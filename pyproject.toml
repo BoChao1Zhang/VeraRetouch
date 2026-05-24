@@ -1,0 +1,29 @@
+[project]
+name = "veraretouch-shape-curve-m1"
+version = "0.1.0"
+description = "ShapeCurve M1 action-space viability gate for VeraRetouch."
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "scipy>=1.13",
+    "scikit-image>=0.24",
+    "scikit-learn>=1.5",
+    "pyyaml>=6.0",
+    "tqdm>=4.66",
+    "lpips>=0.1.4",
+]
+
+[project.optional-dependencies]
+metrics = [
+    "colour-science>=0.4.4",
+    "piq>=0.8.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
