@@ -40,8 +40,11 @@ class A2RenderMode:
     final_grid_weight: float
     pre_grid_weight: float
     regularize: bool
+    gt_action_weight: float = 0.0
     smoothness_weight: float = 0.005
     gamut_weight: float = 1.0
+    gamut_l1_weight: float = 0.0
+    bound_margin: float = 0.0
     dict_l1_weight: float = 0.002
     tail_gate_weight: float = 0.01
 
@@ -62,6 +65,14 @@ DEFAULT_MODES = (
         render_weight=1.0,
         final_grid_weight=0.5,
         pre_grid_weight=0.5,
+        regularize=True,
+    ),
+    A2RenderMode(
+        "A2-grid+render+gt-action-aux",
+        render_weight=1.0,
+        final_grid_weight=0.5,
+        pre_grid_weight=0.5,
+        gt_action_weight=0.2,
         regularize=True,
     ),
 )
@@ -160,6 +171,7 @@ def fit_shape_a2_batch(
 ) -> dict[str, torch.Tensor]:
     source = batch["source"]
     target = batch["target"]
+    gt_action = decode_raw_action(batch["raw"])
     raw = make_raw_parameter(source.shape[0], source.device, spec.include_dictionary, spec.include_free_tail)
     opt = torch.optim.AdamW([raw], lr=lr)
     for _ in range(fit_steps):
@@ -167,9 +179,13 @@ def fit_shape_a2_batch(
         action = decode_raw_action(mask_raw_for_config(raw, spec.include_dictionary, spec.include_free_tail))
         pred, luts = render_hybrid(source, action, dictionary, rho, spec.include_dictionary, spec.include_free_tail)
         loss = grid_render_loss(pred, target, luts, batch, mode)
+        if mode.gt_action_weight:
+            loss = loss + mode.gt_action_weight * action_aux_loss(action, gt_action, spec.include_dictionary, spec.include_free_tail)
         if mode.regularize:
             loss = loss + mode.smoothness_weight * smoothness2_3d(luts["final"]).mean()
             loss = loss + mode.gamut_weight * gamut_penalty(luts["pre"])
+            if mode.gamut_l1_weight:
+                loss = loss + mode.gamut_l1_weight * gamut_l1_penalty(luts["pre"], margin=mode.bound_margin)
             if spec.include_dictionary:
                 loss = loss + mode.dict_l1_weight * action.dict_coef.abs().mean()
             if spec.include_free_tail:
@@ -182,6 +198,7 @@ def fit_shape_a2_batch(
         pred, luts = render_hybrid(source, action, dictionary, rho, spec.include_dictionary, spec.include_free_tail)
         aux = lut_stats(action, luts)
         add_grid_metrics(aux, luts, batch)
+        aux["action_aux_l1"] = action_aux_per_image(action, gt_action, spec.include_dictionary, spec.include_free_tail)
         return metric_summary(pred, target, aux, lpips_model)
 
 
@@ -268,6 +285,29 @@ def grid_render_loss(
     if mode.pre_grid_weight:
         loss = loss + mode.pre_grid_weight * F.mse_loss(luts["pre"], batch["gt_pre_lut"])
     return loss
+
+
+def gamut_l1_penalty(lut_pre: torch.Tensor, margin: float = 0.0) -> torch.Tensor:
+    lo = margin
+    hi = 1.0 - margin
+    return F.relu(lut_pre - hi).mean() + F.relu(lo - lut_pre).mean()
+
+
+def action_aux_loss(pred, target, include_dictionary: bool, include_free_tail: bool) -> torch.Tensor:
+    return action_aux_per_image(pred, target, include_dictionary, include_free_tail).mean()
+
+
+def action_aux_per_image(pred, target, include_dictionary: bool, include_free_tail: bool) -> torch.Tensor:
+    curve = (pred.curves - target.curves).abs().mean(dim=(1, 2))
+    hsl = (pred.hsl - target.hsl).abs().mean(dim=(1, 2))
+    wb = (pred.wb - target.wb).abs().mean(dim=1)
+    parts = [curve, hsl, wb]
+    if include_dictionary:
+        parts.append((pred.dict_coef - target.dict_coef).abs().mean(dim=1))
+    if include_free_tail:
+        parts.append((pred.tail_gate - target.tail_gate).abs().mean(dim=1))
+        parts.append((pred.tail_color - target.tail_color).abs().mean(dim=(1, 2)))
+    return sum(parts) / len(parts)
 
 
 def add_grid_metrics(aux: dict[str, torch.Tensor], luts: dict[str, torch.Tensor], batch: dict[str, torch.Tensor]) -> None:
@@ -389,6 +429,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Comma-separated gamut weights for Fit-Full A2-grid+render+regularizer troubleshooting.",
     )
+    parser.add_argument(
+        "--bound-l1-sweep",
+        default="",
+        help="Comma-separated L1 bound weights for Fit-Full A2-grid+render+regularizer troubleshooting.",
+    )
+    parser.add_argument("--gt-action-aux", action="store_true", help="Run only the GT-action auxiliary Fit-Full closure mode.")
     parser.add_argument("--smoke", action="store_true")
     return parser
 
@@ -413,6 +459,33 @@ def main(argv: list[str] | None = None) -> int:
                 gamut_weight=weight,
             )
             for weight in weights
+        )
+        fit_specs = (A2FitSpec("Fit-Full", include_dictionary=True, include_free_tail=True),)
+    if args.bound_l1_sweep:
+        weights = [float(item) for item in args.bound_l1_sweep.split(",") if item.strip()]
+        modes = tuple(
+            A2RenderMode(
+                f"A2-grid+render+regularizer-boundL1{weight:g}",
+                render_weight=1.0,
+                final_grid_weight=0.5,
+                pre_grid_weight=0.5,
+                regularize=True,
+                gamut_weight=4.0,
+                gamut_l1_weight=weight,
+            )
+            for weight in weights
+        )
+        fit_specs = (A2FitSpec("Fit-Full", include_dictionary=True, include_free_tail=True),)
+    if args.gt_action_aux:
+        modes = (
+            A2RenderMode(
+                "A2-grid+render+gt-action-aux",
+                render_weight=1.0,
+                final_grid_weight=0.5,
+                pre_grid_weight=0.5,
+                gt_action_weight=0.2,
+                regularize=True,
+            ),
         )
         fit_specs = (A2FitSpec("Fit-Full", include_dictionary=True, include_free_tail=True),)
     result = run_a2_render_check(

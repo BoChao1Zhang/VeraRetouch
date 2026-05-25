@@ -48,6 +48,7 @@ class DynamicFitHyper:
     steps: int = 80
     lr: float = 0.07
     gamut_weight: float = 4.0
+    gamut_l1_weight: float = 0.5
     smoothness_weight: float = 0.005
     dict_l1_weight: float = 0.0005
     tail_gate_weight: float = 0.01
@@ -134,17 +135,23 @@ def run_capacity(
 
     for tier_name, (source, target) in tiers.items():
         tier_rows: dict[str, Any] = {}
+        report["tiers"][tier_name] = {
+            "configs": tier_rows,
+            "derived": {},
+            "complete": False,
+        }
+        write_json(output, {**report, "complete": False, "ended_at": None})
         for shape_config in SHAPE_CONFIGS:
             atoms, rho = build_dynamic_dictionary(dictionary16, rho16, shape_config, seed, device)
             metrics = fit_dynamic_dataset(source, target, shape_config, fit_hyper, atoms, rho, lpips_model, batch_size)
             tier_rows[shape_config.name] = {"metrics": metrics, "config": asdict(shape_config)}
+            write_json(output, {**report, "complete": False, "ended_at": None})
         for dense_config in D4_CONFIGS:
             metrics = fit_dense_dataset(source, target, dense_config, lpips_model, batch_size)
             tier_rows[dense_config.name] = {"metrics": metrics, "config": asdict(dense_config)}
-        report["tiers"][tier_name] = {
-            "configs": tier_rows,
-            "derived": derive_capacity_metrics(tier_rows),
-        }
+            write_json(output, {**report, "complete": False, "ended_at": None})
+        report["tiers"][tier_name]["derived"] = derive_capacity_metrics(tier_rows)
+        report["tiers"][tier_name]["complete"] = True
         write_json(output, {**report, "complete": False, "ended_at": None})
 
     report["decision"] = decide_capacity(report)
@@ -200,6 +207,7 @@ def fit_dynamic_batch(
         loss = F.mse_loss(pred, target) + 0.15 * F.l1_loss(pred, target)
         loss = loss + hyper.smoothness_weight * smoothness2_3d(luts["final"]).mean()
         loss = loss + hyper.gamut_weight * gamut_penalty(luts["pre"])
+        loss = loss + hyper.gamut_l1_weight * gamut_l1_penalty(luts["pre"])
         if config.m_atoms:
             loss = loss + hyper.dict_l1_weight * aux_action["dict_coef"].abs().mean()
         if config.r_free:
@@ -265,6 +273,10 @@ def dynamic_tail_lut(gate: torch.Tensor, color: torch.Tensor, alpha: torch.Tenso
     return torch.einsum("br,brc,bri,brj,brk->bijkc", gate, color, u, v, w)
 
 
+def gamut_l1_penalty(lut_pre: torch.Tensor) -> torch.Tensor:
+    return F.relu(lut_pre - 1.0).mean() + F.relu(-lut_pre).mean()
+
+
 def dynamic_lut_stats(aux_action: dict[str, torch.Tensor], luts: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     identity = luts["identity"]
     main_energy = (luts["main"] - identity).pow(2).mean(dim=(1, 2, 3, 4)).sqrt()
@@ -289,6 +301,7 @@ def dynamic_lut_stats(aux_action: dict[str, torch.Tensor], luts: dict[str, torch
         "dictionary_explained_ratio": dict_energy / (residual + 1e-6),
         "active_atom_count": active,
         "inactive_atom_ratio": inactive,
+        "dict_coef": dict_coef,
     }
 
 
@@ -480,6 +493,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ppr10k-count", type=int, default=100)
     parser.add_argument("--fit-steps", type=int, default=80)
     parser.add_argument("--fit-lr", type=float, default=0.07)
+    parser.add_argument("--gamut-l1-weight", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=20260525)
     parser.add_argument("--smoke", action="store_true")
     return parser
@@ -505,7 +519,7 @@ def main(argv: list[str] | None = None) -> int:
         args.fivek_count,
         args.ppr10k_count,
         args.seed,
-        DynamicFitHyper(steps=args.fit_steps, lr=args.fit_lr),
+        DynamicFitHyper(steps=args.fit_steps, lr=args.fit_lr, gamut_l1_weight=args.gamut_l1_weight),
     )
     print(result["decision"]["capacity_conclusion"])
     return 0

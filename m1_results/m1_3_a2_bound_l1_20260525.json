@@ -1,0 +1,249 @@
+{
+  "complete": true,
+  "data_config": {
+    "batch_size": 16,
+    "count": 200,
+    "data_root": "/home/bc/retouching/monetGPT/data",
+    "device": "cuda:0",
+    "image_size": 64,
+    "seed": 20260525
+  },
+  "decision": {
+    "conclusion": "A2_RENDER_CLOSED",
+    "fit_full_by_mode": {
+      "A2-grid+render+regularizer-boundL10.5": {
+        "bound_pass": true,
+        "image_metric_pass": true,
+        "pass": true
+      },
+      "A2-grid+render+regularizer-boundL11": {
+        "bound_pass": true,
+        "image_metric_pass": true,
+        "pass": true
+      },
+      "A2-grid+render+regularizer-boundL12": {
+        "bound_pass": true,
+        "image_metric_pass": true,
+        "pass": true
+      }
+    },
+    "gt_replay_pass": true
+  },
+  "ended_at": "2026-05-25T12:49:45+0800",
+  "experiment": "M1.3_A2_rendered_image_closure",
+  "fit_steps": 100,
+  "gt_action_stats": {
+    "active_atom_count": 3.47,
+    "banding_smoothness_penalty": 0.09298515036702155,
+    "clipping_ratio": 0.0048527714308875146,
+    "dictionary_energy": 0.017448958307504654,
+    "dictionary_explained_ratio": 0.9997816696763039,
+    "free_tail_energy": 2.2350004067561715e-06,
+    "gamut_violation_ratio": 0.004695705139456549,
+    "inactive_atom_ratio": 0.783125,
+    "main_energy": 0.14226090371608735,
+    "residual_ratio": 0.10784362385049462
+  },
+  "gt_replay": {
+    "bound_pass": true,
+    "image_metric_pass": true,
+    "metrics": {
+      "LPIPS": 0.0,
+      "PSNR": 120.0,
+      "active_atom_count": 3.47,
+      "banding_smoothness_penalty": 0.09298515036702155,
+      "clipping_ratio": 0.0048527714308875146,
+      "dictionary_energy": 0.017448958307504654,
+      "dictionary_explained_ratio": 0.9997816696763039,
+      "final_grid_mse": 0.0,
+      "free_tail_energy": 2.2350004067561715e-06,
+      "gamut_violation_ratio": 0.004695705139456549,
+      "inactive_atom_ratio": 0.783125,
+      "main_energy": 0.14226090371608735,
+      "mean_deltaE2000": 0.0,
+      "p95_deltaE2000": 0.0,
+      "pre_grid_mse": 0.0,
+      "residual_ratio": 0.10784362385049462
+    },
+    "pass": true
+  },
+  "lr": 0.05,
+  "rows": [
+    {
+      "bound_pass": true,
+      "fit": "Fit-Full",
+      "fit_config": {
+        "dense": false,
+        "include_dictionary": true,
+        "include_free_tail": true,
+        "name": "Fit-Full"
+      },
+      "image_metric_pass": true,
+      "metrics": {
+        "LPIPS": 0.004323697859745152,
+        "PSNR": 45.016048212051395,
+        "action_aux_l1": 0.26277054358273744,
+        "active_atom_count": 4.815,
+        "banding_smoothness_penalty": 0.08361436877399683,
+        "clipping_ratio": 0.009311689796377323,
+        "dictionary_energy": 0.01001377190470521,
+        "dictionary_explained_ratio": 0.999660717844963,
+        "final_grid_mse": 0.007303157710121013,
+        "free_tail_energy": 7.588267884273136e-07,
+        "gamut_violation_ratio": 0.008851685778827232,
+        "inactive_atom_ratio": 0.6990625,
+        "main_energy": 0.14002017721533774,
+        "mean_deltaE2000": 1.083090945482254,
+        "p95_deltaE2000": 3.615584626495838,
+        "pre_grid_mse": 0.0076574161072494465,
+        "residual_ratio": 0.06409138317394536
+      },
+      "mode": "A2-grid+render+regularizer-boundL10.5",
+      "mode_config": {
+        "bound_margin": 0.0,
+        "dict_l1_weight": 0.002,
+        "final_grid_weight": 0.5,
+        "gamut_l1_weight": 0.5,
+        "gamut_weight": 4.0,
+        "gt_action_weight": 0.0,
+        "name": "A2-grid+render+regularizer-boundL10.5",
+        "pre_grid_weight": 0.5,
+        "regularize": true,
+        "render_weight": 1.0,
+        "smoothness_weight": 0.005,
+        "tail_gate_weight": 0.01
+      },
+      "pass": true
+    },
+    {
+      "bound_pass": true,
+      "fit": "Fit-Full",
+      "fit_config": {
+        "dense": false,
+        "include_dictionary": true,
+        "include_free_tail": true,
+        "name": "Fit-Full"
+      },
+      "image_metric_pass": true,
+      "metrics": {
+        "LPIPS": 0.004449697432210087,
+        "PSNR": 44.98926601409912,
+        "action_aux_l1": 0.2628980926051736,
+        "active_atom_count": 4.9,
+        "banding_smoothness_penalty": 0.0837022552266717,
+        "clipping_ratio": 0.006931949074423755,
+        "dictionary_energy": 0.0093425923162431,
+        "dictionary_explained_ratio": 0.9996297273039818,
+        "final_grid_mse": 0.007379604137968272,
+        "free_tail_energy": 7.441683356645967e-07,
+        "gamut_violation_ratio": 0.006490263717787457,
+        "inactive_atom_ratio": 0.69375,
+        "main_energy": 0.14005950167775155,
+        "mean_deltaE2000": 1.108390024676919,
+        "p95_deltaE2000": 3.63095662817359,
+        "pre_grid_mse": 0.00773577994783409,
+        "residual_ratio": 0.06043847484048456
+      },
+      "mode": "A2-grid+render+regularizer-boundL11",
+      "mode_config": {
+        "bound_margin": 0.0,
+        "dict_l1_weight": 0.002,
+        "final_grid_weight": 0.5,
+        "gamut_l1_weight": 1.0,
+        "gamut_weight": 4.0,
+        "gt_action_weight": 0.0,
+        "name": "A2-grid+render+regularizer-boundL11",
+        "pre_grid_weight": 0.5,
+        "regularize": true,
+        "render_weight": 1.0,
+        "smoothness_weight": 0.005,
+        "tail_gate_weight": 0.01
+      },
+      "pass": true
+    },
+    {
+      "bound_pass": true,
+      "fit": "Fit-Full",
+      "fit_config": {
+        "dense": false,
+        "include_dictionary": true,
+        "include_free_tail": true,
+        "name": "Fit-Full"
+      },
+      "image_metric_pass": true,
+      "metrics": {
+        "LPIPS": 0.00432116310164929,
+        "PSNR": 45.033705949783325,
+        "action_aux_l1": 0.2631209371984005,
+        "active_atom_count": 4.875,
+        "banding_smoothness_penalty": 0.08381798841059208,
+        "clipping_ratio": 0.004311689936621406,
+        "dictionary_energy": 0.008926657623669598,
+        "dictionary_explained_ratio": 0.9996086326241493,
+        "final_grid_mse": 0.007342801797785796,
+        "free_tail_energy": 8.127065058260996e-07,
+        "gamut_violation_ratio": 0.003896125812752871,
+        "inactive_atom_ratio": 0.6953125,
+        "main_energy": 0.14021810479462146,
+        "mean_deltaE2000": 1.0986566565930844,
+        "p95_deltaE2000": 3.7092666989564895,
+        "pre_grid_mse": 0.007696425378089771,
+        "residual_ratio": 0.05801583844644483
+      },
+      "mode": "A2-grid+render+regularizer-boundL12",
+      "mode_config": {
+        "bound_margin": 0.0,
+        "dict_l1_weight": 0.002,
+        "final_grid_weight": 0.5,
+        "gamut_l1_weight": 2.0,
+        "gamut_weight": 4.0,
+        "gt_action_weight": 0.0,
+        "name": "A2-grid+render+regularizer-boundL12",
+        "pre_grid_weight": 0.5,
+        "regularize": true,
+        "render_weight": 1.0,
+        "smoothness_weight": 0.005,
+        "tail_gate_weight": 0.01
+      },
+      "pass": true
+    }
+  ],
+  "sampling": {
+    "acceptance_rate": 0.08620689655172414,
+    "accepted": 200,
+    "accepted_active_atom_count": 3.4663461538461537,
+    "accepted_banding_smoothness_penalty": 0.09304342246972598,
+    "accepted_clipping_ratio": 0.004861839509640749,
+    "accepted_dictionary_energy": 0.017320093483879015,
+    "accepted_dictionary_explained_ratio": 0.9997811913490295,
+    "accepted_free_tail_energy": 2.2153184580439793e-06,
+    "accepted_gamut_violation_ratio": 0.004708530882803293,
+    "accepted_inactive_atom_ratio": 0.7833533653846154,
+    "accepted_main_energy": 0.14234236570504996,
+    "accepted_residual_ratio": 0.10708542512013362,
+    "attempted": 2320,
+    "policy": {
+      "max_active_atom_count": 6.0,
+      "max_attempt_multiplier": 80,
+      "max_candidate_batch": 512,
+      "max_clipping_ratio": 0.01,
+      "max_free_tail_energy": 0.003,
+      "max_gamut_violation_ratio": 0.01,
+      "min_active_atom_count": 2.0,
+      "min_free_tail_energy": 1e-08,
+      "mode": "standard",
+      "name": "clean_renderer_aligned",
+      "oversample_multiplier": 8
+    },
+    "requested": 200
+  },
+  "started_at": "2026-05-25T12:46:49+0800",
+  "thresholds": {
+    "LPIPS": 0.05,
+    "PSNR": 38.0,
+    "clipping_ratio": 0.01,
+    "gamut_violation_ratio": 0.01,
+    "mean_deltaE2000": 1.5,
+    "p95_deltaE2000": 4.0
+  }
+}
