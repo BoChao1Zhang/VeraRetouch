@@ -124,6 +124,7 @@ def run_m1(config: M1RunConfig) -> dict[str, Any]:
     report["thresholds"] = evaluate_thresholds(report)
     report["M1_CONCLUSION"] = conclusion_from_thresholds(report["thresholds"])
     report["fallback_decision"] = fallback_decision(report)
+    report.update(protocol_interpretation(report))
     report["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     _write_result(config.output, report)
     return report
@@ -386,9 +387,20 @@ def fallback_decision(report: dict[str, Any]) -> dict[str, str]:
             "decision": "实验未真正运行或缺少阈值证据；不得进入 M2。",
         }
     if not thresholds.get("A_renderer_aligned", {}).get("pass", False):
+        gt_issue = _tier_a_gt_gate_issue(report)
+        if gt_issue:
+            return {
+                "category": "A_renderer_aligned_failed",
+                "failure_scope": "implementation_protocol",
+                "primary_protocol_issue": gt_issue,
+                "architecture_claim": "not_established",
+                "decision": "Tier A GT action already violates clipping/gamut gate; keep M1_CONCLUSION=FAIL, stop VLM/SFT/GRPO, fix renderer-aligned generator and A0/A1/A2 before making any ShapeCurve architecture claim.",
+            }
         return {
             "category": "A_renderer_aligned_failed",
-            "decision": "判定 renderer / scale / loss / softclip / identity / gate / B-spline 实现错误，停止 VLM/SFT/GRPO，先修 unit test。",
+            "failure_scope": "implementation_protocol",
+            "architecture_claim": "not_established",
+            "decision": "判定 renderer / scale / loss / softclip / identity / gate / B-spline 实现错误，停止 VLM/SFT/GRPO，先修 unit test；当前失败不得解释为 action space 架构级失败。",
         }
 
     tiers = report.get("tiers", {})
@@ -417,6 +429,56 @@ def fallback_decision(report: dict[str, Any]) -> dict[str, str]:
         "category": "partial_or_mixed_failure",
         "decision": "未满足 M1 放行条件；按最先失败阈值定位，优先检查 B/C 表达力与 dictionary/free_tail 解释性指标。",
     }
+
+
+def protocol_interpretation(report: dict[str, Any]) -> dict[str, str]:
+    conclusion = report.get("M1_CONCLUSION", "BLOCKED")
+    if conclusion == "PASS":
+        return {
+            "failure_scope": "none",
+            "architecture_level_conclusion": "action_space_passed_m1",
+            "next_action": "enter M2 hidden-layer probe and Gaussian policy credit assignment test",
+        }
+    if conclusion == "BLOCKED":
+        return {
+            "failure_scope": "blocked",
+            "architecture_level_conclusion": "not_established",
+            "next_action": "resolve missing data or runtime dependency before interpreting ShapeCurve architecture",
+        }
+
+    gt_issue = _tier_a_gt_gate_issue(report)
+    if gt_issue:
+        return {
+            "failure_scope": "implementation_protocol",
+            "architecture_level_conclusion": "not_established",
+            "primary_protocol_issue": gt_issue,
+            "next_action": "fix Tier A rejection sampling, inverse-fit ablations, free_tail stress, and data audit before M2",
+        }
+
+    fallback = report.get("fallback_decision", {})
+    if fallback.get("category") == "expression_capacity_failed":
+        return {
+            "failure_scope": "architecture_capacity_candidate",
+            "architecture_level_conclusion": "candidate_only_after_A_passed",
+            "next_action": "run dictionary/free_tail/K upgrades and compare against D4-Dense before pivoting renderer",
+        }
+    return {
+        "failure_scope": "implementation_protocol",
+        "architecture_level_conclusion": "not_established",
+        "next_action": "stop VLM/SFT/GRPO and repair M1 protocol before architecture-level conclusions",
+    }
+
+
+def _tier_a_gt_gate_issue(report: dict[str, Any]) -> str:
+    gt = report.get("tiers", {}).get("renderer_aligned_synthetic", {}).get("gt_action_stats", {})
+    clipping = float(gt.get("clipping_ratio", 0.0))
+    gamut = float(gt.get("gamut_violation_ratio", 0.0))
+    issues = []
+    if clipping > 0.01:
+        issues.append(f"GT clipping_ratio={clipping:.5f} exceeds 0.01000 gate")
+    if gamut > 0.01:
+        issues.append(f"GT gamut_violation_ratio={gamut:.5f} exceeds 0.01000 gate")
+    return "; ".join(issues)
 
 
 def _relative_drop(before: float, after: float) -> float:

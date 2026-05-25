@@ -1,5 +1,6 @@
 {
   "M1_CONCLUSION": "FAIL",
+  "architecture_level_conclusion": "not_established",
   "atom_names": [
     "warm_highlight_color",
     "cool_shadow_color",
@@ -130,8 +131,14 @@
   "ended_at": "2026-05-25T01:03:41+0800",
   "fallback_decision": {
     "category": "A_renderer_aligned_failed",
-    "decision": "\u5224\u5b9a renderer / scale / loss / softclip / identity / gate / B-spline \u5b9e\u73b0\u9519\u8bef\uff0c\u505c\u6b62 VLM/SFT/GRPO\uff0c\u5148\u4fee unit test\u3002"
+    "architecture_claim": "not_established",
+    "decision": "Tier A GT action already violates clipping/gamut gate; keep M1_CONCLUSION=FAIL, stop VLM/SFT/GRPO, fix renderer-aligned generator and A0/A1/A2 before making any ShapeCurve architecture claim.",
+    "failure_scope": "implementation_protocol",
+    "primary_protocol_issue": "GT clipping_ratio=0.04485 exceeds 0.01000 gate; GT gamut_violation_ratio=0.04458 exceeds 0.01000 gate"
   },
+  "failure_scope": "implementation_protocol",
+  "next_action": "fix Tier A rejection sampling, inverse-fit ablations, free_tail stress, and data audit before M2",
+  "primary_protocol_issue": "GT clipping_ratio=0.04485 exceeds 0.01000 gate; GT gamut_violation_ratio=0.04458 exceeds 0.01000 gate",
   "started_at": "2026-05-25T00:42:26+0800",
   "thresholds": {
     "A_renderer_aligned": {
