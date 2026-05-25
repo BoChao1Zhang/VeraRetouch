@@ -1,0 +1,35 @@
+{
+  "fivek_mmart_like": {
+    "N_mmart_like_processed": 20464,
+    "N_name_pattern_fivek_expert_c": 4092,
+    "N_overlap_train_test": 0,
+    "N_rows": 20464,
+    "N_true_fivek_expert_c": 0,
+    "N_unique_before_sha1": null,
+    "N_unique_sample_id": 20464,
+    "N_unique_source_target_pair": null,
+    "dataset": "fivek_mmart_like",
+    "duplicate_before_sha1_examples": [],
+    "duplicate_pair_sha1_examples": [],
+    "duplicate_sample_id_examples": [],
+    "hash_audit": {
+      "N_unique_before_sha1": null,
+      "N_unique_source_target_pair": null,
+      "duplicate_before_sha1_examples": [],
+      "duplicate_pair_sha1_examples": [],
+      "enabled": false,
+      "hash_limit": 0,
+      "hashed_rows": 0,
+      "note": "Set --hash-limit N to hash the first N rows; full hash audit is intentionally not the default because this dataset can be I/O heavy."
+    },
+    "note": "Directory discovery cannot prove strict MIT-Adobe FiveK Expert C provenance; use fivek_mmart_like_real_probe until an external manifest maps true FiveK IDs.",
+    "overlap_train_test_sample_id_examples": [],
+    "source_root": "/home/bc/retouching/monetGPT/data/fivek_mmart_like",
+    "split_counts": {
+      "test_global": 4092,
+      "train_global": 16372
+    },
+    "strict_fivek_expert_c_label_allowed": false,
+    "tier_label": "fivek_mmart_like_real_probe"
+  }
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha1
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ class PairRecord:
     source: Path
     target: Path
     tier: str
+    split: str = ""
 
     def to_dict(self) -> dict[str, str]:
         return {
@@ -29,6 +31,7 @@ class PairRecord:
             "source": str(self.source),
             "target": str(self.target),
             "tier": self.tier,
+            "split": self.split,
         }
 
 
@@ -119,7 +122,8 @@ def _discover_fivek_pairs(data_root: Path) -> list[PairRecord]:
                         sample_id=sample_dir.name,
                         source=source,
                         target=target,
-                        tier="fivek_expert_c",
+                        tier="fivek_mmart_like_real_probe",
+                        split=split,
                     )
                 )
     return pairs
@@ -141,6 +145,7 @@ def _discover_ppr10k_pairs(data_root: Path, target_name: str = "target_c") -> li
                     source=source,
                     target=target,
                     tier=f"ppr10k_{target_name}",
+                    split="",
                 )
             )
     return pairs
@@ -185,7 +190,7 @@ def discover_m1_data(data_root: Path, requirements: DataRequirements) -> DataDis
             data_root,
         ),
         _status(
-            "fivek_expert_c_real_probe",
+            "fivek_mmart_like_real_probe",
             requirements.fivek_real_min,
             len(fivek_pairs),
             data_root / "fivek_mmart_like",
@@ -204,3 +209,116 @@ def discover_m1_data(data_root: Path, requirements: DataRequirements) -> DataDis
         ppr10k_pairs=tuple(ppr10k_pairs),
         base_pool=tuple(base_pool),
     )
+
+
+def audit_fivek_mmart_like(data_root: Path, hash_limit: int = 0) -> dict[str, Any]:
+    pairs = _discover_fivek_pairs(data_root.resolve())
+    sample_ids: dict[str, list[PairRecord]] = {}
+    split_sample_ids: dict[str, set[str]] = {}
+    for pair in pairs:
+        sample_ids.setdefault(pair.sample_id, []).append(pair)
+        split_sample_ids.setdefault(pair.split, set()).add(pair.sample_id)
+
+    train_ids = split_sample_ids.get("train_global", set())
+    test_ids = split_sample_ids.get("test_global", set())
+    sample_overlap = sorted(train_ids & test_ids)
+    hash_audit = _hash_audit_subset(pairs, hash_limit)
+    name_pattern_fivek = [pair for pair in pairs if _looks_like_fivek_expert_c(pair.sample_id)]
+    return {
+        "dataset": "fivek_mmart_like",
+        "source_root": str((data_root.resolve() / "fivek_mmart_like")),
+        "tier_label": "fivek_mmart_like_real_probe",
+        "strict_fivek_expert_c_label_allowed": False,
+        "N_rows": len(pairs),
+        "N_unique_before_sha1": hash_audit["N_unique_before_sha1"],
+        "N_unique_source_target_pair": hash_audit["N_unique_source_target_pair"],
+        "N_unique_sample_id": len(sample_ids),
+        "N_overlap_train_test": len(sample_overlap),
+        "N_true_fivek_expert_c": 0,
+        "N_name_pattern_fivek_expert_c": len(name_pattern_fivek),
+        "N_mmart_like_processed": len(pairs),
+        "hash_audit": hash_audit,
+        "split_counts": _count_by_split(pairs),
+        "duplicate_before_sha1_examples": hash_audit["duplicate_before_sha1_examples"],
+        "duplicate_pair_sha1_examples": hash_audit["duplicate_pair_sha1_examples"],
+        "duplicate_sample_id_examples": _duplicate_examples(sample_ids),
+        "overlap_train_test_sample_id_examples": sample_overlap[:5],
+        "note": "Directory discovery cannot prove strict MIT-Adobe FiveK Expert C provenance; use fivek_mmart_like_real_probe until an external manifest maps true FiveK IDs.",
+    }
+
+
+def _hash_audit_subset(pairs: list[PairRecord], hash_limit: int) -> dict[str, Any]:
+    if hash_limit <= 0:
+        return {
+            "enabled": False,
+            "hash_limit": hash_limit,
+            "hashed_rows": 0,
+            "N_unique_before_sha1": None,
+            "N_unique_source_target_pair": None,
+            "duplicate_before_sha1_examples": [],
+            "duplicate_pair_sha1_examples": [],
+            "note": "Set --hash-limit N to hash the first N rows; full hash audit is intentionally not the default because this dataset can be I/O heavy.",
+        }
+    selected = pairs[:hash_limit]
+    before_hashes: dict[str, list[PairRecord]] = {}
+    pair_hashes: dict[tuple[str, str], list[PairRecord]] = {}
+    for pair in selected:
+        before = _file_sha1(pair.source)
+        target = _file_sha1(pair.target)
+        before_hashes.setdefault(before, []).append(pair)
+        pair_hashes.setdefault((before, target), []).append(pair)
+    return {
+        "enabled": True,
+        "hash_limit": hash_limit,
+        "hashed_rows": len(selected),
+        "N_unique_before_sha1": len(before_hashes),
+        "N_unique_source_target_pair": len(pair_hashes),
+        "duplicate_before_sha1_examples": _duplicate_examples(before_hashes),
+        "duplicate_pair_sha1_examples": _duplicate_pair_examples(pair_hashes),
+    }
+
+
+def _file_sha1(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    hasher = sha1()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _looks_like_fivek_expert_c(sample_id: str) -> bool:
+    return sample_id.startswith("a") and sample_id.endswith("_C")
+
+
+def _count_by_split(pairs: list[PairRecord]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for pair in pairs:
+        counts[pair.split] = counts.get(pair.split, 0) + 1
+    return counts
+
+
+def _duplicate_examples(rows: dict[Any, list[PairRecord]], limit: int = 5) -> list[dict[str, Any]]:
+    out = []
+    for key, values in rows.items():
+        if len(values) > 1:
+            out.append({"key": str(key), "count": len(values), "sample_ids": [item.sample_id for item in values[:5]]})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _duplicate_pair_examples(rows: dict[tuple[str, str], list[PairRecord]], limit: int = 5) -> list[dict[str, Any]]:
+    out = []
+    for key, values in rows.items():
+        if len(values) > 1:
+            out.append(
+                {
+                    "source_sha1": key[0],
+                    "target_sha1": key[1],
+                    "count": len(values),
+                    "sample_ids": [item.sample_id for item in values[:5]],
+                }
+            )
+        if len(out) >= limit:
+            break
+    return out

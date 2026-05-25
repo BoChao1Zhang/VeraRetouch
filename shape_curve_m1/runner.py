@@ -131,7 +131,7 @@ def run_m1(config: M1RunConfig) -> dict[str, Any]:
 
     fivek_pairs = _stable_sample(list(discovery.fivek_pairs), config.fivek_count, config.seed + 3)
     ppr_pairs = _stable_sample(list(discovery.ppr10k_pairs), config.ppr10k_count, config.seed + 4)
-    report["tiers"]["real_fivek_expert_c"] = _run_real_tier(fivek_pairs, config, dictionary, rho, lpips_model, device)
+    report["tiers"]["real_fivek_mmart_like"] = _run_real_tier(fivek_pairs, config, dictionary, rho, lpips_model, device)
     _write_result(config.output, report)
     report["tiers"]["real_ppr10k_target_c"] = _run_real_tier(ppr_pairs, config, dictionary, rho, lpips_model, device)
     _write_result(config.output, report)
@@ -441,7 +441,7 @@ def evaluate_thresholds(report: dict[str, Any]) -> dict[str, Any]:
     }
 
     real_checks = {}
-    for key in ("real_fivek_expert_c", "real_ppr10k_target_c"):
+    for key in ("real_fivek_mmart_like", "real_ppr10k_target_c"):
         tier = tiers[key]
         main = tier["configs"][FIT_MAIN.name]
         full = tier["configs"][FIT_FULL.name]

@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .data import DataRequirements, discover_m1_data
+from .data import DataRequirements, audit_fivek_mmart_like, discover_m1_data
 from .runner import M1RunConfig, run_m1
 
 
@@ -33,6 +33,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Emit machine-readable JSON.",
+    )
+
+    audit_data = subparsers.add_parser(
+        "audit-data",
+        help="Hash-audit data manifests used by M1.",
+    )
+    audit_data.add_argument(
+        "--data-root",
+        default="~/retouching/monetGPT/data",
+        help="Root containing ppr10k and fivek_mmart_like directories.",
+    )
+    audit_data.add_argument(
+        "--output",
+        help="Optional JSON output path.",
+    )
+    audit_data.add_argument(
+        "--hash-limit",
+        type=int,
+        default=0,
+        help="Hash the first N fivek_mmart_like rows. Default 0 keeps audit path-level and fast.",
     )
 
     run = subparsers.add_parser(
@@ -80,6 +100,15 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(report.format_text())
         return 0 if report.ready else 2
+    if args.command == "audit-data":
+        payload = {"fivek_mmart_like": audit_fivek_mmart_like(Path(args.data_root).expanduser(), args.hash_limit)}
+        text = json.dumps(payload, indent=2, sort_keys=True)
+        if args.output:
+            out = Path(args.output)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(text + "\n", encoding="utf-8")
+        print(text)
+        return 0
     if args.command == "run-m1":
         if args.smoke:
             args.tier_a_count = 8
