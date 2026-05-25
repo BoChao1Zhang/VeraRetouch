@@ -13,8 +13,8 @@ R_FREE = 4
 M_ATOMS = 16
 HSL_SCALE = torch.tensor([8.0, 0.08, 0.08])
 WB_SCALE = torch.tensor([0.08, 0.08])
-TAIL_COLOR_SCALE = 0.08
-G_MAX_TAIL = 0.06
+TAIL_COLOR_SCALE = 0.1
+G_MAX_TAIL = 0.08
 
 
 @dataclass

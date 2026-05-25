@@ -6,7 +6,7 @@ from typing import Any
 
 import torch
 
-from .action import R_FREE, raw_layout, decode_raw_action, identity_raw
+from .action import R_FREE, raw_layout, decode_raw_action, identity_raw, softplus_inverse
 from .render import (
     hybrid_lut,
     apply_lut,
@@ -41,12 +41,25 @@ class SyntheticActionPolicy:
     max_attempt_multiplier: int = 80
     oversample_multiplier: int = 8
     max_candidate_batch: int = 512
+    mode: str = "standard"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
 CLEAN_RENDERER_POLICY = SyntheticActionPolicy(name="clean_renderer_aligned")
+TAIL_STRESS_POLICY = SyntheticActionPolicy(
+    name="free_tail_stress",
+    max_clipping_ratio=0.01,
+    max_gamut_violation_ratio=0.01,
+    min_active_atom_count=0.0,
+    max_active_atom_count=0.0,
+    min_free_tail_energy=5e-5,
+    max_free_tail_energy=5e-4,
+    max_attempt_multiplier=40,
+    oversample_multiplier=4,
+    mode="tail_stress",
+)
 
 
 def sample_raw_actions(batch: int, seed: int, device: torch.device | str) -> torch.Tensor:
@@ -91,7 +104,7 @@ def sample_filtered_raw_actions(
             max(remaining * policy.oversample_multiplier, remaining),
             max_attempts - attempted,
         )
-        raw = sample_raw_actions(candidate_count, seed + rounds * 9_973, device)
+        raw = sample_policy_raw_actions(candidate_count, seed + rounds * 9_973, device, policy)
         action = decode_raw_action(raw)
         with torch.no_grad():
             luts = hybrid_lut(action, dictionary, rho, True, True)
@@ -134,6 +147,34 @@ def _policy_mask(stats: dict[str, torch.Tensor], policy: SyntheticActionPolicy) 
         & (stats["free_tail_energy"] >= policy.min_free_tail_energy)
         & (stats["free_tail_energy"] <= policy.max_free_tail_energy)
     )
+
+
+def sample_policy_raw_actions(
+    batch: int,
+    seed: int,
+    device: torch.device | str,
+    policy: SyntheticActionPolicy,
+) -> torch.Tensor:
+    if policy.mode == "tail_stress":
+        return sample_tail_stress_raw_actions(batch, seed, device)
+    return sample_raw_actions(batch, seed, device)
+
+
+def sample_tail_stress_raw_actions(batch: int, seed: int, device: torch.device | str) -> torch.Tensor:
+    gen = torch.Generator(device=device).manual_seed(seed)
+    layout = raw_layout()
+    raw = identity_raw(batch, device)
+    raw[:, layout.curve_delta] = softplus_inverse(torch.tensor(1.0, device=device))
+    raw[:, layout.curve_black_white] = -3.0
+    raw[:, layout.hsl] = 0.0
+    raw[:, layout.wb] = 0.0
+    raw[:, layout.dictionary] = 0.0
+    raw[:, layout.tail_gate] = 2.5 + 0.5 * torch.randn(batch, R_FREE, generator=gen, device=device)
+    raw[:, layout.tail_color] = 2.0 * torch.randn(batch, R_FREE * 3, generator=gen, device=device)
+    raw[:, layout.tail_alpha] = torch.randn(batch, R_FREE * 10, generator=gen, device=device)
+    raw[:, layout.tail_beta] = torch.randn(batch, R_FREE * 10, generator=gen, device=device)
+    raw[:, layout.tail_gamma] = torch.randn(batch, R_FREE * 10, generator=gen, device=device)
+    return raw
 
 
 def generate_dense_teacher_lut(

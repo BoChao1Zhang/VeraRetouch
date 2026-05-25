@@ -11,11 +11,11 @@ import numpy as np
 import torch
 
 from .data import DataRequirements, PairRecord, discover_m1_data
-from .fit import A1_NO_REG_FULL, ALL_FIT_CONFIGS, D4_DENSE, FIT_FULL, FIT_MAIN, fit_batch
+from .fit import A1_NO_REG_FULL, ALL_FIT_CONFIGS, D4_DENSE, FIT_DICT, FIT_FULL, FIT_MAIN, SPARSE_SWEEP_FIT_CONFIGS, fit_batch
 from .image_io import load_image
 from .metrics import MetricAccumulator
 from .render import build_dictionary, render_hybrid, lut_stats
-from .synthetic import TIER_B_FAMILIES, decode_raw_batch, render_dense_teacher, sample_filtered_raw_actions
+from .synthetic import TAIL_STRESS_POLICY, TIER_B_FAMILIES, decode_raw_batch, render_dense_teacher, sample_filtered_raw_actions
 from .tiny_sft import TinySFTConfig, run_tiny_sft
 
 
@@ -32,6 +32,8 @@ class M1RunConfig:
     tier_b_count: int
     fivek_count: int
     ppr10k_count: int
+    tail_stress_count: int
+    sparse_sweep_count: int
     tiny_train_count: int
     tiny_val_count: int
     tiny_epochs: int
@@ -91,6 +93,23 @@ def run_m1(config: M1RunConfig) -> dict[str, Any]:
 
     report["tiers"]["renderer_aligned_synthetic"] = _run_renderer_aligned_tier(
         tier_a_paths, config, dictionary, rho, lpips_model, device
+    )
+    report["diagnostics"] = {}
+    report["diagnostics"]["free_tail_stress_synthetic"] = _run_free_tail_stress_tier(
+        _stable_sample(base_paths, config.tail_stress_count, config.seed + 7),
+        config,
+        dictionary,
+        rho,
+        lpips_model,
+        device,
+    )
+    report["diagnostics"]["dictionary_sparsity_sweep"] = _run_sparse_sweep(
+        _stable_sample(base_paths, config.sparse_sweep_count, config.seed + 8),
+        config,
+        dictionary,
+        rho,
+        lpips_model,
+        device,
     )
     report["a_sanity_checks"] = evaluate_tier_a_sanity(report["tiers"]["renderer_aligned_synthetic"])
     report["thresholds"] = {
@@ -220,6 +239,89 @@ def _run_renderer_aligned_tier(
         "gt_action_stats": gt_acc.summary(),
         "a0_gt_replay": a0_acc.summary(),
         "sampling": _summarize_sampling(sampling_rows),
+    }
+
+
+def _run_free_tail_stress_tier(
+    paths: list[Path],
+    config: M1RunConfig,
+    dictionary: torch.Tensor,
+    rho: torch.Tensor,
+    lpips_model,
+    device: torch.device,
+) -> dict[str, Any]:
+    fit_configs = (FIT_MAIN, FIT_DICT, FIT_FULL)
+    acc = {fit.name: MetricAccumulator.create() for fit in fit_configs}
+    gt_acc = MetricAccumulator.create()
+    sampling_rows: list[dict[str, Any]] = []
+    count = 0
+    for batch_idx, sl_paths in enumerate(_chunks(paths, config.batch_size)):
+        source = _load_path_batch(sl_paths, config.image_size, device)
+        raw, sample_summary = sample_filtered_raw_actions(
+            source.shape[0],
+            config.seed + 15_000 + batch_idx,
+            device,
+            dictionary,
+            rho,
+            TAIL_STRESS_POLICY,
+        )
+        sampling_rows.append(sample_summary)
+        action = decode_raw_batch(raw)
+        with torch.no_grad():
+            target, luts = render_hybrid(source, action, dictionary, rho, True, True)
+            gt_stats = lut_stats(action, luts)
+            for key, value in gt_stats.items():
+                gt_acc.extend_tensor(key, value)
+        for fit in fit_configs:
+            _, metrics = fit_batch(source, target, fit, dictionary, rho, lpips_model, config.fit_steps, config.fit_lr)
+            _add_metrics(acc[fit.name], metrics)
+        count += source.shape[0]
+    summary = gt_acc.summary()
+    target_min = 0.005
+    return {
+        "count": count,
+        "configs": {name: acc[name].summary() for name in acc},
+        "gt_action_stats": summary,
+        "sampling": _summarize_sampling(sampling_rows),
+        "stress_target": {
+            "requested_free_tail_energy_min": target_min,
+            "achieved_free_tail_energy": summary.get("free_tail_energy", float("nan")),
+            "achieves_requested_energy": bool(summary.get("free_tail_energy", 0.0) >= target_min),
+            "note": "Current normalized CP/B-spline tail scale reaches roughly 1e-4 LUT RMS without clipping; requested 0.005-0.02 is not reachable without changing renderer scale.",
+        },
+    }
+
+
+def _run_sparse_sweep(
+    paths: list[Path],
+    config: M1RunConfig,
+    dictionary: torch.Tensor,
+    rho: torch.Tensor,
+    lpips_model,
+    device: torch.device,
+) -> dict[str, Any]:
+    acc = {fit.name: MetricAccumulator.create() for fit in SPARSE_SWEEP_FIT_CONFIGS}
+    count = 0
+    for batch_idx, sl_paths in enumerate(_chunks(paths, config.batch_size)):
+        source = _load_path_batch(sl_paths, config.image_size, device)
+        raw, _ = sample_filtered_raw_actions(
+            source.shape[0],
+            config.seed + 17_000 + batch_idx,
+            device,
+            dictionary,
+            rho,
+        )
+        action = decode_raw_batch(raw)
+        with torch.no_grad():
+            target, _ = render_hybrid(source, action, dictionary, rho, True, True)
+        for fit in SPARSE_SWEEP_FIT_CONFIGS:
+            _, metrics = fit_batch(source, target, fit, dictionary, rho, lpips_model, config.fit_steps, config.fit_lr)
+            _add_metrics(acc[fit.name], metrics)
+        count += source.shape[0]
+    return {
+        "count": count,
+        "configs": {name: acc[name].summary() for name in acc},
+        "selection_policy": "diagnostic_only_default_gate_still_uses_Fit-Full",
     }
 
 

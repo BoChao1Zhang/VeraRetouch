@@ -48,6 +48,17 @@ A1_NO_REG_FULL = FitConfig(
     dict_l1_weight=0.0,
     tail_gate_weight=0.0,
 )
+SPARSE_SWEEP_FIT_CONFIGS = tuple(
+    FitConfig(
+        f"Fit-Full-Sparse-{weight:g}",
+        include_dictionary=True,
+        include_free_tail=True,
+        dict_l1_weight=weight,
+        dict_entropy_weight=0.001,
+        active_budget_weight=0.001,
+    )
+    for weight in (0.0005, 0.002, 0.005, 0.01)
+)
 
 
 def fit_batch(

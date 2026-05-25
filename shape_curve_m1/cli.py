@@ -50,6 +50,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--tier-b-count", type=int, default=500)
     run.add_argument("--fivek-count", type=int, default=100)
     run.add_argument("--ppr10k-count", type=int, default=100)
+    run.add_argument("--tail-stress-count", type=int, default=100)
+    run.add_argument("--sparse-sweep-count", type=int, default=100)
     run.add_argument("--tiny-train-count", type=int, default=2000)
     run.add_argument("--tiny-val-count", type=int, default=500)
     run.add_argument("--tiny-epochs", type=int, default=5)
@@ -84,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
             args.tier_b_count = 8
             args.fivek_count = 4
             args.ppr10k_count = 4
+            args.tail_stress_count = 4
+            args.sparse_sweep_count = 4
             args.tiny_train_count = 16
             args.tiny_val_count = 8
             args.fit_steps = min(args.fit_steps, 4)
@@ -101,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
             tier_b_count=args.tier_b_count,
             fivek_count=args.fivek_count,
             ppr10k_count=args.ppr10k_count,
+            tail_stress_count=args.tail_stress_count,
+            sparse_sweep_count=args.sparse_sweep_count,
             tiny_train_count=args.tiny_train_count,
             tiny_val_count=args.tiny_val_count,
             tiny_epochs=args.tiny_epochs,
