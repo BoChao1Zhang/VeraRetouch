@@ -11,11 +11,11 @@ import numpy as np
 import torch
 
 from .data import DataRequirements, PairRecord, discover_m1_data
-from .fit import ALL_FIT_CONFIGS, D4_DENSE, FIT_FULL, FIT_MAIN, fit_batch
+from .fit import A1_NO_REG_FULL, ALL_FIT_CONFIGS, D4_DENSE, FIT_FULL, FIT_MAIN, fit_batch
 from .image_io import load_image
 from .metrics import MetricAccumulator
 from .render import build_dictionary, render_hybrid, lut_stats
-from .synthetic import TIER_B_FAMILIES, decode_raw_batch, render_dense_teacher, sample_raw_actions
+from .synthetic import TIER_B_FAMILIES, decode_raw_batch, render_dense_teacher, sample_filtered_raw_actions
 from .tiny_sft import TinySFTConfig, run_tiny_sft
 
 
@@ -92,6 +92,17 @@ def run_m1(config: M1RunConfig) -> dict[str, Any]:
     report["tiers"]["renderer_aligned_synthetic"] = _run_renderer_aligned_tier(
         tier_a_paths, config, dictionary, rho, lpips_model, device
     )
+    report["a_sanity_checks"] = evaluate_tier_a_sanity(report["tiers"]["renderer_aligned_synthetic"])
+    report["thresholds"] = {
+        "A_renderer_aligned": evaluate_tier_a_threshold(report["tiers"]["renderer_aligned_synthetic"])
+    }
+    if not report["thresholds"]["A_renderer_aligned"]["pass"]:
+        report["M1_CONCLUSION"] = conclusion_from_thresholds(report["thresholds"])
+        report["fallback_decision"] = fallback_decision(report)
+        report.update(protocol_interpretation(report))
+        report["ended_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        _write_result(config.output, report)
+        return report
     _write_result(config.output, report)
 
     report["tiers"]["off_manifold_dense_teacher"] = _run_dense_teacher_tier(
@@ -171,19 +182,35 @@ def _run_renderer_aligned_tier(
     lpips_model,
     device: torch.device,
 ) -> dict[str, Any]:
-    acc = {fit.name: MetricAccumulator.create() for fit in ALL_FIT_CONFIGS}
+    fit_configs = (*ALL_FIT_CONFIGS, A1_NO_REG_FULL)
+    acc = {fit.name: MetricAccumulator.create() for fit in fit_configs}
     gt_acc = MetricAccumulator.create()
+    a0_acc = MetricAccumulator.create()
+    sampling_rows: list[dict[str, Any]] = []
     count = 0
     for batch_idx, sl_paths in enumerate(_chunks(paths, config.batch_size)):
         source = _load_path_batch(sl_paths, config.image_size, device)
-        raw = sample_raw_actions(source.shape[0], config.seed + 10_000 + batch_idx, device)
+        raw, sample_summary = sample_filtered_raw_actions(
+            source.shape[0],
+            config.seed + 10_000 + batch_idx,
+            device,
+            dictionary,
+            rho,
+        )
+        sampling_rows.append(sample_summary)
         action = decode_raw_batch(raw)
         with torch.no_grad():
             target, luts = render_hybrid(source, action, dictionary, rho, True, True)
+            replay, _ = render_hybrid(source, action, dictionary, rho, True, True)
+            replay_error = (replay - target).abs()
+            replay_mse = replay_error.pow(2).mean(dim=(1, 2, 3))
+            a0_acc.extend_tensor("MSE", replay_mse)
+            a0_acc.extend_tensor("PSNR", 10.0 * torch.log10(1.0 / replay_mse.clamp_min(1e-12)))
+            a0_acc.extend_tensor("max_abs_error", replay_error.amax(dim=(1, 2, 3)))
             gt_stats = lut_stats(action, luts)
             for key, value in gt_stats.items():
                 gt_acc.extend_tensor(key, value)
-        for fit in ALL_FIT_CONFIGS:
+        for fit in fit_configs:
             _, metrics = fit_batch(source, target, fit, dictionary, rho, lpips_model, config.fit_steps, config.fit_lr)
             _add_metrics(acc[fit.name], metrics)
         count += source.shape[0]
@@ -191,6 +218,8 @@ def _run_renderer_aligned_tier(
         "count": count,
         "configs": {name: acc[name].summary() for name in acc},
         "gt_action_stats": gt_acc.summary(),
+        "a0_gt_replay": a0_acc.summary(),
+        "sampling": _summarize_sampling(sampling_rows),
     }
 
 
@@ -254,6 +283,25 @@ def _add_metrics(acc: MetricAccumulator, metrics: dict[str, torch.Tensor]) -> No
         acc.extend_tensor(key, value)
 
 
+def _summarize_sampling(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {}
+    out: dict[str, Any] = {"policy": rows[0].get("policy", {})}
+    numeric_keys = sorted(key for key, value in rows[0].items() if isinstance(value, int | float))
+    total_requested = sum(int(row.get("requested", 0)) for row in rows)
+    total_attempted = sum(int(row.get("attempted", 0)) for row in rows)
+    for key in numeric_keys:
+        if key in {"requested", "attempted", "accepted", "acceptance_rate"}:
+            continue
+        vals = [float(row[key]) for row in rows if key in row]
+        out[key] = float(np.mean(vals)) if vals else float("nan")
+    out["requested"] = total_requested
+    out["attempted"] = total_attempted
+    out["accepted"] = sum(int(row.get("accepted", 0)) for row in rows)
+    out["acceptance_rate"] = total_requested / max(1, total_attempted)
+    return out
+
+
 def _metric(tier: dict[str, Any], config_name: str, key: str) -> float:
     return float(tier["configs"][config_name][key])
 
@@ -263,17 +311,7 @@ def evaluate_thresholds(report: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
 
     tier_a = tiers["renderer_aligned_synthetic"]
-    full_a = tier_a["configs"][FIT_FULL.name]
-    out["A_renderer_aligned"] = {
-        "pass": bool(
-            full_a["PSNR"] >= 38.0
-            and full_a["LPIPS"] <= 0.05
-            and full_a["mean_deltaE2000"] <= 1.5
-            and full_a["p95_deltaE2000"] <= 4.0
-            and full_a["clipping_ratio"] < 0.01
-        ),
-        "metrics": full_a,
-    }
+    out["A_renderer_aligned"] = evaluate_tier_a_threshold(tier_a)
 
     tier_b = tiers["off_manifold_dense_teacher"]
     main_b = tier_b["configs"][FIT_MAIN.name]
@@ -362,6 +400,58 @@ def evaluate_thresholds(report: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def evaluate_tier_a_threshold(tier_a: dict[str, Any]) -> dict[str, Any]:
+    full_a = tier_a["configs"][FIT_FULL.name]
+    a_sanity = evaluate_tier_a_sanity(tier_a)
+    return {
+        "pass": bool(
+            a_sanity["pass"]
+            and full_a["PSNR"] >= 38.0
+            and full_a["LPIPS"] <= 0.05
+            and full_a["mean_deltaE2000"] <= 1.5
+            and full_a["p95_deltaE2000"] <= 4.0
+            and full_a["clipping_ratio"] < 0.01
+        ),
+        "metrics": full_a,
+        "sanity": a_sanity,
+    }
+
+
+def evaluate_tier_a_sanity(tier_a: dict[str, Any]) -> dict[str, Any]:
+    gt = tier_a.get("gt_action_stats", {})
+    a0 = tier_a.get("a0_gt_replay", {})
+    a1 = tier_a.get("configs", {}).get(A1_NO_REG_FULL.name, {})
+    a2 = tier_a.get("configs", {}).get(FIT_FULL.name, {})
+    checks = {
+        "gt_gate_clean": bool(
+            gt.get("clipping_ratio", float("inf")) <= 0.01
+            and gt.get("gamut_violation_ratio", float("inf")) <= 0.01
+            and 2.0 <= gt.get("active_atom_count", float("inf")) <= 6.0
+            and 1e-8 <= gt.get("free_tail_energy", float("inf")) <= 0.003
+        ),
+        "a0_gt_replay": bool(a0.get("max_abs_error", float("inf")) <= 1e-6),
+        "a1_no_reg_inverse": bool(
+            a1.get("PSNR", 0.0) >= 38.0
+            and a1.get("LPIPS", float("inf")) <= 0.05
+            and a1.get("mean_deltaE2000", float("inf")) <= 1.5
+        ),
+        "a2_regularized_inverse": bool(
+            a2.get("PSNR", 0.0) >= 38.0
+            and a2.get("LPIPS", float("inf")) <= 0.05
+            and a2.get("mean_deltaE2000", float("inf")) <= 1.5
+            and a2.get("clipping_ratio", float("inf")) < 0.01
+        ),
+    }
+    return {
+        "pass": all(checks.values()),
+        "checks": checks,
+        "gt_action_stats": gt,
+        "A0_GT_replay": a0,
+        "A1_no_reg_inverse": a1,
+        "A2_regularized_inverse": a2,
+    }
+
+
 def conclusion_from_thresholds(thresholds: dict[str, Any]) -> str:
     if not thresholds:
         return "BLOCKED"
@@ -395,6 +485,15 @@ def fallback_decision(report: dict[str, Any]) -> dict[str, str]:
                 "primary_protocol_issue": gt_issue,
                 "architecture_claim": "not_established",
                 "decision": "Tier A GT action already violates clipping/gamut gate; keep M1_CONCLUSION=FAIL, stop VLM/SFT/GRPO, fix renderer-aligned generator and A0/A1/A2 before making any ShapeCurve architecture claim.",
+            }
+        sanity_issue = _tier_a_sanity_issue(report)
+        if sanity_issue:
+            return {
+                "category": "A_renderer_aligned_failed",
+                "failure_scope": "implementation_protocol",
+                "primary_protocol_issue": sanity_issue,
+                "architecture_claim": "not_established",
+                "decision": "Tier A clean GT is established, but A0/A1/A2 sanity did not close; stop VLM/SFT/GRPO and repair inverse fitting or renderer protocol before full M1.",
             }
         return {
             "category": "A_renderer_aligned_failed",
@@ -454,6 +553,14 @@ def protocol_interpretation(report: dict[str, Any]) -> dict[str, str]:
             "primary_protocol_issue": gt_issue,
             "next_action": "fix Tier A rejection sampling, inverse-fit ablations, free_tail stress, and data audit before M2",
         }
+    sanity_issue = _tier_a_sanity_issue(report)
+    if sanity_issue:
+        return {
+            "failure_scope": "implementation_protocol",
+            "architecture_level_conclusion": "not_established",
+            "primary_protocol_issue": sanity_issue,
+            "next_action": "repair A0/A1/A2 inverse-fit closure before running B/C/D/E or entering M2",
+        }
 
     fallback = report.get("fallback_decision", {})
     if fallback.get("category") == "expression_capacity_failed":
@@ -479,6 +586,15 @@ def _tier_a_gt_gate_issue(report: dict[str, Any]) -> str:
     if gamut > 0.01:
         issues.append(f"GT gamut_violation_ratio={gamut:.5f} exceeds 0.01000 gate")
     return "; ".join(issues)
+
+
+def _tier_a_sanity_issue(report: dict[str, Any]) -> str:
+    sanity = report.get("a_sanity_checks") or report.get("thresholds", {}).get("A_renderer_aligned", {}).get("sanity", {})
+    checks = sanity.get("checks", {})
+    failed = [key for key, value in checks.items() if not value]
+    if not failed:
+        return ""
+    return "Tier A sanity failed: " + ", ".join(failed)
 
 
 def _relative_drop(before: float, after: float) -> float:

@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from .action import action_main_l1, action_vector_mae, decode_raw_action, identity_raw, raw_layout
 from .metrics import delta_e_per_image, lpips_per_image
 from .render import build_dictionary, free_tail_lut, render_hybrid
-from .synthetic import sample_raw_actions
+from .synthetic import sample_filtered_raw_actions
 
 
 class TinyActionPredictor(nn.Module):
@@ -59,7 +59,7 @@ def make_synthetic_pairs(
         source = base_images.repeat(repeats, 1, 1, 1)[:count]
     else:
         source = base_images[:count]
-    raw = sample_raw_actions(count, seed, source.device)
+    raw, _ = sample_filtered_raw_actions(count, seed, source.device, dictionary, rho)
     action = decode_raw_action(raw)
     with torch.no_grad():
         target, _ = render_hybrid(source, action, dictionary, rho, True, True)

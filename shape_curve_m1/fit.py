@@ -25,6 +25,13 @@ class FitConfig:
     include_dictionary: bool
     include_free_tail: bool
     dense: bool = False
+    smoothness_weight: float = 0.01
+    gamut_weight: float = 0.5
+    dict_l1_weight: float = 0.0005
+    dict_entropy_weight: float = 0.0
+    active_budget_weight: float = 0.0
+    active_budget: float = 6.0
+    tail_gate_weight: float = 0.01
 
 
 FIT_MAIN = FitConfig("Fit-Main", include_dictionary=False, include_free_tail=False)
@@ -32,6 +39,15 @@ FIT_DICT = FitConfig("Fit-Dict", include_dictionary=True, include_free_tail=Fals
 FIT_FULL = FitConfig("Fit-Full", include_dictionary=True, include_free_tail=True)
 D4_DENSE = FitConfig("D4-Dense", include_dictionary=False, include_free_tail=False, dense=True)
 ALL_FIT_CONFIGS = (FIT_MAIN, FIT_DICT, FIT_FULL, D4_DENSE)
+A1_NO_REG_FULL = FitConfig(
+    "A1-NoReg-Full",
+    include_dictionary=True,
+    include_free_tail=True,
+    smoothness_weight=0.0,
+    gamut_weight=0.0,
+    dict_l1_weight=0.0,
+    tail_gate_weight=0.0,
+)
 
 
 def fit_batch(
@@ -67,11 +83,20 @@ def fit_hybrid_batch(
         action = decode_raw_action(masked)
         pred, luts = render_hybrid(source, action, dictionary, rho, config.include_dictionary, config.include_free_tail)
         loss = F.mse_loss(pred, target) + 0.15 * F.l1_loss(pred, target)
-        loss = loss + 0.01 * smoothness2_3d(luts["final"]).mean() + 0.5 * gamut_penalty(luts["pre"])
+        loss = loss + config.smoothness_weight * smoothness2_3d(luts["final"]).mean()
+        loss = loss + config.gamut_weight * gamut_penalty(luts["pre"])
         if config.include_dictionary:
-            loss = loss + 0.0005 * action.dict_coef.abs().mean()
+            abs_coef = action.dict_coef.abs()
+            loss = loss + config.dict_l1_weight * abs_coef.mean()
+            if config.dict_entropy_weight:
+                probs = abs_coef / abs_coef.sum(dim=1, keepdim=True).clamp_min(1e-6)
+                entropy = -(probs * (probs + 1e-6).log()).sum(dim=1).mean()
+                loss = loss + config.dict_entropy_weight * entropy
+            if config.active_budget_weight:
+                soft_active = torch.sigmoid(80.0 * (abs_coef - 0.03)).sum(dim=1)
+                loss = loss + config.active_budget_weight * F.relu(soft_active - config.active_budget).pow(2).mean()
         if config.include_free_tail:
-            loss = loss + 0.01 * action.tail_gate.mean()
+            loss = loss + config.tail_gate_weight * action.tail_gate.mean()
         loss.backward()
         opt.step()
     with torch.no_grad():
