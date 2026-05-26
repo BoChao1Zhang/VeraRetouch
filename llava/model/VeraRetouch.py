@@ -1,4 +1,5 @@
 from .language_model.llava_qwen import *
+from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
@@ -12,6 +13,15 @@ from llava.model.llava_arch import unpad_image
 logger = logging.get_logger(__name__)
 from utils import tensor2img
 import cv2
+
+
+@dataclass
+class VeraSALUTFeatureOutput:
+    vision_spatial: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None
+    hidden_bank: Optional[torch.Tensor] = None
+    z_exec: Optional[torch.Tensor] = None
+    base_image: Optional[torch.Tensor] = None
+    retouch_latent: Optional[torch.Tensor] = None
 
 
 class VeraRetouchForCausalLLM_Unified(LlavaQwen2ForCausalLM):
@@ -105,6 +115,184 @@ class VeraRetouchForCausalLLM_Unified(LlavaQwen2ForCausalLM):
                 if "mm_projector" not in name:
                     p.requires_grad = False
         print("Freeze LLM!!!")
+
+    @torch.no_grad()
+    def encode_vision_spatial_for_sa_lut(
+        self,
+        images: Optional[Union[torch.Tensor, List[torch.Tensor]]],
+    ) -> Optional[Union[torch.Tensor, List[torch.Tensor]]]:
+        """Return VeraRetouch vision-tower features before the mm_projector.
+
+        VeraSA-LUT uses this as V_pre. The returned tensor is normally
+        (B, N, D_v) patch tokens, which model.vera_sa_lut can consume directly
+        or reshape to a spatial map when the token grid is square.
+        """
+        if images is None:
+            return None
+        vision_tower = self.get_vision_tower()
+        if vision_tower is None:
+            raise ValueError("VeraRetouch has no vision tower")
+        if isinstance(images, list):
+            images = torch.cat([image.unsqueeze(0) if image.ndim == 3 else image for image in images], dim=0)
+        return vision_tower(images)
+
+    def extract_retouch_hidden_bank(
+        self,
+        output_ids: torch.LongTensor,
+        hidden_states,
+        selected_layers: Optional[List[int]] = None,
+    ) -> torch.Tensor:
+        """Collect selected-layer hidden states for <L>/<GC>/<SC> tokens.
+
+        Returns:
+            Tensor with shape (B, L, 3, D), ordered as L / GC / SC.
+        """
+        if hidden_states is None:
+            raise ValueError("hidden_states are required; call generate with output_hidden_states=True")
+        if output_ids.ndim != 2:
+            raise ValueError(f"output_ids must have shape (B, S), got {tuple(output_ids.shape)}")
+
+        batch_banks = []
+        resolved_layers = None
+        for batch_idx in range(output_ids.shape[0]):
+            token_positions = self._retouch_token_positions(output_ids, batch_idx)
+            token_banks = []
+            for position in token_positions:
+                if position >= len(hidden_states):
+                    raise ValueError(
+                        "retouch token position is outside the generated hidden-state tuple. "
+                        "Pass output_ids aligned with generate(...).hidden_states."
+                    )
+                step_hidden_states = hidden_states[position]
+                if resolved_layers is None:
+                    resolved_layers = self._resolve_hidden_layers(
+                        len(step_hidden_states),
+                        selected_layers=selected_layers,
+                    )
+                layer_values = []
+                for layer_idx in resolved_layers:
+                    value = step_hidden_states[layer_idx][batch_idx]
+                    if value.ndim == 2:
+                        value = value[-1]
+                    layer_values.append(value.squeeze())
+                token_banks.append(torch.stack(layer_values, dim=0))
+
+            batch_banks.append(torch.stack(token_banks, dim=1))
+
+        return torch.stack(batch_banks, dim=0)
+
+    @torch.no_grad()
+    def project_hidden_bank_to_sa_lut_exec(
+        self,
+        hidden_bank: torch.Tensor,
+        retouch_masks: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Project hidden-bank last-layer tokens through the Retouch Adaptor.
+
+        Returns:
+            z_exec: (B, 3, D_z), adaptor-aligned retouch latents.
+            retouch_latent: (B, 3 * D_z), flattened decoder latent.
+        """
+        if hidden_bank.ndim != 4 or hidden_bank.shape[2] != 3:
+            raise ValueError(f"hidden_bank must have shape (B, L, 3, D), got {tuple(hidden_bank.shape)}")
+        last_layer_tokens = hidden_bank[:, -1]
+        retouch_latent = self.retouch_head(last_layer_tokens.flatten(start_dim=1))
+
+        if retouch_masks is not None:
+            masks = self._retouch_masks_as_tensor(retouch_masks, retouch_latent)
+            mask_expand = masks.unsqueeze(-1).expand(-1, -1, retouch_latent.shape[-1] // 3)
+            retouch_latent = retouch_latent * mask_expand.reshape_as(retouch_latent)
+
+        return retouch_latent.view(retouch_latent.shape[0], 3, -1), retouch_latent
+
+    @torch.no_grad()
+    def collect_vera_sa_lut_features(
+        self,
+        *,
+        output_ids: torch.LongTensor,
+        hidden_states,
+        images: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
+        input_imgs: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
+        retouch_masks: Optional[Union[torch.Tensor, List[torch.Tensor]]] = None,
+        selected_layers: Optional[List[int]] = None,
+        render_base: bool = False,
+        chunk: int = -1,
+    ) -> VeraSALUTFeatureOutput:
+        """Build the frozen VeraRetouch feature packet consumed by VeraSA-LUT."""
+        vision_spatial = self.encode_vision_spatial_for_sa_lut(images)
+        hidden_bank = self.extract_retouch_hidden_bank(output_ids, hidden_states, selected_layers)
+        z_exec, retouch_latent = self.project_hidden_bank_to_sa_lut_exec(hidden_bank, retouch_masks)
+
+        base_image = None
+        if render_base:
+            if input_imgs is None:
+                raise ValueError("input_imgs are required when render_base=True")
+            base_image = self._render_retouch_base(input_imgs, retouch_latent, chunk=chunk)
+
+        return VeraSALUTFeatureOutput(
+            vision_spatial=vision_spatial,
+            hidden_bank=hidden_bank,
+            z_exec=z_exec,
+            base_image=base_image,
+            retouch_latent=retouch_latent,
+        )
+
+    def _retouch_token_positions(self, output_ids: torch.LongTensor, batch_idx: int) -> List[int]:
+        token_ids = [
+            self.retouch_token_light_idx,
+            self.retouch_token_colortemp_idx,
+            self.retouch_token_colormixer_idx,
+        ]
+        positions = []
+        for token_id in token_ids:
+            token_positions = torch.where(output_ids[batch_idx] == token_id)[0]
+            if token_positions.numel() == 0:
+                raise ValueError(f"retouch token id {token_id} was not found in sample {batch_idx}")
+            positions.append(int(token_positions[0].item()))
+        return positions
+
+    def _resolve_hidden_layers(self, layer_count: int, selected_layers: Optional[List[int]]) -> List[int]:
+        if selected_layers is None:
+            start = max(0, layer_count - 4)
+            selected_layers = list(range(start, layer_count))
+
+        resolved = []
+        for layer_idx in selected_layers:
+            if layer_idx < 0:
+                layer_idx = layer_count + layer_idx
+            if layer_idx < 0 or layer_idx >= layer_count:
+                raise ValueError(f"hidden layer index {layer_idx} is out of range for {layer_count} layers")
+            resolved.append(layer_idx)
+        return resolved
+
+    def _retouch_masks_as_tensor(
+        self,
+        retouch_masks: Union[torch.Tensor, List[torch.Tensor]],
+        target: torch.Tensor,
+    ) -> torch.Tensor:
+        if isinstance(retouch_masks, list):
+            retouch_masks = torch.stack([mask.to(device=target.device, dtype=target.dtype) for mask in retouch_masks])
+        else:
+            retouch_masks = retouch_masks.to(device=target.device, dtype=target.dtype)
+        if retouch_masks.ndim == 1:
+            retouch_masks = retouch_masks.unsqueeze(0)
+        if retouch_masks.shape[-1] != 3:
+            raise ValueError(f"retouch_masks must have 3 channels, got {tuple(retouch_masks.shape)}")
+        return retouch_masks
+
+    def _render_retouch_base(
+        self,
+        input_imgs: Union[torch.Tensor, List[torch.Tensor]],
+        retouch_latent: torch.Tensor,
+        *,
+        chunk: int,
+    ) -> torch.Tensor:
+        if isinstance(input_imgs, list):
+            input_imgs = torch.cat([img.unsqueeze(0) if img.ndim == 3 else img for img in input_imgs], dim=0)
+        input_imgs = input_imgs.to(device=retouch_latent.device, dtype=retouch_latent.dtype)
+        if chunk > 0:
+            return self.retouch_decoder.forward_chunk(input_imgs, retouch_latent, chunk).to(torch.float32)
+        return self.retouch_decoder(input_imgs, retouch_latent).to(torch.float32)
             
     def prepare_inputs_labels_for_multimodal(
         self, input_ids, position_ids, attention_mask, past_key_values, labels,
@@ -415,4 +603,3 @@ class VeraRetouchForCausalLLM_Unified(LlavaQwen2ForCausalLM):
             decoded_outputs.append(decoded)
 
         return retouched_imgs, decoded_outputs
-    
