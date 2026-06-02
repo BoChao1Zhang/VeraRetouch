@@ -3,9 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Large reference material (papers) — kept out of git, not source
-docs/papers_extracted/
-docs/*.zip
+# Docs: design plans, paper digests, reference PDFs — kept out of git entirely
+docs/
 
 # Local build outputs / scratch
 *.tmp
