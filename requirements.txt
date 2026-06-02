@@ -13,6 +13,7 @@ opencv_python_headless==4.9.0.80
 packaging==26.2
 peft==0.15.0
 Pillow==12.2.0
+pytest==8.4.2
 python_box==7.3.2
 PyYAML==6.0.2
 PyYAML==6.0.3

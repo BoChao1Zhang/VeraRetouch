@@ -1,0 +1,12 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large reference material (papers) — kept out of git, not source
+docs/papers_extracted/
+docs/*.zip
+
+# Local build outputs / scratch
+*.tmp
+.DS_Store

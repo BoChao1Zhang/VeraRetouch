@@ -1,0 +1,276 @@
+# =============================================================================
+# dataset_build/config.yaml
+# VeraRetouch Direction-A, RECIPE-BASED, region-local-heavy 1,000,000 dataset.
+# All paths verified on disk 2026-06-01 (see docs/plan/dataset/probe/*.md).
+# Edit budgets / ratios here; code reads this file, never hard-codes paths.
+# =============================================================================
+
+build_version: "v2"
+schema_version: "datagen_v2"
+seed: 1234
+out_root: "/home/bc/data/datasets/vera_directionA_1M"   # shards + indexes + C_GT live here
+scratch_dir: "/home/bc/data/datasets/_scratch"          # raw decode / archive extraction (ephemeral)
+stage0:
+  max_pixels: 80000000                                  # native-res render/composite budget for z* probe/loader.
+
+# -----------------------------------------------------------------------------
+# Model + service paths (DO NOT load weights in subagents; main process only).
+# -----------------------------------------------------------------------------
+models:
+  veraretouch:                                          # the TEACHER (param-mode renderer)
+    model_path: "/home/bc/data/models/VeraRetouch"
+    teacher_sha256: "auto"                              # hashes <model_path>/model.safetensors at build time (real weights, not config-vs-config)
+    config_add_path: "./configs/infer_config.yaml"      # cwd must be /home/bc/VeraRetouch
+    dtype: "bfloat16"
+    chunk: 262144                                       # 512*512 pixel tiling for native-res render
+    max_new_tokens: 768                                 # must cover problem+plan+3 retouch tokens (256 truncated before retouch tokens emitted)
+    batch_size: 8                                        # VLM-stage batch (decoder loop is bs=1 internally)
+    num_workers: 0                                       # render DataLoader workers=0: load in-thread, NO subprocesses.
+                                                        # num_workers>0 + per-batch DataLoader leaks worker procs holding
+                                                        # native-res tensors across thousands of batches -> RAM OOM.
+    greedy: true                                        # temperature=0 deterministic teacher
+  sam3:                                                 # text-promptable masker (env monetgpt_sam3)
+    model_dir: "/home/bc/data/models"                   # Sam3VideoModel; use .detector_model
+    env: "monetgpt_sam3"
+    python: "/home/bc/miniconda3/envs/monetgpt_sam3/bin/python"
+    dtype: "bfloat16"
+    score_threshold: 0.3
+    mask_threshold: 0.5
+    # --- Wave-2 SAM3 mask cache (precompute via sam3_precompute.py in monetgpt_sam3) ---
+    cache_subdir: "sam3_cache"                          # under out_root
+    cache_dir: "/home/bc/data/datasets/vera_directionA_1M/sam3_cache"
+    use_cache: false                                    # set true for S2/S3 Wave-2 (orchestrator reads cache, base env)
+  groundingdino_sam2_fallback:
+    gdino_weights: "/home/bc/data/models/groundingdino_swint_ogc.pth"
+    sam2_weights: "/home/bc/data/models/sam2_hiera_large.pt"
+    gdino_conf: 0.8
+  ppr10k_masks:                                         # CONDITIONAL: corrupt download (probe_sources §1a)
+    masks_zip: "/home/bc/datasets/PPR0K_all_files_11161_zip/masks_360p.zip"
+    available: false                                    # set true after re-download + integrity check
+  raw_decode:                                           # rawpy only in fivek-cleaning (probe_GREYSKY §2)
+    env: "fivek-cleaning"
+    python: "/home/bc/miniconda3/envs/fivek-cleaning/bin/python"
+
+vllm:                                                   # Qwen3-VL cleaner (HTTP; main process launches)
+  base_url: "http://localhost:8001/v1"
+  api_key: "EMPTY"
+  served_model_name: "qwen3-vl-8b"
+  model_path: "/home/bc/data/models/Qwen3-VL-8B-Instruct"
+  max_tokens: 768
+  temperature: 0.2
+  limit_mm_per_prompt_image: 2                          # template (c) feeds before+after
+  concurrency: 32                                       # threadpool fan-out for VLM HTTP/text work. Image encoding is
+                                                        # separately capped below to avoid giant-source RAM spikes.
+  max_outstanding_samples: 32                           # hard backpressure cap for submitted clean futures.
+                                                        # Keeps rendered after arrays / encoded-image work bounded.
+  image_encode_concurrency: 4                           # PIL/header/full decode cap for VLM image payloads.
+  image_cache_entries: 512                              # in-process thumbnail data-URI LRU; set 0 to disable.
+  max_image_pixels: 80000000                            # reject VLM image encode above this many source pixels.
+  image_longedge: 768                                   # downscale images sent to the judge (0=native); native-res
+                                                        # vision-encode x3-4 calls/sample is the clean-stage bottleneck
+                                                        # (768 keeps instruction/judge detail; big win on 2-4K source corpora)
+
+# -----------------------------------------------------------------------------
+# SOURCE corpora (the 'before' image pools). Verified counts in probes.
+# -----------------------------------------------------------------------------
+sources:
+  max_source_pixels: 80000000                            # skip giant print/PSD/frame assets before CPU mask/VLM decode.
+  tad66k:
+    path: "/home/bc/data/datasets/TAD66K/TAD66K.zip"        # ~66K aesthetic imgs (not extracted)
+    extract_to: "/home/bc/data/datasets/_scratch/TAD66K"
+    scene: "any"
+    count_est: 66000
+  fivek:
+    path: "/home/bc/datasets/fivek_dataset.tar"             # 5000 DNG (source-only; experts absent)
+    raw_glob: "raw_photos/HQa*/photos/*.dng"
+    raw_decode: "rawpy"
+    scene: "any"
+    count_est: 5000
+  awards:                                                   # high-aesthetic; double-nested .rar/.zip
+    path: "/home/bc/retouching/presets/2008-2021 获奖摄影师作品合集"
+    extract: "7z_two_step"                                  # /usr/bin/7z; extract lazily (probe_GREYSKY §3)
+    scene: "any"
+    count_est: 8000
+  korean_portraits:
+    path: "/home/bc/retouching/presets/211韩国JPG图片集先转存在提取以免丢失"
+    scene: "portrait"
+    is_portrait_pool: true
+    count_est: 1312
+  quandian:                                                 # 全店素材 source-image pools (probe_全店素材 §3)
+    path: "/home/bc/retouching/presets/全店素材"
+    portrait_pools: ["H033", "H100", "H103"]                # ~5600 wedding/bride/hanfu portraits
+    scene: "portrait"
+    is_portrait_pool: true
+    count_est: 5600
+  greysky:                                                  # TIER-1 gold; raw DNG before
+    path: "/home/bc/retouching/presets/GREYSKY 老斯基的预设专车"
+    raw_decode: "rawpy"
+    scene: "any"
+    triples: 91
+    dng_xmp_pairs: 100
+  mmart:                                                    # 4055 before imgs + 12165 records
+    grpo_json: "/home/bc/datasets/MMArt-PPR10k/grpo_dataset.json"
+    image_root: "/home/bc/datasets/MMArt-PPR10k/global"     # rebase stale paths to <id>/before.jpg
+    scene: "any"
+    unique_images: 4055
+  unsplash:                                                 # URL CSV only; download a ~25K slice (deferred)
+    csv: "/home/bc/data/datasets/unsplash-research-dataset-lite-latest.zip"
+    download: true
+    count_est: 25000
+    on_pilot_critical_path: false
+  raise:                                                    # URL CSV; SKIP for pilot
+    csv: "/home/bc/data/datasets/RAISE_6k.csv.zip"
+    download: false
+
+# -----------------------------------------------------------------------------
+# RECIPE banks (the 'look' edits). XMP is canonical; cube/lrtemplate alternates.
+# -----------------------------------------------------------------------------
+recipes:
+  quandian:
+    path: "/home/bc/retouching/presets/全店素材"
+    xmp_est: 5814           # usable looks after technical/B&W filter (probe_全店素材 §2)
+    cube_est: 3755
+    lrtemplate_est: 4028
+    local_mask_recipes: 2510  # MaskGroup/Gradient/PaintBased -> region hints
+  e18_luts:
+    path: "/home/bc/retouching/presets/E18 《300+广告级LUT》"
+    cube_est: 3041
+  greysky_xmp:
+    path: "/home/bc/retouching/presets/GREYSKY 老斯基的预设专车"
+    xmp_est: 118
+  preset_v1_manifest:       # cataloging/scene-matching only (DEMOTED quality)
+    manifest: "/home/bc/retouching/presets/preset_dataset_v1/manifests/manifest.jsonl"
+    role: "scene_matching"
+    xmp_est: 7624
+  parsers:
+    xmp_parser: "/home/bc/retouching/presets/scripts/build_preset_dataset.py"   # parse_xmp_file
+    lua_parser: "/home/bc/retouching/pe_kg/scripts/_lua_table_parser.py"
+  filters:                  # drop technical / B&W (probe_recipe_parsers §1b/§2, probe_全店素材 §2)
+    technical_name_re: "Slog|S-Log|SLog2|SLog3|REC709|Rec\\.709|709toLog|LogtoRec|LinearTo|_to_|Conversion|Technical|LUTCalc|Identity|Neutral"
+    drop_bw: true           # ConvertToGrayscale="True"
+    junk_ext: [".mov",".mp4",".txt",".doc",".docx",".pdf",".zip",".rar",".exe",".apk",".cfg",".url",".wav",".jsp",".8bf",".ds_store"]
+    junk_path_re: "教程|安装|导入|说明|必看|二维码|广告|微信|售后|转换器|Generator|使用方法"
+    min_source_bytes: 512000     # >500KB to drop thumbnails/UI chrome
+    costyle: "skip"              # Capture One; lossy mapping (probe_recipe_parsers §3)
+
+# -----------------------------------------------------------------------------
+# PER-STREAM BUDGET (sums to 1,000,000). Region-local = S1+S2+S3+S4 = 600k (60%).
+# Pilot = same mix scaled to ~5000 (probe_sources_budget §4).
+# -----------------------------------------------------------------------------
+region_local_floor: 0.50      # USER OVERRIDE: >=50% (achieved 60%)
+budget:
+  total: 1000000
+  streams:
+    S1: {budget: 340000, region_local: true,  recipe_kind: degrade, mask: degrade}
+    S2: {budget: 190000, region_local: true,  recipe_kind: param_or_lut, mask: sam3}
+    S3: {budget: 30000,  region_local: true,  recipe_kind: param, mask: sam3}
+    S4: {budget: 40000,  region_local: true,  recipe_kind: param, mask: ppr10k}   # CONDITIONAL
+    S5: {budget: 20000,  region_local: false, recipe_kind: param, mask: global}
+    S6: {budget: 270000, region_local: false, recipe_kind: param_or_lut, mask: global}
+    S7: {budget: 110000, region_local: false, recipe_kind: degrade, mask: global}
+  # If PPR10K masks stay blocked, fold S4's 40k into S1 (still 60% region-local).
+  s4_fallback_stream: "S1"
+pilot:
+  total: 5000
+  streams: {S1: 1700, S2: 950, S3: 150, S4: 200, S5: 100, S6: 1350, S7: 550}
+
+# Within region-local, oversample SC-local edits (SC "wants to be local", P0_001 §5).
+aspect_mix:
+  region_local_sc_fraction: 0.5     # half of region-local samples target SC concepts
+  # Equal-ratio Auto/Style/Param reasoning format on the global recipe streams (dossier).
+  global_task_mix: {auto: 0.34, style: 0.33, param: 0.33}
+
+# Track-B Gaussian-operator perturbation: the 7 L/GC/SC combos (impl_plan_A §2.1).
+degrade:
+  combos: ["L","GC","SC","L+GC","L+SC","GC+SC","L+GC+SC"]
+  region_shapes: ["sam3_concept","random_blob","radial","linear"]   # for the exact M_r
+  # per-op sigma table name (P0_001 Tab 8; matches infer_dataset L281-287). Impl resolves it.
+  sigma_profile: "aether_tab8"
+
+# -----------------------------------------------------------------------------
+# SCENE-MATCHING (recipe -> source). Soft routing (probe_sources_budget §3).
+# -----------------------------------------------------------------------------
+scene_matching:
+  portrait_recipe_re: "portrait|人像|instagram|film.?portrait|skin|新娘|婚礼|wedding|肤"
+  scenery_recipe_re: "landscape|ocean|海洋|flower|花|cine|电影|sky|风光|sunset|日落"
+  default: "any"
+  use_clip_zeroshot_fallback: true
+
+# -----------------------------------------------------------------------------
+# C_GT (Direction-A supervision). Single-channel + optional 3-aspect stack.
+# -----------------------------------------------------------------------------
+cgt:
+  single_channel: true                 # primary: C_GT^{1ch} = max_r C_GT^r (impl_plan_A §2.3)
+  store_aspect_stack: false            # set true to also emit L/GC/SC PNGs
+  patch_grid: 16                       # also store a tiny patch-grid .npy (VLM C(x) lives here)
+  store_format: "png"                  # 1-ch 8-bit PNG, native HxW (probe_sam3 §7)
+  magnitude_tau: 1.0                   # g(||dtheta_r||)=tanh(||dtheta_r||/tau) Mode-1 weighting
+  soft_blur_sigma_px: 2.0              # PerTouch soft-boundary blur on stored C_GT (anti-overfit)
+  min_coverage: 0.01                   # reject region-local masks covering <1% of pixels
+  max_coverage: 0.95                   # reject masks covering >95% (not 'local')
+  concept_vocab:                       # SAM3 text prompts -> 3-aspect spine (probe_sam3 §6)
+    subject:  ["person","face","skin","hair","eyes","lips","subject"]
+    nature:   ["sky","clouds","foliage","leaves","grass","trees","flowers","water","sea","sunset","mountain","snow","sand"]
+    built:    ["building","wall","street","car","food"]
+    compositional: ["foreground","background","shadows","highlights"]
+    catch_all: ["the main subject","the background"]
+  concept_map:                         # default cgt_aspect_stack mapping
+    L:  ["foreground","background"]               # usually near-uniform -> C_L ~ 1 (correct)
+    GC: ["sky","background","building"]
+    SC: ["skin","face","foliage","grass","water","sky","flowers"]
+
+# -----------------------------------------------------------------------------
+# QA GATES (accept/reject). data_construction_dossier §8; probe_vllm_clean §3c.
+# -----------------------------------------------------------------------------
+qa:
+  mllm_score_min: 0.70                 # MLLM-judge threshold (Pico-Banana style)
+  require_look_match: true
+  require_param_sane: true
+  mmart_require_processed_ok: true     # caveat (a): verify processed.jpg before pixel use
+  mask_quality_min: 0.30               # SAM3/GDINO confidence floor
+  histsim_min: 0.50                    # color-direction agreement (Track recon gate)
+  er_recon_psnr_min: 25.0              # Track-A round-trip floor (P0_001 Tab 9: 27.4-40.6)
+  reject_log: "rejects.jsonl"          # log every reject with reason (not silent pass)
+  max_retries: 3                       # retry-and-keep-failures -> free RL preference pairs
+  annotation_mode: "vlm"               # "vlm" enriches instruction/think/scene tags for quality;
+                                       # "template" is a throughput mode for bulk generation.
+  vlm_override_answer: false           # keep deterministic recipe/MMArt/degrade answers as GT;
+                                       # VLM reasoning may explain them but must not overwrite them.
+  tag_global: false                    # TUNABLE: global S5/S6 don't use the region tag to build a mask;
+                                       # scene/style fill from the offline path. Set true to also run
+                                       # tag_scene_region for GLOBAL streams (extra VLM call) when you
+                                       # want scene/style distributions for post-build filtering/analysis.
+  # --- teacher-after -> vLLM judge (cleaner.verify) wiring -------------------
+  enable_verify: true                  # ON: render the teacher 'after' + feed cleaner.verify (log mode)
+  verify_degrade_streams: false        # S1/S7 are recipe-only at build; Stage-0 runs z* PSNR gate.
+  verify_gate_mode: "log"              # "log": record verdict in meta only (NO reject) -> measure
+                                       # score distributions first; switch to "enforce" only after
+                                       # inspecting score/look_match/param_sane distributions.
+  verify_sample_rate: 0.1              # TUNABLE: gate_mode is 'log' so verify never rejects; a 0.1
+                                       # sample still measures look_match/param_sane distributions
+                                       # while dropping ~90% of the priciest 2-image verify calls
+                                       # (+ their teacher render+downscale). Raise toward 1.0 for a
+                                       # quality-first pass; only lower under "log" gate_mode.
+  verify_downscale_longedge: 768       # downscale before+after to this long edge before base64
+                                       # (native-res 24MP x2 would blow past vLLM max_model_len)
+
+# -----------------------------------------------------------------------------
+# SHARDING / STORAGE / RESUMABILITY.
+# -----------------------------------------------------------------------------
+storage:
+  shard_size: 5000                     # samples per shard JSONL
+  manifest_index: "manifest_index.jsonl"   # one row per committed shard
+  source_index: "source_index.jsonl"
+  recipe_index: "recipe_index.jsonl"
+  pack_index: "pack_index.jsonl"
+  cgt_subdir: "cgt"                    # cgt/<stream>/<shard>/<sample_id>.png
+  atomic_write: true                   # write .tmp then fsync+rename
+  dedup_preset_stem: true              # G3: dedup recipes by preset stem / internalName
+
+# -----------------------------------------------------------------------------
+# EVAL / INSPECTION (DATASET_BUILD_PLAN.md §eval).
+# -----------------------------------------------------------------------------
+eval:
+  human_seed_bench: 200                # strictly human-checked w/ GT masks (C_GT IoU)
+  contact_sheet_n: 64                  # render before/after/C_GT triptychs per stream for review
+  report: "build_report.html"
