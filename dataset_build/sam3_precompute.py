@@ -48,6 +48,29 @@ def _concepts_from_config(cfg: dict) -> List[str]:
     return DEFAULT_CONCEPTS
 
 
+def _tag_concepts_for(tag_cache_dir: Optional[str], path: str, max_concepts: int) -> Optional[List[str]]:
+    """Per-image SAM3 concepts = the VLM concepts the build will actually request
+    (read from the tag precompute cache), so the SAM3 cache hits the build's
+    CachedMasker queries instead of a fixed vocab that would mostly miss.
+    Returns None if no tag entry / no concepts (caller falls back to the fixed set)."""
+    if not tag_cache_dir:
+        return None
+    p = os.path.join(tag_cache_dir, path_key(path), "tags.json")
+    try:
+        with open(p) as f:
+            d = json.load(f)
+    except Exception:
+        return None
+    out: List[str] = []
+    for c in (d.get("sam3_concepts") or []):
+        c = str(c).strip()
+        if c and c not in out:
+            out.append(c)
+        if max_concepts and len(out) >= max_concepts:
+            break
+    return out or None
+
+
 def _parse_corpora_arg(raw: str) -> Set[str]:
     vals = {c.strip() for c in str(raw or "").split(",") if c.strip()}
     if any(v.lower() in {"all", "*"} for v in vals):
@@ -100,6 +123,8 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="cap sources this shard (smoke)")
     ap.add_argument("--corpora", default="", help="comma list to restrict corpora; default = S2/S3 SAM3 pools; use ALL for no filter")
     ap.add_argument("--concepts", default="", help="comma list; empty = config cgt.concept_vocab or SC defaults")
+    ap.add_argument("--from-tags", default="1", help="derive per-image SAM3 concepts from tag_cache (aligns with build queries); 0 to disable")
+    ap.add_argument("--max-concepts", type=int, default=4, help="cap concepts per image when --from-tags")
     ap.add_argument("--cache-dir", default="", help="override cache dir")
     args = ap.parse_args()
 
@@ -113,11 +138,18 @@ def main() -> None:
     cache_dir = args.cache_dir or os.path.join(out_root, sam.get("cache_subdir", "sam3_cache"))
     os.makedirs(cache_dir, exist_ok=True)
 
+    tagc = (cfg.get("tag_cache", {}) or {})
+    tag_cache_dir = None
+    if str(args.from_tags).lower() not in {"0", "false", "no", ""}:
+        tcd = tagc.get("cache_dir") or os.path.join(out_root, tagc.get("subdir", "tag_cache"))
+        tag_cache_dir = tcd if os.path.isdir(tcd) else None
+
     shard_i, shard_n = (int(x) for x in args.shard.split("/"))
     concepts = [c.strip() for c in args.concepts.split(",") if c.strip()] or _concepts_from_config(cfg)
     corpora = _parse_corpora_arg(args.corpora)
 
-    print(f"[sam3] shard {shard_i}/{shard_n} cache={cache_dir} concepts={concepts} corpora={corpora or 'ALL'}", flush=True)
+    print(f"[sam3] shard {shard_i}/{shard_n} cache={cache_dir} from_tags={'on' if tag_cache_dir else 'off'} "
+          f"fallback_concepts={concepts} corpora={corpora or 'ALL'}", flush=True)
 
     # Lazy SAM3 load (only here, only in monetgpt_sam3).
     from dataset_build.masking import Sam3Masker
@@ -132,18 +164,19 @@ def main() -> None:
     done = skipped = failed = 0
     for r in _iter_sources(index_path, corpora, shard_i, shard_n, args.limit):
         path = r["path"]
+        row_concepts = _tag_concepts_for(tag_cache_dir, path, args.max_concepts) or concepts
         d = os.path.join(cache_dir, path_key(path))
-        if all(os.path.exists(os.path.join(d, concept_slug(c) + ".png")) for c in concepts):
+        if all(os.path.exists(os.path.join(d, concept_slug(c) + ".png")) for c in row_concepts):
             skipped += 1
             continue
         os.makedirs(d, exist_ok=True)
         try:
-            cmaps: Dict[str, np.ndarray] = masker.masks(path, concepts)
+            cmaps: Dict[str, np.ndarray] = masker.masks(path, row_concepts)
         except Exception as e:  # missing file / decode / OOM on one image
             failed += 1
             print(f"[sam3] skip {path}: {e}", file=sys.stderr)
             continue
-        for c in concepts:
+        for c in row_concepts:
             m = cmaps.get(c)
             if m is None:
                 continue

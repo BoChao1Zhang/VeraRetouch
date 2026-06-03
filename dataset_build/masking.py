@@ -455,7 +455,7 @@ class Sam3Masker(ConceptMasker):
 
         # Filter instances by score.
         if scores is not None:
-            sc = scores.detach().cpu().numpy() if hasattr(scores, "detach") else np.asarray(scores)
+            sc = scores.detach().to(torch.float32).cpu().numpy() if hasattr(scores, "detach") else np.asarray(scores)
             keep = sc >= float(min_score)
             if keep.any():
                 m = m[keep]

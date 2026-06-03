@@ -722,6 +722,63 @@ class QwenVLCleaner(Cleaner):
             "masksubtype_hint": msub,
         }
 
+    # ---- (d') scene + region-concept tagging + VLM aesthetic ------------
+    def tag_full(self, image_path: str, instruction: str = "") -> dict:
+        """Same tags as ``tag_scene_region`` PLUS a VLM aesthetic score (1-10).
+
+        Used ONLY by the source-image tag precompute (``tag_precompute.py``).
+        It is a SUPERSET of ``tag_scene_region`` — the same six keys plus an
+        integer ``aesthetic_vlm`` (1=poor ... 10=excellent). The existing inline
+        ``tag_scene_region`` callers in the build are unchanged; this is an
+        additive method so the per-sample build path keeps working untouched.
+        """
+        system = self.persona + "\n\nYou also localize which region the edit targets and rate aesthetics."
+        user_text = (
+            f'<image> Edit intent: "{instruction}".\n'
+            "Tag this photo:\n"
+            "  - scene: one of {portrait, landscape, street, food, product, wedding, "
+            "night, architecture, still_life}\n"
+            "  - style: short label (e.g. 'warm vintage film', 'clean bright commercial')\n"
+            "  - region_local: true if the edit primarily targets a SPECIFIC region/object, "
+            "false if it is a global look.\n"
+            "  - sam3_concepts: list of open-vocabulary noun phrases naming the target "
+            'region(s) for SAM3 text-prompting (e.g. ["sky"], ["person\'s face","hair"]).\n'
+            "  - groundingdino_prompt: a single GroundingDINO text prompt, period-separated "
+            '(e.g. "sky . person").\n'
+            "  - masksubtype_hint: MMArt MaskSubType int (1=Subject, 2=Sky, 3=Person; 0 if "
+            "none/global).\n"
+            "  - aesthetic: integer 1-10 rating the OVERALL photographic aesthetic quality "
+            "(1=poor, 10=excellent).\n"
+            "Output JSON ONLY with exactly those keys."
+        )
+        d = self._chat_json(system, user_text, images=[image_path])
+        scene = str(d.get("scene", "")).strip().lower()
+        if scene not in _VALID_SCENES:
+            scene = "any"
+        concepts = d.get("sam3_concepts", [])
+        if not isinstance(concepts, list):
+            concepts = [str(concepts)] if concepts else []
+        concepts = [str(c).strip() for c in concepts if str(c).strip()]
+        try:
+            msub = int(d.get("masksubtype_hint", 0) or 0)
+        except (TypeError, ValueError):
+            msub = 0
+        aesthetic_vlm: Optional[float] = None
+        if d.get("aesthetic") is not None:
+            try:
+                aesthetic_vlm = max(1.0, min(10.0, float(d.get("aesthetic"))))
+            except (TypeError, ValueError):
+                aesthetic_vlm = None
+        return {
+            "scene": scene,
+            "style": str(d.get("style", "")).strip(),
+            "region_local": bool(d.get("region_local", False)),
+            "sam3_concepts": concepts,
+            "groundingdino_prompt": str(d.get("groundingdino_prompt", "")).strip(),
+            "masksubtype_hint": msub,
+            "aesthetic_vlm": aesthetic_vlm,
+        }
+
 
 def _clamp01(v: Any) -> float:
     try:

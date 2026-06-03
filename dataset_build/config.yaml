@@ -39,23 +39,43 @@ models:
     # --- Wave-2 SAM3 mask cache (precompute via sam3_precompute.py in monetgpt_sam3) ---
     cache_subdir: "sam3_cache"                          # under out_root
     cache_dir: "/home/bc/data/datasets/vera_directionA_1M/sam3_cache"
-    use_cache: false                                    # set true for S2/S3 Wave-2 (orchestrator reads cache, base env)
+    use_cache: true                                     # ON: S2/S3 read precomputed SAM3 masks (per-image tag concepts; base env)
   groundingdino_sam2_fallback:
     gdino_weights: "/home/bc/data/models/groundingdino_swint_ogc.pth"
     sam2_weights: "/home/bc/data/models/sam2_hiera_large.pt"
     gdino_conf: 0.8
-  ppr10k_masks:                                         # CONDITIONAL: corrupt download (probe_sources §1a)
-    masks_zip: "/home/bc/datasets/PPR0K_all_files_11161_zip/masks_360p.zip"
-    available: false                                    # set true after re-download + integrity check
+  ppr10k_masks:                                         # REVIVED: real human masks (monetGPT masks, NOT the corrupt masks_360p.zip)
+    masks_path: "/home/bc/retouching/monetGPT/data/ppr10k/masks"   # masks/360p/masks_360p/<orig_base>.png
+    masks_zip: "/home/bc/datasets/PPR0K_all_files_11161_zip/masks_360p.zip"   # legacy/corrupt; unused
+    available: true                                     # real masks present -> S4 active (no S4->S1 fold)
   raw_decode:                                           # rawpy only in fivek-cleaning (probe_GREYSKY §2)
     env: "fivek-cleaning"
     python: "/home/bc/miniconda3/envs/fivek-cleaning/bin/python"
 
+# -----------------------------------------------------------------------------
+# Source-image TAG + AESTHETIC precompute cache (precompute via tag_precompute.py
+# against the running vLLM server(s); base-env orchestrator reads via
+# tag_cache.CachedTagger). Mirrors the sam3 cache block above; path_key is shared
+# so the two caches align (disjoint+consistent shards). DEFAULT-OFF.
+# -----------------------------------------------------------------------------
+tag_cache:
+  use_cache: true                                       # ON: build reads cached scene/style/concepts/aesthetic INSTEAD of the inline VLM tag call
+  subdir: "tag_cache"                                   # under out_root
+  cache_dir: "/home/bc/data/datasets/vera_directionA_1M/tag_cache"
+
+# -----------------------------------------------------------------------------
+# Dedicated objective aesthetic scorer (CLIP ViT-L/14 + LAION linearMSE head).
+# Used only by tag_precompute.py; graceful if the weights are absent.
+# -----------------------------------------------------------------------------
+aesthetic:
+  clip_dir: "/home/bc/data/models/clip-vit-large-patch14"
+  mlp_path: "/home/bc/data/models/laion_aesthetic_sac_logos_ava1_l14_linearMSE.pth"
+
 vllm:                                                   # Qwen3-VL cleaner (HTTP; main process launches)
   base_url: "http://localhost:8001/v1"
   api_key: "EMPTY"
-  served_model_name: "qwen3-vl-8b"
-  model_path: "/home/bc/data/models/Qwen3-VL-8B-Instruct"
+  served_model_name: "qwen3_5-4b"                        # tagging/annotation now on Qwen3.5-4B (dual-card, mem-util 0.7, 64 seqs)
+  model_path: "/home/bc/data/models/Qwen3.5-4B"
   max_tokens: 768
   temperature: 0.2
   limit_mm_per_prompt_image: 2                          # template (c) feeds before+after
@@ -121,6 +141,18 @@ sources:
   raise:                                                    # URL CSV; SKIP for pilot
     csv: "/home/bc/data/datasets/RAISE_6k.csv.zip"
     download: false
+  fivek_gold:                                               # NEW GOLD GLOBAL pairs -> S8 (real before->expert after)
+    path: "/home/bc/retouching/monetGPT/data/fivek_mmart_like/train_global"   # ONLY train_global (20,000) is scanned/built
+    # EVAL HOLDOUT: .../fivek_mmart_like/test_global (5000 samples) is the held-out
+    # eval set and is NEVER scanned by the registry (do not point any build path at it).
+    scene: "any"
+    count_est: 20000
+  ppr10k:                                                   # REVIVED region-local portrait PARAM -> S4 (real human masks)
+    path: "/home/bc/retouching/monetGPT/data/ppr10k"        # source/<id>.png + xmp/target_{a,b,c}/<id>.xmp + masks/360p/masks_360p/<orig_base>.png
+    scene: "portrait"
+    is_portrait_pool: true
+    experts: ["a", "b", "c"]                                # all 3 experts: ~8875 x 3 = 26,625 region-local samples
+    count_est: 26625
 
 # -----------------------------------------------------------------------------
 # RECIPE banks (the 'look' edits). XMP is canonical; cube/lrtemplate alternates.
@@ -154,25 +186,27 @@ recipes:
     costyle: "skip"              # Capture One; lossy mapping (probe_recipe_parsers §3)
 
 # -----------------------------------------------------------------------------
-# PER-STREAM BUDGET (sums to 1,000,000). Region-local = S1+S2+S3+S4 = 600k (60%).
+# PER-STREAM BUDGET (sums to 1,000,000). Region-local = S1+S2+S3+S4 = 580k (58%).
+# Additions (S4 ppr10k=26,625 + S8 fivek_gold=20,000) are carved from S1 (tad66k-heavy).
 # Pilot = same mix scaled to ~5000 (probe_sources_budget §4).
 # -----------------------------------------------------------------------------
-region_local_floor: 0.50      # USER OVERRIDE: >=50% (achieved 60%)
+region_local_floor: 0.50      # USER OVERRIDE: >=50% (achieved 58%)
 budget:
   total: 1000000
   streams:
-    S1: {budget: 340000, region_local: true,  recipe_kind: degrade, mask: degrade}
+    S1: {budget: 333375, region_local: true,  recipe_kind: degrade, mask: degrade}
     S2: {budget: 190000, region_local: true,  recipe_kind: param_or_lut, mask: sam3}
     S3: {budget: 30000,  region_local: true,  recipe_kind: param, mask: sam3}
-    S4: {budget: 40000,  region_local: true,  recipe_kind: param, mask: ppr10k}   # CONDITIONAL
+    S4: {budget: 26625,  region_local: true,  recipe_kind: param, mask: ppr10k}   # REVIVED (8875 x 3 experts)
     S5: {budget: 20000,  region_local: false, recipe_kind: param, mask: global}
     S6: {budget: 270000, region_local: false, recipe_kind: param_or_lut, mask: global}
     S7: {budget: 110000, region_local: false, recipe_kind: degrade, mask: global}
-  # If PPR10K masks stay blocked, fold S4's 40k into S1 (still 60% region-local).
+    S8: {budget: 20000,  region_local: false, recipe_kind: param, mask: global}   # NEW gold real-JPG (fivek_gold)
+  # ppr10k masks now available -> S4 is active; this fold is a no-op (kept for safety).
   s4_fallback_stream: "S1"
 pilot:
   total: 5000
-  streams: {S1: 1700, S2: 950, S3: 150, S4: 200, S5: 100, S6: 1350, S7: 550}
+  streams: {S1: 1670, S2: 950, S3: 150, S4: 130, S5: 100, S6: 1350, S7: 550, S8: 100}
 
 # Within region-local, oversample SC-local edits (SC "wants to be local", P0_001 §5).
 aspect_mix:
@@ -229,7 +263,7 @@ qa:
   mmart_require_processed_ok: true     # caveat (a): verify processed.jpg before pixel use
   mask_quality_min: 0.30               # SAM3/GDINO confidence floor
   histsim_min: 0.50                    # color-direction agreement (Track recon gate)
-  er_recon_psnr_min: 25.0              # Track-A round-trip floor (P0_001 Tab 9: 27.4-40.6)
+  er_recon_psnr_min: 22.0              # lowered from 25.0 (stage0 2026-06-03: floor 22 keeps ~80% of S1/S7 vs 60% at 25)
   reject_log: "rejects.jsonl"          # log every reject with reason (not silent pass)
   max_retries: 3                       # retry-and-keep-failures -> free RL preference pairs
   annotation_mode: "vlm"               # "vlm" enriches instruction/think/scene tags for quality;

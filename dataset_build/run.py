@@ -304,6 +304,7 @@ def _build_real_models(
         "cleaner": None,
         "parser": None,
         "lut_applier": None,
+        "cached_tagger": None,
     }
 
     stream_ids = list(stream_ids or list(StreamId))
@@ -359,6 +360,18 @@ def _build_real_models(
             print(f"[run] masker unavailable: {e}", file=sys.stderr)
     else:
         print("[run] masker skipped: selected streams do not need SAM3/CachedMasker", file=sys.stderr)
+
+    # Optional PRECOMPUTED source-tag/aesthetic cache (tag_precompute.py). DEFAULT-OFF:
+    # only built when tag_cache.use_cache:true; otherwise stays None (no behavior change).
+    tc = (config.get("tag_cache", {}) or {})
+    if tc.get("use_cache") and tc.get("cache_dir"):
+        try:
+            from dataset_build.tag_cache import CachedTagger
+
+            out["cached_tagger"] = CachedTagger(tc["cache_dir"])
+            print(f"[run] tagger: CachedTagger({tc['cache_dir']})", file=sys.stderr)
+        except Exception as e:  # pragma: no cover
+            print(f"[run] cached tagger unavailable: {e}", file=sys.stderr)
 
     if need_cleaner:
         try:
@@ -449,6 +462,9 @@ def _row_to_recipe(d: Dict[str, Any]) -> RecipeAsset:
 
 
 # corpus pools per stream (DATASET_BUILD_PLAN §2 construction column).
+# NOTE: the legacy "fivek" tar corpus (5000 source-only DNGs) still feeds S1/S7 as
+# raw 'before' inputs; the NEW gold pair corpus "fivek_gold" (real before->expert
+# after) is a DISTINCT name and feeds ONLY S8 -> no collision.
 _STREAM_SOURCE_CORPORA: Dict[StreamId, Sequence[str]] = {
     StreamId.S1_DEGRADE_LOCAL: ("tad66k", "fivek", "awards", "korean", "unsplash", "quandian"),
     StreamId.S2_RECIPE_LOCAL: ("tad66k", "awards", "korean", "quandian", "unsplash"),
@@ -457,12 +473,15 @@ _STREAM_SOURCE_CORPORA: Dict[StreamId, Sequence[str]] = {
     StreamId.S5_GREYSKY_GLOBAL: ("greysky",),
     StreamId.S6_RECIPE_GLOBAL: ("tad66k", "awards", "korean", "quandian", "unsplash"),
     StreamId.S7_DEGRADE_GLOBAL: ("tad66k", "fivek", "awards", "korean", "unsplash", "quandian"),
+    StreamId.S8_FIVEK_GLOBAL: ("fivek_gold",),
 }
+# Streams that draw from the SHARED recipe_index pool. S4 is NOT here: it pairs each
+# ppr10k source with its OWN per-source target XMP (source.meta['ppr10k_xmp']), and
+# S8 is gold real-JPG (no recipe pool, no LUT, no teacher params).
 _RECIPE_STREAMS = {
     StreamId.S2_RECIPE_LOCAL,
     StreamId.S6_RECIPE_GLOBAL,
     StreamId.S5_GREYSKY_GLOBAL,
-    StreamId.S4_PPR10K_LOCAL,
 }
 
 
@@ -1020,6 +1039,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             parser=models["parser"],
             lut_applier=models.get("lut_applier"),
             cgt_writer=writer,
+            cached_tagger=models.get("cached_tagger"),
         )
 
     print(f"[run] out_root={out_root} streams={[s.value for s in stream_ids]} "

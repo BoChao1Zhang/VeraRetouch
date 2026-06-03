@@ -182,6 +182,10 @@ class BuildContext:
     region_tag_cache: Dict[str, dict] = field(default_factory=dict)
     tag_cache_inflight: Dict[str, threading.Event] = field(default_factory=dict)
     tag_cache_lock: Any = field(default_factory=threading.Lock)
+    # Optional PRECOMPUTED per-source tag/aesthetic cache (tag_cache.CachedTagger).
+    # When set (config tag_cache.use_cache:true), the inline source/region tag
+    # sites read this INSTEAD of the live VLM tag call. None => no behavior change.
+    cached_tagger: Optional[Any] = None
 
     # ---- convenience config accessors (with plan defaults) ----
     @property
@@ -511,8 +515,39 @@ class BaseStream(StreamABC):
             )
         except (TypeError, ValueError):
             pass
+        # Cached tags may carry an aesthetic (model score preferred, else VLM
+        # score); round-trips via pack.py:172 -> contracts QualityScores.aesthetic.
+        if sample.quality.aesthetic is None:
+            ae = tag.get("aesthetic")
+            if ae is None:
+                ae = tag.get("aesthetic_model")
+            if ae is None:
+                ae = tag.get("aesthetic_vlm")
+            if ae is not None:
+                try:
+                    sample.quality.aesthetic = float(ae)
+                except (TypeError, ValueError):
+                    pass
+
+    def _precomputed_tag(self, source: SourceItem, recipe: Recipe, sample: Sample) -> Optional[dict]:
+        """Per-source PRECOMPUTED tags (tag_cache.CachedTagger) if enabled + hit.
+
+        Image-level (scene/style/concepts/aesthetic), so it serves both source
+        and region tag sites. ``None`` => cache disabled or miss (caller falls
+        through to the live VLM / offline path: NO behavior change)."""
+        tagger = self.ctx.cached_tagger
+        if tagger is None:
+            return None
+        vlm_path = self._vlm_image_path(source, recipe, sample)
+        try:
+            return tagger.tags_for(vlm_path)
+        except Exception:
+            return None
 
     def _source_vlm_tag(self, source: SourceItem, recipe: Recipe, sample: Sample) -> dict:
+        cached = self._precomputed_tag(source, recipe, sample)
+        if cached is not None:
+            return cached
         cl = self.ctx.cleaner
         if cl is None:
             return {}
@@ -531,6 +566,9 @@ class BaseStream(StreamABC):
         sample: Sample,
         instruction: str,
     ) -> dict:
+        cached = self._precomputed_tag(source, recipe, sample)
+        if cached is not None:
+            return cached
         cl = self.ctx.cleaner
         if cl is None:
             return {}
@@ -1486,6 +1524,116 @@ class Tier1ExpertStream(BaseStream):
         return super()._params_for_render(recipe)
 
 
+class FivekGoldStream(BaseStream):
+    """S8: fivek GOLD GLOBAL real before -> real expert-after pairs.
+
+    Mirrors :class:`Tier1ExpertStream` (S5) gold real-JPG path but for the fivek
+    ``fivek_gold`` corpus: I_in = before.jpg, I_tar = the real expert processed.jpg
+    (after_source=REAL_JPG; the JPG IS the 'after', NO teacher render, NO LUT). The
+    sample instruction comes from the en/ user_prompt text recorded on the source.
+    The old-Lightroom config.lua params are NOT teacher CRS2012 params, so the recipe
+    carries an EMPTY (identity) param dict and the .lua path is metadata only.
+    C_GT = global all-ones sentinel (region_local=False).
+    """
+
+    def __init__(
+        self,
+        ctx: BuildContext,
+        inputs: _PlanInputs,
+        gate: Optional[QAGate] = None,
+    ):
+        super().__init__(ctx, gate)
+        self.stream_id = StreamId.S8_FIVEK_GLOBAL
+        self.inputs = inputs
+
+    def plan(self, budget: int, seed: int) -> Iterator[Tuple[SourceItem, Recipe, bool]]:
+        sources = self.inputs.sources
+        if not sources:
+            return
+        emitted = 0
+        si = 0
+        while emitted < budget:
+            src = sources[si % len(sources)]
+            si += 1
+            smeta = src.meta or {}
+            recipe = Recipe(
+                kind=RecipeKind.PARAM,
+                params=_empty_params(),
+                provenance=Provenance.PARAM,
+                source_recipe_id=src.source_id,
+                meta={
+                    "tier": "gold",
+                    "expert": True,
+                    "origin": "fivek_gold",
+                    # real expert JPG -> the gold 'after'; skips teacher render (S5 path)
+                    "expert_after_jpg": smeta.get("expert_after_jpg"),
+                    "use_real_jpg": True,
+                    # old-Lightroom .lua params: METADATA ONLY (not teacher CRS2012 space)
+                    "fivek_params_lua": smeta.get("fivek_params_lua"),
+                    "instruction": smeta.get("instruction"),
+                    "instruction_short": smeta.get("instruction_short"),
+                },
+            )
+            yield src, recipe, False  # global
+            emitted += 1
+
+    def _params_for_render(self, recipe: Recipe) -> Optional[Dict[str, Dict[str, float]]]:
+        # Real expert JPG IS the 'after'; never render the teacher for S8 gold rows.
+        return None
+
+    def build_one(
+        self,
+        source: SourceItem,
+        recipe: Recipe,
+        region_local: bool,
+        sample_id: str,
+        shard: str,
+        precomputed_after: Any = _UNSET,
+    ) -> Optional[Sample]:
+        seed = int(self.ctx.config.get("seed", 0))
+        sample = Sample(
+            sample_id=sample_id,
+            stream=self.stream_id,
+            shard=shard,
+            source_path=source.path,
+            raw_decode=source.raw_decode,
+            recipe=recipe,
+            region_local=False,
+            c_gt=CgtRef(),
+            instruction=recipe.meta.get("instruction"),
+            instruction_short=recipe.meta.get("instruction_short"),
+            answer=None,  # no teacher params for gold real-JPG rows
+            scene_meta=SceneMeta(scene=scene_of(source)),
+            quality=QualityScores(),
+            source_id=source.source_id,
+            recipe_asset_id=recipe.source_recipe_id,
+            native_size=self._native_size(source),
+            build_version=str(self.ctx.config.get("build_version", "v2")),
+            schema_version=str(self.ctx.config.get("schema_version", "datagen_v2")),
+            after_source=AfterSource.REAL_JPG,
+        )
+        # Real expert JPG bypass (reproduce.py REAL_JPG branch loads this path).
+        real_jpg = recipe.meta.get("expert_after_jpg")
+        if real_jpg:
+            sample.meta["expert_after_path"] = real_jpg
+            sample.meta["after_source"] = "real_jpg"
+        # carry the old-Lightroom params path as metadata only (never teacher params).
+        if recipe.meta.get("fivek_params_lua"):
+            sample.meta["fivek_params_lua"] = recipe.meta["fivek_params_lua"]
+        # global C_GT sentinel (no PNG; all-ones).
+        sample.c_gt = self._build_cgt(
+            sample_id, shard, source, params=None, region_local=False,
+            seed=int(seed) ^ _det_seed32(sample_id),
+            mask_source=MaskSource.GLOBAL,
+            recipe_key=recipe.source_recipe_id,
+        )
+        # annotate (instruction already from en/ text; cleaner may enrich think/scene).
+        self._annotate(source, recipe, sample, after_rgb=None)
+        if not self._gate(sample):
+            return None
+        return sample
+
+
 class MMArtTextStream(BaseStream):
     """S3: MMArt text-attached, region-local.
 
@@ -1789,12 +1937,19 @@ class InverseDegradeStream(BaseStream):
 
 
 class PPR10KStream(BaseStream):
-    """S4: PPR10K source + expert XMP, C_GT = the real human-region mask.
+    """S4: PPR10K source + its OWN expert target XMP, C_GT = the real human mask.
 
-    CONDITIONAL: blocked while the PPR10K mask download is corrupt
-    (config: models.ppr10k_masks.available=false). When unavailable the
-    orchestrator folds S4's budget into S1 (config: budget.s4_fallback_stream).
-    Implemented for completeness so the build is ready the moment masks land.
+    REVIVED (ppr10k now available; config models.ppr10k_masks.available=true). Each
+    PPR10K source carries its own per-source target XMP and human mask on
+    ``source.meta`` (registry ``_scan_ppr10k``):
+      - meta['ppr10k_xmp']    -> teacher CRS2012 PARAM params (ctx.parser.xmp_to_params)
+      - meta['ppr10k_mask']   -> the real human-region mask PNG (the EXACT C_GT)
+      - meta['ppr10k_target'] -> the expert target PNG (provenance; I_tar is the
+                                 teacher render of source+params, on the manifold)
+    All 3 experts (a/b/c) are distinct sources (~8875 x 3 = 26,625). The XMP is the
+    source's OWN target XMP (NOT the shared recipe_index pool). I_tar = teacher
+    render(source, params); C_GT = the human mask (mask_source=PPR10K,
+    mask_quality=1.0). region_local=True.
     """
 
     def __init__(
@@ -1809,27 +1964,36 @@ class PPR10KStream(BaseStream):
 
     def plan(self, budget: int, seed: int) -> Iterator[Tuple[SourceItem, Recipe, bool]]:
         sources = self.inputs.sources
-        recipes = [r for r in self.inputs.recipes if r.kind == RecipeKind.PARAM]
-        if not sources or not recipes:
+        if not sources:
             return
         emitted = 0
         si = 0
         while emitted < budget:
             src = sources[si % len(sources)]
             si += 1
-            asset = _stable_choice(recipes, f"{src.source_id}:{emitted}")
+            smeta = src.meta or {}
+            xmp_path = smeta.get("ppr10k_xmp")
+            if not xmp_path:
+                continue
+            # Parse the source's OWN target XMP into teacher CRS2012 PARAM params
+            # (per-source, NOT the shared recipe_index pool).
             params: Optional[Dict[str, Dict[str, float]]] = None
             if self.ctx.parser is not None:
                 try:
-                    params = self.ctx.parser.xmp_to_params(asset.path)
+                    params = self.ctx.parser.xmp_to_params(xmp_path)
                 except Exception:
                     params = None
             recipe = Recipe(
                 kind=RecipeKind.PARAM,
                 params=params or _empty_params(),
                 provenance=Provenance.PPR10K,
-                source_recipe_id=asset.recipe_id,
-                meta={"origin": "ppr10k"},
+                source_recipe_id=src.source_id,
+                meta={
+                    "origin": "ppr10k",
+                    "expert": smeta.get("expert"),
+                    "ppr10k_xmp": xmp_path,
+                    "ppr10k_target": smeta.get("ppr10k_target"),
+                },
             )
             yield src, recipe, True
             emitted += 1
@@ -1914,4 +2078,6 @@ def make_stream(
         )
     if stream_id == StreamId.S4_PPR10K_LOCAL:
         return PPR10KStream(ctx, inputs, gate)
+    if stream_id == StreamId.S8_FIVEK_GLOBAL:
+        return FivekGoldStream(ctx, inputs, gate)
     raise ValueError(f"unknown stream {stream_id!r}")

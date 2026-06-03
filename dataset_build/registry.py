@@ -321,6 +321,8 @@ class SourceRegistry(Registry):
             self._scan_awards,
             self._scan_mmart,
             self._scan_unsplash,
+            self._scan_fivek_gold,
+            self._scan_ppr10k,
         )
         for fn in scanners:
             n = 0
@@ -520,6 +522,127 @@ class SourceRegistry(Registry):
             for f in _iter_files(Path(dl_dir)):
                 if _ext(f) in IMAGE_EXTS:
                     yield self._emit_source(f, "unsplash", scene=c.get("scene", "any"))
+
+    def _scan_fivek_gold(self) -> Iterator[SourceItem]:
+        """fivek GOLD GLOBAL pairs (S8): real before.jpg -> real expert after.jpg.
+
+        Layout (verified): <root>/train_global/<sample_id>/{before.jpg, processed.jpg,
+        config.lua, meta.json, en/user_want_{short,middle,long}/user_prompt.txt}.
+
+        ONLY ``train_global`` is scanned. ``test_global`` (5000) is the EVAL HOLDOUT
+        and is never scanned here (see config sources.fivek_gold comment). Each usable
+        sample dir -> one SourceItem (corpus="fivek_gold") with the real expert JPG as
+        the gold 'after' (after_source=REAL_JPG, like S5 Tier1ExpertStream). The
+        old-Lightroom config.lua params are NOT in the teacher CRS2012 space -> stored
+        as metadata (``fivek_params_lua`` path) ONLY, never used as teacher params.
+        """
+        c = self.sources_cfg.get("fivek_gold") or {}
+        root = c.get("path")
+        if not root or not os.path.isdir(root):
+            return
+        rootp = Path(root)
+        for entry_dir in sorted(p for p in rootp.iterdir() if p.is_dir()):
+            before = entry_dir / "before.jpg"
+            processed = entry_dir / "processed.jpg"
+            if not (before.is_file() and processed.is_file()):
+                continue
+            meta_json: Dict[str, Any] = {}
+            mp = entry_dir / "meta.json"
+            if mp.is_file():
+                try:
+                    with open(mp, "r", encoding="utf-8") as f:
+                        meta_json = json.load(f)
+                except (OSError, json.JSONDecodeError):
+                    meta_json = {}
+            instr = self._read_text(entry_dir / "en" / "user_want_middle" / "user_prompt.txt")
+            instr_short = self._read_text(entry_dir / "en" / "user_want_short" / "user_prompt.txt")
+            yield self._emit_source(
+                before, "fivek_gold", scene="any", is_portrait_pool=False,
+                tags=["gold", "fivek"],
+                meta={
+                    "expert_after_jpg": str(processed),
+                    "expert": meta_json.get("expert", "C"),
+                    "instruction": instr,
+                    "instruction_short": instr_short,
+                    "fivek_params_lua": str(entry_dir / "config.lua"),
+                    "base_name": meta_json.get("base_name", entry_dir.name),
+                    "split": "train_global",
+                    "tier": "gold",
+                    "expert_flag": True,
+                },
+            )
+
+    @staticmethod
+    def _read_text(path: Path) -> Optional[str]:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except OSError:
+            return None
+
+    def _scan_ppr10k(self) -> Iterator[SourceItem]:
+        """PPR10K region-local portrait PARAM sources (S4): real human masks + the
+        per-source target XMP (teacher-manifold CRS2012 params).
+
+        Layout (verified): <root>/{source/<id>.png, target_{a,b,c}/<id>.png,
+        xmp/target_{a,b,c}/<id>.xmp, masks/360p/masks_360p/<orig_base>.png,
+        manifests/id_map.csv}. The mask filename is keyed by ``orig_base`` (id_map.csv
+        new_id -> orig_base), NOT the 4-digit <id>; pattern is
+        ``masks/360p/masks_360p/<orig_base>.png`` (one human mask per source). All 3
+        experts (a/b/c) are emitted per source -> ~8875 x 3 = 26,625 region-local
+        items. C_GT = the real human mask (mask_quality=1.0, mask_source=PPR10K).
+        """
+        c = self.sources_cfg.get("ppr10k") or {}
+        root = c.get("path")
+        if not root or not os.path.isdir(root):
+            return
+        rootp = Path(root)
+        mask_dir = rootp / "masks" / "360p" / "masks_360p"
+        # id_map.csv: new_id -> orig_base (mask filename stem).
+        id_to_base: Dict[str, str] = {}
+        id_map_path = rootp / "manifests" / "id_map.csv"
+        if id_map_path.is_file():
+            import csv as _csv
+
+            with open(id_map_path, "r", encoding="utf-8") as f:
+                for row in _csv.DictReader(f):
+                    nid = (row.get("new_id") or "").strip()
+                    ob = (row.get("orig_base") or "").strip()
+                    if nid and ob:
+                        id_to_base[nid] = ob
+        src_dir = rootp / "source"
+        if not src_dir.is_dir():
+            return
+        for src_png in sorted(src_dir.glob("*.png")):
+            sid = src_png.stem
+            orig_base = id_to_base.get(sid)
+            if not orig_base:
+                continue
+            mask_path = mask_dir / f"{orig_base}.png"
+            if not mask_path.is_file():
+                continue
+            for e in ("a", "b", "c"):
+                xmp_path = rootp / "xmp" / f"target_{e}" / f"{sid}.xmp"
+                target_path = rootp / "target_{}".format(e) / f"{sid}.png"
+                if not xmp_path.is_file():
+                    continue
+                yield SourceItem(
+                    source_id=f"ppr10k_{sid}_{e}",
+                    path=str(src_png),
+                    corpus="ppr10k",
+                    raw_decode=RawDecode.NONE,
+                    scene="portrait",
+                    is_portrait_pool=True,
+                    tags=["ppr10k", "portrait_human_mask"],
+                    bytes_size=_safe_stat_size(src_png),
+                    meta={
+                        "ppr10k_mask": str(mask_path),
+                        "ppr10k_xmp": str(xmp_path),
+                        "ppr10k_target": str(target_path),
+                        "expert": e,
+                        "orig_base": orig_base,
+                    },
+                )
 
     # ================================================================== #
     # RECIPES

@@ -133,6 +133,7 @@ class StreamId(str, Enum):
     S5_GREYSKY_GLOBAL = "S5"  # GREYSKY real-expert global triples               20k
     S6_RECIPE_GLOBAL = "S6"   # recipe x source, GLOBAL                         270k
     S7_DEGRADE_GLOBAL = "S7"  # inverse-degradation, GLOBAL                     110k
+    S8_FIVEK_GLOBAL = "S8"    # fivek real before->expert-after GOLD global      20k
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +152,7 @@ class SourceItem:
     path: str                            # ABS path to the source image / raw
     corpus: str                          # "tad66k" | "fivek" | "awards" | "korean"
                                          #  | "quandian" (全店素材) | "greysky" | "mmart"
-                                         #  | "unsplash" | "ppr10k"
+                                         #  | "unsplash" | "ppr10k" | "fivek_gold"
     raw_decode: RawDecode = RawDecode.NONE
     width: Optional[int] = None          # native px (filled lazily; may be None pre-decode)
     height: Optional[int] = None
