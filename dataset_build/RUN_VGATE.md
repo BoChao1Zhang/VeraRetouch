@@ -1,8 +1,9 @@
 # Running the build under vGate (operator quickstart)
 
 The unified concurrency rewrite (design:
-`UNIFIED_CONCURRENCY_DESIGN_v2_2026-06-16.md`) decouples the build into
-independently-managed pieces. This is the single canonical startup path.
+`docs/concurrency/UNIFIED_CONCURRENCY_DESIGN_v2_2026-06-16.md`) decouples the
+build into independently-managed pieces. This is the single canonical startup
+path.
 
 ## Start order
 

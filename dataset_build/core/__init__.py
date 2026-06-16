@@ -1,5 +1,5 @@
 """Decoupled core layer for the VeraRetouch data pipeline (see
-``dataset_build/UNIFIED_CONCURRENCY_DESIGN_v2_2026-06-16.md``).
+``docs/concurrency/UNIFIED_CONCURRENCY_DESIGN_v2_2026-06-16.md``).
 
 Phase 0 shipped the out-of-process vLLM broker (``core.broker``). Phase 2 adds
 the synchronous ``core`` facade the business consumes — ``core.vllm`` /

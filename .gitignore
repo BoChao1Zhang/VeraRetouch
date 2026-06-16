@@ -3,8 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Docs: design plans, paper digests, reference PDFs — kept out of git entirely
-docs/
+# Docs: keep curated module docs (docs/<module>/*.md) in git, but exclude the
+# heavy research corpus living under docs/ (PDF bundles, extracted papers, plans).
+docs/*.zip
+docs/papers_extracted/
+docs/plan/
+docs/paper_list.md
 
 # Local build outputs / scratch
 *.tmp

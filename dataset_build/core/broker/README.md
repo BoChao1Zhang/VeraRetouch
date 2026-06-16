@@ -3,7 +3,7 @@
 Out-of-process, OpenAI-compatible reverse proxy in front of the 1–2 stock
 `vllm serve` replicas (`reason_g0:8001` / `reason_g1:8002`). It is the **Phase 0**
 deliverable of the unified-concurrency rewrite
-(`dataset_build/UNIFIED_CONCURRENCY_DESIGN_v2_2026-06-16.md`): the
+(`docs/concurrency/UNIFIED_CONCURRENCY_DESIGN_v2_2026-06-16.md`): the
 highest-leverage, lowest-risk, fully-reversible first step. It needs **no**
 business-code changes and **no** unified image.
 
