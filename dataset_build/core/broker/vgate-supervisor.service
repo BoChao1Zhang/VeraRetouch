@@ -1,0 +1,33 @@
+# vGate supervisor — systemd unit (elastic vLLM replica lifecycle, Phase 1).
+#
+# Brings a vLLM replica up on each free GPU (GPU0->reason_g0:8001,
+# GPU1->reason_g1:8002) and restarts crashed ones; the broker discovers them and
+# scales its budget. Conservative: starts only on genuinely-free cards, never
+# tears down a healthy/warming replica.
+#
+# IMPORTANT: this unit runs with --apply (it actuates docker). Review the
+# dry-run first (`python -m dataset_build.core.broker.supervisor --once`) before
+# enabling. Needs docker access for the running user (docker group).
+#
+# Install (user units):
+#   cp dataset_build/core/broker/vgate-supervisor.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now vgate-supervisor
+#   journalctl --user -u vgate-supervisor -f
+
+[Unit]
+Description=vGate vLLM replica supervisor (elastic per-GPU lifecycle)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/bc/VeraRetouch
+ExecStart=/home/bc/miniconda3/bin/python -m dataset_build.core.broker.supervisor --apply
+Restart=always
+RestartSec=5
+# Environment=VGATE_SUP_MIN_FREE_MB=70000
+# Environment=VGATE_SUP_INTERVAL=15
+# Environment=VGATE_SUP_GPU_MAP=0:reason_g0:8001,1:reason_g1:8002
+
+[Install]
+WantedBy=default.target

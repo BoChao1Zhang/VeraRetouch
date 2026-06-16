@@ -186,6 +186,11 @@ class BuildContext:
     # When set (config tag_cache.use_cache:true), the inline source/region tag
     # sites read this INSTEAD of the live VLM tag call. None => no behavior change.
     cached_tagger: Optional[Any] = None
+    # Decoupled core facade (dataset_build.core.Core). When set, the teacher
+    # render path routes through ``core.render`` (which owns render_lock+renderer),
+    # and ``cleaner``/``masker`` are the delegating ``core.vllm``/``core.sam3``
+    # wrappers. None => fully inline legacy path (byte-identical fallback).
+    core: Optional[Any] = None
 
     # ---- convenience config accessors (with plan defaults) ----
     @property
@@ -591,6 +596,10 @@ class BaseStream(StreamABC):
         """Render the GLOBAL 'after' via the teacher. Returns np.uint8 HxWx3 or None.
         A teacher failure (e.g. the VLM not emitting a retouch token) must reject
         THIS sample, never crash the run."""
+        core = getattr(self.ctx, "core", None)
+        if core is not None and getattr(core, "render", None) is not None:
+            return core.render.render_one(source.path, params,
+                                          log_prefix=f"stream {self.stream_id}")
         if self.ctx.renderer is None:
             return None
         try:
@@ -621,6 +630,13 @@ class BaseStream(StreamABC):
         out None-param items before the call and scatter the results back to their
         original slots, so the i-th return aligns with sources[i].
         """
+        core = getattr(self.ctx, "core", None)
+        if core is not None and getattr(core, "render", None) is not None:
+            cap = int(self.ctx.qa_cfg.get("verify_downscale_longedge", 768))
+            return core.render.render_batch(
+                [s.path for s in sources], list(params_list), cap,
+                log_prefix=f"stream {self.stream_id}",
+            )
         n = len(sources)
         results: List[Optional[Any]] = [None] * n
         if self.ctx.renderer is None:
@@ -715,21 +731,10 @@ class BaseStream(StreamABC):
     @staticmethod
     def _downscale_rgb(arr: Any, longedge: int) -> Any:
         """Long-edge downscale of an RGB uint8 array (best-effort; returns input on
-        failure or if already small)."""
-        try:
-            import cv2
-            import numpy as np
-
-            a = np.asarray(arr)
-            h, w = a.shape[:2]
-            m = max(h, w)
-            if not longedge or m <= longedge:
-                return a
-            s = longedge / float(m)
-            return cv2.resize(a, (max(1, int(round(w * s))), max(1, int(round(h * s)))),
-                              interpolation=cv2.INTER_AREA)
-        except Exception:
-            return arr
+        failure or if already small). Delegates to the canonical core impl so the
+        inline and core.render paths produce identical pixels."""
+        from dataset_build.core.render_worker import downscale_rgb
+        return downscale_rgb(arr, longedge)
 
     def _params_for_render(
         self, recipe: Recipe

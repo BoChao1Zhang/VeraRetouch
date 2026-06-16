@@ -72,10 +72,16 @@ aesthetic:
   mlp_path: "/home/bc/data/models/laion_aesthetic_sac_logos_ava1_l14_linearMSE.pth"
 
 vllm:                                                   # Qwen3-VL cleaner (HTTP; main process launches)
-  base_url: "http://localhost:8001/v1"
+  base_url: "http://localhost:8003/v1"                   # vGate broker (Phase 0): least-outstanding routing over
+                                                         # reason_g0:8001/reason_g1:8002. Rollback -> ":8001/v1".
+                                                         # See dataset_build/core/broker/README.md.
   api_key: "EMPTY"
-  served_model_name: "qwen3_5-4b"                        # tagging/annotation now on Qwen3.5-4B (dual-card, mem-util 0.7, 64 seqs)
-  model_path: "/home/bc/data/models/Qwen3.5-4B"
+  served_model_name: "qwen3_5-35b-a3b"                   # REASONING annotation pass on Qwen3.5-35B-A3B-FP8 (MoE, multimodal).
+                                                         # Served dp=2 via dataset_build/docker/launch_reasoning.sh
+                                                         # (reason_g0:8001 / reason_g1:8002). Tagging was cached on the 4B;
+                                                         # this stronger model serves the live gen_instruction/reason_params/verify.
+                                                         # NOTE: name MUST match launch_reasoning.sh --served-model-name.
+  model_path: "/home/bc/data/models/Qwen3.5-35B-A3B-FP8"
   max_tokens: 768
   temperature: 0.2
   limit_mm_per_prompt_image: 2                          # template (c) feeds before+after
@@ -181,7 +187,7 @@ recipes:
     technical_name_re: "Slog|S-Log|SLog2|SLog3|REC709|Rec\\.709|709toLog|LogtoRec|LinearTo|_to_|Conversion|Technical|LUTCalc|Identity|Neutral"
     drop_bw: true           # ConvertToGrayscale="True"
     junk_ext: [".mov",".mp4",".txt",".doc",".docx",".pdf",".zip",".rar",".exe",".apk",".cfg",".url",".wav",".jsp",".8bf",".ds_store"]
-    junk_path_re: "教程|安装|导入|说明|必看|二维码|广告|微信|售后|转换器|Generator|使用方法"
+    junk_path_re: "教程|安装|导入|说明|必看|二维码|广告|微信|售后|转换器|Generator|使用方法|__MACOSX|(^|/)\\._"
     min_source_bytes: 512000     # >500KB to drop thumbnails/UI chrome
     costyle: "skip"              # Capture One; lossy mapping (probe_recipe_parsers §3)
 
@@ -296,10 +302,34 @@ storage:
   manifest_index: "manifest_index.jsonl"   # one row per committed shard
   source_index: "source_index.jsonl"
   recipe_index: "recipe_index.jsonl"
+  # SOURCE-QA CLOSE-THE-LOOP: after running the source_qa pipeline + apply.py,
+  # flip these to the cleaned indexes so the build consumes QA-filtered inputs
+  # (drops invalid/low-quality/duplicate sources + bad/duplicate presets; carries
+  # qa_verdict / dup_cluster / qa_local_edit / qa_render_engine). Keep the raw
+  # names until apply.py has written the cleaned files (run.py has no fallback).
+  #   source_index: "source_index.cleaned.jsonl"
+  #   recipe_index: "recipe_index.qa.jsonl"
   pack_index: "pack_index.jsonl"
   cgt_subdir: "cgt"                    # cgt/<stream>/<shard>/<sample_id>.png
   atomic_write: true                   # write .tmp then fsync+rename
   dedup_preset_stem: true              # G3: dedup recipes by preset stem / internalName
+
+# -----------------------------------------------------------------------------
+# CLEAN-BEFORE-BUILD (Phase 3): read-only per-asset PG cleaning predicate.
+# When enabled, load_plan_inputs drops any source/recipe NOT cleared by
+# source_qa's verdict in the `assets` table (asset_id == source_id/recipe_id).
+# OPT-IN + FAIL-CLOSED: default off (no behavior change); when on, a PG error
+# HALTS the build (never falls open to un-cleaned assets). Activating this (and
+# the apply closure that fills the verdicts) is the operator's go-live decision.
+# See dataset_build/cleaning.py. NOTE: presets currently have very few cleared
+# rows, so apply_to defaults to images only.
+# -----------------------------------------------------------------------------
+cleaning:
+  enabled: false                       # ON: build consumes only QA-cleared assets
+  apply_to: ["image"]                  # add "preset" to also gate recipes
+  keep_verdicts: ["keep", "needs_local_render"]   # verdicts considered cleared
+  require_dup_head: true               # exclude dedup non-heads (dup_of NOT NULL)
+  # pg_dsn: "postgresql://vera:vera@127.0.0.1:5432/vera_source_qa"  # default: SOURCE_QA_PG_DSN
 
 # -----------------------------------------------------------------------------
 # EVAL / INSPECTION (DATASET_BUILD_PLAN.md §eval).

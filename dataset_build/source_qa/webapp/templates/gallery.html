@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ f.type }} 画廊 · Source QA{% endblock %}
+{% block content %}
+<h1>{{ f.type }} 画廊 <span class="mut">· {{ "{:,}".format(total) }} 条</span></h1>
+
+<form class="filters" method="get" action="/assets">
+  <label>类型<select name="type">
+    {% for t in ['image','preset','all'] %}<option value="{{t}}" {{'selected' if f.type==t}}>{{t}}</option>{% endfor %}
+  </select></label>
+  <label>corpus<select name="corpus"><option value="">全部</option>
+    {% for c in corpora %}<option value="{{c}}" {{'selected' if f.corpus==c}}>{{c}}</option>{% endfor %}
+  </select></label>
+  <label>状态<select name="status"><option value="">全部</option>
+    {% for s in statuses %}<option value="{{s}}" {{'selected' if f.status==s}}>{{s}}</option>{% endfor %}
+  </select></label>
+  <label>判级<select name="verdict"><option value="">全部</option>
+    {% for v in ['keep','review','drop'] %}<option value="{{v}}" {{'selected' if f.verdict==v}}>{{v}}</option>{% endfor %}
+  </select></label>
+  <label>决策<select name="decision"><option value="">全部</option>
+    {% for v in ['none','keep','drop','hold'] %}<option value="{{v}}" {{'selected' if f.decision==v}}>{{v}}</option>{% endfor %}
+  </select></label>
+  <label>PASS_A<select name="pass_a"><option value="">·</option><option value="1" {{'selected' if f.pass_a=='1'}}>1</option><option value="0" {{'selected' if f.pass_a=='0'}}>0</option></select></label>
+  <label>PASS_B<select name="pass_b"><option value="">·</option><option value="1" {{'selected' if f.pass_b=='1'}}>1</option><option value="0" {{'selected' if f.pass_b=='0'}}>0</option></select></label>
+  <label>局部编辑<select name="local"><option value="">·</option><option value="1" {{'selected' if f.local=='1'}}>仅 mask</option><option value="0" {{'selected' if f.local=='0'}}>非 mask</option></select></label>
+  <label>指标<select name="metric"><option value="">·</option>
+    {% for m in ['musiq','niqe','brisque','clipiqa','sharpness','aesthetic','aesthetic_vlm'] %}<option value="{{m}}" {{'selected' if f.metric==m}}>{{m}}</option>{% endfor %}
+  </select></label>
+  <label>op<select name="op">{% for o in ['>=','<=','>','<','='] %}<option {{'selected' if f.op==o}}>{{o}}</option>{% endfor %}</select></label>
+  <label>值<input name="val" type="number" step="0.1" value="{{ f.val if f.val is not none else '' }}" style="width:80px"></label>
+  <label>搜索<input name="q" value="{{ f.q }}" placeholder="id/path"></label>
+  <label>排序<select name="sort">{% for s in sortable %}<option value="{{s}}" {{'selected' if f.sort==s}}>{{s}}</option>{% endfor %}</select></label>
+  <label>序<select name="order"><option value="desc" {{'selected' if f.order=='desc'}}>desc</option><option value="asc" {{'selected' if f.order=='asc'}}>asc</option></select></label>
+  <button class="btn" type="submit">应用</button>
+</form>
+
+<div class="bar">
+  <label><input type="checkbox" id="selall"> 全选本页</label>
+  <span class="mut" id="selcount">0 选中</span>
+  <button class="btn keep" onclick="bulk('keep')">本页 keep</button>
+  <button class="btn drop" onclick="bulk('drop')">本页 drop</button>
+  <button class="btn hold" onclick="bulk('hold')">本页 hold</button>
+  <span style="width:18px"></span>
+  <span class="mut">整个筛选({{ "{:,}".format(total) }})：</span>
+  <button class="btn ghost" onclick="bulkFilter('keep')">全 keep</button>
+  <button class="btn ghost" onclick="bulkFilter('drop')">全 drop</button>
+  <button class="btn ghost" onclick="bulkFilter('hold')">全 hold</button>
+</div>
+<script>window.QA_FILTERS = {{ f|tojson }}; window.QA_TOTAL = {{ total }};</script>
+
+<div class="grid">
+{% for r in rows %}
+  <div class="tile" data-id="{{ r['asset_id'] }}">
+    <input type="checkbox" class="pick">
+    <a href="/asset/{{ r['asset_id'] }}">
+      <img loading="lazy" src="/thumb/{{ r['asset_id'] }}">
+    </a>
+    <div class="meta">
+      <div class="id">{{ r['asset_id'] }}</div>
+      <div class="mut">{{ r['corpus'] }} · {{ r['scene'] or r['fmt'] or '' }}</div>
+      <div class="chips">
+        {% if r['auto_verdict'] %}<span class="chip {{r['auto_verdict']}}">{{r['auto_verdict']}}</span>{% endif %}
+        {% if r['final_decision'] %}<span class="chip {{r['final_decision']}}">{{r['final_decision']}}</span>{% endif %}
+        {% if r['pass_a'] is not none %}<span class="chip {{'pass' if r['pass_a'] else 'fail'}}">A{{ '✓' if r['pass_a'] else '✗' }}</span>{% endif %}
+        {% if r['pass_b'] is not none %}<span class="chip {{'pass' if r['pass_b'] else 'fail'}}">B{{ '✓' if r['pass_b'] else '✗' }}</span>{% endif %}
+        {% if r['musiq'] is not none %}<span class="chip">M {{ r['musiq']|round(0)|int }}</span>{% endif %}
+        {% if r['aesthetic'] is not none %}<span class="chip">æ {{ r['aesthetic']|round(1) }}</span>{% endif %}
+      </div>
+    </div>
+  </div>
+{% endfor %}
+</div>
+
+<div class="pager">
+  {% set qs = request.url.query %}
+  {% if page > 1 %}<a class="btn ghost" href="?{{ qs|replace('page='+page|string, 'page='+(page-1)|string) if 'page=' in qs else qs+'&page='+(page-1)|string }}">上一页</a>{% endif %}
+  <span class="mut">第 {{ page }} / {{ pages }} 页</span>
+  {% if page < pages %}<a class="btn ghost" href="?{{ qs|replace('page='+page|string, 'page='+(page+1)|string) if 'page=' in qs else qs+'&page='+(page+1)|string }}">下一页</a>{% endif %}
+</div>
+{% endblock %}

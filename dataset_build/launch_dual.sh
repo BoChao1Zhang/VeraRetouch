@@ -1,4 +1,18 @@
 #!/bin/bash
+# =============================================================================
+# DEPRECATED (vGate cutover, 2026-06-16). Use the canonical, decoupled path:
+#   1. broker     :  bash dataset_build/core/broker/launch_broker.sh start
+#   2. replica(s) :  bash dataset_build/docker/launch_reasoning.sh start
+#                    (or the elastic supervisor: python -m dataset_build.core.broker.supervisor --apply)
+#   3. shards     :  bash dataset_build/launch_build.sh pilot|full|fast-degrade
+#
+# Why deprecated: this launcher (a) serves the stale qwen3-vl-8b model on
+# :8001/:8002 — the build now expects the 35B 'qwen3_5-35b-a3b' (launch_reasoning.sh),
+# so the served-name no longer matches config.yaml; (b) sed's per-port configs
+# (mk_cfg) and hardcodes /2 — both obsolete now that every shard points at the
+# broker (:8003) and shard count is decoupled from replica count. Kept only for
+# reference / rollback. See dataset_build/core/broker/README.md.
+# -----------------------------------------------------------------------------
 # Dual-GPU "mirror" launcher for the VeraRetouch Direction-A dataset build.
 #   GPU0: vLLM qwen3-vl-8b @:8001 + renderer (orchestrator --shard 0/2)
 #   GPU1: vLLM qwen3-vl-8b @:8002 + renderer (orchestrator --shard 1/2)
@@ -10,6 +24,7 @@
 # Usage: bash dataset_build/launch_dual.sh smoke|fast-degrade|pilot|full [arg]
 set -uo pipefail
 cd /home/bc/VeraRetouch
+echo "[launch_dual] DEPRECATED — prefer launch_broker.sh + launch_reasoning.sh + launch_build.sh (see header)." >&2
 MODE="${1:-smoke}"; ARG="${2:-}"
 PY=/home/bc/miniconda3/bin/python            # base env: llava + torch + renderer
 IMG=vllm/vllm-openai:nightly

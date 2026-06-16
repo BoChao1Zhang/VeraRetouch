@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{{ a['asset_id'] }} · Source QA{% endblock %}
+{% block content %}
+<div class="bar">
+  <a class="btn ghost" href="javascript:history.back()">← 返回</a>
+  <span class="mono mut">{{ a['asset_id'] }}</span>
+  <span class="chip">{{ a['asset_type'] }}</span>
+  <span class="chip">{{ a['corpus'] }}</span>
+  {% if a['auto_verdict'] %}<span class="chip {{a['auto_verdict']}}">auto:{{a['auto_verdict']}}</span>{% endif %}
+  {% if a['final_decision'] %}<span class="chip {{a['final_decision']}}">decision:{{a['final_decision']}}</span>{% endif %}
+  {% if next_id %}<a class="btn ghost" href="/asset/{{ next_id }}">下一条 →</a>{% endif %}
+</div>
+
+<div class="detail">
+  <div>
+    {% if a['asset_type'] == 'image' %}
+      <img class="full" src="/image/{{ a['asset_id'] }}">
+    {% endif %}
+    {% if previews %}
+    <div class="panel"><h3>预设渲染预览 (before → after)</h3>
+      <div class="previews">
+      {% for p in previews %}
+        <div><div class="mut mono">{{ p['probe_image']|default('',true)|truncate(28) }}</div>
+          <img src="/preview?path={{ p['before_path'] }}"><div class="mut">before</div></div>
+        <div><img src="/preview?path={{ p['after_path'] }}"><div class="mut">
+          after · <b>{{ p['render_engine'] or '?' }}</b>{{ ' · LOCAL' if p['region_local'] }}
+          {% if p['paired_metrics'] %}<br>{{ p['paired_metrics'] }}{% endif %}</div></div>
+      {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <div class="panel"><h3>基本信息</h3>
+      <div class="kv">
+        <div class="k">path</div><div class="mono">{{ a['path'] }}</div>
+        <div class="k">scene/style</div><div>{{ a['scene'] }} / {{ a['style'] or '—' }}</div>
+        {% if a['asset_type']=='image' %}
+        <div class="k">尺寸/字节</div><div>{{ a['width'] or '?' }}×{{ a['height'] or '?' }} · {{ a['bytes_size'] }}</div>
+        {% else %}
+        <div class="k">kind/fmt/pack</div><div>{{ a['kind'] }} / {{ a['fmt'] }} / {{ a['pack_id'] }}</div>
+        {% if a['has_local_mask'] %}
+        <div class="k">⚠ 局部编辑</div><div><span class="chip fail">LOCAL EDIT — 全局 teacher 无法复现；仅真实 Lightroom 渲染</span></div>
+        {% endif %}
+        <div class="k">flags</div><div>bw={{a['is_bw']}} tech={{a['is_technical']}} mask={{a['has_local_mask']}} lut={{a['lut_size'] or '—'}}</div>
+        {% endif %}
+        <div class="k">status</div><div>{{ a['status'] }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel"><h3>NR-IQA / 美学分</h3>
+      {% if scores %}
+      {% for s in scores %}
+        <div class="score"><span>{{ s['metric'] }} <span class="mut">{{ '↑' if s['higher_is_better'] else '↓' }}</span></span>
+          <span class="mono">{{ s['value']|round(3) if s['value'] is not none else '—' }}</span></div>
+      {% endfor %}
+      {% else %}<div class="mut">尚未评分</div>{% endif %}
+    </div>
+
+    {% for qk in ['A','B','C'] %}
+    {% if qk in qa_groups %}
+    {# latest answer + rationale per item (append-only: last row wins) #}
+    {% set latest = {} %}
+    {% for r in qa_groups[qk] %}{% if latest.update({r['item']: r}) %}{% endif %}{% endfor %}
+    <div class="panel"><h3>问卷 {{ qk }} · {{ defs[qk]['title'] }}</h3>
+      {% for item, qspec in defs[qk]['items'].items() %}
+      {% set r = latest.get(item) %}
+      {% set ans = r['answer'] if r else none %}
+      {% set graded = qspec['type'] == 'grade' %}
+        <div class="qitem">
+          <span class="chip {{ 'pass' if (ans==1 or (graded and ans is not none and ans>=2)) else ('fail' if ans==0 else '') }}">{{ item }} {{ (ans if graded and ans is not none else ('✓' if ans==1 else ('✗' if ans==0 else '?'))) }}</span>
+          <span class="q">{{ qspec['q'] if qspec is mapping else qspec }}</span>
+          <span style="float:right">
+            <a href="javascript:qaOverride('{{ qk }}','{{ item }}',1)" title="改为 yes" style="color:var(--good)">✓</a>
+            <a href="javascript:qaOverride('{{ qk }}','{{ item }}',0)" title="改为 no" style="color:var(--bad);margin-left:6px">✗</a>
+          </span>
+          {% if r and r['rationale'] %}<div class="mut" style="margin-top:3px">{{ r['rationale'] }}</div>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    {% if 'caption' in qa_groups %}
+    <div class="panel"><h3>Caption</h3>
+      {% for r in qa_groups['caption'] %}<div>{{ r['raw'] or r['rationale'] }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="panel"><h3>处理时间线 (溯源)</h3>
+      <div class="timeline">
+      {% for e in events %}
+        <div class="e"><span class="stage">{{ e['stage'] }}</span>
+          <span class="chip {{ 'pass' if e['status']=='ok' else ('fail' if e['status']=='error' else 'review') }}">{{ e['status'] }}</span>
+          <span class="mut">{{ e['ts'] }}</span>
+          {% if e['detail'] %}<div class="mono mut">{{ e['detail']|truncate(200) }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      </div>
+    </div>
+
+    <div class="panel"><h3>决策历史</h3>
+      {% if decisions %}<table><tr><th>决策</th><th>by</th><th>原因</th><th>时间</th></tr>
+      {% for d in decisions %}<tr><td><span class="chip {{d['decision']}}">{{d['decision']}}</span></td>
+        <td class="mut">{{d['reviewer']}}</td><td>{{d['reason']}}</td><td class="mut">{{d['ts']}}</td></tr>{% endfor %}
+      </table>{% else %}<div class="mut">无</div>{% endif %}
+    </div>
+
+    <details class="panel"><summary>原始 meta</summary><pre>{{ meta|tojson(indent=2) }}</pre></details>
+  </div>
+</div>
+
+<div class="sticky-actions" data-id="{{ a['asset_id'] }}" data-next="{{ next_id or '' }}">
+  <input id="reason" placeholder="决策原因(可选)" style="flex:1;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px">
+  <button class="btn keep" onclick="decide('keep')">Keep (k)</button>
+  <button class="btn drop" onclick="decide('drop')">Drop (d)</button>
+  <button class="btn hold" onclick="decide('hold')">Hold (h)</button>
+</div>
+{% endblock %}

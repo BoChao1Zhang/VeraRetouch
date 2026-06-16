@@ -528,6 +528,14 @@ def load_plan_inputs(
     if stream_id == StreamId.S3_MMART_LOCAL:
         mmart_records = _read_jsonl(root / "mmart_records.jsonl")
 
+    # Clean-before-build (Phase 3): drop any source/recipe not cleared by
+    # source_qa's per-asset verdict (read-only PG predicate). Opt-in
+    # (config.cleaning.enabled, default off) and fail-closed (PG error -> HALT),
+    # so the build never consumes an un-cleaned asset.
+    from dataset_build import cleaning
+    src_pool = cleaning.filter_sources(config, stream_id.value, src_pool)
+    rec_pool = cleaning.filter_recipes(config, stream_id.value, rec_pool)
+
     return _PlanInputs(sources=src_pool, recipes=rec_pool, mmart_records=mmart_records)
 
 
@@ -1031,15 +1039,39 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                   "lut_applier": ctx.lut_applier}
     else:
         models = _build_real_models(config, stream_ids)
-        ctx = BuildContext(
-            config=config,
+        # Decoupled core facade: render_lock+renderer relocate into core.render;
+        # cleaner/masker become the delegating core.vllm/core.sam3 wrappers (which
+        # forward verbatim, so the build is byte-identical). gpu=None keeps render
+        # serialized by render_lock alone, exactly as before. Rollback = drop the
+        # `core=` kwarg (the inline path is the byte-identical fallback).
+        from dataset_build.core import build_core
+        from dataset_build.core.gpu_compute import GpuCompute
+
+        # VERA_DISABLE_CORE=1 pins the inline (pre-core) path — the byte-identical
+        # fallback and the Phase-2 rollback switch.
+        disable_core = os.environ.get("VERA_DISABLE_CORE") == "1"
+        # Shared per-card lease. The shard runs under CUDA_VISIBLE_DEVICES=<i>, so
+        # in-process the renderer sees cuda:0. Uncontended in the build (renderer
+        # is the only GPU tenant) -> byte-identical; establishes the
+        # lease->render_lock contract for render/IQA/SAM3 co-tenancy.
+        gpu = GpuCompute(["cuda:0"])
+        core = None if disable_core else build_core(
+            config,
             renderer=models["renderer"],
             masker=models["masker"],
             cleaner=models["cleaner"],
+            gpu=gpu,
+        )
+        ctx = BuildContext(
+            config=config,
+            renderer=models["renderer"],          # kept for the render_needed gate + fallback
+            masker=(core.sam3 if core else models["masker"]),     # delegating wrapper when core on
+            cleaner=(core.vllm if core else models["cleaner"]),   # delegating wrapper when core on
             parser=models["parser"],
             lut_applier=models.get("lut_applier"),
             cgt_writer=writer,
             cached_tagger=models.get("cached_tagger"),
+            core=core,
         )
 
     print(f"[run] out_root={out_root} streams={[s.value for s in stream_ids]} "

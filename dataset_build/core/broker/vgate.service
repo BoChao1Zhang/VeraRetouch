@@ -1,0 +1,43 @@
+# vGate vLLM broker — systemd unit (SPOF mitigation: auto-start + auto-restart).
+#
+# Install (as the user that runs the build; --user avoids root):
+#   mkdir -p ~/.config/systemd/user
+#   cp dataset_build/core/broker/vgate.service ~/.config/systemd/user/vgate.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now vgate.service
+#   # let it survive logout:
+#   loginctl enable-linger "$USER"
+#
+# Inspect / control:
+#   systemctl --user status vgate
+#   journalctl --user -u vgate -f
+#   systemctl --user restart vgate
+#
+# Replicas are stateless to the broker: a broker restart simply re-discovers
+# them within one poll interval (~10s). In-flight client requests during a
+# restart see a connection error and are absorbed by the clients' own bounded
+# retry (OpenAI SDK / requests loop).
+#
+# For a system-wide (root) unit instead, drop the WorkingDirectory/ExecStart
+# into /etc/systemd/system/vgate.service, add `User=bc`, and use the non-`--user`
+# systemctl forms.
+
+[Unit]
+Description=vGate vLLM broker (transparent OpenAI /v1 proxy for the VeraRetouch build)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/bc/VeraRetouch
+ExecStart=/home/bc/miniconda3/bin/python -m dataset_build.core.broker.app --port 8003
+Restart=always
+RestartSec=2
+# Tunables (uncomment to override the built-in defaults):
+# Environment=VGATE_REPLICA_PORTS=8001,8002
+# Environment=VGATE_SERVED_NAME=qwen3_5-35b-a3b
+# Environment=VGATE_REPLICA_CAP=32
+# Environment=VGATE_LOG_LEVEL=info
+
+[Install]
+WantedBy=default.target

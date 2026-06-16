@@ -17,13 +17,15 @@ Per source it computes (DUAL-CARD: two VLM servers, one --base-url each):
 Cache layout (path_key REUSED from mask_cache so this cache aligns with sam3):
     <out_root>/<tag_cache.subdir>/<path_key(source_path)>/tags.json
 
-DUAL-CARD launch (two processes, disjoint shards, one server each):
+Sharded launch (N processes, disjoint shards). Under vGate, point every shard
+at the broker (:8003) and let it balance across replicas — no per-shard port:
     QWEN_PY=<python with openai+torch+transformers>
-    CUDA_VISIBLE_DEVICES=0 $QWEN_PY -m dataset_build.tag_precompute --shard 0/2 \
-        --base-url http://localhost:8001/v1 &
-    CUDA_VISIBLE_DEVICES=1 $QWEN_PY -m dataset_build.tag_precompute --shard 1/2 \
-        --base-url http://localhost:8002/v1 &
+    for i in 0 1; do
+      $QWEN_PY -m dataset_build.tag_precompute --shard $i/2 \
+        --base-url http://localhost:8003/v1 &   # tag class = P2 (set on the cleaner)
+    done
     wait
+    # (Direct-to-replica still works for a broker-less run: --base-url :8001/:8002.)
 
 Resumable: skips a source whose tags.json already exists (unless --overwrite).
 A per-image failure logs and continues (never crashes the run). The base-env
@@ -136,6 +138,9 @@ def main() -> None:
     if args.base_url:
         cfg.setdefault("vllm", {})["base_url"] = args.base_url
     cleaner = QwenVLCleaner.from_config(cfg)
+    # Stage-0 tagging is the lowest-priority (P2) vGate class: it must yield to
+    # live build annotation and QA judging when they contend for the replicas.
+    cleaner.vgate_class = "tag"
 
     # Dedicated objective aesthetic scorer (graceful: None if weights absent).
     scorer = None

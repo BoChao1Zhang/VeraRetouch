@@ -242,7 +242,9 @@ def loads_lenient(text: str) -> Optional[dict]:
     return None
 
 
-def split_think_answer(text: str) -> Tuple[str, Optional[dict], dict]:
+def split_think_answer(
+    text: str, reasoning: Optional[str] = None
+) -> Tuple[str, Optional[dict], dict]:
     """Split a ``<think>...</think><answer>...</answer>`` envelope.
 
     Returns ``(think_str, answer_param_dict_or_None, extras)`` where
@@ -252,13 +254,38 @@ def split_think_answer(text: str) -> Tuple[str, Optional[dict], dict]:
 
     Robust to: missing tags (treats whole string as the answer blob), and to the
     answer being a bare JSON / single-quoted dict.
+
+    Reasoning capture (never silently empty when the model clearly reasoned):
+      think = ``reasoning`` (a separate ``reasoning_content`` channel, if provided)
+              OR the ``<think>...</think>`` tag body
+              OR the leading prose that precedes the ``<answer>`` block
+              (or the whole content with the ``<answer>`` block stripped, if there
+              is no ``<answer>`` tag). The 35B serving emits reasoning as plain
+              prose with no ``<think>`` tag, so the leading-prose fallback is the
+              normal path, not an error path.
     """
-    think = ""
-    m_think = re.search(r"<think>(.*?)</think>", text, flags=re.S | re.I)
-    if m_think:
-        think = m_think.group(1).strip()
+    # 1) explicit separate reasoning channel (vLLM reasoning parser) wins.
+    think = (reasoning or "").strip()
+
+    # 2) <think>...</think> tag body.
+    if not think:
+        m_think = re.search(r"<think>(.*?)</think>", text, flags=re.S | re.I)
+        if m_think:
+            think = m_think.group(1).strip()
 
     m_ans = re.search(r"<answer>(.*?)</answer>", text, flags=re.S | re.I)
+
+    # 3) leading-prose fallback: the content before <answer> (or the whole content
+    #    with any <answer> block removed) IS the reasoning when no tag was emitted.
+    if not think:
+        if m_ans is not None:
+            lead = text[: m_ans.start()]
+        else:
+            lead = text
+        # Drop any stray envelope tags so the prose reads cleanly.
+        lead = re.sub(r"</?(?:think|answer)>", "", lead, flags=re.I)
+        think = lead.strip()
+
     ans_blob = m_ans.group(1).strip() if m_ans else text
     raw = loads_lenient(ans_blob)
     if raw is None:
@@ -413,8 +440,15 @@ class QwenVLCleaner(Cleaner):
         image_encode_concurrency: int = 2,
         max_image_pixels: int = 80_000_000,
         image_cache_entries: int = 512,
+        vgate_class: str = "build-annotate",
     ) -> None:
         self.base_url = base_url
+        # Priority class advertised to the vGate broker via the ``X-vgate-class``
+        # request header (weighted-fair admission). The build's live annotation
+        # (gen_instruction/reason_params/verify) is ``build-annotate`` (P0); the
+        # stage-0 tag pass overrides this to ``tag`` (P2). Harmless when the
+        # base_url points at a plain vLLM replica (it ignores the header).
+        self.vgate_class = vgate_class
         self.api_key = api_key
         self.model = model
         self.temperature = temperature
@@ -553,17 +587,24 @@ class QwenVLCleaner(Cleaner):
             while len(self._image_uri_cache) > self.image_cache_entries:
                 self._image_uri_cache.popitem(last=False)
 
-    def _chat(
+    def _chat_full(
         self,
         system: str,
         user_text: str,
         images: Optional[Sequence[str]] = None,
         json_mode: bool = False,
-    ) -> str:
-        """One chat-completions call. ``images`` = local file paths (-> data URIs)."""
+    ) -> Tuple[str, str]:
+        """One chat-completions call returning ``(content, reasoning_content)``.
+
+        ``images`` = local file paths (-> data URIs). ``reasoning_content`` is the
+        separate reasoning channel some thinking-model servings expose on
+        ``message.reasoning_content`` (vLLM reasoning parsers). It is ``""`` when
+        the serving folds reasoning into ``content`` as plain prose (the current
+        Qwen3.5-35B serving) or does not surface it.
+        """
 
         @_retry(max_attempts=self.max_retries)
-        def _call() -> str:
+        def _call() -> Tuple[str, str]:
             client = self._get_client()
             content: List[Dict[str, Any]] = [{"type": "text", "text": user_text}]
             for img in (images or []):
@@ -582,10 +623,35 @@ class QwenVLCleaner(Cleaner):
             )
             if json_mode:
                 kwargs["response_format"] = {"type": "json_object"}
+            # Advertise the vGate priority class (ignored by a plain vLLM server).
+            kwargs["extra_headers"] = {"X-vgate-class": self.vgate_class}
             resp = client.chat.completions.create(**kwargs)
-            return resp.choices[0].message.content or ""
+            msg = resp.choices[0].message
+            text = msg.content or ""
+            # Thinking models served with a vLLM reasoning parser put the chain of
+            # thought on ``message.reasoning_content`` (not part of the OpenAI spec,
+            # so accessed defensively). Under the current 35B serving this is None.
+            reasoning = getattr(msg, "reasoning_content", None) or ""
+            return text, str(reasoning).strip()
 
         return _call()
+
+    def _chat(
+        self,
+        system: str,
+        user_text: str,
+        images: Optional[Sequence[str]] = None,
+        json_mode: bool = False,
+    ) -> str:
+        """One chat-completions call returning the message content only.
+
+        Thin wrapper over ``_chat_full`` preserving the original string-returning
+        contract used by ``_chat_json`` and the JSON-template methods.
+        """
+        text, _reasoning = self._chat_full(
+            system, user_text, images=images, json_mode=json_mode
+        )
+        return text
 
     def _chat_json(
         self, system: str, user_text: str,
@@ -608,17 +674,31 @@ class QwenVLCleaner(Cleaner):
                 f", which an expert retouched using the preset '{preset_name}' "
                 f"(scene: {sm.get('scene', 'unknown')}, style: {sm.get('style', 'unknown')})."
             )
-        system = self.persona + "\n\nYou are reverse-engineering the photographer's intent."
+        system = (
+            self.persona
+            + "\n\nYou are now a senior photo-retouching editor. You are reverse-engineering "
+            "the photographer's editing intent for THIS image: state the edit the way a real "
+            "user would phrase a request to a retoucher, grounded in what you actually see "
+            "(subject, lighting, palette, mood) — never invent edits the image gives no "
+            "evidence for, and never describe the camera scene as if it were an edit."
+        )
         user_text = (
             f"Look at this photograph{preset_clause}.\n"
-            "Describe, as a natural editing request a user would type, the retouch this "
-            "image needs/received. Cover three aspects when relevant:\n"
-            "  1. LIGHTING (exposure, contrast, highlights/shadows, tone),\n"
-            "  2. GLOBAL COLOR & TEMPERATURE (warmth, tint, overall vibrance/saturation),\n"
-            "  3. SPECIFIC COLOR (named hues e.g. sky-blue, skin-orange, foliage-green).\n"
-            "Output JSON ONLY:\n"
-            '{"instruction_long": "<rich, specific, ~2-3 sentences>", '
-            '"instruction_short": "<terse user-style, <=12 words>", "lang": "en"}'
+            "Write the retouch this image needs/received as a natural editing REQUEST a user "
+            "would type (imperative voice, e.g. 'warm it up and lift the shadows'), NOT a "
+            "caption of the scene. Ground every clause in visible evidence. Cover these three "
+            "aspects ONLY where the image actually calls for them (omit an aspect rather than "
+            "padding):\n"
+            "  1. LIGHTING — exposure, contrast, highlights/shadows, overall tone.\n"
+            "  2. GLOBAL COLOR & TEMPERATURE — warmth/coolness, tint, overall vibrance/saturation.\n"
+            "  3. SPECIFIC COLOR — named hues by region (e.g. sky-blue, skin-orange, "
+            "foliage-green), with the direction of change.\n"
+            "Keep it concrete and free of brand/preset jargon. Detect the dominant language of "
+            "any caption context; otherwise use English ('en').\n"
+            "Output JSON ONLY, exactly these keys and nothing else:\n"
+            '{"instruction_long": "<rich, specific, imperative, ~2-3 sentences>", '
+            '"instruction_short": "<terse user-style imperative, <=12 words>", '
+            '"lang": "<ISO-639-1 code, e.g. en or zh>"}'
         )
         d = self._chat_json(system, user_text, images=[image_path])
         return {
@@ -630,12 +710,42 @@ class QwenVLCleaner(Cleaner):
     # ---- (b) <think> + <answer> params ----------------------------------
     def reason_params(self, image_path: str, instruction: str) -> dict:
         # System = MMArt persona VERBATIM (already specifies the <think>/<answer> envelope).
+        # We leave the persona untouched (it is shared by every template and loaded verbatim
+        # from grpo_dataset.json) and reinforce the SAME envelope contract in the user turn so
+        # the stronger 35B reliably emits BOTH tags and a valid <answer> param dict.
         system = self.persona
-        user_text = f"<image>{instruction}"
+        user_text = (
+            f"<image>Edit request: {instruction}\n\n"
+            "Look at the image and translate this request into Adobe Lightroom adjustments.\n"
+            "Format your ENTIRE reply as EXACTLY this envelope and NOTHING else — no preamble, "
+            "no markdown, no text outside the two tag blocks:\n"
+            "<think> Reason here: which lighting / global-color / specific-color sliders the request "
+            "and the visible image call for, and in which direction. </think>\n"
+            "<answer> A SINGLE valid JSON object of the parameters to change. </answer>\n\n"
+            "Rules for the <answer> JSON:\n"
+            "  - Keys are standard English Lightroom identifiers, e.g. Exposure2012, Contrast2012, "
+            "Highlights2012, Shadows2012, Whites2012, Blacks2012, Temperature, Tint, Vibrance, "
+            "Saturation, and per-band HSL keys like BlueSaturation, OrangeLuminance, GreenHue.\n"
+            "  - Values are RAW Lightroom slider units: most sliders are integers in [-100, 100]; "
+            "Exposure2012 is in stops, roughly [-5.0, 5.0]. Do NOT pre-divide or normalize.\n"
+            "  - Include ONLY the parameters you are actually changing (omit no-op zeros).\n"
+            "  - Global adjustments only; if the edit is region-local, choose the global sliders that "
+            "best approximate it (mask/local structures are allowed but will be treated as hints).\n"
+            "  - The <answer> is your explanatory proposal; it documents the edit but does NOT override "
+            "any ground-truth recipe.\n"
+            "Put ALL of your reasoning inside <think>...</think> and the JSON object inside "
+            "<answer>...</answer>. Emit nothing before <think> and nothing after </answer>.\n"
+            "Example shape: <think> ...your reasoning... </think> "
+            "<answer> {\"Exposure2012\": 0.35, \"Temperature\": 12, \"BlueSaturation\": -15} </answer>"
+        )
         # Not JSON-mode: the assistant emits the <think>...</think><answer>...</answer>
-        # envelope, which we parse by regex then json/ast.
-        raw = self._chat(system, user_text, images=[image_path], json_mode=False)
-        think, params, extras = split_think_answer(raw)
+        # envelope, which we parse by regex then json/ast. We also capture any
+        # separate reasoning_content channel (thinking-model serving); the parser
+        # falls back to leading prose so capture never depends on tag compliance.
+        raw, reasoning = self._chat_full(
+            system, user_text, images=[image_path], json_mode=False
+        )
+        think, params, extras = split_think_answer(raw, reasoning=reasoning)
         return {
             "think": think,
             "answer": params or {},
@@ -654,18 +764,28 @@ class QwenVLCleaner(Cleaner):
         if isinstance(params, dict):
             instruction = str(params.get("_instruction", "")) if "_instruction" in params else ""
         user_text = (
-            'Image 1 = ORIGINAL ("before"). Image 2 = RETOUCHED RESULT ("after").\n'
+            'You are comparing TWO images. Image 1 = ORIGINAL ("before"). '
+            'Image 2 = RETOUCHED RESULT ("after").\n'
             f"The after was produced by these Lightroom params: {params_json}.\n"
             f'The stated edit intent was: "{instruction}".\n'
-            "Judge:\n"
-            "  - look_match: does the after visually realize the intent vs the before?\n"
-            "  - param_sane: are the param values plausible (no extreme/contradictory "
-            "values, within typical Lightroom ranges)?\n"
-            "  - processed_ok: does the after look like a genuine expert retouch of the SAME "
-            "scene as before (NOT a different image, NOT a corrupt/over-baked render)?\n"
-            "Output JSON ONLY:\n"
+            "Compare them carefully (look at exposure/contrast, white balance & overall color, "
+            "and any region-specific hue shifts) and judge each criterion independently:\n"
+            "  - look_match: does the after move in the SAME DIRECTION as the intent AND the "
+            "params, relative to the before (e.g. if the params warm + brighten, the after is "
+            "visibly warmer + brighter)? false if the change is absent, opposite, or unrelated.\n"
+            "  - param_sane: are the param values plausible and mutually consistent (no extreme or "
+            "self-contradictory sliders; within typical Lightroom ranges) AND consistent with the "
+            "visible change?\n"
+            "  - processed_ok: is the after a genuine, clean expert retouch of the SAME scene/"
+            "subject as the before — same content, same framing — and NOT a different image, a "
+            "crop, a corrupt/clipped/over-baked/banded render, or an unedited copy?\n"
+            "  - score: overall quality of this (before, after, intent, params) sample as training "
+            "data, 0.0 (unusable) to 1.0 (excellent); be strict — reserve >0.8 for clearly correct, "
+            "clean realizations of the intent.\n"
+            "Be decisive: a criterion is true only if the evidence in the images supports it.\n"
+            "Output JSON ONLY, exactly these keys:\n"
             '{"look_match": bool, "param_sane": bool, "processed_ok": bool, '
-            '"score": <0.0-1.0>, "reason": "<one sentence>"}'
+            '"score": <0.0-1.0>, "reason": "<one concise sentence citing the deciding evidence>"}'
         )
         d = self._chat_json(system, user_text, images=[before_path, after_path])
         if not d:
