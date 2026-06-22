@@ -18,3 +18,4 @@ docs/paper_list.md
 lrc_scripts/servers/lr_caches/
 lrc_scripts/**/__pycache__/
 dataset_build/source_qa/render_stage/
+lrc_scripts/
