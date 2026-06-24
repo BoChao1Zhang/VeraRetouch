@@ -27,8 +27,8 @@ from typing import List, Tuple
 
 from .bank import load_captions
 
-TAU_SFT = 0.62     # graded composite q to qualify as an SFT target (q in [-1,1], ~0.5 = neutral)
-MARGIN_DPO = 0.22  # min q gap for a chosen/rejected DPO pair
+TAU_SFT = 0.58     # gaussianized q (N(0.5,0.15)) for an SFT target ≈ top-30% (z≈+0.5)
+MARGIN_DPO = 0.18  # min q gap for a chosen/rejected DPO pair (≈1.2σ on the normal scale)
 _CAPS = None
 
 

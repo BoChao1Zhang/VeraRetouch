@@ -20,14 +20,32 @@ vLLM = config.VLLM_* (2 images/prompt). CLI smoke: python -m construct.qa
 from __future__ import annotations
 
 import base64
+import bisect
 import io
+import json
+import os
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor
+from statistics import NormalDist
 from typing import List, Optional, Tuple
 
 import numpy as np
 import requests
+
+# --- score gaussianization (grade-on-a-curve) -------------------------------- #
+# VLM aesthetic judgment is near-binary, so the raw composite is bimodal. Map it through its empirical
+# quantile to a normal N(0.5,0.15) in [0,1]: rank-preserving (SFT/DPO selection unchanged) but the
+# score DISTRIBUTION becomes a clean bell. Reference quantiles calibrated on a representative build.
+_NPPF = NormalDist().inv_cdf
+_Q_REF = json.load(open(os.path.join(os.path.dirname(__file__), "q_ref.json")))
+_Q_MU, _Q_SIG = 0.5, 0.15
+
+
+def _gaussianize(q_raw: float) -> float:
+    i = bisect.bisect_left(_Q_REF, q_raw)
+    pct = min(0.999, max(0.001, (i + 0.5) / len(_Q_REF)))
+    return round(min(1.0, max(0.0, _Q_MU + _Q_SIG * _NPPF(pct))), 3)
 from PIL import Image, ImageFile, ImageOps
 
 from dataset_build.source_qa import config
@@ -346,9 +364,10 @@ def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float)
     base = {"det": sorted(det), "is_bw": is_bw}
     # unreliable: low deducted core, but blended with continuous polish so they don't all stack on one
     # value (still lands low — they're untrustworthy — just spread, per "fill the middle").
-    ded = lambda why, d, veto=False: {**base, "reliable": False, "veto": veto, "why": why,
-                                      "merit_score": round(_NEUTRAL - d, 3), "merit_hits": [],
-                                      "q": round((1 - _W_PIX) * (_NEUTRAL - d) + _W_PIX * pol, 3)}
+    def ded(why, d, veto=False):
+        qr = (1 - _W_PIX) * (_NEUTRAL - d) + _W_PIX * pol
+        return {**base, "reliable": False, "veto": veto, "why": why, "merit_hits": [],
+                "merit_score": round(_NEUTRAL - d, 3), "q_raw": round(qr, 3), "q": _gaussianize(qr)}
 
     # phase 1: veto dims + controls
     ans1, ok1, why1 = _run_phase(suri, auri, _VETO_ITEMS, salt=1)
@@ -378,10 +397,11 @@ def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float)
     contra_excess = max(0, contra1 + contra2 - _CONTRA_TOL)
     pen = (_MONO_DISCOUNT * is_bw + _PEN_SOFTVETO * len(vlm_veto) + _PEN_CONTRA * contra_excess)
     core = (1 - _W_PIX) * comp + _W_PIX * pol   # blend VLM composite with continuous pixel polish
-    q = round(max(-1.0, min(1.0, core - pen)), 3)
+    q_raw = max(-1.0, min(1.0, core - pen))
     return {**base, "reliable": contra_excess == 0, "veto": False, "vlm_veto": vlm_veto,
             "facets": facets, "polish": round(pol, 3), "merit_score": round(comp, 3),
-            "merit_hits": merit_hits, "soft_veto": bool(vlm_veto), "q": q,
+            "merit_hits": merit_hits, "soft_veto": bool(vlm_veto),
+            "q_raw": round(q_raw, 3), "q": _gaussianize(q_raw),
             "why": "" if contra_excess == 0 else "contra"}
 
 
