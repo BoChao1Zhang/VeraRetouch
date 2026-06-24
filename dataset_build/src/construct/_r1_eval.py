@@ -9,7 +9,7 @@ from __future__ import annotations
 import json, os, sys
 import numpy as np
 from dataset_build.source_qa import db
-from construct import sf_client, bank
+from . import sf_client, bank
 
 OUT = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_v2"
 
