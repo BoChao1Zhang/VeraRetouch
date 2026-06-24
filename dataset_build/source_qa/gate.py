@@ -77,13 +77,15 @@ def verdict_for(a) -> tuple:
         return pre
     if a["pass_a"] == 0:
         return "drop", "PASS_A=0 (invalid photo)"
-    hard = _hard_iqa_fail(a)
-    if hard:
-        return "drop", f"hard IQA fail: {hard}"
+    iqa_on = getattr(config, "IQA_IN_CLEAN", True)
+    if iqa_on:
+        hard = _hard_iqa_fail(a)
+        if hard:
+            return "drop", f"hard IQA fail: {hard}"
     if a["pass_b"] == 0:
         return "drop", "PASS_B=0 (low quality / unsuitable source)"
-    if a["pass_a"] == 1 and a["pass_b"] == 1 and _iqa_keep_band(a):
-        return "keep", "PASS_A&B + IQA keep-band"
+    if a["pass_a"] == 1 and a["pass_b"] == 1 and (not iqa_on or _iqa_keep_band(a)):
+        return "keep", "PASS_A&B" + ("" if iqa_on else " (IQA off)") + (" + IQA keep-band" if iqa_on else "")
     return "review", "borderline / incomplete signals"
 
 
