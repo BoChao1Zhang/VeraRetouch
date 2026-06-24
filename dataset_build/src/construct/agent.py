@@ -86,7 +86,7 @@ def process_source(sel: Selector, src: dict, render_n: int, render_workers: int 
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait)
     after = {f["preset_id"]: ap for f, ap in rendered}
     return {
-        "source": path, "is_portrait": is_portrait,
+        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
         "candidates": [{"preset_id": f["preset_id"], "kind": f["kind"], "fmt": f.get("fmt"),
                         "preset_path": f["path"], "content_hash": f.get("preset_content_hash"),
                         "after_path": after[f["preset_id"]],
@@ -131,7 +131,7 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     is_portrait = bool(src.get("is_portrait_pool"))
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
     return {
-        "source": path, "is_portrait": is_portrait, "local": True,
+        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait, "local": True,
         "candidates": [{"preset_id": s["mask_unit_id"], "kind": "local_from_preset",
                         "after_path": s["after_path"], "qa": qres["scores"].get(s["mask_unit_id"]),
                         "local": {"mask_unit_id": s["mask_unit_id"], "mask_type": g["mask_type"],
@@ -164,7 +164,7 @@ def process_source_sam3(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     is_portrait = bool(src.get("is_portrait_pool"))
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
     return {
-        "source": path, "is_portrait": is_portrait, "local": True,
+        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait, "local": True,
         "candidates": [{"preset_id": s["mask_unit_id"], "kind": "lut_in_sam3",
                         "after_path": s["after_path"], "qa": qres["scores"].get(s["mask_unit_id"]),
                         "local": {"route": "sam3", "mask_unit_id": s["mask_unit_id"],
@@ -176,11 +176,16 @@ def process_source_sam3(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
 
 
 def run(n: int, render_n: int, out_dir: str, src_workers: int = 4, local: bool = False,
-        route: str = "geom") -> dict:
+        route: str = "geom", persist: bool = True) -> dict:
     os.makedirs(out_dir, exist_ok=True)
     cgt_dir = os.path.join(out_dir, "cgt")
     sel = Selector()   # both routes need vlemb (global: the look; local: the base preset for the mask)
+    route_label = (route if local else "global")
     conn = db.connect()
+    run_id = db.start_run(conn, f"construct_{route_label}",
+                          {"n": n, "render_n": render_n, "out": out_dir, "local": local,
+                           "route": route_label}) if persist else None
+    conn.commit()
     # Route 1 (geometric mask-only) applies to ANY photo; b_subject is for Route 2 (SAM3 semantic).
     rows = [dict(r) for r in conn.execute(
         "SELECT asset_id, path, is_portrait_pool FROM assets WHERE asset_type='image' "
@@ -214,6 +219,11 @@ def run(n: int, render_n: int, out_dir: str, src_workers: int = 4, local: bool =
     _dump(out_dir, "sft.jsonl", sft)
     _dump(out_dir, "dpo.jsonl", dpo)
     summary = tier.summarize(groups, sft, dpo)
+    if persist and run_id is not None:
+        from . import provenance
+        pstat = provenance.persist_run(run_id, groups, sft, dpo, route_label)
+        c2 = db.connect(); db.finish_run(c2, run_id, pstat); c2.commit(); c2.close()
+        summary["postgres"] = {"run_id": run_id, **pstat}
     print("\n=== R4 SUMMARY ===\n" + json.dumps(summary, ensure_ascii=False, indent=1))
     json.dump(summary, open(os.path.join(out_dir, "r4_summary.json"), "w"), ensure_ascii=False, indent=1)
     return summary
@@ -244,9 +254,10 @@ def main() -> None:
     r.add_argument("--local", action="store_true", help="local mask pipeline (Mask v2)")
     r.add_argument("--route", choices=["geom", "sam3"], default="geom",
                    help="geom=Route1 preset-tone-in-mask; sam3=Route2 LUT in SAM3 region")
+    r.add_argument("--no-db", action="store_true", help="skip Postgres provenance (dry test)")
     a = ap.parse_args()
     if a.cmd == "run":
-        run(a.n, a.render_n, a.out, local=a.local, route=a.route)
+        run(a.n, a.render_n, a.out, local=a.local, route=a.route, persist=not a.no_db)
 
 
 if __name__ == "__main__":
