@@ -124,7 +124,7 @@ def _stats(path: str):
     cf = float(np.hypot(rg.std(), yb.std()) + 0.3 * np.hypot(rg.mean(), yb.mean()))
     luma = 0.299 * R + 0.587 * G + 0.114 * B
     return {"cf": cf, "hi": float((a.max(-1) > 250).mean()), "lo": float((luma < 8).mean()),
-            "luma": float(luma.mean())}
+            "luma": float(luma.mean()), "lstd": float(luma.std())}
 
 
 # Data-driven thresholds — calibrated on the preset-clean preview distribution (construct.calibrate
@@ -288,6 +288,21 @@ def _vhealth(ans: dict, key: str, det: set) -> float:
     return h
 
 
+_W_PIX = 0.28             # weight of the continuous pixel-quality signal blended into q (fills the
+                          # middle + breaks the VLM-binary 0/1 spikes; the rest is the VLM composite)
+
+
+def _polish(st: dict) -> float:
+    """Continuous pixel-quality prior in [0,1] (clip-free, well-exposed, moderate contrast/saturation).
+    Varies per-image even when the VLM answers identically -> de-spikes the rails, fills the middle."""
+    bell = lambda v, c, w: max(0.0, 1.0 - abs(v - c) / w)
+    clip_ok = max(0.0, 1.0 - (st["hi"] + st["lo"]) / 0.20)
+    expo_ok = bell(st["luma"], 118.0, 95.0)            # mid exposure
+    contrast_ok = bell(st["lstd"], 52.0, 46.0)         # punchy but not flat / not crushed
+    sat_ok = bell(st["cf"], 45.0, 55.0)                # moderate colorfulness (gray & garish both off)
+    return (clip_ok + expo_ok + contrast_ok + sat_ok) / 4
+
+
 def _composite(ans1: dict, ans2: dict, is_portrait: bool, is_bw: bool, det: set):
     """Logically-gated facet composite in [0,1]. tone gated by clip/crush health, color gated by
     satclip/skintone health (can't be 'good color' if oversaturated). B&W color=neutral (no shrink)."""
@@ -327,10 +342,13 @@ def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float)
     auri = _uri(after_path)
     veto_keys = [k for k, t, c, p, f, r in _DIMS if t == "veto" and _active(k, is_portrait, is_bw)]
     merit_keys = [k for k, t, c, p, f, r in _DIMS if t == "merit" and _active(k, is_portrait, is_bw)]
+    pol = _polish(st)
     base = {"det": sorted(det), "is_bw": is_bw}
+    # unreliable: low deducted core, but blended with continuous polish so they don't all stack on one
+    # value (still lands low — they're untrustworthy — just spread, per "fill the middle").
     ded = lambda why, d, veto=False: {**base, "reliable": False, "veto": veto, "why": why,
-                                      "merit_score": round(_NEUTRAL - d, 3),
-                                      "q": round(_NEUTRAL - d, 3), "merit_hits": []}
+                                      "merit_score": round(_NEUTRAL - d, 3), "merit_hits": [],
+                                      "q": round((1 - _W_PIX) * (_NEUTRAL - d) + _W_PIX * pol, 3)}
 
     # phase 1: veto dims + controls
     ans1, ok1, why1 = _run_phase(suri, auri, _VETO_ITEMS, salt=1)
@@ -359,10 +377,12 @@ def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float)
     merit_hits = [k for k in merit_keys if _graded(ans2, k) >= 1.0]
     contra_excess = max(0, contra1 + contra2 - _CONTRA_TOL)
     pen = (_MONO_DISCOUNT * is_bw + _PEN_SOFTVETO * len(vlm_veto) + _PEN_CONTRA * contra_excess)
-    q = round(max(-1.0, min(1.0, comp - pen)), 3)
+    core = (1 - _W_PIX) * comp + _W_PIX * pol   # blend VLM composite with continuous pixel polish
+    q = round(max(-1.0, min(1.0, core - pen)), 3)
     return {**base, "reliable": contra_excess == 0, "veto": False, "vlm_veto": vlm_veto,
-            "facets": facets, "merit_score": round(comp, 3), "merit_hits": merit_hits,
-            "soft_veto": bool(vlm_veto), "q": q, "why": "" if contra_excess == 0 else "contra"}
+            "facets": facets, "polish": round(pol, 3), "merit_score": round(comp, 3),
+            "merit_hits": merit_hits, "soft_veto": bool(vlm_veto), "q": q,
+            "why": "" if contra_excess == 0 else "contra"}
 
 
 def qa_rank(source_path: str, variants: List[Tuple[str, str]], scene: Optional[str] = None,
