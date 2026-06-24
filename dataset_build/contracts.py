@@ -115,6 +115,8 @@ class MaskSource(str, Enum):
     GROUNDINGDINO_SAM2 = "groundingdino_sam2"  # fallback detector+segmenter
     PPR10K = "ppr10k"                   # real human-region mask (if re-downloaded)
     DEGRADE = "degrade"                 # exact construction mask (self-supervised)
+    SAM3_ANCHORED = "sam3_anchored"     # WS-B: real-preset template pinned to a SAM3 region
+    LR_GOLD = "lr_gold"                 # WS-B: real Lightroom local-mask render (gold)
     GLOBAL = "global"                   # all-ones (degenerate 3D-LUT case)
 
 

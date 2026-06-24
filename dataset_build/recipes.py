@@ -197,6 +197,80 @@ def detect_local_mask(attrs_or_settings: Dict[str, Any]) -> bool:
     return any(m in attrs_or_settings for m in LOCAL_MASK_MARKERS)
 
 
+#: The local-edit param attributes Lightroom writes on a correction's
+#: rdf:Description (the modern 2012 set + the few non-versioned ones that still
+#: matter). Used by parse_local_masks to capture the edit *direction* per mask.
+_LOCAL_PARAM_KEYS: Tuple[str, ...] = (
+    "LocalExposure2012", "LocalContrast2012", "LocalHighlights2012",
+    "LocalShadows2012", "LocalWhites2012", "LocalBlacks2012",
+    "LocalClarity2012", "LocalDehaze", "LocalTemperature", "LocalTint",
+    "LocalSaturation", "LocalToningHue", "LocalToningSaturation",
+)
+
+
+def _crs_attr(el: Any, name: str) -> Optional[str]:
+    """Read a crs-namespaced attribute (compact form) off an element."""
+    v = el.attrib.get(f"{{{CRS_NS}}}{name}")
+    return v if v is not None else el.attrib.get(name)
+
+
+def parse_local_masks(xmp_path: str) -> List[Dict[str, Any]]:
+    """Deep-parse the local-mask corrections of an XMP preset.
+
+    Returns one record (plain dict) per mask; a correction may hold several
+    masks. Each record:
+      {container, mask_type, what, geom {Top,Left,...|ZeroX,...},
+       local_params {LocalExposure2012: float, ...}, correction_amount,
+       range_mask {Type,LumMin,LumMax,ColorAmount}|None, is_ai}
+
+    Unlike xmp_to_params (which keeps only the 38 GLOBAL keys), this reads the
+    CorrectionMasks geometry + the Local*2012 edit vector that the mask-template
+    miner needs to extract anchor templates. xmp_to_params is left untouched —
+    GLOBAL param rendering still ignores all of this.
+    """
+    try:
+        tree = ET.parse(xmp_path)
+    except (ET.ParseError, OSError):
+        return []
+    root = tree.getroot()
+    out: List[Dict[str, Any]] = []
+    for container in LOCAL_MASK_MARKERS:
+        for cont_el in root.iter(f"{{{CRS_NS}}}{container}"):
+            for corr in cont_el.iter(f"{{{RDF_NS}}}Description"):
+                ca = _parse_num(_crs_attr(corr, "CorrectionAmount"))
+                local_params = {
+                    k: v for k in _LOCAL_PARAM_KEYS
+                    if (v := _parse_num(_crs_attr(corr, k))) is not None and v != 0.0
+                }
+                rm = corr.find(f"{{{CRS_NS}}}CorrectionRangeMask")
+                range_mask = None
+                if rm is not None:
+                    range_mask = {
+                        n: _parse_num(_crs_attr(rm, n))
+                        for n in ("Type", "LumMin", "LumMax", "ColorAmount")
+                    }
+                cmasks = corr.find(f"{{{CRS_NS}}}CorrectionMasks")
+                mask_lis = list(cmasks.iter(f"{{{RDF_NS}}}li")) if cmasks is not None else []
+                for li in mask_lis:
+                    what = _crs_attr(li, "What") or ""
+                    geom = {
+                        _localname(k): v for k, v in li.attrib.items()
+                        if k.startswith(f"{{{CRS_NS}}}") and _localname(k) != "What"
+                    }
+                    out.append({
+                        "container": container,
+                        "mask_type": what.rsplit("/", 1)[-1].lower(),
+                        "what": what,
+                        "geom": geom,
+                        "local_params": local_params,
+                        "correction_amount": ca,
+                        "range_mask": range_mask,
+                        "is_ai": container == "MaskGroupBasedCorrections"
+                                 or "image" in what.lower(),
+                    })
+    return out
+
+
 def is_grayscale_preset(attrs: Dict[str, Any]) -> bool:
     """True if ``ConvertToGrayscale="True"`` — dropped for the color C_GT pilot
     (config.yaml recipes.filters.drop_bw)."""

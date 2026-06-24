@@ -12,9 +12,10 @@ Cache layout (keys shared with the writer so they always agree):
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -88,3 +89,36 @@ class CachedMasker:
             if m is not None:
                 out[c] = _resize(m, native_size)
         return out
+
+    def regions(self, image: Any) -> Dict[str, Dict[str, Any]]:
+        """Precomputed per-concept geometry for WS-B anchoring:
+        {concept: {bbox: [x0,y0,x1,y1], centroid: [cx,cy], area: f}} in NORMALIZED
+        [0,1] coords (resolution-independent). Written alongside the PNGs by
+        sam3_precompute. Missing file -> {} (anchoring falls back to template geom)."""
+        p = os.path.join(self.cache_dir, path_key(_as_path(image)), "regions.json")
+        try:
+            with open(p) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            return {}
+
+
+def compute_regions(masks: Dict[str, np.ndarray]) -> Dict[str, Dict[str, Any]]:
+    """Derive normalized bbox/centroid/area per concept from binary-ish masks.
+    Shared by the writer (sam3_precompute) so reader & writer agree on format."""
+    out: Dict[str, Dict[str, Any]] = {}
+    for c, m in masks.items():
+        a = np.asarray(m, dtype=np.float32)
+        if a.ndim != 2 or a.size == 0:
+            continue
+        H, W = a.shape
+        ys, xs = np.where(a > 0.5)
+        if xs.size == 0:
+            continue
+        out[c] = {
+            "bbox": [float(xs.min() / W), float(ys.min() / H),
+                     float((xs.max() + 1) / W), float((ys.max() + 1) / H)],
+            "centroid": [float(xs.mean() / W), float(ys.mean() / H)],
+            "area": float(xs.size / (H * W)),
+        }
+    return out
