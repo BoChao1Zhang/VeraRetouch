@@ -14,6 +14,10 @@ docs/paper_list.md
 *.tmp
 .DS_Store
 
+# Secrets / local tool caches
+.env
+.serena/
+
 # LR render service caches (regeneratable)
 lrc_scripts/servers/lr_caches/
 lrc_scripts/**/__pycache__/
