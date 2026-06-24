@@ -17,10 +17,26 @@ from .client import IqaClient, LrClient, Sam3Client, VLLMClient
 from .render_worker import RenderClient, downscale_rgb
 
 __all__ = [
-    "Core", "build_core",
+    "Core", "build_core", "build_lr_client",
     "VLLMClient", "Sam3Client", "IqaClient", "LrClient", "RenderClient",
     "downscale_rgb",
 ]
+
+
+def build_lr_client(max_concurrency: Optional[int] = None) -> LrClient:
+    """The ``core.lr`` handle for the QA path (preset_qa stage2).
+
+    ``max_concurrency`` is the LR pool admission cap (concurrent farm renders);
+    defaults to ``source_qa.config.LR_MAX_CONCURRENCY`` when None. Build does not
+    use LR, so this is constructed by the QA stage rather than ``build_core``.
+    """
+    if max_concurrency is None:
+        try:
+            from dataset_build.source_qa import config as _sqa_cfg
+            max_concurrency = int(getattr(_sqa_cfg, "LR_MAX_CONCURRENCY", 3))
+        except Exception:
+            max_concurrency = 3
+    return LrClient(max_concurrency=max_concurrency)
 
 
 def _render_kw_from_config(config: Dict[str, Any]) -> Dict[str, int]:

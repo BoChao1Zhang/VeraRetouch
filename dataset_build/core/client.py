@@ -21,6 +21,7 @@ exact algorithms while consuming a uniform ``core.*`` surface:
 
 from __future__ import annotations
 
+import threading
 import time
 from contextlib import nullcontext
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -203,16 +204,65 @@ class IqaClient:
 
 
 class LrClient:
-    """Thin handle over the source_qa LR (Lightroom farm) submit path.
+    """LR (Lightroom farm) resource handle — the core's ``core.lr``.
 
-    ``submit_fn`` is the existing durable-queue submit callable; the build does
-    not use this (LR is a QA-stage path). Kept for facade completeness.
+    Real renders go to the durable ``render_jobs`` queue + ``lrc_task_server``
+    farm via ``source_qa.lr_render`` (lazy-imported so the core does not hard-
+    depend on source_qa). A bounded semaphore is the **LR pool admission**: the
+    true number of concurrent renders submitted to the farm, independent of any
+    caller's thread-pool size — size it to the online eligible LrC clients (1:1 =
+    no server-side queue). The ``render_jobs`` idempotency/caching and job
+    bookkeeping stay with the caller (preset_qa), which already owns that state;
+    this handle only owns the *transport + concurrency cap*. Structured failure
+    dicts from ``lr_render`` ({ok, error_code, retryable, ...}) pass through
+    verbatim. The build does not use LR (it is a QA-stage path).
     """
 
-    def __init__(self, submit_fn: Optional[Any] = None) -> None:
-        self._submit_fn = submit_fn
+    def __init__(
+        self,
+        max_concurrency: Optional[int] = None,
+        render_fn: Optional[Any] = None,
+        submit_and_wait_fn: Optional[Any] = None,
+        health_fn: Optional[Any] = None,
+    ) -> None:
+        self._render_fn = render_fn
+        self._submit_and_wait_fn = submit_and_wait_fn
+        self._health_fn = health_fn
+        cap = int(max_concurrency) if max_concurrency else 0
+        self._sem: Optional[threading.BoundedSemaphore] = (
+            threading.BoundedSemaphore(cap) if cap > 0 else None)
 
-    def submit(self, *args, **kw) -> Any:
-        if self._submit_fn is None:
-            raise RuntimeError("LrClient has no submit_fn configured")
-        return self._submit_fn(*args, **kw)
+    @staticmethod
+    def _lr() -> Any:
+        from dataset_build.source_qa import lr_render  # lazy: source_qa-only dep
+        return lr_render
+
+    def _gate(self):
+        return self._sem if self._sem is not None else nullcontext()
+
+    def render(self, recipe_path: str, fmt: str, photo_path: str) -> Dict[str, Any]:
+        """Convert preset -> config.lua, submit to the farm, return the after.
+
+        Returns ``lr_render.render_via_lr``'s structured dict
+        (``{ok, after_path, ...}`` or ``{ok: False, error_code, retryable, ...}``).
+        Bounded by the LR pool semaphore (held only for the network render)."""
+        fn = self._render_fn or self._lr().render_via_lr
+        with self._gate():
+            return fn(recipe_path, fmt, photo_path)
+
+    def submit_and_wait(self, photo_path: str, lua_path: str) -> Dict[str, Any]:
+        """Low-level: submit a pre-built config.lua + probe, long-poll the after."""
+        fn = self._submit_and_wait_fn or self._lr().submit_and_wait
+        with self._gate():
+            return fn(photo_path, lua_path)
+
+    def health(self) -> bool:
+        fn = self._health_fn or self._lr().lr_health
+        try:
+            return bool(fn())
+        except Exception:
+            return False
+
+    # Back-compat alias: ``submit`` == ``render``.
+    def submit(self, recipe_path: str, fmt: str, photo_path: str) -> Dict[str, Any]:
+        return self.render(recipe_path, fmt, photo_path)
