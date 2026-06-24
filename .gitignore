@@ -19,3 +19,7 @@ lrc_scripts/servers/lr_caches/
 lrc_scripts/**/__pycache__/
 dataset_build/source_qa/render_stage/
 lrc_scripts/
+dataset_build/source_qa/pilot/
+lr_caches
+CLAUDE.md
+assets/lightroom_windows_client_20260616_231400 (2).zip
