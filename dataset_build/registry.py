@@ -91,7 +91,7 @@ _DEFAULT_JUNK_EXT = {
     ".apk", ".cfg", ".url", ".wav", ".jsp", ".8bf", ".ds_store", ".free",
     ".cbf", ".mbr", ".hfs", ".pkg",
 }
-_DEFAULT_JUNK_PATH_RE = r"教程|安装|导入|说明|必看|二维码|广告|微信|售后|转换器|Generator|使用方法"
+_DEFAULT_JUNK_PATH_RE = r"教程|安装|导入|说明|必看|二维码|广告|微信|售后|转换器|Generator|使用方法|__MACOSX|(^|/)\._"
 _DEFAULT_TECHNICAL_RE = (
     r"Slog|S-Log|SLog2|SLog3|REC709|Rec\.709|709toLog|LogtoRec|LinearTo|_to_|"
     r"Conversion|Technical|LUTCalc|Identity|Neutral"
@@ -153,36 +153,6 @@ def _preset_stem(path: Path) -> str:
     stem = re.sub(r"\s+", "", stem).lower()
     # strip common ordinal suffixes like '-1' / '_02' that distinguish format dupes weakly
     return stem
-
-
-# GREYSKY collection layout: <collection>/{DNG 原片参数文件, JPG 预览文件, XMP 预设文件}/<stem>.{dng,jpg,xmp}
-_GREYSKY_JPG_DIR = "JPG 预览文件"   # expert preview == the gold 'after'
-_GREYSKY_XMP_DIR = "XMP 预设文件"   # the expert preset
-
-
-def _greysky_siblings(dng: Path) -> Tuple[Optional[str], Optional[str]]:
-    """Resolve a GREYSKY DNG's sibling expert JPG (preview = the gold 'after') and
-    XMP (preset) by stem within its collection. Exact ``<stem>.ext`` first, then a
-    whitespace/case-normalized scan (folder/file names carry CJK + stray spaces)."""
-    col = dng.parent.parent  # <collection>/DNG 原片参数文件/x.dng -> <collection>
-    target = _preset_stem(dng)
-
-    def _find(subdir: str, ext: str) -> Optional[str]:
-        d = col / subdir
-        if not d.is_dir():
-            return None
-        exact = d / f"{dng.stem}{ext}"
-        if exact.is_file():
-            return str(exact)
-        try:
-            for f in d.iterdir():
-                if f.is_file() and f.suffix.lower() == ext and _preset_stem(f) == target:
-                    return str(f)
-        except OSError:
-            pass
-        return None
-
-    return _find(_GREYSKY_JPG_DIR, ".jpg"), _find(_GREYSKY_XMP_DIR, ".xmp")
 
 
 def _load_yaml(path: str) -> Dict[str, Any]:
@@ -273,6 +243,7 @@ class SourceRegistry(Registry):
         out: Dict[str, Dict[str, Any]] = {}
         mcfg = (self.recipes_cfg.get("preset_v1_manifest") or {})
         mpath = mcfg.get("manifest")
+        path_root = mcfg.get("path_root") or _PRESET_V1_PATH_ROOT
         if mpath and os.path.exists(mpath):
             with open(mpath, "r", encoding="utf-8") as f:
                 for line in f:
@@ -286,7 +257,7 @@ class SourceRegistry(Registry):
                     sp = rec.get("source_path")
                     if not sp:
                         continue
-                    abs_p = os.path.normpath(os.path.join(_PRESET_V1_PATH_ROOT, sp))
+                    abs_p = os.path.normpath(os.path.join(path_root, sp))
                     out[abs_p] = rec
         self._manifest_by_path = out
         return out
@@ -313,13 +284,12 @@ class SourceRegistry(Registry):
 
     def scan_sources(self) -> Iterator[SourceItem]:
         scanners = (
-            self._scan_tad66k,
             self._scan_fivek,
+            self._scan_raise,
             self._scan_greysky_sources,
             self._scan_korean,
             self._scan_quandian_sources,
             self._scan_awards,
-            self._scan_mmart,
             self._scan_unsplash,
             self._scan_fivek_gold,
             self._scan_ppr10k,
@@ -358,170 +328,142 @@ class SourceRegistry(Registry):
         p = c.get("path")
         return Path(p) if p else None
 
-    def _scan_tad66k(self) -> Iterator[SourceItem]:
-        """TAD66K is a zip (~66K). We register the EXTRACTED dir if present, else
-        emit a single archive-pointer SourceItem so streams know to extract lazily."""
-        c = self.sources_cfg.get("tad66k") or {}
-        extract_to = c.get("extract_to")
-        scene = c.get("scene", "any")
-        if extract_to and os.path.isdir(extract_to):
-            for f in _iter_files(Path(extract_to)):
-                if _ext(f) in IMAGE_EXTS:
-                    yield self._emit_source(f, "tad66k", scene=scene)
-            return
-        zip_path = c.get("path")
-        if zip_path and os.path.exists(zip_path):
-            yield self._emit_source(
-                Path(zip_path), "tad66k", scene=scene,
-                meta={"archive": True, "extract_to": extract_to,
-                      "note": "zip not extracted; streams extract lazily to scratch"},
-            )
+    def _load_rename_manifest(self, key: str) -> Dict[str, Dict[str, Any]]:
+        """Load a corpus's migration manifest -> {new_id: record}. Lazy + tolerant:
+        a missing/garbled manifest yields {} (scan degrades to no orig traceback).
+        Used to recover post-rename metadata (pack_id / award_year / collection /
+        orig_base) that the sequential filename no longer encodes."""
+        cache = getattr(self, "_rename_manifest_cache", None)
+        if cache is None:
+            cache = {}
+            self._rename_manifest_cache = cache
+        if key in cache:
+            return cache[key]
+        out: Dict[str, Dict[str, Any]] = {}
+        c = self.sources_cfg.get(key) or {}
+        mpath = c.get("rename_manifest")
+        if mpath and os.path.isfile(mpath):
+            with open(mpath, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if rec.get("status") not in (None, "moved"):
+                        continue
+                    nid = rec.get("new_id")
+                    if nid:
+                        out[nid] = rec
+        cache[key] = out
+        return out
 
     def _scan_fivek(self) -> Iterator[SourceItem]:
-        """FiveK = 5000 DNGs inside a tar (probe_sources §1a). Source-only (no experts).
-        Register the tar pointer; the streams extract+rawpy-decode under fivek-cleaning."""
-        c = self.sources_cfg.get("fivek") or {}
-        tar_path = c.get("path")
-        if not tar_path or not os.path.exists(tar_path):
-            return
-        # If a pre-extracted dir of dng exists alongside, prefer it; else archive pointer.
-        scratch = (self.cfg.get("scratch_dir") or "")
-        extracted = os.path.join(scratch, "fivek_dng") if scratch else None
-        if extracted and os.path.isdir(extracted):
-            for f in _iter_files(Path(extracted)):
-                if _ext(f) in RAW_EXTS:
-                    yield self._emit_source(f, "fivek", scene=c.get("scene", "any"),
-                                            raw_decode=RawDecode.RAWPY)
-            return
-        yield self._emit_source(
-            Path(tar_path), "fivek", scene=c.get("scene", "any"),
-            raw_decode=RawDecode.RAWPY,
-            meta={"archive": True, "raw_glob": c.get("raw_glob"),
-                  "note": "tar of 5000 dng; extract lazily, decode under fivek-cleaning"},
-        )
-
-    def _scan_greysky_sources(self) -> Iterator[SourceItem]:
-        """GREYSKY DNG 'before' raws (TIER-1). Decoded via rawpy. Whole-tree search
-        because DNG can be misfiled inside the XMP folder (probe_GREYSKY gotcha c)."""
-        root = self._corpus_path("greysky")
+        """FiveK = 5000 DNGs, migrated + renamed to <path>/fivek_<NNNNNN>.dng
+        (source-only; no experts). Decoded via rawpy under fivek-cleaning."""
+        root = self._corpus_path("fivek")
         if not root or not root.is_dir():
             return
-        for f in _iter_files(root):
-            if self._is_junk_path(f, root):
-                continue
-            if _ext(f) == ".dng":
-                sz = _safe_stat_size(f)
-                # GREYSKY DNGs are genuine raws (multi-MB), unlike 全店素材 preset-dngs.
-                if sz is not None and sz < 2_000_000:
-                    continue
-                jpg, xmp = _greysky_siblings(f)
-                meta: Dict[str, Any] = {"collection": f.parent.parent.name}
-                if jpg:  # the real expert JPG = the gold 'after' (S5 real-JPG bypass)
-                    meta["expert_after_jpg"] = jpg
-                if xmp:
-                    meta["expert_xmp"] = xmp
-                yield self._emit_source(
-                    f, "greysky", scene="any", raw_decode=RawDecode.RAWPY,
-                    tags=["tier1_gold"], size=sz, meta=meta,
-                )
+        scene = (self.sources_cfg.get("fivek") or {}).get("scene", "any")
+        for f in sorted(root.glob("*.dng")):
+            yield self._emit_source(f, "fivek", scene=scene, raw_decode=RawDecode.RAWPY)
+
+    def _scan_raise(self) -> Iterator[SourceItem]:
+        """RAISE-6k = ~6000 Nikon NEF raws, migrated + renamed to
+        <path>/RAISE-6k_<NNNNNN>.nef. Decoded via rawpy (like fivek)."""
+        root = self._corpus_path("raise")
+        if not root or not root.is_dir():
+            return
+        scene = (self.sources_cfg.get("raise") or {}).get("scene", "any")
+        for f in sorted(root.glob("*.nef")):
+            yield self._emit_source(f, "raise", scene=scene, raw_decode=RawDecode.RAWPY)
+
+    def _scan_greysky_sources(self) -> Iterator[SourceItem]:
+        """GREYSKY DNG 'before' raws (TIER-1), migrated to the same-seq triple
+        <path>/{raw/<seq>.dng, preview/<seq>.jpg, xmp/<seq>.xmp}. preview = the gold
+        expert 'after' (S5 real-JPG bypass), xmp = the expert preset. Decoded rawpy."""
+        root = self._corpus_path("greysky")
+        if not root or not (root / "raw").is_dir():
+            return
+        manifest = self._load_rename_manifest("greysky")
+        for f in sorted((root / "raw").glob("*.dng")):
+            seq = f.stem
+            meta: Dict[str, Any] = {}
+            rec = manifest.get(seq)
+            if rec:
+                meta["collection"] = (rec.get("meta") or {}).get("collection")
+            jpg = root / "preview" / f"{seq}.jpg"
+            xmp = root / "xmp" / f"{seq}.xmp"
+            if jpg.is_file():  # the real expert JPG = the gold 'after'
+                meta["expert_after_jpg"] = str(jpg)
+            if xmp.is_file():
+                meta["expert_xmp"] = str(xmp)
+            yield self._emit_source(
+                f, "greysky", scene="any", raw_decode=RawDecode.RAWPY,
+                tags=["tier1_gold"], meta=meta,
+            )
 
     def _scan_korean(self) -> Iterator[SourceItem]:
-        """211 Korean portraits (~1312 jpg). The dir name in config may be truncated;
-        glob the real one under presets/ as a fallback (probe_GREYSKY §4)."""
+        """211 Korean portraits, migrated + renamed to a flat <path>/korean_<NNNNNN>.<ext>."""
         root = self._corpus_path("korean_portraits")
         if root is None or not root.is_dir():
-            # fallback: glob 211* under the presets dir
-            presets_dir = Path(_PRESET_V1_PATH_ROOT)
-            matches = sorted(presets_dir.glob("211*")) if presets_dir.is_dir() else []
-            root = matches[0] if matches else None
-        if root is None or not root.is_dir():
             return
-        for f in _iter_files(root):
-            if _ext(f) in IMAGE_EXTS and not self._is_junk_path(f, root):
-                sz = _safe_stat_size(f)
-                if sz is not None and sz < self.min_source_bytes:
-                    continue
-                yield self._emit_source(f, "korean", scene="portrait",
-                                        is_portrait_pool=True, size=sz)
+        for f in sorted(root.iterdir()):
+            if f.is_file() and _ext(f) in IMAGE_EXTS:
+                yield self._emit_source(f, "korean", scene="portrait", is_portrait_pool=True)
 
     def _scan_quandian_sources(self) -> Iterator[SourceItem]:
-        """全店素材 SOURCE images: curated portrait pools (H033/H100/H103) + genuine
-        RAW (6 CR2 + 2 ARW). Non-junk jpg/png >min_bytes; preset-dngs are NOT sources
-        (probe_全店素材 G2)."""
+        """全店素材 SOURCE images, migrated + renamed to a flat <path>/quandian_<NNNNNN>.<ext>.
+        pack_id (portrait routing) is recovered from the rename manifest, since the
+        H033/H100/H103 directory structure no longer survives the flat rename."""
         c = self.sources_cfg.get("quandian") or {}
         root = c.get("path")
         if not root or not os.path.isdir(root):
             return
         portrait_pools = set(c.get("portrait_pools") or [])
+        manifest = self._load_rename_manifest("quandian")
         rootp = Path(root)
-        for f in _iter_files(rootp):
-            ext = _ext(f)
-            if self._is_junk_path(f, rootp):
+        for f in sorted(rootp.iterdir()):
+            if not f.is_file():
                 continue
-            pack_id = self._pack_id_for(f, rootp)
+            ext = _ext(f)
+            pack_id = ((manifest.get(f.stem) or {}).get("meta") or {}).get("pack_id")
             is_portrait = self._pack_is_portrait(pack_id, portrait_pools)
+            scene = "portrait" if is_portrait else "any"
             if ext in IMAGE_EXTS:
-                sz = _safe_stat_size(f)
-                if sz is None or sz < self.min_source_bytes:
-                    continue
-                item = self._emit_source(
-                    f, "quandian",
-                    scene="portrait" if is_portrait else "any",
-                    is_portrait_pool=is_portrait, size=sz,
-                    meta={"pack_id": pack_id},
-                )
+                item = self._emit_source(f, "quandian", scene=scene,
+                                         is_portrait_pool=is_portrait, meta={"pack_id": pack_id})
                 self._pack_add(pack_id, rootp, "source_images", str(f))
                 yield item
             elif ext in (".cr2", ".arw"):
-                # genuine source RAW (rare). dng excluded: those are presets (G2).
-                yield self._emit_source(f, "quandian",
-                                        scene="portrait" if is_portrait else "any",
-                                        is_portrait_pool=is_portrait,
-                                        raw_decode=RawDecode.RAWPY,
-                                        meta={"pack_id": pack_id})
+                yield self._emit_source(f, "quandian", scene=scene, is_portrait_pool=is_portrait,
+                                        raw_decode=RawDecode.RAWPY, meta={"pack_id": pack_id})
 
     def _scan_awards(self) -> Iterator[SourceItem]:
-        """Award photographers: double-nested .rar/.zip (~43G). Register archive
-        pointers only; streams extract lazily with 7z (probe_GREYSKY §3)."""
+        """Award photographers, extracted then migrated + renamed to a flat
+        <path>/awards_<NNNNNN>.<ext>. award_year recovered from the rename manifest."""
+        aw_img = IMAGE_EXTS | {".tif", ".tiff", ".webp", ".bmp"}
         root = self._corpus_path("awards")
         if not root or not root.is_dir():
             return
-        for f in _iter_files(root):
-            if _ext(f) in (".rar", ".zip"):
-                yield self._emit_source(
-                    f, "awards", scene="any",
-                    meta={"archive": True, "extract": "7z_two_step",
-                          "note": "double-nested; 7z x outer then inner, extract on demand"},
-                )
-
-    def _scan_mmart(self) -> Iterator[SourceItem]:
-        """MMArt: 4055 before.jpg under global/<id>/. Stale grpo paths rebase to local
-        (probe_sources §1a / gotcha 4). One SourceItem per unique before.jpg."""
-        c = self.sources_cfg.get("mmart") or {}
-        image_root = c.get("image_root")
-        if not image_root or not os.path.isdir(image_root):
-            return
-        rootp = Path(image_root)
-        for entry_dir in sorted(p for p in rootp.iterdir() if p.is_dir()):
-            before = entry_dir / "before.jpg"
-            if before.is_file():
-                yield self._emit_source(
-                    before, "mmart", scene="any",
-                    meta={"mmart_id": entry_dir.name,
-                          "processed": str(entry_dir / "processed.jpg"),
-                          "config_xmp": str(entry_dir / "config.xmp")},
-                )
+        manifest = self._load_rename_manifest("awards")
+        for f in sorted(root.iterdir()):
+            if f.is_file() and _ext(f) in aw_img:
+                year = ((manifest.get(f.stem) or {}).get("meta") or {}).get("award_year")
+                yield self._emit_source(f, "awards", scene="any", meta={"award_year": year})
 
     def _scan_unsplash(self) -> Iterator[SourceItem]:
-        """Unsplash-lite is a URL CSV (no pixels). Register the downloaded slice dir
-        if present; otherwise skip (download is deferred, off pilot critical path)."""
-        c = self.sources_cfg.get("unsplash") or {}
-        scratch = self.cfg.get("scratch_dir") or ""
-        dl_dir = os.path.join(scratch, "unsplash") if scratch else None
-        if dl_dir and os.path.isdir(dl_dir):
-            for f in _iter_files(Path(dl_dir)):
-                if _ext(f) in IMAGE_EXTS:
-                    yield self._emit_source(f, "unsplash", scene=c.get("scene", "any"))
+        """Unsplash-lite downloaded slice, migrated + renamed to a flat
+        <path>/unsplash_<NNNNNN>.<ext>."""
+        root = self._corpus_path("unsplash")
+        if not root or not root.is_dir():
+            return
+        scene = (self.sources_cfg.get("unsplash") or {}).get("scene", "any")
+        for f in sorted(root.iterdir()):
+            if f.is_file() and _ext(f) in IMAGE_EXTS:
+                yield self._emit_source(f, "unsplash", scene=scene)
 
     def _scan_fivek_gold(self) -> Iterator[SourceItem]:
         """fivek GOLD GLOBAL pairs (S8): real before.jpg -> real expert after.jpg.
@@ -597,37 +539,26 @@ class SourceRegistry(Registry):
         if not root or not os.path.isdir(root):
             return
         rootp = Path(root)
-        mask_dir = rootp / "masks" / "360p" / "masks_360p"
-        # id_map.csv: new_id -> orig_base (mask filename stem).
-        id_to_base: Dict[str, str] = {}
-        id_map_path = rootp / "manifests" / "id_map.csv"
-        if id_map_path.is_file():
-            import csv as _csv
-
-            with open(id_map_path, "r", encoding="utf-8") as f:
-                for row in _csv.DictReader(f):
-                    nid = (row.get("new_id") or "").strip()
-                    ob = (row.get("orig_base") or "").strip()
-                    if nid and ob:
-                        id_to_base[nid] = ob
+        # Post-migration layout: source/<seq>.png ↔ target_{e}/<seq>.png ↔
+        # xmp/target_{e}/<seq>.xmp ↔ masks/360p/<seq>.png (all sharing <seq>).
+        mask_dir = rootp / "masks" / "360p"
         src_dir = rootp / "source"
         if not src_dir.is_dir():
             return
+        manifest = self._load_rename_manifest("ppr10k")
         for src_png in sorted(src_dir.glob("*.png")):
-            sid = src_png.stem
-            orig_base = id_to_base.get(sid)
-            if not orig_base:
-                continue
-            mask_path = mask_dir / f"{orig_base}.png"
+            seq = src_png.stem
+            mask_path = mask_dir / f"{seq}.png"
             if not mask_path.is_file():
                 continue
+            orig_base = ((manifest.get(seq) or {}).get("meta") or {}).get("orig_base")
             for e in ("a", "b", "c"):
-                xmp_path = rootp / "xmp" / f"target_{e}" / f"{sid}.xmp"
-                target_path = rootp / "target_{}".format(e) / f"{sid}.png"
+                xmp_path = rootp / "xmp" / f"target_{e}" / f"{seq}.xmp"
+                target_path = rootp / f"target_{e}" / f"{seq}.png"
                 if not xmp_path.is_file():
                     continue
                 yield SourceItem(
-                    source_id=f"ppr10k_{sid}_{e}",
+                    source_id=f"{seq}_{e}",
                     path=str(src_png),
                     corpus="ppr10k",
                     raw_decode=RawDecode.NONE,

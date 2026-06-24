@@ -44,9 +44,8 @@ models:
     gdino_weights: "/home/bc/data/models/groundingdino_swint_ogc.pth"
     sam2_weights: "/home/bc/data/models/sam2_hiera_large.pt"
     gdino_conf: 0.8
-  ppr10k_masks:                                         # REVIVED: real human masks (monetGPT masks, NOT the corrupt masks_360p.zip)
-    masks_path: "/home/bc/retouching/monetGPT/data/ppr10k/masks"   # masks/360p/masks_360p/<orig_base>.png
-    masks_zip: "/home/bc/datasets/PPR0K_all_files_11161_zip/masks_360p.zip"   # legacy/corrupt; unused
+  ppr10k_masks:                                         # REVIVED: real human masks (now under data/datasets after migration)
+    masks_path: "/home/bc/data/datasets/ppr10k/masks"   # masks/360p/<seq>.png (renamed 1:1 with source <seq>)
     available: true                                     # real masks present -> S4 active (no S4->S1 fold)
   raw_decode:                                           # rawpy only in fivek-cleaning (probe_GREYSKY §2)
     env: "fivek-cleaning"
@@ -101,60 +100,58 @@ vllm:                                                   # Qwen3-VL cleaner (HTTP
 # -----------------------------------------------------------------------------
 sources:
   max_source_pixels: 80000000                            # skip giant print/PSD/frame assets before CPU mask/VLM decode.
-  tad66k:
-    path: "/home/bc/data/datasets/TAD66K/TAD66K.zip"        # ~66K aesthetic imgs (not extracted)
-    extract_to: "/home/bc/data/datasets/_scratch/TAD66K"
-    scene: "any"
-    count_est: 66000
-  fivek:
-    path: "/home/bc/datasets/fivek_dataset.tar"             # 5000 DNG (source-only; experts absent)
-    raw_glob: "raw_photos/HQa*/photos/*.dng"
+  # ALL corpora migrated + sequentially renamed under data/datasets (see
+  # dataset_build/tools/migrate_datasets.py). Files are <slug>_<NNNNNN>.<ext>;
+  # paired sub-assets share the sequence number. tad66k (low-res, dropped) and
+  # mmart (MMArt-PPR10k processed version, dropped) are intentionally absent.
+  fivek:                                                    # 5000 DNG (source-only; experts absent), extracted from tar
+    path: "/home/bc/data/datasets/fivek5k/raw"              # fivek_<NNNNNN>.dng
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/fivek.jsonl"
     raw_decode: "rawpy"
     scene: "any"
     count_est: 5000
-  awards:                                                   # high-aesthetic; double-nested .rar/.zip
-    path: "/home/bc/retouching/presets/2008-2021 获奖摄影师作品合集"
-    extract: "7z_two_step"                                  # /usr/bin/7z; extract lazily (probe_GREYSKY §3)
+  awards:                                                   # high-aesthetic photographers (extracted + renamed)
+    path: "/home/bc/data/datasets/presets_sources/awards"
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/awards.jsonl"
     scene: "any"
-    count_est: 8000
+    count_est: 16000
   korean_portraits:
-    path: "/home/bc/retouching/presets/211韩国JPG图片集先转存在提取以免丢失"
+    path: "/home/bc/data/datasets/presets_sources/korean"
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/korean.jsonl"
     scene: "portrait"
     is_portrait_pool: true
-    count_est: 1312
-  quandian:                                                 # 全店素材 source-image pools (probe_全店素材 §3)
-    path: "/home/bc/retouching/presets/全店素材"
-    portrait_pools: ["H033", "H100", "H103"]                # ~5600 wedding/bride/hanfu portraits
+    count_est: 4455
+  quandian:                                                 # 全店素材 source images (pack_id now via rename_manifest)
+    path: "/home/bc/data/datasets/presets_sources/quandian"
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/quandian.jsonl"
+    portrait_pools: ["H033", "H100", "H103"]                # wedding/bride/hanfu portraits (resolved from manifest pack_id)
     scene: "portrait"
     is_portrait_pool: true
     count_est: 5600
-  greysky:                                                  # TIER-1 gold; raw DNG before
-    path: "/home/bc/retouching/presets/GREYSKY 老斯基的预设专车"
+  greysky:                                                  # TIER-1 gold; raw DNG before (dng/preview/xmp triple, same seq)
+    path: "/home/bc/data/datasets/presets_sources/greysky"
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/greysky.jsonl"
     raw_decode: "rawpy"
     scene: "any"
-    triples: 91
-    dng_xmp_pairs: 100
-  mmart:                                                    # 4055 before imgs + 12165 records
-    grpo_json: "/home/bc/datasets/MMArt-PPR10k/grpo_dataset.json"
-    image_root: "/home/bc/datasets/MMArt-PPR10k/global"     # rebase stale paths to <id>/before.jpg
+  unsplash:                                                 # downloaded slice, renamed (no longer a deferred URL CSV)
+    path: "/home/bc/data/datasets/unsplash-lite/images"     # unsplash_<NNNNNN>.jpg
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/unsplash.jsonl"
     scene: "any"
-    unique_images: 4055
-  unsplash:                                                 # URL CSV only; download a ~25K slice (deferred)
-    csv: "/home/bc/data/datasets/unsplash-research-dataset-lite-latest.zip"
-    download: true
-    count_est: 25000
-    on_pilot_critical_path: false
-  raise:                                                    # URL CSV; SKIP for pilot
-    csv: "/home/bc/data/datasets/RAISE_6k.csv.zip"
-    download: false
-  fivek_gold:                                               # NEW GOLD GLOBAL pairs -> S8 (real before->expert after)
-    path: "/home/bc/retouching/monetGPT/data/fivek_mmart_like/train_global"   # ONLY train_global (20,000) is scanned/built
-    # EVAL HOLDOUT: .../fivek_mmart_like/test_global (5000 samples) is the held-out
-    # eval set and is NEVER scanned by the registry (do not point any build path at it).
+    count_est: 16000
+  raise:                                                    # RAISE-6k NEF RAW (downloaded via tools/download_raise.py)
+    path: "/home/bc/data/datasets/RAISE-6k/raw"             # RAISE-6k_<NNNNNN>.nef
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/raise.jsonl"
+    raw_decode: "rawpy"
+    scene: "any"
+    count_est: 6000
+  fivek_gold:                                               # GOLD GLOBAL pairs -> S8 (real before->expert after)
+    path: "/home/bc/data/datasets/fivek_gold/train_global"  # fivek_gold_<NNNNNN>_<A|B|D|E>/{before,processed,...}
+    # EVAL HOLDOUT: fivek_mmart_like/test_global (5000) is NEVER migrated/scanned.
     scene: "any"
     count_est: 20000
   ppr10k:                                                   # REVIVED region-local portrait PARAM -> S4 (real human masks)
-    path: "/home/bc/retouching/monetGPT/data/ppr10k"        # source/<id>.png + xmp/target_{a,b,c}/<id>.xmp + masks/360p/masks_360p/<orig_base>.png
+    path: "/home/bc/data/datasets/ppr10k"                   # source/<seq>.png + xmp/target_{a,b,c}/<seq>.xmp + masks/360p/<seq>.png
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/ppr10k.jsonl"
     scene: "portrait"
     is_portrait_pool: true
     experts: ["a", "b", "c"]                                # all 3 experts: ~8875 x 3 = 26,625 region-local samples
@@ -164,20 +161,27 @@ sources:
 # RECIPE banks (the 'look' edits). XMP is canonical; cube/lrtemplate alternates.
 # -----------------------------------------------------------------------------
 recipes:
+  # Recipe (look) assets migrated + sequentially renamed under data/datasets/recipes/.
+  # The legacy pack_id/scene/B&W/technical filename heuristics are being retired in
+  # favor of a unified LLM meta-tagging pass (source_qa questionnaire redesign).
   quandian:
-    path: "/home/bc/retouching/presets/全店素材"
+    path: "/home/bc/data/datasets/recipes/quandian"
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/quandian_recipes.jsonl"
     xmp_est: 5814           # usable looks after technical/B&W filter (probe_全店素材 §2)
     cube_est: 3755
     lrtemplate_est: 4028
     local_mask_recipes: 2510  # MaskGroup/Gradient/PaintBased -> region hints
   e18_luts:
-    path: "/home/bc/retouching/presets/E18 《300+广告级LUT》"
+    path: "/home/bc/data/datasets/recipes/e18"
+    rename_manifest: "/home/bc/data/datasets/_migration/manifests/e18_recipes.jsonl"
     cube_est: 3041
-  greysky_xmp:
-    path: "/home/bc/retouching/presets/GREYSKY 老斯基的预设专车"
+  greysky_xmp:                                # shares the migrated greysky source triple's xmp dir
+    path: "/home/bc/data/datasets/presets_sources/greysky/xmp"
     xmp_est: 118
+  # preset_v1 (DEMOTED, manifest-only) is not migrated in this pass; left in place.
   preset_v1_manifest:       # cataloging/scene-matching only (DEMOTED quality)
     manifest: "/home/bc/retouching/presets/preset_dataset_v1/manifests/manifest.jsonl"
+    path_root: "/home/bc/retouching/presets"   # source_path entries are relative to this root
     role: "scene_matching"
     xmp_est: 7624
   parsers:
@@ -192,27 +196,29 @@ recipes:
     costyle: "skip"              # Capture One; lossy mapping (probe_recipe_parsers §3)
 
 # -----------------------------------------------------------------------------
-# PER-STREAM BUDGET (sums to 1,000,000). Region-local = S1+S2+S3+S4 = 580k (58%).
-# Additions (S4 ppr10k=26,625 + S8 fivek_gold=20,000) are carved from S1 (tad66k-heavy).
+# PER-STREAM BUDGET (sums to 1,000,000). REBALANCED 2026-06-22: preset-forward is
+# now the dominant paradigm. degrade (S1+S7) = 12%, preset-forward (S2+S6) = 78%,
+# gold (S5+S8) = 7%. Region-local = S1+S2+S4 = 546,625 (54.7%, satisfies floor).
+# S2 is greatly enlarged (190k->430k) to carry the local share while degrade shrinks.
 # Pilot = same mix scaled to ~5000 (probe_sources_budget §4).
 # -----------------------------------------------------------------------------
-region_local_floor: 0.50      # USER OVERRIDE: >=50% (achieved 58%)
+region_local_floor: 0.50      # USER OVERRIDE: >=50% (achieved 54.7%)
 budget:
   total: 1000000
   streams:
-    S1: {budget: 333375, region_local: true,  recipe_kind: degrade, mask: degrade}
-    S2: {budget: 190000, region_local: true,  recipe_kind: param_or_lut, mask: sam3}
-    S3: {budget: 30000,  region_local: true,  recipe_kind: param, mask: sam3}
+    S1: {budget: 90000,  region_local: true,  recipe_kind: degrade, mask: degrade}   # shrunk: exact-mask localization signal only (mask now SAM3-anchored, WS-B)
+    S2: {budget: 430000, region_local: true,  recipe_kind: param_or_lut, mask: sam3}  # preset-forward local main; carries the >=50% local share
+    S3: {budget: 0,      region_local: true,  recipe_kind: param, mask: sam3}         # DISABLED: mmart corpus removed (its only source)
     S4: {budget: 26625,  region_local: true,  recipe_kind: param, mask: ppr10k}   # REVIVED (8875 x 3 experts)
-    S5: {budget: 20000,  region_local: false, recipe_kind: param, mask: global}
-    S6: {budget: 270000, region_local: false, recipe_kind: param_or_lut, mask: global}
-    S7: {budget: 110000, region_local: false, recipe_kind: degrade, mask: global}
-    S8: {budget: 20000,  region_local: false, recipe_kind: param, mask: global}   # NEW gold real-JPG (fivek_gold)
+    S5: {budget: 40000,  region_local: false, recipe_kind: param, mask: global}   # gold doubled (real-JPG, no GPU render)
+    S6: {budget: 353375, region_local: false, recipe_kind: param_or_lut, mask: global}  # preset-forward global main (absorbs the rebalance remainder)
+    S7: {budget: 30000,  region_local: false, recipe_kind: degrade, mask: global}  # shrunk: keep a small global localization signal
+    S8: {budget: 30000,  region_local: false, recipe_kind: param, mask: global}   # gold real-JPG (fivek_gold)
   # ppr10k masks now available -> S4 is active; this fold is a no-op (kept for safety).
   s4_fallback_stream: "S1"
 pilot:
   total: 5000
-  streams: {S1: 1670, S2: 950, S3: 150, S4: 130, S5: 100, S6: 1350, S7: 550, S8: 100}
+  streams: {S1: 450, S2: 2150, S3: 0, S4: 133, S5: 200, S6: 1767, S7: 150, S8: 150}   # rebalanced mix x5000 (sums to 5000)
 
 # Within region-local, oversample SC-local edits (SC "wants to be local", P0_001 §5).
 aspect_mix:
@@ -223,9 +229,14 @@ aspect_mix:
 # Track-B Gaussian-operator perturbation: the 7 L/GC/SC combos (impl_plan_A §2.1).
 degrade:
   combos: ["L","GC","SC","L+GC","L+SC","GC+SC","L+GC+SC"]
-  region_shapes: ["sam3_concept","random_blob","radial","linear"]   # for the exact M_r
+  region_shapes: ["anchored","sam3_concept","random_blob","radial","linear"]   # for the exact M_r ("anchored"=WS-B first)
   # per-op sigma table name (P0_001 Tab 8; matches infer_dataset L281-287). Impl resolves it.
   sigma_profile: "aether_tab8"
+  # WS-B: anchor degrade masks to mined real-preset templates pinned to SAM3
+  # regions (instead of random geometry). Falls back to _degrade_mask if the bank
+  # is missing or no region matches. Build the bank with tools/mine_mask_templates.
+  use_anchored_masks: true
+  mask_template_bank: "/home/bc/data/datasets/vera_directionA_1M/mask_templates/template_bank.json"
 
 # -----------------------------------------------------------------------------
 # SCENE-MATCHING (recipe -> source). Soft routing (probe_sources_budget §3).
@@ -266,7 +277,6 @@ qa:
   mllm_score_min: 0.70                 # MLLM-judge threshold (Pico-Banana style)
   require_look_match: true
   require_param_sane: true
-  mmart_require_processed_ok: true     # caveat (a): verify processed.jpg before pixel use
   mask_quality_min: 0.30               # SAM3/GDINO confidence floor
   histsim_min: 0.50                    # color-direction agreement (Track recon gate)
   er_recon_psnr_min: 22.0              # lowered from 25.0 (stage0 2026-06-03: floor 22 keeps ~80% of S1/S7 vs 60% at 25)
