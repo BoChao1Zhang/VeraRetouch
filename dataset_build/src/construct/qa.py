@@ -20,32 +20,38 @@ vLLM = config.VLLM_* (2 images/prompt). CLI smoke: python -m construct.qa
 from __future__ import annotations
 
 import base64
-import bisect
 import io
-import json
-import os
+import math
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor
-from statistics import NormalDist
 from typing import List, Optional, Tuple
 
 import numpy as np
 import requests
 
-# --- score gaussianization (grade-on-a-curve) -------------------------------- #
-# VLM aesthetic judgment is near-binary, so the raw composite is bimodal. Map it through its empirical
-# quantile to a normal N(0.5,0.15) in [0,1]: rank-preserving (SFT/DPO selection unchanged) but the
-# score DISTRIBUTION becomes a clean bell. Reference quantiles calibrated on a representative build.
-_NPPF = NormalDist().inv_cdf
-_Q_REF = json.load(open(os.path.join(os.path.dirname(__file__), "q_ref.json")))
-_Q_MU, _Q_SIG = 0.5, 0.15
+from . import objscore
+
+# --- objective quality combination ------------------------------------------- #
+# The VLM's binary aesthetic vote clusters (bimodal, poor separability). Blend it with OBJECTIVE,
+# continuous learned IQA (musiq + clipiqa+, see objscore) — both the render's absolute quality and its
+# improvement over the source — so renders genuinely separate by measurable quality, not VLM ties.
+_W_VLM, _W_OQUAL, _W_OIMPR = 0.40, 0.35, 0.25   # VLM composite / objective quality / objective gain
 
 
-def _gaussianize(q_raw: float) -> float:
-    i = bisect.bisect_left(_Q_REF, q_raw)
-    pct = min(0.999, max(0.001, (i + 0.5) / len(_Q_REF)))
-    return round(min(1.0, max(0.0, _Q_MU + _Q_SIG * _NPPF(pct))), 3)
+def _objective(after_obj, src_obj, polish: float):
+    """(obj_quality, obj_improvement) in [0,1] from learned IQA; falls back to pixel polish if IQA NA."""
+    musiq_a, clip_a = after_obj
+    if clip_a is None or musiq_a is None:
+        return polish, 0.5
+    obj_q = 0.5 * clip_a + 0.5 * min(1.0, musiq_a / 100.0)
+    musiq_s, clip_s = src_obj
+    if clip_s and musiq_s:
+        d = (clip_a - clip_s) + (musiq_a - musiq_s) / 100.0   # quality gain vs the source photo
+        obj_i = 0.5 + 0.5 * math.tanh(2.0 * d)
+    else:
+        obj_i = 0.5
+    return obj_q, obj_i
 from PIL import Image, ImageFile, ImageOps
 
 from dataset_build.source_qa import config
@@ -306,8 +312,6 @@ def _vhealth(ans: dict, key: str, det: set) -> float:
     return h
 
 
-_W_PIX = 0.28             # weight of the continuous pixel-quality signal blended into q (fills the
-                          # middle + breaks the VLM-binary 0/1 spikes; the rest is the VLM composite)
 
 
 def _polish(st: dict) -> float:
@@ -342,15 +346,17 @@ def _composite(ans1: dict, ans2: dict, is_portrait: bool, is_bw: bool, det: set)
     return comp, facets
 
 
-def qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float) -> dict:
+def qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float,
+                  src_obj=(None, None)) -> dict:
     try:
-        return _qa_score_pair(suri, after_path, is_portrait, src_cf)
+        return _qa_score_pair(suri, after_path, is_portrait, src_cf, src_obj)
     except Exception as e:  # noqa: BLE001 - one corrupt render must not kill the batch
         return {"reliable": False, "why": f"exception:{type(e).__name__}", "veto": False,
                 "q": round(_NEUTRAL - _DED_CONTROL, 3), "merit_score": 0.0, "merit_hits": []}
 
 
-def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float) -> dict:
+def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float,
+                   src_obj=(None, None)) -> dict:
     """2-phase graded QA. phase-1 veto dims + controls; phase-2 merit dims on survivors. Score = a
     logically-gated facet composite (gradient), NOT a hit-fraction. Unreliable answers DEDUCT from a
     neutral baseline instead of becoming a hard zero/drop (mirrors source_qa's merit-soft policy)."""
@@ -361,13 +367,14 @@ def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float)
     veto_keys = [k for k, t, c, p, f, r in _DIMS if t == "veto" and _active(k, is_portrait, is_bw)]
     merit_keys = [k for k, t, c, p, f, r in _DIMS if t == "merit" and _active(k, is_portrait, is_bw)]
     pol = _polish(st)
-    base = {"det": sorted(det), "is_bw": is_bw}
-    # unreliable: low deducted core, but blended with continuous polish so they don't all stack on one
-    # value (still lands low — they're untrustworthy — just spread, per "fill the middle").
+    oq, oi = _objective(objscore.score(after_path), src_obj, pol)   # objective learned-IQA signals
+    base = {"det": sorted(det), "is_bw": is_bw, "obj_q": round(oq, 3), "obj_impr": round(oi, 3)}
+    # unreliable VLM answers => fall back to the OBJECTIVE score (minus a confidence discount) rather
+    # than a flat deduction: still a real, separable quality estimate, just trusted less.
     def ded(why, d, veto=False):
-        qr = (1 - _W_PIX) * (_NEUTRAL - d) + _W_PIX * pol
+        q = max(0.0, 0.62 * oq + 0.38 * oi - 0.5 * d)
         return {**base, "reliable": False, "veto": veto, "why": why, "merit_hits": [],
-                "merit_score": round(_NEUTRAL - d, 3), "q_raw": round(qr, 3), "q": _gaussianize(qr)}
+                "merit_score": round(oq, 3), "q": round(q, 3)}
 
     # phase 1: veto dims + controls
     ans1, ok1, why1 = _run_phase(suri, auri, _VETO_ITEMS, salt=1)
@@ -396,24 +403,107 @@ def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float)
     merit_hits = [k for k in merit_keys if _graded(ans2, k) >= 1.0]
     contra_excess = max(0, contra1 + contra2 - _CONTRA_TOL)
     pen = (_MONO_DISCOUNT * is_bw + _PEN_SOFTVETO * len(vlm_veto) + _PEN_CONTRA * contra_excess)
-    core = (1 - _W_PIX) * comp + _W_PIX * pol   # blend VLM composite with continuous pixel polish
-    q_raw = max(-1.0, min(1.0, core - pen))
+    # objective-led composite: VLM aesthetic judgment + learned-IQA quality + improvement-over-source.
+    q = _W_VLM * comp + _W_OQUAL * oq + _W_OIMPR * oi - pen
+    q = round(max(-1.0, min(1.0, q)), 3)
     return {**base, "reliable": contra_excess == 0, "veto": False, "vlm_veto": vlm_veto,
             "facets": facets, "polish": round(pol, 3), "merit_score": round(comp, 3),
-            "merit_hits": merit_hits, "soft_veto": bool(vlm_veto),
-            "q_raw": round(q_raw, 3), "q": _gaussianize(q_raw),
+            "merit_hits": merit_hits, "soft_veto": bool(vlm_veto), "q": q,
             "why": "" if contra_excess == 0 else "contra"}
+
+
+# --------------------------------------------------------------------------- #
+# Comparative QA: judge the SAME source's renders pairwise (VLMs are far more reliable at "A vs B"
+# than at absolute binary scoring), with the source itself as a fixed anchor. Bradley-Terry turns the
+# win matrix into a continuous strength; q = P(candidate beats source) = p_i/(p_i+p_src) — objective,
+# source-anchored, no ties, genuinely separable. det-extreme defects are vetoed before the tournament.
+# --------------------------------------------------------------------------- #
+_CMP_SYS = (
+    "你是资深商业修图评审。下面是同一张照片的两个版本：【图A】和【图B】。\n"
+    "判断哪一张作为最终成片更好——更自然耐看、色调更讨喜、明暗层次与通透度更好，且没有"
+    "过曝死白/死黑、过饱和溢色、肤色失真、廉价滤镜感等缺陷。不要因为单纯更亮/更艳就判它好。\n"
+    "只输出一个字符：A（图A更好）、B（图B更好）、或 T（确实难分伯仲）。不要解释。"
+)
+
+
+def _compare(uri_a: str, uri_b: str) -> float:
+    """Pairwise: returns A's score in {1.0 win, 0.5 tie, 0.0 loss}. None on call failure."""
+    out = _call(uri_a, uri_b, _CMP_SYS, temp=0.0)
+    if not out:
+        return 0.5
+    for ch in out.strip().upper():
+        if ch == "A":
+            return 1.0
+        if ch == "B":
+            return 0.0
+        if ch == "T":
+            return 0.5
+    return 0.5
+
+
+def _bt(items: list, results: list, iters: int = 300) -> dict:
+    """Bradley-Terry strengths from results=[(a,b,score_a)]. +0.5 prior win vs a strength-1 phantom
+    regularizes undefeated/winless items toward the field mean (=1)."""
+    wins = {i: 0.5 for i in items}
+    n: dict = {}
+    for a, b, sa in results:
+        wins[a] += sa; wins[b] += (1 - sa)
+        n[(a, b)] = n.get((a, b), 0) + 1; n[(b, a)] = n.get((b, a), 0) + 1
+    p = {i: 1.0 for i in items}
+    for _ in range(iters):
+        nv = {}
+        for i in items:
+            denom = 1.0 / (p[i] + 1.0)                       # phantom anchor: 1 game vs strength 1
+            for j in items:
+                if j != i and n.get((i, j)):
+                    denom += n[(i, j)] / (p[i] + p[j])
+            nv[i] = wins[i] / denom if denom > 0 else p[i]
+        m = sum(nv.values()) / len(nv)
+        p = {i: max(1e-6, v / m) for i, v in nv.items()}
+    return p
 
 
 def qa_rank(source_path: str, variants: List[Tuple[str, str]], scene: Optional[str] = None,
             is_portrait: bool = False) -> dict:
     if not variants:
         return {"ranking": [], "scores": {}}
-    suri = _uri(source_path); src_cf = _stats(source_path)["cf"]
+    src_cf = _stats(source_path)["cf"]
+    uri = {lab: _uri(path) for lab, path in variants}
+    uri["__src__"] = _uri(source_path)
+    # objective defect veto BEFORE the tournament (blown/crushed/garish renders are out, not compared)
+    veto, st = {}, {}
+    for lab, path in variants:
+        s = _stats(path); st[lab] = s
+        veto[lab] = _det_extreme(s)              # only SEVERE objective defects skip the tournament
+    players = [lab for lab, _ in variants if not veto[lab]] + ["__src__"]
+
+    pairs = [(a, b) for ia, a in enumerate(players) for b in players[ia + 1:]]
+    rng = random.Random(hash(source_path) & 0xffffffff)
+
+    def _judge(pair):
+        a, b = pair
+        if rng.random() < 0.5:                              # scramble A/B order to kill position bias
+            return (a, b, _compare(uri[a], uri[b]))
+        return (a, b, 1.0 - _compare(uri[b], uri[a]))
+
     with ThreadPoolExecutor(max_workers=QA_WORKERS) as ex:
-        res = list(ex.map(lambda v: qa_score_pair(suri, v[1], is_portrait, src_cf), variants))
-    scores = {lab: r for (lab, _), r in zip(variants, res)}
-    # q already encodes veto severity + unreliability deductions -> rank purely by q (veto last).
+        results = list(ex.map(_judge, pairs)) if pairs else []
+    p = _bt(players, results) if results else {x: 1.0 for x in players}
+    psrc = p.get("__src__", 1.0)
+
+    scores = {}
+    for lab, path in variants:
+        if veto[lab]:
+            scores[lab] = {"veto": True, "reliable": True, "q": 0.0, "merit_score": 0.0,
+                           "merit_hits": [], "is_bw": st[lab]["cf"] < 8.0, "det": sorted(_det_flags(st[lab], src_cf))}
+        else:
+            # q = P(candidate beats a field-average render) = p/(p+1) (BT strengths are mean-1):
+            # spreads candidates around 0.5 -> bell-shaped across sources AND separable within source.
+            q = p[lab] / (p[lab] + 1.0)
+            scores[lab] = {"veto": False, "reliable": True, "q": round(q, 4),
+                           "bt_strength": round(p[lab], 4), "beat_source": p[lab] > psrc,
+                           "merit_score": round(q, 4), "merit_hits": [],
+                           "is_bw": st[lab]["cf"] < 8.0, "det": sorted(_det_flags(st[lab], src_cf))}
     ranking = sorted(scores, key=lambda l: (scores[l]["veto"], -scores[l]["q"]))
     return {"ranking": ranking, "scores": scores}
 
