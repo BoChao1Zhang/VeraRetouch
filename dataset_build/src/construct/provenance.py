@@ -14,11 +14,30 @@ existing `runs` row (db.start_run kind='construct_<route>'); run_id ties everyth
 """
 from __future__ import annotations
 
+import hashlib
+import os
 import uuid
 
 from psycopg.types.json import Jsonb
 
 from dataset_build.source_qa import db
+
+# every rendered variant is one of these engines (derived from candidate.kind)
+_ENGINE = {"param": "lr_farm", "lut": "lut_trilinear",
+           "local_from_preset": "lr_farm", "lut_in_sam3": "lut_composite"}
+
+
+def _sha256(path: str) -> tuple:
+    """(sha256_hex, size_bytes) of a file, or (None, None) if unreadable."""
+    try:
+        h = hashlib.sha256()
+        sz = 0
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk); sz += len(chunk)
+        return h.hexdigest(), sz
+    except OSError:
+        return None, None
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS construct_groups (
@@ -79,6 +98,26 @@ CREATE TABLE IF NOT EXISTS construct_dpo (
     rejected_after TEXT,                  -- after_path of rejected candidate
     created_at    TIMESTAMPTZ DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS construct_renders (
+    render_id       TEXT PRIMARY KEY,
+    run_id          TEXT,
+    group_id        TEXT,
+    route           TEXT,
+    source_path     TEXT,
+    source_asset_id TEXT,
+    preset_id       TEXT,
+    kind            TEXT,
+    fmt             TEXT,
+    engine          TEXT,                -- lr_farm | lut_trilinear | lut_composite
+    after_path      TEXT,                -- the saved render jpg on disk
+    sha256          TEXT,                -- content hash of the render bytes (dedup / integrity)
+    size_bytes      BIGINT,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_crender_run    ON construct_renders (run_id);
+CREATE INDEX IF NOT EXISTS ix_crender_sha    ON construct_renders (sha256);
+CREATE INDEX IF NOT EXISTS ix_crender_after  ON construct_renders (after_path);
+CREATE INDEX IF NOT EXISTS ix_crender_src    ON construct_renders (source_path);
 CREATE INDEX IF NOT EXISTS ix_cgroups_run ON construct_groups (run_id);
 CREATE INDEX IF NOT EXISTS ix_cgroups_src ON construct_groups (source_path);
 CREATE INDEX IF NOT EXISTS ix_ccand_run  ON construct_candidates (run_id);
@@ -105,7 +144,7 @@ def persist_run(run_id: str, groups: list, sft: list, dpo: list, route: str) -> 
     chosen_tar = {d["chosen"]["I_tar"] for d in dpo}
     reject_tar = {d["rejected"]["I_tar"] for d in dpo}
     src2gid: dict = {}
-    grows, crows, srows, drows = [], [], [], []
+    grows, crows, srows, drows, rrows = [], [], [], [], []
 
     for g in groups:
         gid = uuid.uuid4().hex
@@ -116,6 +155,11 @@ def persist_run(run_id: str, groups: list, sft: list, dpo: list, route: str) -> 
             cid = uuid.uuid4().hex
             ap = c.get("after_path")
             qa = c.get("qa") or {}
+            if ap and os.path.exists(ap):   # register every saved render with content hash + size
+                sha, sz = _sha256(ap)
+                rrows.append((uuid.uuid4().hex, run_id, gid, route, g["source"],
+                              g.get("source_asset_id"), c.get("preset_id"), c.get("kind"),
+                              c.get("fmt"), _ENGINE.get(c.get("kind"), c.get("kind")), ap, sha, sz))
             if ap in sft_by_tar:
                 role, rank = "sft", (sft_by_tar[ap].get("qa") or {}).get("rank")
             elif ap in chosen_tar:
@@ -152,8 +196,12 @@ def persist_run(run_id: str, groups: list, sft: list, dpo: list, route: str) -> 
         if drows:
             conn.executemany("INSERT INTO construct_dpo VALUES (?,?,?,?,?,?,?,?,?,now()) "
                              "ON CONFLICT (dpo_id) DO NOTHING", drows)
+        if rrows:
+            conn.executemany("INSERT INTO construct_renders VALUES "
+                             "(?,?,?,?,?,?,?,?,?,?,?,?,?,now()) "
+                             "ON CONFLICT (render_id) DO NOTHING", rrows)
 
     ok = db.write_retry(conn, _w)
     conn.close()
     return {"ok": ok, "groups": len(grows), "candidates": len(crows),
-            "sft": len(srows), "dpo": len(drows)}
+            "sft": len(srows), "dpo": len(drows), "renders": len(rrows)}
