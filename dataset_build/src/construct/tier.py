@@ -27,8 +27,8 @@ from typing import List, Tuple
 
 from .bank import load_captions
 
-TAU_SFT = 0.5      # merit_score (fraction of merit dims hit) to qualify as an SFT target
-MARGIN_DPO = 0.34  # min merit_score gap for a chosen/rejected DPO pair
+TAU_SFT = 0.62     # graded composite q to qualify as an SFT target (q in [-1,1], ~0.5 = neutral)
+MARGIN_DPO = 0.22  # min q gap for a chosen/rejected DPO pair
 _CAPS = None
 
 
@@ -82,11 +82,13 @@ def _reasoning(cap: dict, qa: dict, is_portrait: bool) -> str:
 def build(group: dict) -> Tuple[List[dict], List[dict]]:
     src = group["source"]; isp = group["is_portrait"]
     caps = _caps()
-    cands = group["candidates"]
-    reliable = [c for c in cands if c.get("qa") and c["qa"].get("reliable")]
-    keep = sorted([c for c in reliable if not c["qa"].get("veto")],
-                  key=lambda c: -c["qa"].get("merit_score", 0))
-    rejects = [c for c in reliable if c["qa"].get("veto")] or keep[-1:] if keep else []
+    cands = [c for c in group["candidates"] if c.get("qa")]
+    _q = lambda c: c["qa"].get("q", -99)
+    # SFT pool = reliable, non-veto, ranked by graded q. Unreliable are NOT discarded (per design):
+    # their q is already deducted -> they fall out of SFT naturally and can serve as DPO rejecteds.
+    keep = sorted([c for c in cands if c["qa"].get("reliable") and not c["qa"].get("veto")],
+                  key=lambda c: -_q(c))
+    rejects = sorted(cands, key=_q)   # worst-q first (veto / unreliable / low merit)
 
     def recipe(c):
         lc = c.get("local")
@@ -119,23 +121,26 @@ def build(group: dict) -> Tuple[List[dict], List[dict]]:
             instr, reason, local = _instruction(cap), _reasoning(cap, c["qa"], isp), None
         return {"I_in": src, "I_tar": c["after_path"], "recipe": recipe(c), "local": local,
                 "instruction": instr, "reasoning": reason,
-                "qa": {"merit_score": c["qa"].get("merit_score"), "rank": rank,
-                       "merit_hits": c["qa"].get("merit_hits")}}
+                "qa": {"q": c["qa"].get("q"), "merit_score": c["qa"].get("merit_score"), "rank": rank,
+                       "merit_hits": c["qa"].get("merit_hits"), "facets": c["qa"].get("facets")}}
 
     sft = [sft_record(c, rank) for rank, c in
-           enumerate(k for k in keep if k["qa"].get("merit_score", 0) >= TAU_SFT) if rank < 2]
+           enumerate(k for k in keep if _q(k) >= TAU_SFT) if rank < 2]
 
     dpo = []
     if keep and rejects:
         chosen = keep[0]
         for rej in rejects:
-            margin = chosen["qa"].get("merit_score", 0) - (0 if rej["qa"].get("veto") else rej["qa"].get("merit_score", 0))
+            if rej["after_path"] == chosen["after_path"]:
+                continue
+            margin = _q(chosen) - _q(rej)
             if rej["qa"].get("veto") or margin >= MARGIN_DPO:
                 dpo.append({"I_in": src,
                             "chosen": {"I_tar": chosen["after_path"], "recipe": recipe(chosen),
-                                       "merit_score": chosen["qa"].get("merit_score")},
+                                       "q": _q(chosen), "merit_score": chosen["qa"].get("merit_score")},
                             "rejected": {"I_tar": rej["after_path"], "recipe": recipe(rej),
-                                         "merit_score": rej["qa"].get("merit_score"), "veto": rej["qa"].get("veto")},
+                                         "q": _q(rej), "merit_score": rej["qa"].get("merit_score"),
+                                         "veto": rej["qa"].get("veto")},
                             "margin": round(margin, 3)})
                 break  # one clean pair per source for now
     return sft, dpo
@@ -144,20 +149,20 @@ def build(group: dict) -> Tuple[List[dict], List[dict]]:
 def summarize(groups: list, sft: list, dpo: list) -> dict:
     import numpy as np
     n = len(groups)
-    merits = [c["qa"]["merit_score"] for g in groups for c in g["candidates"]
-              if c.get("qa") and c["qa"].get("reliable") and not c["qa"].get("veto")
-              and c["qa"].get("merit_score") is not None]
-    rel = sum(1 for g in groups for c in g["candidates"] if c.get("qa") and c["qa"].get("reliable"))
+    allc = [c for g in groups for c in g["candidates"] if c.get("qa")]
+    qs = [c["qa"].get("q") for c in allc if c["qa"].get("q") is not None and not c["qa"].get("veto")]
+    rel = sum(1 for c in allc if c["qa"].get("reliable"))
     tot = sum(len(g["candidates"]) for g in groups)
-    veto = sum(1 for g in groups for c in g["candidates"]
-               if c.get("qa") and c["qa"].get("reliable") and c["qa"].get("veto"))
-    pc = (lambda a, p: round(float(np.percentile(a, p)), 3)) if merits else (lambda a, p: None)
+    veto = sum(1 for c in allc if c["qa"].get("veto"))
+    pct = (lambda arr, p: round(float(np.percentile(arr, p)), 3))
     return {
         "n_sources": n, "candidates": tot, "reliable_frac": round(rel / max(tot, 1), 3),
-        "veto_frac_of_reliable": round(veto / max(rel, 1), 3),
+        "veto_frac": round(veto / max(tot, 1), 3),
         "sources_with_sft": len({s["I_in"] for s in sft}), "sft_records": len(sft),
         "sources_with_dpo": len({d["I_in"] for d in dpo}), "dpo_pairs": len(dpo),
-        "merit_score_dist": {f"p{p}": pc(merits, p) for p in (10, 25, 50, 75, 90)} if merits else {},
+        "q_dist_nonveto": {f"p{p}": pct(qs, p) for p in (5, 10, 25, 50, 75, 90, 95)} if qs else {},
+        "q_mean": round(float(np.mean(qs)), 3) if qs else None,
+        "q_std": round(float(np.std(qs)), 3) if qs else None,
         "TAU_SFT": TAU_SFT, "MARGIN_DPO": MARGIN_DPO,
         "note": "instruction/reasoning are v1 templates — refine with a VLM pass before full build",
     }

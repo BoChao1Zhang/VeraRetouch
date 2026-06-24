@@ -156,8 +156,9 @@ def _det_extreme(after_stats) -> bool:
 
 _SYS = (
     "你是资深商业修图质检员。第一张是【原图】，第二张是对原图套用某调色预设后的真实成片。\n"
-    "判断标准：自然、克制、高级、耐看才是好成片；不要因为更鲜艳/更亮/对比更强本身就给 yes——"
-    "过饱和溢色、肤色失真、死白死黑、廉价滤镜感都是缺陷。请独立看两张图，逐题作答。\n"
+    "判断标准：自然、克制、高级、耐看才是好成片。若第二张确实更通透/色调更讨喜/层次更好/更耐看，"
+    "请如实给 yes，不要一味挑剔；但也不要因为单纯更鲜艳/更亮/对比更强就给 yes——"
+    "过饱和溢色、肤色失真、死白死黑、廉价滤镜感才是缺陷。请独立看两张图，按事实逐题作答。\n"
     "下面每个『两位编号』对应一个 yes/no 判断，1=yes，0=no：\n{items}\n"
     "只输出一个 JSON 对象：键是两位编号(字符串)，值是 0 或 1，必须且只包含上面列出的全部编号，"
     '例如 {{"07":1,"02":0,"11":1}}。不要输出 JSON 以外的任何文字。'
@@ -244,54 +245,124 @@ def _contra(ans: dict, keys: list) -> int:
     return sum(1 for k in keys if ans.get(k + "_F") == 1 and ans.get(k + "_R") == 1)  # both-1 only
 
 
+# --------------------------------------------------------------------------- #
+# graded composite scoring (extends source_qa.clean_aes: keeps its gate order + both-1 contradiction
+# + merit-as-soft-signal, but turns the discrete merit_frac into a GRADED, logically-gated composite
+# so scores spread instead of collapsing to 0/1, and unreliable => deduction not a hard zero).
+# --------------------------------------------------------------------------- #
+_W = {"overall": 0.30, "tone": 0.22, "color": 0.22, "mood": 0.13, "pop": 0.13}  # facet weights (Σ=1)
+_GATE_FLOOR = 0.40        # a defect-gated facet keeps this fraction (logical coupling, not annihilation)
+_MONO_DISCOUNT = 0.10     # B&W is a heavy desaturation; small discount kills "B&W always wins"
+_PEN_SOFTVETO = 0.06      # per uncorroborated VLM veto dim
+_PEN_CONTRA = 0.07        # per both-1 contradiction beyond tolerance
+_CONTRA_TOL = 1           # borrowed from source_qa AES_CONTRA_TOL: tolerate 1 contradiction
+_NEUTRAL = 0.5            # honest-middle baseline
+_DED_PARSE = 0.32         # unreliable (phase unparseable) deduction from neutral
+_DED_CONTROL = 0.40       # judge failed sanity controls -> heavier deduction (but NOT -99/drop)
+
+
+def _graded(ans: dict, key: str) -> float:
+    """F⊕R -> 3-level signal. 1.0 = good asserted & no defect; 0.0 = defect asserted & not-good;
+    0.5 = honest middle (both-0) OR contradiction (both-1). This is the gradient fix."""
+    f, r = ans.get(key + "_F"), ans.get(key + "_R")
+    if f == 1 and r == 0:
+        return 1.0
+    if f == 0 and r == 1:
+        return 0.0
+    return 0.5
+
+
+def _vhealth(ans: dict, key: str, det: set) -> float:
+    """veto-dim health in [0,1] (1=clean). Only an ASSERTED defect (R=1∧F=0) pulls it down — an
+    ambiguous both-0 ('no defect confirmed') is healthy, so the gate doesn't punish fine renders the
+    judge was merely unsure about. A corroborating det metric forces it low."""
+    f, r = ans.get(key + "_F"), ans.get(key + "_R")
+    if r != 1:
+        h = 1.0                       # no defect asserted -> healthy
+    elif f == 1:
+        h = 0.5                       # both-1 contradiction
+    else:
+        h = 0.0                       # defect asserted, quality denied
+    if key in det:
+        h = min(h, 0.2)
+    return h
+
+
+def _composite(ans1: dict, ans2: dict, is_portrait: bool, is_bw: bool, det: set):
+    """Logically-gated facet composite in [0,1]. tone gated by clip/crush health, color gated by
+    satclip/skintone health (can't be 'good color' if oversaturated). B&W color=neutral (no shrink)."""
+    g = lambda k: _graded(ans2, k)
+    gate = lambda h: _GATE_FLOOR + (1.0 - _GATE_FLOOR) * h
+    tone_h = (_vhealth(ans1, "HILIGHTCLIP", det) + _vhealth(ans1, "SHADOWCRUSH", det)) / 2
+    tone = (g("CLEAN") + g("CONTRAST")) / 2 * gate(tone_h)
+    if is_bw:
+        color = _NEUTRAL                                  # neutral, NOT skipped -> no fraction inflation
+    else:
+        ch = [_vhealth(ans1, "SATCLIP", det)] + ([_vhealth(ans1, "SKINTONE", det)] if is_portrait else [])
+        color = (g("WBQUALITY") + g("MEMORYCOLOR") + g("VIVID")) / 3 * gate(sum(ch) / len(ch))
+    pop = g("SUBJECTPOP") if is_portrait else _NEUTRAL
+    mood, overall = g("MOOD"), g("BETTER")
+    comp = (_W["overall"] * overall + _W["tone"] * tone + _W["color"] * color
+            + _W["mood"] * mood + _W["pop"] * pop)
+    facets = {k: round(v, 3) for k, v in
+              {"overall": overall, "tone": tone, "color": color, "mood": mood, "pop": pop}.items()}
+    return comp, facets
+
+
 def qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float) -> dict:
     try:
         return _qa_score_pair(suri, after_path, is_portrait, src_cf)
     except Exception as e:  # noqa: BLE001 - one corrupt render must not kill the batch
-        return {"reliable": False, "why": f"exception:{type(e).__name__}", "veto": True, "q": -99}
+        return {"reliable": False, "why": f"exception:{type(e).__name__}", "veto": False,
+                "q": round(_NEUTRAL - _DED_CONTROL, 3), "merit_score": 0.0, "merit_hits": []}
 
 
 def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float) -> dict:
-    """2-phase: phase-1 veto dims + controls; if not vetoed, phase-2 merit dims. Smaller calls
-    (~12 / ~16 codes) => far better parse reliability than one 28-code call."""
+    """2-phase graded QA. phase-1 veto dims + controls; phase-2 merit dims on survivors. Score = a
+    logically-gated facet composite (gradient), NOT a hit-fraction. Unreliable answers DEDUCT from a
+    neutral baseline instead of becoming a hard zero/drop (mirrors source_qa's merit-soft policy)."""
     st = _stats(after_path)
     is_bw = st["cf"] < 8.0
     det = _det_flags(st, src_cf)
     auri = _uri(after_path)
     veto_keys = [k for k, t, c, p, f, r in _DIMS if t == "veto" and _active(k, is_portrait, is_bw)]
     merit_keys = [k for k, t, c, p, f, r in _DIMS if t == "merit" and _active(k, is_portrait, is_bw)]
-    bad = lambda why, veto=True: {"reliable": False, "why": why, "veto": veto, "q": -99,
-                                  "det": sorted(det), "is_bw": is_bw}
+    base = {"det": sorted(det), "is_bw": is_bw}
+    ded = lambda why, d, veto=False: {**base, "reliable": False, "veto": veto, "why": why,
+                                      "merit_score": round(_NEUTRAL - d, 3),
+                                      "q": round(_NEUTRAL - d, 3), "merit_hits": []}
 
     # phase 1: veto dims + controls
     ans1, ok1, why1 = _run_phase(suri, auri, _VETO_ITEMS, salt=1)
     if not ok1:
-        return bad(why1)
+        return ded("p1_" + why1, _DED_PARSE)
     if (ans1.get("ANCHOR") != 1 or ans1.get("HONPOS") != 1 or ans1.get("HONNEG") != 0
             or ans1.get("GRAYTRAP") != (0 if is_bw else 1)):
-        return bad("control")
-    if _contra(ans1, veto_keys) > 1:
-        return bad("contra:veto")
+        return ded("control", _DED_CONTROL)
+    contra1 = _contra(ans1, veto_keys)
     vlm_veto = [k for k in veto_keys if ans1.get(k + "_F") == 0 and ans1.get(k + "_R") == 1]
     corroborated = [k for k in vlm_veto if k in det]
-    # cross-validation: hard-drop only when metric ∧ VLM AGREE, or >=2 VLM vetoes, or severe metric
-    # extreme. metric-alone / vlm-alone are uncertain (xval showed low agreement) -> don't hard-drop.
-    hard_veto = bool(corroborated) or len(vlm_veto) >= 2 or _det_extreme(st)
-    base = {"reliable": True, "vlm_veto": vlm_veto, "det": sorted(det), "is_bw": is_bw}
-    if hard_veto:
-        return {**base, "veto": True, "q": -3.0, "why": "veto", "merit_score": 0.0}
+    # hard veto only when metric ∧ VLM agree, or >=2 VLM vetoes, or severe metric extreme. Graded by
+    # severity (not a flat -3) so even rejects keep a gradient.
+    if corroborated or len(vlm_veto) >= 2 or _det_extreme(st):
+        sev = len(corroborated) + 0.5 * max(0, len(vlm_veto) - 2) + (1 if _det_extreme(st) else 0)
+        q = round(max(-1.0, -0.25 - 0.25 * sev), 3)
+        return {**base, "reliable": True, "veto": True, "vlm_veto": vlm_veto, "why": "veto",
+                "merit_score": 0.0, "merit_hits": [], "q": q}
 
     # phase 2: merit dims (survivors only)
     ans2, ok2, why2 = _run_phase(suri, auri, _MERIT_ITEMS, salt=2)
     if not ok2:
-        return bad(f"merit_{why2}", veto=False)
-    if _contra(ans2, merit_keys) > 1:
-        return bad("contra:merit", veto=False)
-    merit_hits = [k for k in merit_keys if ans2.get(k + "_F") == 1 and ans2.get(k + "_R") == 0]
-    merit_score = len(merit_hits) / max(len(merit_keys), 1)
-    soft_pen = 0.34 if vlm_veto else 0.0
-    return {**base, "veto": False, "q": round(merit_score - soft_pen, 3), "why": "",
-            "merit_score": round(merit_score, 3), "merit_hits": merit_hits, "soft_veto": bool(vlm_veto)}
+        return ded("p2_" + why2, _DED_PARSE)
+    contra2 = _contra(ans2, merit_keys)
+    comp, facets = _composite(ans1, ans2, is_portrait, is_bw, det)
+    merit_hits = [k for k in merit_keys if _graded(ans2, k) >= 1.0]
+    contra_excess = max(0, contra1 + contra2 - _CONTRA_TOL)
+    pen = (_MONO_DISCOUNT * is_bw + _PEN_SOFTVETO * len(vlm_veto) + _PEN_CONTRA * contra_excess)
+    q = round(max(-1.0, min(1.0, comp - pen)), 3)
+    return {**base, "reliable": contra_excess == 0, "veto": False, "vlm_veto": vlm_veto,
+            "facets": facets, "merit_score": round(comp, 3), "merit_hits": merit_hits,
+            "soft_veto": bool(vlm_veto), "q": q, "why": "" if contra_excess == 0 else "contra"}
 
 
 def qa_rank(source_path: str, variants: List[Tuple[str, str]], scene: Optional[str] = None,
@@ -302,8 +373,8 @@ def qa_rank(source_path: str, variants: List[Tuple[str, str]], scene: Optional[s
     with ThreadPoolExecutor(max_workers=QA_WORKERS) as ex:
         res = list(ex.map(lambda v: qa_score_pair(suri, v[1], is_portrait, src_cf), variants))
     scores = {lab: r for (lab, _), r in zip(variants, res)}
-    ranking = sorted(scores, key=lambda l: (scores[l]["veto"], not scores[l].get("reliable", False),
-                                            -scores[l]["q"]))
+    # q already encodes veto severity + unreliability deductions -> rank purely by q (veto last).
+    ranking = sorted(scores, key=lambda l: (scores[l]["veto"], -scores[l]["q"]))
     return {"ranking": ranking, "scores": scores}
 
 

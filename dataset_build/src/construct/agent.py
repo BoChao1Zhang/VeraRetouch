@@ -123,7 +123,7 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
         g = mask_synth.sample_geom(bank, rng)
         geom = mask_synth.perturb(g["geom"], rng)
         geom["__what__"] = g["what"]; geom["__type__"] = g["mask_type"]
-        s = mask_synth.make_local_sample(path, base["path"], geom, cgt_dir)
+        s = mask_synth.make_local_sample(path, base["path"], geom, cgt_dir, rng)
         return (g, s) if s else None
     with ThreadPoolExecutor(max_workers=render_workers) as ex:
         samples = [x for x in ex.map(_one, range(n_masks)) if x]

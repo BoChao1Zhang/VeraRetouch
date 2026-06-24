@@ -40,14 +40,32 @@ _GEOM_KEYS = ("Top", "Left", "Bottom", "Right", "Angle", "Midpoint", "Roundness"
               "Flipped", "Version", "ZeroX", "ZeroY", "FullX", "FullY")
 _BANK_PATH = "/home/bc/data/datasets/vera_directionA_1M/mask_templates/mask_bank_v2.json"
 
-# preset GLOBAL key -> mask Local* key (the localizable, relative tone/color params; same scale).
-# Everything NOT here (HSL HueAdjustment*/Sat*/Lum*, ToneCurve*, ColorGrade*/SplitToning, WhiteBalance,
-# Temperature/Tint absolute WB, calibration, sharpening) STAYS GLOBAL.
-_G2L = {"Exposure2012": "LocalExposure2012", "Contrast2012": "LocalContrast2012",
-        "Highlights2012": "LocalHighlights2012", "Shadows2012": "LocalShadows2012",
-        "Whites2012": "LocalWhites2012", "Blacks2012": "LocalBlacks2012",
-        "Clarity2012": "LocalClarity2012", "Dehaze": "LocalDehaze", "Texture": "LocalTexture",
-        "Saturation": "LocalSaturation", "Vibrance": "LocalSaturation"}
+# Strong, deliberately-VISIBLE local edits applied INSIDE the mask (on top of the base preset's look,
+# which is applied globally — curve/HSL/WB can't localize in LR so they stay global, per design).
+# The old "pop the preset's own mild tone into the mask" produced near-invisible local changes; these
+# are large, coherent, single-intent edits so the localized region is clearly distinguishable.
+# EVERY edit is anchored on a strong LocalExposure2012 (|Δ|≥0.5) or LocalSaturation (|Δ|≥45) — those
+# are the only Local* params that render strongly+reliably through the LR pipeline (Clarity/Contrast/
+# Dehaze/Highlights/Shadows alone are image-dependent and often near-invisible on a feathered region).
+_LOCAL_EDITS = [
+    ("提亮并增清晰(主体突出)", {"LocalExposure2012": 0.85, "LocalClarity2012": 30, "LocalContrast2012": 20}),
+    ("压暗收光(局部加重氛围)", {"LocalExposure2012": -0.9, "LocalHighlights2012": -45, "LocalContrast2012": 15}),
+    ("提亮压高光(开阴影)", {"LocalExposure2012": 0.7, "LocalHighlights2012": -55, "LocalShadows2012": 45}),
+    ("增艳加清晰", {"LocalSaturation": 55, "LocalExposure2012": 0.25, "LocalClarity2012": 20}),
+    ("降饱和压暗(弱化干扰)", {"LocalSaturation": -65, "LocalExposure2012": -0.5}),
+    ("提亮找回细节", {"LocalExposure2012": 0.6, "LocalHighlights2012": -55, "LocalShadows2012": 50}),
+    ("增艳提亮去朦胧", {"LocalSaturation": 50, "LocalExposure2012": 0.4, "LocalClarity2012": 22}),
+]
+
+
+def sample_local_edit(rng: random.Random) -> tuple:
+    """Pick one strong, coherent local edit and jitter its magnitudes ±20% so samples vary."""
+    label, base = _LOCAL_EDITS[rng.randrange(len(_LOCAL_EDITS))]
+    edit = {}
+    for k, v in base.items():
+        v2 = v * rng.uniform(0.85, 1.2)
+        edit[k] = round(v2, 4) if k == "LocalExposure2012" else round(max(-100, min(100, v2)), 1)
+    return label, edit
 
 
 def _f(d, k, default=0.0):
@@ -99,33 +117,31 @@ def load_bank(path: str = _BANK_PATH) -> dict:
     return json.load(open(path))
 
 
-def sample_geom(bank: dict, rng: random.Random, radial_frac: float = 0.66) -> dict:
-    shape = "circulargradient" if (rng.random() < radial_frac and bank["geoms"]["circulargradient"]) \
-        else ("gradient" if bank["geoms"]["gradient"] else "circulargradient")
-    g = rng.choice(bank["geoms"][shape])
-    return {"mask_type": shape, "what": g["what"], "geom": dict(g["geom"])}
+_LIN_SIDES = {  # linear gradient: (Zero=0% line near center, Full=100% line at the edge), jittered
+    "上方": ((0.5, 0.55), (0.5, 0.08)), "下方": ((0.5, 0.45), (0.5, 0.92)),
+    "左侧": ((0.55, 0.5), (0.08, 0.5)), "右侧": ((0.45, 0.5), (0.92, 0.5))}
+
+
+def sample_geom(bank: dict, rng: random.Random, radial_frac: float = 0.55) -> dict:
+    """Synthesize an in-frame, substantial mask geometry directly (no mined geoms — those perturbed
+    off-frame / degenerate, giving empty masks). Guarantees a meaningful, correctly-rasterizable C_GT."""
+    j = lambda v, d=0.05: round(v + rng.uniform(-d, d), 4)
+    if rng.random() < radial_frac:
+        cx, cy = rng.uniform(0.34, 0.66), rng.uniform(0.34, 0.66)
+        rx, ry = rng.uniform(0.24, 0.36), rng.uniform(0.24, 0.36)
+        geom = {"Top": round(cy - ry, 4), "Bottom": round(cy + ry, 4),
+                "Left": round(cx - rx, 4), "Right": round(cx + rx, 4),
+                "Angle": 0.0, "Feather": float(rng.choice([45, 60, 75])), "Roundness": 0.0,
+                "Midpoint": 50.0, "Flipped": "true"}   # Flipped=affect INSIDE the ellipse (subject)
+        return {"mask_type": "circulargradient", "what": "Mask/CircularGradient", "geom": geom}
+    side = rng.choice(list(_LIN_SIDES))
+    (zx, zy), (fx, fy) = _LIN_SIDES[side]
+    geom = {"ZeroX": j(zx), "ZeroY": j(zy), "FullX": j(fx), "FullY": j(fy), "Flipped": "false"}
+    return {"mask_type": "gradient", "what": "Mask/Gradient", "geom": geom, "_side": side}
 
 
 def perturb(geom: dict, rng: random.Random) -> dict:
-    g = dict(geom)
-    clip = lambda v, lo, hi: max(lo, min(hi, v))
-    dx, dy, sc = rng.uniform(-0.15, 0.15), rng.uniform(-0.15, 0.15), rng.uniform(0.85, 1.15)
-    if "Top" in geom:
-        cx = clip((_f(geom, "Left") + _f(geom, "Right")) / 2 + dx, 0.2, 0.8)
-        cy = clip((_f(geom, "Top") + _f(geom, "Bottom")) / 2 + dy, 0.2, 0.8)
-        hw = clip(abs(_f(geom, "Right") - _f(geom, "Left")) / 2 * sc, 0.12, 0.42)
-        hh = clip(abs(_f(geom, "Bottom") - _f(geom, "Top")) / 2 * sc, 0.12, 0.42)
-        g.update(Left=cx - hw, Right=cx + hw, Top=cy - hh, Bottom=cy + hh)
-    elif "ZeroX" in geom:
-        mx = clip((_f(geom, "ZeroX") + _f(geom, "FullX")) / 2 + dx, 0.3, 0.7)
-        my = clip((_f(geom, "ZeroY") + _f(geom, "FullY")) / 2 + dy, 0.3, 0.7)
-        ox = mx - (_f(geom, "ZeroX") + _f(geom, "FullX")) / 2
-        oy = my - (_f(geom, "ZeroY") + _f(geom, "FullY")) / 2
-        for a in ("ZeroX", "FullX"):
-            g[a] = _f(geom, a) + ox
-        for a in ("ZeroY", "FullY"):
-            g[a] = _f(geom, a) + oy
-    return g
+    return dict(geom)   # geometry is already synthesized in-frame + jittered; keep API for agent
 
 
 # --------------------------------------------------------------------------- #
@@ -135,9 +151,10 @@ def _C(name):  # crs-namespaced tag/attr
     return f"{{{_CRS}}}{name}"
 
 
-def synth_local_xmp(base_xmp: str, geom: dict, out_dir: str) -> dict | None:
-    """Take a base preset XMP; move its localizable tone params into a mask (Local* + geom), keep
-    everything else GLOBAL. Returns {xmp_path, local_params} or None if nothing localizable."""
+def synth_local_xmp(base_xmp: str, geom: dict, local: dict, out_dir: str) -> dict | None:
+    """base preset stays GLOBAL (curve/HSL/WB included — they can't localize in LR); add ONE strong
+    `local` edit (Local* params) confined to `geom` as a mask correction. Returns {xmp_path,
+    local_params} or None on parse failure."""
     try:
         ET.register_namespace("crs", _CRS); ET.register_namespace("rdf", _RDF)
         ET.register_namespace("x", "adobe:ns:meta/")
@@ -145,19 +162,8 @@ def synth_local_xmp(base_xmp: str, geom: dict, out_dir: str) -> dict | None:
     except Exception:  # noqa: BLE001
         return None
     desc = tree.getroot().find(".//rdf:Description", _NS)
-    if desc is None:
+    if desc is None or not local:
         return None
-    local = {}
-    for gk, lk in _G2L.items():                       # pop localizable globals -> mask Local*
-        a = _C(gk)
-        if a in desc.attrib:
-            v = _f({gk: desc.attrib.pop(a)}, gk, None)
-            if v:
-                local[lk] = local.get(lk, 0.0) + v    # Saturation+Vibrance both -> LocalSaturation
-    local = {k: round(max(-100, min(100, v)) if k != "LocalExposure2012" else v, 4)
-             for k, v in local.items() if abs(v) > 1e-6}
-    if not local:
-        return None                                   # HSL/curve-only preset: nothing to localize
     corr = ET.SubElement(ET.SubElement(ET.SubElement(desc, _C("MaskGroupBasedCorrections")),
                                        f"{{{_RDF}}}Seq"), f"{{{_RDF}}}li")
     cd = ET.SubElement(corr, f"{{{_RDF}}}Description")
@@ -195,7 +201,9 @@ def cgt_raster(mask_type: str, geom: dict, h: int, w: int) -> np.ndarray:
         yr = -(x - cx) * math.sin(ang) + (y - cy) * math.cos(ang)
         d = np.sqrt((xr / rx) ** 2 + (yr / ry) ** 2)
         feather = max(_f(geom, "Feather", 50) / 100.0, 0.05)
-        m = np.clip((1.0 - d) / feather + 0.5, 0, 1).astype("float32")
+        # LR's CircularGradient corrects the area OUTSIDE the ellipse by default (verified: center-=1
+        # convention round-tripped with negative corr). 0 inside, 1 outside; Flipped re-inverts below.
+        m = np.clip((d - 1.0) / feather + 0.5, 0, 1).astype("float32")
     else:
         zx, zy, fx, fy = _f(geom, "ZeroX"), _f(geom, "ZeroY"), _f(geom, "FullX", 1), _f(geom, "FullY")
         dxv, dyv = fx - zx, fy - zy
@@ -222,9 +230,12 @@ def _region(geom: dict) -> str:
     return "整体"
 
 
-def make_local_sample(source_path: str, base_xmp: str, geom: dict, out_dir: str) -> dict | None:
-    """Render: base preset's look applied only inside `geom` on the source; save 1-ch C_GT."""
-    syn = synth_local_xmp(base_xmp, geom, config.RENDER_STAGE)
+def make_local_sample(source_path: str, base_xmp: str, geom: dict, out_dir: str,
+                      rng: random.Random | None = None) -> dict | None:
+    """base preset globally + ONE strong, visible local edit inside `geom`. Save 1-ch C_GT."""
+    rng = rng or random.Random()
+    label, local = sample_local_edit(rng)
+    syn = synth_local_xmp(base_xmp, geom, local, config.RENDER_STAGE)
     if syn is None:
         return None
     res = render.render_preset(syn["xmp_path"], "param", "xmp", source_path)
@@ -241,7 +252,8 @@ def make_local_sample(source_path: str, base_xmp: str, geom: dict, out_dir: str)
     cgt_path = os.path.join(out_dir, f"cgt_{muid}.png")
     Image.fromarray((cgt * 255).astype("uint8")).save(cgt_path)
     return {"after_path": res["after_path"], "cgt_path": cgt_path, "mask_unit_id": muid,
-            "geom": geom, "region": _region(geom), "local_params": syn["local_params"]}
+            "geom": geom, "region": _region(geom), "local_params": syn["local_params"],
+            "edit_label": label}
 
 
 # --------------------------------------------------------------------------- #
