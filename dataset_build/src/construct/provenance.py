@@ -27,8 +27,15 @@ _ENGINE = {"param": "lr_farm", "lut": "lut_trilinear",
            "local_from_preset": "lr_farm", "lut_in_sam3": "lut_composite"}
 
 
-def _sha256(path: str) -> tuple:
-    """(sha256_hex, size_bytes) of a file, or (None, None) if unreadable."""
+def _render_meta(path: str) -> tuple:
+    """(sha256_hex, size_bytes). Sharded renders are content-addressed (filename IS the sha), so the
+    hash is free from the name; only non-sharded/legacy paths are re-hashed."""
+    stem = os.path.splitext(os.path.basename(path))[0]
+    if len(stem) == 64 and all(c in "0123456789abcdef" for c in stem):
+        try:
+            return stem, os.path.getsize(path)
+        except OSError:
+            return stem, None
     try:
         h = hashlib.sha256()
         sz = 0
@@ -156,7 +163,7 @@ def persist_run(run_id: str, groups: list, sft: list, dpo: list, route: str) -> 
             ap = c.get("after_path")
             qa = c.get("qa") or {}
             if ap and os.path.exists(ap):   # register every saved render with content hash + size
-                sha, sz = _sha256(ap)
+                sha, sz = _render_meta(ap)
                 rrows.append((uuid.uuid4().hex, run_id, gid, route, g["source"],
                               g.get("source_asset_id"), c.get("preset_id"), c.get("kind"),
                               c.get("fmt"), _ENGINE.get(c.get("kind"), c.get("kind")), ap, sha, sz))

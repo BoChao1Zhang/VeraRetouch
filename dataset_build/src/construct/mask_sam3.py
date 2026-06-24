@@ -94,6 +94,7 @@ def make_lut_local_sample(source: str, lut_feat: dict, concept: str, mask_png: s
     muid = uuid.uuid4().hex[:16]
     out_path = os.path.join(config.RENDER_STAGE, f"sam3lut_{muid}.jpg")
     Image.fromarray(np.clip(comp, 0, 255).astype("uint8")).save(out_path, "JPEG", quality=95)
+    out_path = render.shard_save(out_path)   # content-addressed sharded store
     cgt_path = os.path.join(out_dir, f"cgt_{muid}.png")
     Image.fromarray((m * 255).astype("uint8")).save(cgt_path)
     return {"after_path": out_path, "cgt_path": cgt_path, "mask_unit_id": muid,

@@ -9,7 +9,9 @@ the two proven paths (lr_render.render_via_lr + pilot_preset._apply_cube/_parser
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import shutil
 import uuid
 
 from PIL import Image
@@ -17,11 +19,37 @@ from PIL import Image
 from dataset_build.source_qa import config, lr_render
 from dataset_build.source_qa import preset_qa as PQ  # _parser().load_cube + _apply_cube
 
+RENDERS_ROOT = os.path.join(config.OUT_ROOT, "renders")   # content-addressed sharded render store
+
+
+def shard_save(tmp_path: str) -> str:
+    """Move a freshly-rendered jpg into content-addressed sharded storage and return the new path.
+
+    Filename IS the sha256, sharded renders/<ab>/<cd>/<sha>.jpg — avoids a 400k-file flat dir and
+    gives natural dedup (identical render bytes resolve to the same path, the duplicate is dropped).
+    """
+    h = hashlib.sha256()
+    with open(tmp_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    sha = h.hexdigest()
+    d = os.path.join(RENDERS_ROOT, sha[:2], sha[2:4])
+    os.makedirs(d, exist_ok=True)
+    dst = os.path.join(d, sha + ".jpg")
+    if os.path.exists(dst):
+        os.remove(tmp_path)          # dedup: identical render already stored
+    else:
+        shutil.move(tmp_path, dst)
+    return dst
+
 
 def render_preset(preset_path: str, kind: str, fmt: str, source_path: str,
                   lut_longedge: int = 1024) -> dict:
     if kind == "param":
-        return lr_render.render_via_lr(preset_path, fmt, source_path)
+        r = lr_render.render_via_lr(preset_path, fmt, source_path)
+        if r.get("ok") and r.get("after_path"):
+            r["after_path"] = shard_save(r["after_path"])
+        return r
     # lut
     try:
         cube = PQ._parser().load_cube(preset_path)
@@ -31,7 +59,7 @@ def render_preset(preset_path: str, kind: str, fmt: str, source_path: str,
         os.makedirs(config.RENDER_STAGE, exist_ok=True)
         out = os.path.join(config.RENDER_STAGE, f"lut_{uuid.uuid4().hex[:12]}.jpg")
         after.save(out, "JPEG", quality=95)
-        return {"ok": True, "after_path": out, "engine": "lut_trilinear"}
+        return {"ok": True, "after_path": shard_save(out), "engine": "lut_trilinear"}
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error_code": "lut_apply_failed", "error": str(e)[:200]}
 
