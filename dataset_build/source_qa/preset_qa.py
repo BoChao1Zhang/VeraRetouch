@@ -236,7 +236,7 @@ def resolve_probes(conn, k: int = None) -> List[dict]:
         return [{"asset_id": r["asset_id"], "path": r["path"], "scene": r["scene"]} for r in rows]
     rows = conn.execute(
         "SELECT asset_id, path, scene FROM assets WHERE asset_type='image' AND aesthetic IS NOT NULL "
-        "AND dup_of IS NULL AND corpus IN ('tad66k','fivek_gold','quandian','korean') "
+        "AND dup_of IS NULL AND corpus IN ('fivek_gold','quandian','korean') "
         "ORDER BY aesthetic DESC, asset_id LIMIT 400").fetchall()
     picked, scenes = [], set()
     for r in rows:
@@ -378,7 +378,9 @@ def run_stage2(limit: Optional[int] = None, run_qc: bool = True,
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from PIL import Image
     Image.MAX_IMAGE_PIXELS = None
-    from . import lr_render, paired_metrics
+    from . import paired_metrics
+    from dataset_build.core import build_lr_client
+    lr = build_lr_client()   # core.lr: LR pool handle (semaphore cap = config.LR_MAX_CONCURRENCY)
     _parser()  # pre-init the shared recipe parser (avoid races in worker threads)
     conn = db.connect()
     run_id = db.start_run(conn, "preset_qa_stage2", {"limit": limit, "workers": workers})
@@ -393,7 +395,7 @@ def run_stage2(limit: Optional[int] = None, run_qc: bool = True,
             probe_pils[p["asset_id"]] = (p, sp, im)
         except Exception as e:
             print(f"[preset stage2] probe {p['asset_id']} failed: {e}", file=sys.stderr)
-    print(f"[preset stage2] {len(probe_pils)} probes; LR health={lr_render.lr_health()}", file=sys.stderr)
+    print(f"[preset stage2] {len(probe_pils)} probes; LR health={lr.health()}", file=sys.stderr)
 
     iqa = None
     try:
@@ -407,7 +409,8 @@ def run_stage2(limit: Optional[int] = None, run_qc: bool = True,
     # retry hits exactly the previously-failed/unrendered presets, no duplicate QC.
     rows = conn.execute(
         "SELECT asset_id, path, fmt, kind, style, scene_affinity, has_local_mask, has_ai_mask, preset_content_hash "
-        "FROM assets WHERE asset_type='preset' AND status IN ('preset_meta_pass','preset_meta_local') "
+        "FROM assets WHERE asset_type='preset' "
+        "AND status IN ('preset_meta_pass','preset_meta_local','preset_render_failed','preset_needs_local_render') "
         "AND dup_of IS NULL "
         "AND NOT EXISTS (SELECT 1 FROM processing_events e WHERE e.asset_id=assets.asset_id "
         "AND e.stage='preset_render' AND e.status='ok')"
@@ -455,7 +458,7 @@ def run_stage2(limit: Optional[int] = None, run_qc: bool = True,
                                          r["fmt"], r["path"], sp, run_id, ai_mask=ai_mask)
                     conn.commit()
                 if engine == "lrc":
-                    res = lr_render.render_via_lr(r["path"], r["fmt"], sp)   # network, parallel
+                    res = lr.render(r["path"], r["fmt"], sp)   # core.lr: pool-capped network render
                     render_ok = bool(res and res.get("ok"))
                     after_path = res["after_path"] if render_ok else None
                     render_error = None if render_ok else json.dumps(res or {"error": "lr render failed"},

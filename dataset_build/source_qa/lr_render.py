@@ -185,16 +185,49 @@ def submit_and_wait(photo_path: str, lua_path: str) -> dict:
             "elapsed": time.time() - started}
 
 
+_RETRYABLE_SIGNS = (
+    "write access", "withwriteaccessdo", "blocked by another", "could not execute action",
+    "import and process", "write_access_failed", "timeout", "submit_failed", "download_failed",
+)
+
+
+def _is_retryable(res: dict) -> bool:
+    """Transient LR failures worth re-submitting. The LrC catalog allows only one
+    `withWriteAccessDo` action at a time; when a client gets overlapping renders the
+    blocked one throws a `plugin_exception` ("could not execute action 'Import and
+    Process Photo' … blocked by another write access call") that the plugin does NOT
+    flag retryable -> it would otherwise drop the probe permanently. Re-submit after
+    backoff so it lands on a now-free client."""
+    if res.get("retryable"):
+        return True
+    blob = f"{res.get('error_code', '')} {res.get('error', '')}".lower()
+    return any(s in blob for s in _RETRYABLE_SIGNS)
+
+
 def render_via_lr(recipe_path: str, fmt: str, photo_path: str) -> dict:
-    """High-level: convert preset -> config.lua, submit to LR, return the after."""
+    """High-level: convert preset -> config.lua, submit to LR, return the after.
+    Bounded retry (config.RENDER_MAX_ATTEMPTS) on transient LrC write-lock / timeout."""
     os.makedirs(config.RENDER_STAGE, exist_ok=True)
     lua_path = os.path.join(config.RENDER_STAGE, f"preset_{uuid.uuid4().hex[:10]}.lua")
     if not preset_to_configlua(recipe_path, fmt, lua_path):
         return {"ok": False, "error_code": "preset_to_lua_failed",
                 "error": "Failed to convert preset to Lightroom config.lua", "retryable": False}
-    res = submit_and_wait(photo_path, lua_path)
+    attempts = max(1, int(getattr(config, "RENDER_MAX_ATTEMPTS", 3)))
+    res: dict = {}
     try:
-        os.remove(lua_path)
-    except OSError:
-        pass
+        for i in range(attempts):
+            res = submit_and_wait(photo_path, lua_path)
+            if res.get("ok") or not _is_retryable(res) or i == attempts - 1:
+                break
+            backoff = min(2 ** i * 2, 12)        # 2s, 4s, 8s ...
+            print(f"[lr_render] transient render fail ({res.get('error_code')}); "
+                  f"retry {i + 1}/{attempts - 1} after {backoff}s", file=sys.stderr)
+            time.sleep(backoff)
+    finally:
+        try:
+            os.remove(lua_path)
+        except OSError:
+            pass
+    if not res.get("ok"):
+        res["attempts"] = attempts
     return res
