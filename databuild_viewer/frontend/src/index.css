@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* Darkroom / lab-console identity. The photos are the heroes; the chrome is a
+   warm graphite workbench lit by a single amber "safelight" accent. Verdicts
+   (keep/drop/flag) carry the only other colour. Data is set in mono. */
+@theme {
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-ink: #14161a;
+  --color-panel: #1b1e24;
+  --color-panel2: #22262e;
+  --color-line: #2e333c;
+  --color-fg: #e7e3da;
+  --color-muted: #888d97;
+  --color-safelight: #e8a13a;
+  --color-ember: #c9712a;
+  --color-keep: #5fb87a;
+  --color-drop: #e2685f;
+  --color-flag: #d7a93a;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: color-mix(in srgb, var(--color-safelight) 35%, transparent); }
+
+/* slim instrument scrollbars */
+* { scrollbar-width: thin; scrollbar-color: #3a404a transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: #3a404a; border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: #4a515d; }
+
+/* keyboard focus stays visible (a11y floor) */
+:focus-visible { outline: 2px solid var(--color-safelight); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* sprocket rail — the contact-sheet motif used on the build filmstrip */
+.sprockets {
+  background-image: repeating-linear-gradient(
+    90deg, transparent 0 14px, #0d0f12 14px 22px);
+  background-size: 100% 7px;
+  background-repeat: no-repeat;
+}
