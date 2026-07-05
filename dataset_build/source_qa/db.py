@@ -82,6 +82,9 @@ CREATE TABLE IF NOT EXISTS assets (
     -- cached headline scores
     aesthetic       DOUBLE PRECISION,
     aesthetic_vlm   DOUBLE PRECISION,
+    artimuse_score  DOUBLE PRECISION,
+    charm_score     DOUBLE PRECISION,
+    iaa_mixed       DOUBLE PRECISION,
     musiq           DOUBLE PRECISION,
     clipiqa         DOUBLE PRECISION,
     niqe            DOUBLE PRECISION,
@@ -251,6 +254,33 @@ CREATE TABLE IF NOT EXISTS runs (
     stats     TEXT
 );
 
+-- source 图 caption + 主体标注 (caption_subjects.py; 一行一图, 重跑覆盖)
+CREATE TABLE IF NOT EXISTS source_captions (
+    asset_id   TEXT PRIMARY KEY,
+    caption    TEXT,                    -- 中文, 修图导向 (主体/场景/光线/色彩)
+    subjects   TEXT,                    -- JSON [{en, cn, main, area}] 显著度降序
+    main_subject TEXT,                  -- subjects[0].en (冗余, 便于 SQL 过滤)
+    model      TEXT,
+    run_id     TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ
+);
+
+-- SAM3 主体 mask 记录 (sam3_subjects.py; 一行一 (图, concept); PNG 在 sam3_cache)
+CREATE TABLE IF NOT EXISTS sam3_masks (
+    asset_id   TEXT NOT NULL,
+    concept    TEXT NOT NULL,           -- source_captions.subjects[].en 原文
+    slug       TEXT NOT NULL,           -- concept_slug(concept) = PNG 文件名
+    png_path   TEXT,                    -- NULL = SAM3 未检出该 concept
+    area       DOUBLE PRECISION,        -- >0.5 像素占比 (归一化)
+    bbox       TEXT,                    -- JSON [x0,y0,x1,y1] 归一化
+    centroid   TEXT,                    -- JSON [cx,cy] 归一化
+    run_id     TEXT,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY(asset_id, slug)
+);
+CREATE INDEX IF NOT EXISTS ix_sam3_masks_asset ON sam3_masks(asset_id);
+
 CREATE TABLE IF NOT EXISTS gate_thresholds (
     corpus      TEXT NOT NULL,          -- per-corpus, or '*' for global
     metric      TEXT NOT NULL,
@@ -281,6 +311,9 @@ _ENSURE_COLUMNS = [
     ("assets", "noise_sigma", "DOUBLE PRECISION"),
     ("assets", "jpeg_blockiness", "DOUBLE PRECISION"),
     ("assets", "max_face_frac", "DOUBLE PRECISION"),
+    ("assets", "artimuse_score", "DOUBLE PRECISION"),
+    ("assets", "charm_score", "DOUBLE PRECISION"),
+    ("assets", "iaa_mixed", "DOUBLE PRECISION"),
     ("assets", "pixel_sha256", "TEXT"),
     ("assets", "phash", "TEXT"),
     ("assets", "dup_cluster", "TEXT"),
@@ -524,7 +557,7 @@ _ASSET_COLS = (
     "is_portrait_pool kind fmt pack_id scene_affinity is_bw is_technical "
     "has_local_mask has_ai_mask lut_size preset_content_hash status pass_a pass_b pass_c "
     "b_quality b_comp b_subject b_face n_answered n_yes auto_verdict "
-    "final_decision decided_by aesthetic aesthetic_vlm musiq clipiqa niqe "
+    "final_decision decided_by aesthetic aesthetic_vlm artimuse_score charm_score iaa_mixed musiq clipiqa niqe "
     "brisque sharpness noise_sigma jpeg_blockiness max_face_frac "
     "pixel_sha256 phash dup_of dup_cluster split meta_json"
 ).split()
@@ -535,7 +568,7 @@ _ASSET_COLS = (
 # here would silently undo QA progress — the idempotency bug this guards against.)
 _QA_OWNED = frozenset(
     "status pass_a pass_b pass_c b_quality b_comp b_subject b_face n_answered n_yes "
-    "auto_verdict final_decision decided_by musiq clipiqa niqe brisque sharpness "
+    "auto_verdict final_decision decided_by aesthetic artimuse_score charm_score iaa_mixed musiq clipiqa niqe brisque sharpness "
     "noise_sigma max_face_frac megapixels width height pixel_sha256 phash dup_of "
     "dup_cluster split preset_content_hash has_ai_mask".split()
 )

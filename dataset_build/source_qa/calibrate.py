@@ -1,7 +1,7 @@
-"""Distribution-driven, PER-CORPUS NR-IQA thresholds.
+"""Distribution-driven, PER-CORPUS IAA thresholds.
 
 Hardcoded global cutoffs over-drop the hard corpora and under-drop the easy ones
-(tad66k vs ppr10k vs greysky have very different baseline IQA distributions). This
+(tad66k vs ppr10k vs greysky have very different baseline IAA distributions). This
 computes, per (corpus, metric), the empirical percentiles and derives:
   * drop_value : the bad-tail cutoff at `drop_pctile` (default 10) — a value past it
                  (in the metric's bad direction) casts a "bad" vote.
@@ -28,7 +28,7 @@ def _pct(sorted_vals: List[float], p: float) -> float:
     return float(sorted_vals[i])
 
 
-METRICS = ["musiq", "clipiqa+", "niqe", "brisque", "laplacian"]
+METRICS = ["iaa_mixed", "artimuse", "charm"]
 
 
 def run(drop_pctile: float = 10.0, min_n: int = 200) -> dict:
@@ -40,7 +40,9 @@ def run(drop_pctile: float = 10.0, min_n: int = 200) -> dict:
         "SELECT a.corpus AS corpus, s.metric AS metric, s.value AS value "
         "FROM iqa_scores s JOIN assets a ON a.asset_id=s.asset_id "
         "WHERE a.asset_type='image' AND s.value IS NOT NULL AND s.metric IN "
-        "('musiq','clipiqa+','niqe','brisque','laplacian')").fetchall()
+        f"({','.join(['?'] * len(METRICS))})",
+        METRICS,
+    ).fetchall()
     buckets: Dict[tuple, List[float]] = {}
     for r in rows:
         buckets.setdefault((r["corpus"], r["metric"]), []).append(r["value"])

@@ -62,5 +62,15 @@ RUN uv pip install --system --python /usr/bin/python3 --index-url ${PIP_INDEX} \
  && /usr/bin/python3 -c "import transformers,torch,torchvision; \
 print('post-install: transformers',transformers.__version__,'torch',torch.__version__,'torchvision',torchvision.__version__)"
 
+# dataset_build 业务依赖（source_qa/caption_subjects/sam3_subjects 等直接在容器内跑）：
+#   psycopg[binary] -> source_qa/db.py (Postgres traceability)
+#   json-repair     -> llm_qa/caption_subjects JSON 解析
+#   scikit-learn    -> src/construct 检索/校准
+RUN uv pip install --system --python /usr/bin/python3 --index-url ${PIP_INDEX} \
+        "psycopg[binary]" \
+        json-repair \
+        scikit-learn \
+ && /usr/bin/python3 -c "import psycopg, json_repair, sklearn; print('databuild deps OK')"
+
 # default back to the base image's vllm entrypoint; the supervisor overrides
 # --entrypoint per role (vllm serve / sleep for the core-worker+business shard).

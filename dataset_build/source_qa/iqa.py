@@ -5,10 +5,12 @@ QA-6), all from established libraries:
   * noise_sigma                       -- skimage.restoration.estimate_sigma
   * max_face_frac (portrait pool)     -- cv2 Haar cascade, largest face / frame
 
-Scores every `image` asset lacking a 'musiq' score, writes long-format iqa_scores
-+ denormalized headline columns on `assets`, logs an `iqa` event.
+Scores every `image` asset lacking a 'musiq' score and, by default, also backfills
+the Artimuse+Charm mixed IAA score used by source cleaning and construct ranking.
+Writes long-format iqa_scores + denormalized headline columns on `assets`, logs an
+`iqa` event.
 
-Run: python -m dataset_build.source_qa.iqa [--limit N] [--corpus C] [--device cuda:0]
+Run: python -m dataset_build.source_qa.iqa [--limit N] [--corpus C] [--device cuda:0] [--no-iaa]
 """
 from __future__ import annotations
 
@@ -22,7 +24,9 @@ from . import config, db
 _COL = {"musiq": "musiq", "clipiqa+": "clipiqa", "niqe": "niqe",
         "brisque": "brisque", "laplacian": "sharpness", "noise_sigma": "noise_sigma",
         "max_face_frac": "max_face_frac", "megapixels": "megapixels",
-        "width": "width", "height": "height"}
+        "width": "width", "height": "height",
+        "artimuse": "artimuse_score", "charm": "charm_score", "iaa_mixed": "iaa_mixed"}
+_SCORE_METRICS = set(_COL) | {"longedge"}
 
 _FACE_CASCADE = None
 
@@ -120,8 +124,10 @@ class IQARunner:
 
 
 def run(limit: Optional[int] = None, corpus: Optional[str] = None,
-        device: Optional[str] = None, metrics: Optional[List[str]] = None) -> dict:
+        device: Optional[str] = None, metrics: Optional[List[str]] = None,
+        with_iaa: Optional[bool] = None) -> dict:
     metrics = metrics or (config.IQA_METRICS + config.IQA_EXTRA)
+    with_iaa = config.IAA_IN_IQA if with_iaa is None else with_iaa
     runner = IQARunner(device=device, metrics=metrics)
     # Consume IQA through the core facade: a GPU lease serializes scoring against
     # any co-tenant on the same card (renderer / live SAM3) per the
@@ -129,29 +135,58 @@ def run(limit: Optional[int] = None, corpus: Optional[str] = None,
     from dataset_build.core.client import IqaClient
     from dataset_build.core.gpu_compute import GpuCompute
     iqa = IqaClient(runner, gpu=GpuCompute([runner.device]), device=runner.device)
+    iaa_runner = None
+    if with_iaa:
+        from .iaa import MixedIAARunner
+        iaa_runner = MixedIAARunner(device=device or config.IAA_DEVICE)
 
     conn = db.connect()
-    run_id = db.start_run(conn, "iqa", {"metrics": metrics, "device": device or config.IQA_DEVICE, "corpus": corpus})
+    run_id = db.start_run(conn, "iqa", {
+        "metrics": metrics,
+        "device": device or config.IQA_DEVICE,
+        "iaa": bool(with_iaa),
+        "corpus": corpus,
+    })
+    missing = [
+        "NOT EXISTS (SELECT 1 FROM iqa_scores s WHERE s.asset_id=a.asset_id AND s.metric='musiq')"
+    ]
+    if with_iaa:
+        missing.append(
+            "NOT EXISTS (SELECT 1 FROM iqa_scores s WHERE s.asset_id=a.asset_id AND s.metric='iaa_mixed')"
+        )
     where = ["a.asset_type='image'", "a.dup_of IS NULL",   # heads only; siblings inherit at apply
-             "NOT EXISTS (SELECT 1 FROM iqa_scores s WHERE s.asset_id=a.asset_id AND s.metric='musiq')"]
+             "(" + " OR ".join(missing) + ")"]
     params: list = []
     if corpus:
         where.append("a.corpus=?"); params.append(corpus)
-    sql = f"SELECT a.asset_id, a.path, a.is_portrait_pool FROM assets a WHERE {' AND '.join(where)}"
+    sql = (
+        "SELECT a.asset_id, a.path, a.is_portrait_pool, "
+        "EXISTS (SELECT 1 FROM iqa_scores s WHERE s.asset_id=a.asset_id AND s.metric='musiq') AS has_musiq, "
+        "EXISTS (SELECT 1 FROM iqa_scores s WHERE s.asset_id=a.asset_id AND s.metric='iaa_mixed') AS has_iaa "
+        f"FROM assets a WHERE {' AND '.join(where)}"
+    )
     if limit:
         sql += f" LIMIT {int(limit)}"
     todo = conn.execute(sql, params).fetchall()
-    print(f"[iqa] {len(todo)} images to score with {metrics}", file=sys.stderr)
+    print(f"[iqa] {len(todo)} images to score with {metrics}; iaa={with_iaa}", file=sys.stderr)
 
     n_ok = n_err = 0
     for i, r in enumerate(todo):
         aid, path = r["asset_id"], r["path"]
         want_face = bool(config.FACE_DETECT and r["is_portrait_pool"])
         try:
-            scores = iqa.score(path, want_face=want_face)
-            db.add_scores(conn, aid, scores, run_id=run_id, model_version="pyiqa0.1.15")
+            scores = {}
+            if not r["has_musiq"]:
+                scores.update(iqa.score(path, want_face=want_face))
+            if iaa_runner is not None and not r["has_iaa"]:
+                scores.update(iaa_runner.score_path(path))
+            score_rows = {k: v for k, v in scores.items() if k in _SCORE_METRICS}
+            db.add_scores(conn, aid, score_rows, run_id=run_id,
+                          model_version="pyiqa0.1.15+" + config.IAA_MODEL_VERSION if with_iaa else "pyiqa0.1.15")
             # native dimensions (the index had them NULL) -> enable the resolution gate
-            denorm = {_COL[m]: v for m, v in scores.items() if m in _COL and v is not None}
+            denorm = {_COL[m]: v for m, v in score_rows.items() if m in _COL and v is not None}
+            if score_rows.get("iaa_mixed") is not None:
+                denorm["aesthetic"] = score_rows["iaa_mixed"]
             denorm["status"] = "iqa_done"
             db.update_asset_fields(conn, aid, **denorm)
             db.log_event(conn, aid, "iqa", "ok", scores, run_id)
@@ -173,9 +208,12 @@ def main():
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--corpus", default=None)
     ap.add_argument("--device", default=None)
+    ap.add_argument("--with-iaa", dest="with_iaa", action="store_true")
+    ap.add_argument("--no-iaa", dest="with_iaa", action="store_false")
+    ap.set_defaults(with_iaa=None)
     args = ap.parse_args()
     import json
-    print(json.dumps(run(limit=args.limit, corpus=args.corpus, device=args.device)))
+    print(json.dumps(run(limit=args.limit, corpus=args.corpus, device=args.device, with_iaa=args.with_iaa)))
 
 
 if __name__ == "__main__":

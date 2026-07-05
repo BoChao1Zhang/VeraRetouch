@@ -38,9 +38,10 @@ $PY -m dataset_build.source_qa.ingest --presets-only  # 只预设(快)
 $PY -m dataset_build.source_qa.dedup                  # 精确+近重复
 $PY -m dataset_build.source_qa.dedup --pixel-only     # 只 tier-1 精确(快)
 
-# 3) NR-IQA（GPU0）：MUSIQ+CLIP-IQA++NIQE+BRISQUE+Laplacian + megapixels/noise/face
+# 3) 技术 IQA + IAA（GPU0）：MUSIQ/NIQE/BRISQUE 等技术指标 + Artimuse/Charm 混合审美分
 $PY -m dataset_build.source_qa.iqa --corpus tad66k
 $PY -m dataset_build.source_qa.iqa --limit 50         # 抽样测试
+$PY -m dataset_build.source_qa.iaa --limit 50         # 只补 Artimuse/Charm 混合分
 
 # 4) LLM QA：分级问卷 A+B+caption（含廉价 tech-gate 三级分流，省 35B 调用）
 $PY -m dataset_build.source_qa.llm_qa --corpus korean --concurrency 24
@@ -63,7 +64,7 @@ $PY -m dataset_build.source_qa.apply                            # 写 source_ind
 # 然后在 dataset_build/config.yaml 把 storage.source_index / recipe_index 指向 cleaned 文件
 ```
 
-推荐流水线顺序：`ingest → dedup → iqa → llm_qa → preset_qa(stage1,stage2) → calibrate → gate → (人工评审) → apply`。
+推荐流水线顺序：`ingest → dedup → iqa(含 IAA) → llm_qa → preset_qa(stage1,stage2) → calibrate → gate → (人工评审) → apply`。
 
 ## Lightroom 渲染服务（已运行）
 

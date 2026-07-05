@@ -34,7 +34,8 @@ app.mount("/static", StaticFiles(directory=os.path.join(HERE, "static")), name="
 
 # columns offered for sorting in the gallery
 SORTABLE = {"musiq", "niqe", "brisque", "clipiqa", "sharpness", "aesthetic",
-            "aesthetic_vlm", "bytes_size", "created_at", "asset_id"}
+            "aesthetic_vlm", "artimuse_score", "charm_score", "iaa_mixed",
+            "bytes_size", "created_at", "asset_id"}
 
 
 def _conn():

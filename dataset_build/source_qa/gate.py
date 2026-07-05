@@ -1,4 +1,4 @@
-"""Auto-gate: combine NR-IQA + questionnaire A/B + cheap deterministic detectors
+"""Auto-gate: combine mixed IAA + questionnaire A/B + cheap deterministic detectors
 into a non-destructive `auto_verdict` (keep | drop | review) suggestion per image.
 Never writes a final human decision — humans confirm via the UI.
 
@@ -60,6 +60,26 @@ def _hard_iqa_fail(a) -> Optional[str]:
     return None
 
 
+def _iaa_score(a) -> Optional[float]:
+    try:
+        v = a.get("iaa_mixed")
+    except AttributeError:
+        v = a["iaa_mixed"] if "iaa_mixed" in a else None
+    return None if v is None else float(v)
+
+
+def _hard_iaa_fail(a) -> Optional[str]:
+    v = _iaa_score(a)
+    if v is not None and v < G["iaa_drop_below"]:
+        return f"iaa_mixed<{G['iaa_drop_below']}"
+    return None
+
+
+def _iaa_keep_band(a) -> bool:
+    v = _iaa_score(a)
+    return v is not None and v >= G["iaa_keep_above"]
+
+
 def _iqa_keep_band(a) -> bool:
     if a["musiq"] is not None and a["musiq"] >= G["musiq_keep_above"]:
         return True
@@ -77,15 +97,27 @@ def verdict_for(a) -> tuple:
         return pre
     if a["pass_a"] == 0:
         return "drop", "PASS_A=0 (invalid photo)"
+    iaa_on = getattr(config, "IAA_IN_CLEAN", True)
+    if iaa_on:
+        hard = _hard_iaa_fail(a)
+        if hard:
+            return "drop", f"hard IAA fail: {hard}"
     iqa_on = getattr(config, "IQA_IN_CLEAN", True)
     if iqa_on:
         hard = _hard_iqa_fail(a)
         if hard:
-            return "drop", f"hard IQA fail: {hard}"
+            return "drop", f"hard technical IQA fail: {hard}"
     if a["pass_b"] == 0:
         return "drop", "PASS_B=0 (low quality / unsuitable source)"
-    if a["pass_a"] == 1 and a["pass_b"] == 1 and (not iqa_on or _iqa_keep_band(a)):
-        return "keep", "PASS_A&B" + ("" if iqa_on else " (IQA off)") + (" + IQA keep-band" if iqa_on else "")
+    if a["pass_a"] == 1 and a["pass_b"] == 1:
+        if iaa_on:
+            if _iaa_keep_band(a):
+                return "keep", "PASS_A&B + Artimuse/Charm IAA keep-band"
+            if getattr(config, "IAA_REQUIRE_FOR_KEEP", True) and _iaa_score(a) is None:
+                return "review", "PASS_A&B but missing Artimuse/Charm IAA"
+            return "review", "PASS_A&B but Artimuse/Charm IAA is borderline"
+        if not iqa_on or _iqa_keep_band(a):
+            return "keep", "PASS_A&B" + ("" if iqa_on else " (IQA off)") + (" + IQA keep-band" if iqa_on else "")
     return "review", "borderline / incomplete signals"
 
 
@@ -103,6 +135,29 @@ def verdict_relative(a, thr: dict, drop_min_votes: int = 2, keep_min_good: int =
     if a["pass_a"] == 0:
         return "drop", "PASS_A=0 (invalid photo)"
     table = thr.get(a["corpus"]) or thr.get("*") or {}
+    iaa_on = getattr(config, "IAA_IN_CLEAN", True)
+    if iaa_on:
+        v = _iaa_score(a)
+        if v is None and getattr(config, "IAA_REQUIRE_FOR_KEEP", True):
+            return "review", "missing Artimuse/Charm IAA"
+        if v is not None:
+            t = table.get("iaa_mixed")
+            if t is not None:
+                higher = t["direction"] == 1
+                iaa_bad = (v < t["drop_value"]) if higher else (v > t["drop_value"])
+                iaa_good = (v >= t["keep_value"]) if higher else (v <= t["keep_value"])
+                src = "relative"
+            else:
+                iaa_bad = v < G["iaa_drop_below"]
+                iaa_good = v >= G["iaa_keep_above"]
+                src = "absolute"
+            if iaa_bad:
+                return "drop", f"{src} Artimuse/Charm IAA bad tail: iaa_mixed={v:.2f}"
+            if a["pass_b"] == 0:
+                return "drop", "PASS_B=0 (unsuitable source)"
+            if a["pass_a"] == 1 and a["pass_b"] == 1 and iaa_good:
+                return "keep", f"PASS_A&B + {src} Artimuse/Charm IAA keep"
+            return "review", f"PASS_A&B + {src} Artimuse/Charm IAA borderline"
     bad, good, bad_metrics = 0, 0, []
     for metric, col in _MCOL.items():
         t = table.get(metric)
@@ -148,7 +203,7 @@ def run(corpus: Optional[str] = None, apply_auto_decisions: bool = False,
     # widen vs the old query: also surface images that have IQA (megapixels) but
     # no LLM yet, so the resolution floor + fail-closed review reach them (FLOW-6).
     where = ["asset_type='image'", "dup_of IS NULL",   # heads only; siblings inherit at apply
-             "(musiq IS NOT NULL OR pass_a IS NOT NULL OR megapixels IS NOT NULL)"]
+             "(iaa_mixed IS NOT NULL OR musiq IS NOT NULL OR pass_a IS NOT NULL OR megapixels IS NOT NULL)"]
     params: list = []
     if corpus:
         where.append("corpus=?"); params.append(corpus)

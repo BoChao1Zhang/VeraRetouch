@@ -23,7 +23,7 @@
   <label>PASS_B<select name="pass_b"><option value="">·</option><option value="1" {{'selected' if f.pass_b=='1'}}>1</option><option value="0" {{'selected' if f.pass_b=='0'}}>0</option></select></label>
   <label>局部编辑<select name="local"><option value="">·</option><option value="1" {{'selected' if f.local=='1'}}>仅 mask</option><option value="0" {{'selected' if f.local=='0'}}>非 mask</option></select></label>
   <label>指标<select name="metric"><option value="">·</option>
-    {% for m in ['musiq','niqe','brisque','clipiqa','sharpness','aesthetic','aesthetic_vlm'] %}<option value="{{m}}" {{'selected' if f.metric==m}}>{{m}}</option>{% endfor %}
+    {% for m in ['iaa_mixed','artimuse_score','charm_score','musiq','niqe','brisque','clipiqa','sharpness','aesthetic','aesthetic_vlm'] %}<option value="{{m}}" {{'selected' if f.metric==m}}>{{m}}</option>{% endfor %}
   </select></label>
   <label>op<select name="op">{% for o in ['>=','<=','>','<','='] %}<option {{'selected' if f.op==o}}>{{o}}</option>{% endfor %}</select></label>
   <label>值<input name="val" type="number" step="0.1" value="{{ f.val if f.val is not none else '' }}" style="width:80px"></label>
@@ -63,6 +63,7 @@
         {% if r['pass_a'] is not none %}<span class="chip {{'pass' if r['pass_a'] else 'fail'}}">A{{ '✓' if r['pass_a'] else '✗' }}</span>{% endif %}
         {% if r['pass_b'] is not none %}<span class="chip {{'pass' if r['pass_b'] else 'fail'}}">B{{ '✓' if r['pass_b'] else '✗' }}</span>{% endif %}
         {% if r['musiq'] is not none %}<span class="chip">M {{ r['musiq']|round(0)|int }}</span>{% endif %}
+        {% if r['iaa_mixed'] is not none %}<span class="chip">IAA {{ r['iaa_mixed']|round(1) }}</span>{% endif %}
         {% if r['aesthetic'] is not none %}<span class="chip">æ {{ r['aesthetic']|round(1) }}</span>{% endif %}
       </div>
     </div>
