@@ -17,14 +17,16 @@ CLI:  python -m construct.agent run [--n 100] [--render-n 8] [--out DIR]
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import random
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from dataset_build.source_qa import db
+from dataset_build.source_qa import db, config
 from . import sf_client, render, qa, tier, mask_synth, mask_sam3
 from .bank import PresetBank
 
@@ -54,8 +56,10 @@ class Selector:
         if os.path.exists(_BG_MEAN):
             return np.load(_BG_MEAN)
         conn = db.connect()
+        min_iaa = getattr(config, "CONSTRUCT_SOURCE_IAA_MIN", config.GATE["iaa_keep_above"])
         rows = conn.execute("SELECT path FROM assets WHERE asset_type='image' AND b_quality=3 "
-                            "AND dup_of IS NULL ORDER BY asset_id LIMIT 4000").fetchall()
+                            "AND iaa_mixed IS NOT NULL AND iaa_mixed >= ? "
+                            "AND dup_of IS NULL ORDER BY asset_id LIMIT 4000", (min_iaa,)).fetchall()
         conn.close()
         paths = [r["path"] for r in rows if os.path.exists(r["path"])]
         paths = paths[::max(1, len(paths) // 256)][:256]
@@ -87,6 +91,7 @@ def process_source(sel: Selector, src: dict, render_n: int, render_workers: int 
     after = {f["preset_id"]: ap for f, ap in rendered}
     return {
         "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
+        "source_iaa": src.get("iaa_mixed"),
         "candidates": [{"preset_id": f["preset_id"], "kind": f["kind"], "fmt": f.get("fmt"),
                         "preset_path": f["path"], "content_hash": f.get("preset_content_hash"),
                         "after_path": after[f["preset_id"]],
@@ -117,7 +122,9 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     if not base:
         return None
     bank = _mask_bank()
-    rng = random.Random(abs(hash(path)) % (2 ** 32))
+    # sha1, not builtin hash(): PYTHONHASHSEED randomizes hash() per process, which
+    # would sample different mask geometries for the same source across restarts.
+    rng = random.Random(int.from_bytes(hashlib.sha1(path.encode()).digest()[:4], "big"))
 
     def _one(_i):
         g = mask_synth.sample_geom(bank, rng)
@@ -131,7 +138,8 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     is_portrait = bool(src.get("is_portrait_pool"))
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
     return {
-        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait, "local": True,
+        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
+        "source_iaa": src.get("iaa_mixed"), "local": True,
         "candidates": [{"preset_id": s["mask_unit_id"], "kind": "local_from_preset",
                         "after_path": s["after_path"], "qa": qres["scores"].get(s["mask_unit_id"]),
                         "local": {"mask_unit_id": s["mask_unit_id"], "mask_type": g["mask_type"],
@@ -164,7 +172,8 @@ def process_source_sam3(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     is_portrait = bool(src.get("is_portrait_pool"))
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
     return {
-        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait, "local": True,
+        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
+        "source_iaa": src.get("iaa_mixed"), "local": True,
         "candidates": [{"preset_id": s["mask_unit_id"], "kind": "lut_in_sam3",
                         "after_path": s["after_path"], "qa": qres["scores"].get(s["mask_unit_id"]),
                         "local": {"route": "sam3", "mask_unit_id": s["mask_unit_id"],
@@ -175,8 +184,34 @@ def process_source_sam3(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     }
 
 
-def run(n: int, render_n: int, out_dir: str, src_workers: int = 4, local: bool = False,
-        route: str = "geom", persist: bool = True) -> dict:
+PERSIST_CHUNK = 25   # groups per incremental provenance write
+
+
+def _load_jsonl(path: str) -> list:
+    if not os.path.exists(path):
+        return []
+    out = []
+    for line in open(path):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            continue   # torn tail line from a crash mid-write
+    return out
+
+
+def run(n: int, render_n: int, out_dir: str, src_workers: int = 12, local: bool = False,
+        route: str = "geom", persist: bool = True, resume: bool = True) -> dict:
+    """Lane-overlapped driver: src_workers sources in flight, each flowing
+    recall -> render -> QA -> tier. The per-lane global gates (LR farm admission in
+    lr_render, vLLM admission in qa) bound the real resources, so a wide in-flight
+    window keeps the LR farm rendering source N+1 while vLLM judges source N —
+    pipeline overlap without a queue framework. Output is STREAMED: each finished
+    group appends to groups/sft/dpo.jsonl immediately and provenance is persisted
+    every PERSIST_CHUNK groups, so a crash loses at most one chunk and a rerun
+    with resume=True skips already-done sources."""
     os.makedirs(out_dir, exist_ok=True)
     cgt_dir = os.path.join(out_dir, "cgt")
     sel = Selector()   # both routes need vlemb (global: the look; local: the base preset for the mask)
@@ -187,61 +222,104 @@ def run(n: int, render_n: int, out_dir: str, src_workers: int = 4, local: bool =
                            "route": route_label}) if persist else None
     conn.commit()
     # Route 1 (geometric mask-only) applies to ANY photo; b_subject is for Route 2 (SAM3 semantic).
+    min_iaa = getattr(config, "CONSTRUCT_SOURCE_IAA_MIN", config.GATE["iaa_keep_above"])
     rows = [dict(r) for r in conn.execute(
-        "SELECT asset_id, path, is_portrait_pool FROM assets WHERE asset_type='image' "
-        "AND b_quality=3 AND dup_of IS NULL AND saturation_mean IS NOT NULL ORDER BY asset_id").fetchall()]
+        "SELECT asset_id, path, is_portrait_pool, iaa_mixed FROM assets WHERE asset_type='image' "
+        "AND b_quality=3 AND iaa_mixed IS NOT NULL AND iaa_mixed >= ? "
+        "AND dup_of IS NULL AND saturation_mean IS NOT NULL ORDER BY asset_id",
+        (min_iaa,)).fetchall()]
     conn.close()
     rows = [r for r in rows if os.path.exists(r["path"])]
     random.Random(0).shuffle(rows)
     srcs = rows[:n]
 
+    # Resume: prior streamed output in this out_dir defines what is already done.
+    # ponytail: groups/sft/dpo stay in RAM for the final summary, same as before —
+    # at ~100k sources stream the summary instead.
+    groups = _load_jsonl(os.path.join(out_dir, "groups.jsonl")) if resume else []
+    sft = _load_jsonl(os.path.join(out_dir, "sft.jsonl")) if resume else []
+    dpo = _load_jsonl(os.path.join(out_dir, "dpo.jsonl")) if resume else []
+    done_srcs = {g["source"] for g in groups}
+    todo = [s for s in srcs if s["path"] not in done_srcs]
+    if done_srcs:
+        print(f"[resume] {len(done_srcs)} sources already in {out_dir}; {len(todo)} to go")
+
+    mode = "a" if resume else "w"
+    gf = open(os.path.join(out_dir, "groups.jsonl"), mode)
+    sf = open(os.path.join(out_dir, "sft.jsonl"), mode)
+    df = open(os.path.join(out_dir, "dpo.jsonl"), mode)
+    fail_f = open(os.path.join(out_dir, "failures.jsonl"), "a")
+    fail_lock = threading.Lock()
+
     def _proc(s):
         if not local:
-            return _safe(process_source, sel, s, render_n)
+            return _safe(process_source, sel, s, render_n, fail_f=fail_f, fail_lock=fail_lock)
         fn = process_source_sam3 if route == "sam3" else process_source_local
-        return _safe(fn, sel, s, render_n, cgt_dir)
+        return _safe(fn, sel, s, render_n, cgt_dir, fail_f=fail_f, fail_lock=fail_lock)
 
-    groups, sft, dpo = [], [], []
+    pend_g, pend_s, pend_d = [], [], []   # provenance chunk buffers
+    ptotals: dict = {}
+
+    def _flush_provenance():
+        nonlocal pend_g, pend_s, pend_d
+        if not (persist and run_id is not None and pend_g):
+            return
+        from . import provenance
+        st = provenance.persist_run(run_id, pend_g, pend_s, pend_d, route_label)
+        for k, v in st.items():
+            if isinstance(v, (int, float)):
+                ptotals[k] = ptotals.get(k, 0) + v
+        pend_g, pend_s, pend_d = [], [], []
+
+    n_done = len(done_srcs)
     with ThreadPoolExecutor(max_workers=src_workers) as ex:
-        for g in ex.map(_proc, srcs):
+        futs = [ex.submit(_proc, s) for s in todo]
+        for fut in as_completed(futs):
+            g = fut.result()   # _safe never raises
             if not g:
                 continue
-            groups.append(g)
             try:
                 s, d = tier.build(g)
             except Exception as e:  # noqa: BLE001 - tier error must not lose the rendered group
                 print(f"[tier-skip] {os.path.basename(g['source'])}: {type(e).__name__}: {str(e)[:100]}")
                 s, d = [], []
-            sft.extend(s); dpo.extend(d)
-            print(f"[{len(groups)}/{len(srcs)}] {os.path.basename(g['source'])[:30]:30s} "
+            groups.append(g); sft.extend(s); dpo.extend(d)
+            gf.write(json.dumps(g, ensure_ascii=False) + "\n"); gf.flush()
+            for r in s:
+                sf.write(json.dumps(r, ensure_ascii=False) + "\n")
+            for r in d:
+                df.write(json.dumps(r, ensure_ascii=False) + "\n")
+            sf.flush(); df.flush()
+            pend_g.append(g); pend_s.extend(s); pend_d.extend(d)
+            if len(pend_g) >= PERSIST_CHUNK:
+                _flush_provenance()
+            n_done += 1
+            print(f"[{n_done}/{len(srcs)}] {os.path.basename(g['source'])[:30]:30s} "
                   f"cands={len(g['candidates'])} sft={len(s)} dpo_pairs={len(d)}")
-    _dump(out_dir, "groups.jsonl", groups)
-    _dump(out_dir, "sft.jsonl", sft)
-    _dump(out_dir, "dpo.jsonl", dpo)
+    _flush_provenance()
+    for fh in (gf, sf, df, fail_f):
+        fh.close()
     summary = tier.summarize(groups, sft, dpo)
     if persist and run_id is not None:
-        from . import provenance
-        pstat = provenance.persist_run(run_id, groups, sft, dpo, route_label)
-        c2 = db.connect(); db.finish_run(c2, run_id, pstat); c2.commit(); c2.close()
-        summary["postgres"] = {"run_id": run_id, **pstat}
+        c2 = db.connect(); db.finish_run(c2, run_id, ptotals); c2.commit(); c2.close()
+        summary["postgres"] = {"run_id": run_id, **ptotals}
     print("\n=== R4 SUMMARY ===\n" + json.dumps(summary, ensure_ascii=False, indent=1))
     json.dump(summary, open(os.path.join(out_dir, "r4_summary.json"), "w"), ensure_ascii=False, indent=1)
     return summary
 
 
-def _safe(fn, *args):
+def _safe(fn, *args, fail_f=None, fail_lock=None):
     src = args[1]   # both process_source(sel, src, ...) and process_source_local(sel, src, ...)
     try:
         return fn(*args)
     except Exception as e:  # noqa: BLE001 - one bad source must not kill the run
         print(f"[skip] {os.path.basename(src['path'])}: {type(e).__name__}: {str(e)[:120]}")
+        if fail_f is not None:
+            rec = json.dumps({"source": src["path"], "stage": fn.__name__,
+                              "error": f"{type(e).__name__}: {str(e)[:200]}"}, ensure_ascii=False)
+            with (fail_lock or threading.Lock()):
+                fail_f.write(rec + "\n"); fail_f.flush()
         return None
-
-
-def _dump(out_dir, name, rows):
-    with open(os.path.join(out_dir, name), "w") as f:
-        for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
 def main() -> None:
@@ -255,9 +333,15 @@ def main() -> None:
     r.add_argument("--route", choices=["geom", "sam3"], default="geom",
                    help="geom=Route1 preset-tone-in-mask; sam3=Route2 LUT in SAM3 region")
     r.add_argument("--no-db", action="store_true", help="skip Postgres provenance (dry test)")
+    r.add_argument("--src-workers", type=int, default=12,
+                   help="sources in flight (lane overlap window; real resources are "
+                        "bounded by the LR farm + vLLM admission gates)")
+    r.add_argument("--fresh", action="store_true",
+                   help="overwrite out_dir output instead of resuming from it")
     a = ap.parse_args()
     if a.cmd == "run":
-        run(a.n, a.render_n, a.out, local=a.local, route=a.route, persist=not a.no_db)
+        run(a.n, a.render_n, a.out, src_workers=a.src_workers, local=a.local,
+            route=a.route, persist=not a.no_db, resume=not a.fresh)
 
 
 if __name__ == "__main__":

@@ -20,9 +20,11 @@ vLLM = config.VLLM_* (2 images/prompt). CLI smoke: python -m construct.qa
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import math
 import random
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Tuple
@@ -33,25 +35,32 @@ import requests
 from . import objscore
 
 # --- objective quality combination ------------------------------------------- #
-# The VLM's binary aesthetic vote clusters (bimodal, poor separability). Blend it with OBJECTIVE,
-# continuous learned IQA (musiq + clipiqa+, see objscore) — both the render's absolute quality and its
-# improvement over the source — so renders genuinely separate by measurable quality, not VLM ties.
-_W_VLM, _W_OQUAL, _W_OIMPR = 0.40, 0.35, 0.25   # VLM composite / objective quality / objective gain
+# The VLM questionnaire is retained as a diagnostic fallback, but construct ranking is now led by
+# the same mixed IAA signal used in source cleaning: Artimuse + Charm absolute quality and the
+# candidate's improvement over the source photo.
+_W_VLM, _W_OQUAL, _W_OIMPR = 0.25, 0.50, 0.25   # legacy pair scorer: VLM composite / IAA quality / IAA gain
+_W_IAA_ABS, _W_IAA_IMPR = 0.72, 0.28            # qa_rank: absolute IAA / improvement over source
 
 
 def _objective(after_obj, src_obj, polish: float):
-    """(obj_quality, obj_improvement) in [0,1] from learned IQA; falls back to pixel polish if IQA NA."""
-    musiq_a, clip_a = after_obj
-    if clip_a is None or musiq_a is None:
+    """(iaa_quality, iaa_improvement) in [0,1]; falls back to pixel polish if IAA is missing."""
+    iaa_a = objscore.mixed_value(after_obj)
+    if iaa_a is None:
         return polish, 0.5
-    obj_q = 0.5 * clip_a + 0.5 * min(1.0, musiq_a / 100.0)
-    musiq_s, clip_s = src_obj
-    if clip_s and musiq_s:
-        d = (clip_a - clip_s) + (musiq_a - musiq_s) / 100.0   # quality gain vs the source photo
+    obj_q = max(0.0, min(1.0, iaa_a / 100.0))
+    iaa_s = objscore.mixed_value(src_obj)
+    if iaa_s is not None:
+        d = (iaa_a - iaa_s) / 100.0   # aesthetic gain vs the source photo
         obj_i = 0.5 + 0.5 * math.tanh(2.0 * d)
     else:
         obj_i = 0.5
     return obj_q, obj_i
+
+
+def _obj_detail(obj, key: str) -> Optional[float]:
+    if isinstance(obj, dict) and obj.get(key) is not None:
+        return float(obj[key])
+    return None
 from PIL import Image, ImageFile, ImageOps
 
 from dataset_build.source_qa import config
@@ -59,6 +68,10 @@ from dataset_build.source_qa import config
 ImageFile.LOAD_TRUNCATED_IMAGES = True  # render downloads occasionally land a few bytes short
 
 QA_WORKERS = 6
+# Global vLLM admission: per-source pools are 6 wide, but with many sources in
+# flight the aggregate fan-out must still respect the engine cap — oversubscribed
+# threads block here cheaply instead of triggering vGate 429 storms.
+_VLLM_GATE = threading.BoundedSemaphore(int(getattr(config, "VLLM_CONCURRENCY", 16)))
 _SCRAMBLE_SEED = 20260624
 
 # dim: (key, type, chroma, portrait, F_question[1=good], R_question[1=defect])
@@ -200,8 +213,9 @@ def _call(suri: str, auri: str, prompt: str, temp: float, retries: int = 3) -> O
     headers = {"Authorization": f"Bearer {config.VLLM_API_KEY}", "X-vgate-class": "qa-judge"}
     for attempt in range(retries):
         try:
-            r = requests.post(config.VLLM_BASE_URL + "/chat/completions", json=payload,
-                              headers=headers, timeout=180)
+            with _VLLM_GATE:
+                r = requests.post(config.VLLM_BASE_URL + "/chat/completions", json=payload,
+                                  headers=headers, timeout=180)
             if r.status_code == 429 and attempt < retries - 1:
                 time.sleep(float(r.headers.get("Retry-After", 2 * (attempt + 1)))); continue
             r.raise_for_status()
@@ -367,8 +381,12 @@ def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float,
     veto_keys = [k for k, t, c, p, f, r in _DIMS if t == "veto" and _active(k, is_portrait, is_bw)]
     merit_keys = [k for k, t, c, p, f, r in _DIMS if t == "merit" and _active(k, is_portrait, is_bw)]
     pol = _polish(st)
-    oq, oi = _objective(objscore.score(after_path), src_obj, pol)   # objective learned-IQA signals
-    base = {"det": sorted(det), "is_bw": is_bw, "obj_q": round(oq, 3), "obj_impr": round(oi, 3)}
+    after_obj = objscore.score(after_path)
+    oq, oi = _objective(after_obj, src_obj, pol)   # Artimuse+Charm mixed IAA signals
+    base = {"det": sorted(det), "is_bw": is_bw, "obj_q": round(oq, 3), "obj_impr": round(oi, 3),
+            "iaa_mixed": _obj_detail(after_obj, "iaa_mixed"),
+            "artimuse": _obj_detail(after_obj, "artimuse"),
+            "charm": _obj_detail(after_obj, "charm")}
     # unreliable VLM answers => fall back to the OBJECTIVE score (minus a confidence discount) rather
     # than a flat deduction: still a real, separable quality estimate, just trusted less.
     def ded(why, d, veto=False):
@@ -403,7 +421,7 @@ def _qa_score_pair(suri: str, after_path: str, is_portrait: bool, src_cf: float,
     merit_hits = [k for k in merit_keys if _graded(ans2, k) >= 1.0]
     contra_excess = max(0, contra1 + contra2 - _CONTRA_TOL)
     pen = (_MONO_DISCOUNT * is_bw + _PEN_SOFTVETO * len(vlm_veto) + _PEN_CONTRA * contra_excess)
-    # objective-led composite: VLM aesthetic judgment + learned-IQA quality + improvement-over-source.
+    # IAA-led composite: VLM aesthetic judgment + mixed IAA quality + improvement-over-source.
     q = _W_VLM * comp + _W_OQUAL * oq + _W_OIMPR * oi - pen
     q = round(max(-1.0, min(1.0, q)), 3)
     return {**base, "reliable": contra_excess == 0, "veto": False, "vlm_veto": vlm_veto,
@@ -426,11 +444,14 @@ _CMP_SYS = (
 )
 
 
-def _compare(uri_a: str, uri_b: str) -> float:
-    """Pairwise: returns A's score in {1.0 win, 0.5 tie, 0.0 loss}. None on call failure."""
+def _compare(uri_a: str, uri_b: str) -> Optional[float]:
+    """Pairwise: returns A's score in {1.0 win, 0.5 tie, 0.0 loss}, or None on call
+    failure. A failed call must NOT read as a tie: during a vLLM outage every pair
+    would silently become 0.5, BT strengths collapse to 1.0, and all candidates get
+    q~0.5 with reliable=True — garbage SFT with no error signal anywhere."""
     out = _call(uri_a, uri_b, _CMP_SYS, temp=0.0)
     if not out:
-        return 0.5
+        return None
     for ch in out.strip().upper():
         if ch == "A":
             return 1.0
@@ -463,49 +484,69 @@ def _bt(items: list, results: list, iters: int = 300) -> dict:
     return p
 
 
+def _iaa_rank_q(iaa: Optional[float], src_iaa: Optional[float]) -> tuple[float, float]:
+    if iaa is None:
+        return 0.0, 0.5
+    abs_q = max(0.0, min(1.0, iaa / 100.0))
+    if src_iaa is None:
+        impr = 0.5
+    else:
+        impr = 0.5 + 0.5 * math.tanh(2.0 * ((iaa - src_iaa) / 100.0))
+    q = _W_IAA_ABS * abs_q + _W_IAA_IMPR * impr
+    return max(0.0, min(1.0, q)), impr
+
+
 def qa_rank(source_path: str, variants: List[Tuple[str, str]], scene: Optional[str] = None,
             is_portrait: bool = False) -> dict:
+    """Rank rendered global/local candidates by Artimuse+Charm mixed IAA.
+
+    The source photo is scored once as the reference. Candidate q blends absolute
+    after quality with improvement over source, while deterministic extreme
+    exposure/color failures still veto unusable renders before tiering.
+    """
     if not variants:
         return {"ranking": [], "scores": {}}
-    src_cf = _stats(source_path)["cf"]
-    uri = {lab: _uri(path) for lab, path in variants}
-    uri["__src__"] = _uri(source_path)
-    # objective defect veto BEFORE the tournament (blown/crushed/garish renders are out, not compared)
-    veto, st = {}, {}
-    for lab, path in variants:
-        s = _stats(path); st[lab] = s
-        veto[lab] = _det_extreme(s)              # only SEVERE objective defects skip the tournament
-    players = [lab for lab, _ in variants if not veto[lab]] + ["__src__"]
-
-    pairs = [(a, b) for ia, a in enumerate(players) for b in players[ia + 1:]]
-    rng = random.Random(hash(source_path) & 0xffffffff)
-
-    def _judge(pair):
-        a, b = pair
-        if rng.random() < 0.5:                              # scramble A/B order to kill position bias
-            return (a, b, _compare(uri[a], uri[b]))
-        return (a, b, 1.0 - _compare(uri[b], uri[a]))
-
-    with ThreadPoolExecutor(max_workers=QA_WORKERS) as ex:
-        results = list(ex.map(_judge, pairs)) if pairs else []
-    p = _bt(players, results) if results else {x: 1.0 for x in players}
-    psrc = p.get("__src__", 1.0)
+    src_stats = _stats(source_path)
+    src_cf = src_stats["cf"]
+    src_obj = objscore.score(source_path)
+    src_iaa = objscore.mixed_value(src_obj)
 
     scores = {}
     for lab, path in variants:
-        if veto[lab]:
-            scores[lab] = {"veto": True, "reliable": True, "q": 0.0, "merit_score": 0.0,
-                           "merit_hits": [], "is_bw": st[lab]["cf"] < 8.0, "det": sorted(_det_flags(st[lab], src_cf))}
-        else:
-            # q = P(candidate beats a field-average render) = p/(p+1) (BT strengths are mean-1):
-            # spreads candidates around 0.5 -> bell-shaped across sources AND separable within source.
-            q = p[lab] / (p[lab] + 1.0)
-            scores[lab] = {"veto": False, "reliable": True, "q": round(q, 4),
-                           "bt_strength": round(p[lab], 4), "beat_source": p[lab] > psrc,
-                           "merit_score": round(q, 4), "merit_hits": [],
-                           "is_bw": st[lab]["cf"] < 8.0, "det": sorted(_det_flags(st[lab], src_cf))}
+        st = _stats(path)
+        det = sorted(_det_flags(st, src_cf))
+        if _det_extreme(st):
+            scores[lab] = {
+                "veto": True, "reliable": True, "q": 0.0, "merit_score": 0.0,
+                "merit_hits": [], "is_bw": st["cf"] < 8.0, "det": det,
+                "why": "det_extreme", "source_iaa": src_iaa,
+            }
+            continue
+        obj = objscore.score(path)
+        iaa = objscore.mixed_value(obj)
+        q, impr = _iaa_rank_q(iaa, src_iaa)
+        reliable = iaa is not None
+        scores[lab] = {
+            "veto": False,
+            "reliable": reliable,
+            "q": round(q, 4),
+            "merit_score": round(q, 4),
+            "merit_hits": [],
+            "is_bw": st["cf"] < 8.0,
+            "det": det,
+            "iaa_mixed": None if iaa is None else round(float(iaa), 3),
+            "artimuse": _obj_detail(obj, "artimuse"),
+            "charm": _obj_detail(obj, "charm"),
+            "source_iaa": None if src_iaa is None else round(float(src_iaa), 3),
+            "iaa_impr": round(impr, 4),
+            "beat_source": bool(iaa is not None and src_iaa is not None and iaa > src_iaa),
+            "qa_mode": "artimuse_charm_mixed",
+            "why": "" if reliable else "missing_iaa",
+        }
     ranking = sorted(scores, key=lambda l: (scores[l]["veto"], -scores[l]["q"]))
-    return {"ranking": ranking, "scores": scores}
+    return {"ranking": ranking, "scores": scores, "qa_fail_frac": 0.0,
+            "source_iaa": None if src_iaa is None else round(float(src_iaa), 3),
+            "qa_mode": "artimuse_charm_mixed"}
 
 
 def _smoke() -> None:
