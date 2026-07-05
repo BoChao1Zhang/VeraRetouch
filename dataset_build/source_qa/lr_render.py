@@ -22,11 +22,21 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+import threading
 import time
 import uuid
 from typing import Optional
 
 from . import config
+
+# Global farm admission: ONE gate for every LR submission in this process
+# (construct render threads, preset_qa via LrClient, ...). Sized by
+# LR_MAX_CONCURRENCY (~2x online LrC clients): the server enforces one
+# in-flight render per client, so extra width never causes write-lock
+# collisions — it just keeps a small pending backlog on the server so no
+# machine idles for a submit round-trip between renders. Held across the
+# whole submit+poll cycle.
+_FARM_GATE = threading.BoundedSemaphore(int(getattr(config, "LR_MAX_CONCURRENCY", 6)))
 
 # lrc_scripts (LR task server + client + plugin + converters) is now part of THIS
 # repo (moved out of JarvisEvo). Resolve it relative to the repo root.
@@ -104,7 +114,13 @@ def lr_health() -> bool:
 
 def submit_and_wait(photo_path: str, lua_path: str) -> dict:
     """Submit one render, long-poll to terminal state, download the after.
-    Returns a dict with ok=True and after_path, or ok=False with structured error."""
+    Returns a dict with ok=True and after_path, or ok=False with structured error.
+    Bounded by the global farm admission gate."""
+    with _FARM_GATE:
+        return _submit_and_wait(photo_path, lua_path)
+
+
+def _submit_and_wait(photo_path: str, lua_path: str) -> dict:
     import requests
     base = config.LR_SERVER_URL
     task_id = None

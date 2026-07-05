@@ -70,6 +70,7 @@ IQA_HIGHER_BETTER = {
     "noise_sigma": False,
     "megapixels": True, "longedge": True, "max_face_frac": True,
     "aesthetic_model": True, "aesthetic_vlm": True,
+    "artimuse": True, "charm": True, "iaa_mixed": True,
 }
 IQA_BATCH = 16
 IQA_LONGEDGE = 1024                # downscale before IQA (keeps texture, bounds VRAM)
@@ -78,6 +79,26 @@ FACE_DETECT = True                 # run a cheap face detector on the portrait p
 # --- aesthetic scorer (reuse dataset_build/aesthetic.py weights) --------------
 AESTHETIC_CLIP_DIR = "/home/bc/data/models/clip-vit-large-patch14"
 AESTHETIC_MLP_PATH = "/home/bc/data/models/laion_aesthetic_sac_logos_ava1_l14_linearMSE.pth"
+
+# --- IAA scorer (Artimuse + Charm mixed aesthetic score, GPU0 by default) -----
+IAA_DEVICE = os.environ.get("SOURCE_QA_IAA_DEVICE", IQA_DEVICE)
+IAA_MODEL_VERSION = "artimuse+charm-ava-frequency"
+IAA_ARTIMUSE_MODEL_PATH = os.environ.get("SOURCE_QA_ARTIMUSE_MODEL", "/home/bc/data/models/ArtiMuse")
+IAA_ARTIMUSE_REPO_DIR = os.environ.get("SOURCE_QA_ARTIMUSE_REPO", "/home/bc/code/iaa_models/ArtiMuse")
+IAA_ARTIMUSE_USE_FLASH_ATTN = bool(int(os.environ.get("SOURCE_QA_ARTIMUSE_FLASH_ATTN", "0")))
+IAA_CHARM_MODEL_DIR = os.environ.get("SOURCE_QA_CHARM_MODEL_DIR", "/home/bc/data/models/Charm")
+IAA_CHARM_CHECKPOINT = os.environ.get(
+    "SOURCE_QA_CHARM_CHECKPOINT",
+    os.path.join(IAA_CHARM_MODEL_DIR, "Ava_large_charm.pth"),
+)
+IAA_CHARM_PATCH_SELECTION = os.environ.get("SOURCE_QA_CHARM_PATCH_SELECTION", "frequency")
+IAA_CHARM_TRAINING_DATASET = os.environ.get("SOURCE_QA_CHARM_TRAINING_DATASET", "ava")
+IAA_CHARM_BACKBONE = os.environ.get("SOURCE_QA_CHARM_BACKBONE", "facebook/dinov2-large")
+IAA_ARTIMUSE_WEIGHT = float(os.environ.get("SOURCE_QA_ARTIMUSE_WEIGHT", "0.75"))
+IAA_CHARM_WEIGHT = float(os.environ.get("SOURCE_QA_CHARM_WEIGHT", "0.25"))
+IAA_IN_IQA = bool(int(os.environ.get("SOURCE_QA_IAA_IN_IQA", "1")))
+IAA_IN_CLEAN = bool(int(os.environ.get("SOURCE_QA_IAA_IN_CLEAN", "1")))
+IAA_REQUIRE_FOR_KEEP = bool(int(os.environ.get("SOURCE_QA_IAA_REQUIRE_FOR_KEEP", "1")))
 
 # --- source-image dedup (dedup.py) -------------------------------------------
 DEDUP_PHASH_HAMMING = 6            # near-dup merge cutoff on the 64-bit DCT pHash
@@ -96,11 +117,14 @@ LR_SERVER_URL = os.environ.get("SOURCE_QA_LR_URL", "http://127.0.0.1:8081")
 LR_POLL_WAIT = 25                  # long-poll seconds per task_status (server caps ~25)
 LR_JOB_TIMEOUT = 1200              # total seconds to wait for one render before giving up
 LR_HTTP_TIMEOUT = 60               # per-HTTP read timeout (> any single short poll)
-# LR pool admission cap (core.LrClient semaphore): true concurrent renders to the
-# farm, independent of preset_qa's thread-pool size. Match online eligible LrC
-# clients (1:1 = no server-side queue). Post catalog-LRU fix, >clients is safe but
-# adds no parallelism (each client renders one at a time). Env-overridable.
-LR_MAX_CONCURRENCY = int(os.environ.get("SOURCE_QA_LR_CONCURRENCY", "3"))
+# LR pool admission cap (core.LrClient semaphore): concurrent submit+poll cycles
+# against the farm, independent of preset_qa's thread-pool size. The server
+# enforces 1 in-flight render per client, so this does NOT create write-lock
+# collisions; 2x the online clients keeps a small pending backlog on the server
+# so each machine picks up its next task the moment it reports the previous one
+# (1:1 left every client idle for a full submit round-trip between renders —
+# measured 2026-07-05: ~71/min at 3, saturated at 6). Env-overridable.
+LR_MAX_CONCURRENCY = int(os.environ.get("SOURCE_QA_LR_CONCURRENCY", "6"))
 RENDER_ENGINE_PRIORITY = ["lrc", "darktable", "lut_trilinear"]
 RENDER_STAGE = os.path.join(QA_ROOT, "render_stage")   # generated xmp / staged probes
 RENDER_OUT_FMT = "jpg"             # LR client exports jpg; darktable tier can emit tif
@@ -136,11 +160,16 @@ GATE = {
     "brisque_drop_above": 65.0,
     "laplacian_drop_below": 40.0,
     "noise_sigma_drop_above": 18.0,       # starting guess
+    # mixed IAA floors (Artimuse + Charm, normalized 0..100)
+    "iaa_drop_below": 35.0,
+    "iaa_keep_above": 55.0,
     # comfortable 'keep' band
     "musiq_keep_above": 55.0,
     "clipiqa_keep_above": 0.50,
     "aesthetic_vlm_keep_above": 5.5,      # starting guess; aesthetic now a soft keep vote
 }
+
+CONSTRUCT_SOURCE_IAA_MIN = float(os.environ.get("CONSTRUCT_SOURCE_IAA_MIN", str(GATE["iaa_keep_above"])))
 
 # Pass-rule thresholds for the graded questionnaire B (suitability).
 QA_PASS = {
