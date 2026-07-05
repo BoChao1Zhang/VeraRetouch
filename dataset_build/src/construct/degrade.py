@@ -26,6 +26,7 @@ import os
 import random
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import asdict
 from typing import Any, Dict, Optional
@@ -96,7 +97,8 @@ def _annotate(degraded_path: str, spec) -> Optional[Dict[str, str]]:
 
 
 def build(n_sources: int, out_dir: str, min_iaa: float = 55.0,
-          variants: int = VARIANTS_PER_SOURCE, use_annotate: bool = True) -> dict:
+          variants: int = VARIANTS_PER_SOURCE, use_annotate: bool = True,
+          workers: int = 8) -> dict:
     os.environ.setdefault("RENDER_BACKEND_POLICY", "throughput")
     from dataset_build.source_qa import db
     from dataset_build.recipes import DiskRecipeParser
@@ -118,65 +120,77 @@ def build(n_sources: int, out_dir: str, min_iaa: float = 55.0,
     stats = {"ok": 0, "gate_de": 0, "gate_clip": 0, "render_fail": 0, "skip_done": 0,
              "annotate_vlm": 0, "annotate_tpl": 0}
     t0 = time.time()
+    slock = threading.Lock()
 
-    with open(shard_p, "a") as out_f:
-        for src in sources:
-            src_np = None
-            for i in range(variants):
-                sid = _sid(src["asset_id"], i)
-                if sid in done:
+    def _one_source(src) -> list:
+        recs = []
+        src_np = None
+        for i in range(variants):
+            sid = _sid(src["asset_id"], i)
+            if sid in done:
+                with slock:
                     stats["skip_done"] += 1
-                    continue
-                seed = int(hashlib.sha1(sid.encode()).hexdigest()[:8], 16)
-                rng = random.Random(seed)
-                combo = rng.choices(COMBOS, weights=COMBO_W, k=1)[0]
-                spec = parser.sample_degrade_spec(combo.split("+"), seed, region_local=False)
-                if not spec.op_params:
-                    continue
-                deg_p = os.path.join(out_dir, "images", f"{sid}.jpg")
-                with tempfile.NamedTemporaryFile(suffix=".xmp", delete=False) as tf:
-                    xmp = params_to_xmp(parser.degrade_spec_to_params(spec), tf.name)
-                try:
-                    r = be.render_one(xmp, "xmp", src["path"], out_path=deg_p)
-                finally:
-                    os.unlink(xmp)
-                if not r.get("ok"):
+                continue
+            seed = int(hashlib.sha1(sid.encode()).hexdigest()[:8], 16)
+            rng = random.Random(seed)
+            combo = rng.choices(COMBOS, weights=COMBO_W, k=1)[0]
+            spec = parser.sample_degrade_spec(combo.split("+"), seed, region_local=False)
+            if not spec.op_params:
+                continue
+            deg_p = os.path.join(out_dir, "images", f"{sid}.jpg")
+            with tempfile.NamedTemporaryFile(suffix=".xmp", delete=False) as tf:
+                xmp = params_to_xmp(parser.degrade_spec_to_params(spec), tf.name)
+            try:
+                r = be.render_one(xmp, "xmp", src["path"], out_path=deg_p)
+            finally:
+                os.unlink(xmp)
+            if not r.get("ok"):
+                with slock:
                     stats["render_fail"] += 1
-                    continue
-                if src_np is None:
-                    src_np = _load01(src["path"])
-                deg_np = _load01(deg_p, size=(src_np.shape[1], src_np.shape[0]))
-                de = _de_ds(src_np, deg_np)
-                if not (GATE_DE[0] <= de <= GATE_DE[1]):
+                continue
+            if src_np is None:
+                src_np = _load01(src["path"])
+            deg_np = _load01(deg_p, size=(src_np.shape[1], src_np.shape[0]))
+            de = _de_ds(src_np, deg_np)
+            if not (GATE_DE[0] <= de <= GATE_DE[1]):
+                with slock:
                     stats["gate_de"] += 1
-                    os.unlink(deg_p)
-                    continue
-                clip = _clip_delta(src_np, deg_np)
-                if clip > GATE_CLIP:
+                os.unlink(deg_p)
+                continue
+            clip = _clip_delta(src_np, deg_np)
+            if clip > GATE_CLIP:
+                with slock:
                     stats["gate_clip"] += 1
-                    os.unlink(deg_p)
-                    continue
-                ann = _annotate(deg_p, spec) if use_annotate else None
-                if ann:
-                    stats["annotate_vlm"] += 1
-                else:
-                    ann = _fallback_instruction(rng)
-                    stats["annotate_tpl"] += 1
-                rec = {
-                    "sample_id": sid, "task": "auto_restore",
-                    "source_id": src["asset_id"], "scene": src["scene"],
-                    "before": deg_p, "after": src["path"],
-                    "instruction": ann["instruction"],
-                    "reasoning": ann.get("reasoning", ""),
-                    "answer": {k: v for k, v in spec.op_params.items()},
-                    "recipe": {"kind": "degrade", "degrade": asdict(spec)},
-                    "qa": {"degrade_de": round(de, 3), "clip_delta": round(clip, 4),
-                           "source_iaa": float(src["iaa_mixed"]), "engine": r.get("engine")},
-                }
+                os.unlink(deg_p)
+                continue
+            ann = _annotate(deg_p, spec) if use_annotate else None
+            with slock:
+                stats["annotate_vlm" if ann else "annotate_tpl"] += 1
+            if not ann:
+                ann = _fallback_instruction(rng)
+            recs.append({
+                "sample_id": sid, "task": "auto_restore",
+                "source_id": src["asset_id"], "scene": src["scene"],
+                "before": deg_p, "after": src["path"],
+                "instruction": ann["instruction"],
+                "reasoning": ann.get("reasoning", ""),
+                "answer": {k: v for k, v in spec.op_params.items()},
+                "recipe": {"kind": "degrade", "degrade": asdict(spec)},
+                "qa": {"degrade_de": round(de, 3), "clip_delta": round(clip, 4),
+                       "source_iaa": float(src["iaa_mixed"]), "engine": r.get("engine")},
+            })
+        return recs
+
+    # 线程并行：GPU 渲染由 render_backend 内部互斥串行，annotate(HTTP)/解码/ΔE 门并行，
+    # 流水线重叠。写盘单线程（主线程消费 futures）。
+    from concurrent.futures import ThreadPoolExecutor
+    with open(shard_p, "a") as out_f, ThreadPoolExecutor(max_workers=workers) as ex:
+        for recs in ex.map(_one_source, sources):
+            for rec in recs:
                 out_f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-                out_f.flush()
                 stats["ok"] += 1
-            if stats["ok"] and stats["ok"] % 50 == 0:
+            out_f.flush()
+            if stats["ok"] and stats["ok"] % 100 < len(recs):
                 el = time.time() - t0
                 print(f"[degrade] ok={stats['ok']} ({stats['ok']/el*60:.0f}/min) {stats}", flush=True)
     stats["wall_min"] = round((time.time() - t0) / 60, 1)
@@ -194,13 +208,14 @@ def main() -> None:
     p_run.add_argument("--min-iaa", type=float, default=55.0)
     p_run.add_argument("--variants", type=int, default=VARIANTS_PER_SOURCE)
     p_run.add_argument("--no-annotate", action="store_true")
+    p_run.add_argument("--workers", type=int, default=8)
     sub.add_parser("smoke")
     a = ap.parse_args()
     if a.cmd == "smoke":
         build(3, "/tmp/claude-1001/-home-bc-VeraRetouch/degrade_smoke", use_annotate=False)
     else:
         build(a.n, a.out, min_iaa=a.min_iaa, variants=a.variants,
-              use_annotate=not a.no_annotate)
+              use_annotate=not a.no_annotate, workers=a.workers)
 
 
 if __name__ == "__main__":
