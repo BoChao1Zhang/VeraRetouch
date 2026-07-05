@@ -41,6 +41,26 @@ def score(path: str) -> dict[str, Optional[float]]:
     return out
 
 
+def score_many(paths: list) -> dict:
+    """批量打分：CPU 预处理并行 + ArtiMuse 单前向 batch（runner.score_batch_pre）。
+    一个 source 的 8 候选一批 ≈ 单张耗时的 ~1.5×，而非 8×。缓存与 score() 共享。"""
+    todo = [p for p in paths if p not in _CACHE]
+    if todo:
+        from concurrent.futures import ThreadPoolExecutor
+        r = _runner()
+        try:
+            with ThreadPoolExecutor(max_workers=min(8, len(todo))) as ex:
+                items = list(ex.map(r.preprocess_path, todo))
+            with _LOCK:
+                outs = r.score_batch_pre(items)
+            for p, o in zip(todo, outs):
+                _CACHE[p] = {k: o.get(k) for k in ("iaa_mixed", "artimuse", "charm")}
+        except Exception:  # noqa: BLE001 - 整批失败退回逐张（内部各自兜错）
+            for p in todo:
+                score(p)
+    return {p: _CACHE[p] for p in paths}
+
+
 def mixed_value(obj: Any) -> Optional[float]:
     """Extract a 0..100 mixed IAA value, accepting old tuple callers too."""
     if obj is None:

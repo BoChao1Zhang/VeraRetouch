@@ -508,6 +508,8 @@ def qa_rank(source_path: str, variants: List[Tuple[str, str]], scene: Optional[s
         return {"ranking": [], "scores": {}}
     src_stats = _stats(source_path)
     src_cf = src_stats["cf"]
+    # 源图 + 全部候选一批打分（ArtiMuse 单前向 batch，qa_rank 主耗时 ~8× 提速）
+    objscore.score_many([source_path] + [p for _, p in variants])
     src_obj = objscore.score(source_path)
     src_iaa = objscore.mixed_value(src_obj)
 
