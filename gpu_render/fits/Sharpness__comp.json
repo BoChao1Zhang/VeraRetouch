@@ -1,0 +1,4 @@
+{
+ "amount_scale": 0.4,
+ "_note": "组合标定：农场 partial_GT 输入/目标均为 JPEG 中间态，高频被压缩衰减，全强度锐化会加入 target 里没有的高频 -> 过冲。amount_scale 线性压低锐化强度，使 stage9 detail active median before_dE 1.30->~1.07 (<2)，过冲对 38->~11。见 scratch/detail_decomp.py。"
+}

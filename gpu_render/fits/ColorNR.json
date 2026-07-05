@@ -1,0 +1,9 @@
+{
+  "method": "opponent-chroma bilateral smoothing (scratch/colornr_fit.py + colornr_refine.py)",
+  "amount_params": [
+    [0.0, 0.0, 0.05, 0.0],
+    [25.0, 10.0, 0.05, 0.85],
+    [100.0, 20.0, 0.05, 1.0]
+  ],
+  "amount_params_columns": ["amount", "sigma_space", "sigma_color", "alpha"]
+}

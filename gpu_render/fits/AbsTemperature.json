@@ -1,0 +1,10 @@
+{
+ "model": "abs_wb_linear_v1",
+ "note": "组合标定：LR 绝对 kelvin 白平衡(WhiteBalance=Custom + Temperature/Tint) 在 JPEG 源上非 no-op（LR 农场实测 partial_GT_0 相对 identity 中位 ΔE4.5）。以 identity 渲染隐含参考 WB≈5029K 为原点，把绝对 Temperature_K/Tint 线性映到等效 IncrementalTemperature/Tint，经 apply_lr_temperature + adjust_tint 复现。replay 只透传 Temperature/Tint（无 AsShot），故用绝对 kelvin 建模。由 ops_v2/temperature.py _abs_temperature 消费。",
+ "it_slope": 0.01520,
+ "it_intercept": -76.455,
+ "ti_slope": 0.3524,
+ "ti_intercept": -2.648,
+ "it_clip": 60,
+ "ti_clip": 30
+}

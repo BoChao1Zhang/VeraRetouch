@@ -1,0 +1,10 @@
+{
+ "value_map": [
+  [-100.0, -100.0],
+  [-45.4545, -100.0],
+  [0.0, 0.0],
+  [45.4545, 100.0],
+  [100.0, 100.0]
+ ],
+ "_note": "composition recalibration (stage hslbw / teacher-forced): scalar-path Green saturation had no fit (identity baseline) and under-desaturated green foliage vs LR. value_map = clip(lr_v*2.2,-100,100). Fit on stage_pairs(6) N=80: strict Pareto win with Aqua (median 1.722->1.694, mean 2.281->2.190, p90 4.425->4.048, max 7.315->6.766)."
+}

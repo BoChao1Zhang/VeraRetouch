@@ -1,0 +1,14 @@
+{
+  "method": "radial remap r_src=r_dst*(1+a*(1-r^2)+b*(1-r^2)^2), corner-anchored, white fill (scratch/fringeprobe_dist_fit.py)",
+  "noop_points": {
+    "purple": {"de_mean": 0.150, "de_p95": 0.822, "verdict": "no-op vs noise floor x1.5 (0.90/2.92)"},
+    "green": {"de_mean": 0.355, "de_p95": 1.991, "verdict": "no-op vs noise floor x1.5 (0.90/2.92)"},
+    "autoca": {"de_mean": 0.862, "de_p95": 2.865, "verdict": "no-op vs noise floor x1.5 (0.90/2.92)"}
+  },
+  "dist_ab": [
+    [-50.0, -0.2508341, 0.0009294],
+    [0.0, 0.0, 0.0],
+    [50.0, 0.1975663, 0.0027494]
+  ],
+  "dist_ab_columns": ["LensManualDistortionAmount", "a", "b"]
+}

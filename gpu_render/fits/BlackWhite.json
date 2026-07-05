@@ -1,0 +1,53 @@
+{
+ "model": "bw_bands_v1",
+ "bands": {
+  "Red": {
+   "center": 355.0,
+   "width": 45.0,
+   "gain": 1.7978,
+   "default": 2.99
+  },
+  "Orange": {
+   "center": 25.0,
+   "width": 45.0,
+   "gain": 1.807,
+   "default": 3.0
+  },
+  "Yellow": {
+   "center": 60.0,
+   "width": 45.0,
+   "gain": 1.8002,
+   "default": -4.0
+  },
+  "Green": {
+   "center": 115.0,
+   "width": 45.0,
+   "gain": 1.8014,
+   "default": 2.0
+  },
+  "Aqua": {
+   "center": 180.0,
+   "width": 45.0,
+   "gain": 1.8035,
+   "default": -6.0
+  },
+  "Blue": {
+   "center": 215.0,
+   "width": 45.0,
+   "gain": 1.7843,
+   "default": 2.0
+  },
+  "Purple": {
+   "center": 275.0,
+   "width": 45.0,
+   "gain": 1.8,
+   "default": 2.0
+  },
+  "Magenta": {
+   "center": 320.0,
+   "width": 45.0,
+   "gain": 1.8,
+   "default": 2.0
+  }
+ }
+}

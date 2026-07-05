@@ -1,0 +1,11 @@
+{
+ "balance_alpha": {
+  "x": [0.0, 50.0, 100.0],
+  "y": [1.0, 0.8, 0.7]
+ },
+ "_note": "组合标定残差校正（teacher-forced stage_pairs(7)）。lr_color_grade 在 |SplitToningBalance| 偏大时对 split-tone tint 过冲（权重区扩太大），按 alpha(|balance|) 把 color-grade delta 缩回：out = inp + alpha*(out-inp)。|bal|=0 → alpha=1（不动已达标的 bal≈0 主流；组合前中位已 0.585）。曲线 knots @ |bal|={0,50,100} = {1.0,0.8,0.7}。",
+ "_fit_source": "scratch/splittone_fit_comp.py 回归感知网格搜索（min mean_all+0.5*p90_all + 1.5*max_reg + 0.15*n_reg）。",
+ "_de": {"before_med_all": 0.585, "before_mean_all": 0.799, "before_p90_all": 2.074, "before_amean": 1.409, "before_ap90": 3.359,
+         "after_med_all": 0.585, "after_mean_all": 0.746, "after_p90_all": 1.925, "after_amean": 1.313, "after_ap90": 2.565,
+         "max_regression": 0.51, "n_regression_gt_0.3": 1}
+}

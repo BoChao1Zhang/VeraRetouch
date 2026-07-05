@@ -1,0 +1,80 @@
+# Default canonical HSL scheme: GEGL/GIMP-inspired 6-color surface.
+
+red:
+  engine: gimp_stable_6color
+  overlap_default: 0.20
+  gimp_gain_h: 0.12
+  gimp_gain_s: 0.38
+  gimp_gain_l: 0.22
+  stability: &gegl6_stability
+    enabled: true
+    sat_floor_low: 0.02
+    sat_floor_high: 0.12
+    chroma_floor_low: 0.006
+    chroma_floor_high: 0.040
+    artifact_guard:
+      enabled: true
+      diff_thresh: 0.10
+      low_sat_threshold: 0.12
+      low_chroma_threshold: 0.040
+      kernel: 3
+      blend: 0.85
+    luma_guard:
+      enabled: true
+      sat_floor_low: 0.06
+      sat_floor_high: 0.22
+      strength: 1.0
+      guided:
+        enabled: true
+        radius: 5
+        eps: 0.001
+        sigma_space: 5.0
+        sigma_color: 0.06
+      speckle:
+        enabled: true
+        low_sat_threshold: 0.22
+        low_chroma_threshold: 0.060
+        delta_thresh: 0.06
+        min_area: 6
+        kernel: 3
+        blend: 0.85
+
+yellow:
+  engine: gimp_stable_6color
+  overlap_default: 0.20
+  gimp_gain_h: 0.12
+  gimp_gain_s: 0.38
+  gimp_gain_l: 0.22
+  stability: *gegl6_stability
+
+green:
+  engine: gimp_stable_6color
+  overlap_default: 0.20
+  gimp_gain_h: 0.12
+  gimp_gain_s: 0.38
+  gimp_gain_l: 0.22
+  stability: *gegl6_stability
+
+aqua:
+  engine: gimp_stable_6color
+  overlap_default: 0.20
+  gimp_gain_h: 0.12
+  gimp_gain_s: 0.38
+  gimp_gain_l: 0.22
+  stability: *gegl6_stability
+
+blue:
+  engine: gimp_stable_6color
+  overlap_default: 0.20
+  gimp_gain_h: 0.12
+  gimp_gain_s: 0.38
+  gimp_gain_l: 0.22
+  stability: *gegl6_stability
+
+magenta:
+  engine: gimp_stable_6color
+  overlap_default: 0.20
+  gimp_gain_h: 0.12
+  gimp_gain_s: 0.38
+  gimp_gain_l: 0.22
+  stability: *gegl6_stability

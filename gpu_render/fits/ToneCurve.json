@@ -1,0 +1,18 @@
+{
+ "curve_cfg": {
+  "space": "melissa",
+  "method": "cubic",
+  "order": "master_then_rgb"
+ },
+ "_note": "组合标定（teacher-forcing, stage_pairs(3): partial_GT_2 -> partial_GT_3）产物。孤立标定的合成曲线从不同时含 master+RGB，故 master/RGB 次序与样条类型无真实约束。真实 preset 曲线更极端，暴露两处模型错误并在组合数据上纠正：(1) 次序 rgb_then_master -> master_then_rgb；(2) 插值 pchip -> 自然三次(可 overshoot，与 LR 点曲线一致)。作用空间 Melissa RGB 经实测确认正确(sRGB 显著更差)。ops_v2/tonecurve.py 读本文件的 curve_cfg（缺省即此），replay 自动生效。",
+ "_calib": {
+  "supervision": "stage_pairs(3, maxside=512)",
+  "n_active_pairs": 66,
+  "before_de_all_median": 0.936,
+  "before_de_active_median": 1.106,
+  "after_de_all_median": 0.66,
+  "after_de_active_median": 0.689,
+  "after_de_active_mean": 0.792,
+  "after_de_active_p90": 0.954
+ }
+}

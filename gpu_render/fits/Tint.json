@@ -1,0 +1,19 @@
+{
+ "model": "tint_composite_v1",
+ "note": "组合标定重写：native adjust_tint 的 value_map(LR IncrementalTint -> local Tint config)。去掉孤立标定的 post_rgb_lut（对连续小 tint 值会最近扫描值快照到满量程 ±30 LUT，产生 ΔE15+ 伪影）。由 ops_v2/tint.py 消费（apply_scalar_op 会把 |local|<1 误判为归一分数×100 过强，故不走标量路径）。",
+ "value_map": [
+  [-100, -74],
+  [-35, -26],
+  [-18, -12],
+  [-10, -5],
+  [-8, -4],
+  [-5, -2],
+  [0, 0],
+  [5, 2],
+  [8, 4],
+  [10, 5],
+  [18, 12],
+  [35, 26],
+  [100, 74]
+ ]
+}

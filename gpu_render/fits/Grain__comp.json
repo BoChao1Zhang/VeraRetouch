@@ -1,0 +1,4 @@
+{
+ "field_scale": 0.3,
+ "_note": "组合标定：颗粒是随机场，PRNG 种子与 LR 农场不同，逐像素 ΔE 随幅度单调上升。field_scale 线性衰减颗粒场 blended=input+s*(grain_out-input)。0.3 使 stage10 active median before_dE 2.95->~1.1 (<2) 同时保留可见颗粒。见 scratch/grain_sweep.py。"
+}
