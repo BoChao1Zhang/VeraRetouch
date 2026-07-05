@@ -67,9 +67,11 @@ def stratified_sources(conn, total: int, min_iaa: float = 55.0,
                        extra_where: str = "", seed: str = "mix_v1") -> List[Any]:
     """按场景配额从 keep 池分层抽源图。返回 rows（asset_id, path, scene, iaa_mixed,
     is_portrait_pool）。类内按 md5(asset_id||seed) 伪随机排序保证可复现且去 asset_id 偏序。"""
+    # 注：不再要求 saturation_mean（老 pipeline 的 stage0 标记，新 IAA 扫描行覆盖率 <1%，
+    # 会把 4150 合格源饿到 30；渲染/QA 均不依赖它。2026-07-06）
     base = ("asset_type='image' AND b_quality=3 AND dup_of IS NULL "
-            "AND iaa_mixed IS NOT NULL AND iaa_mixed >= %s "
-            "AND saturation_mean IS NOT NULL" + (f" AND ({extra_where})" if extra_where else ""))
+            "AND iaa_mixed IS NOT NULL AND iaa_mixed >= %s"
+            + (f" AND ({extra_where})" if extra_where else ""))
     supply_rows = conn.execute(
         f"SELECT COALESCE(scene,'any') AS scene, COUNT(*) AS n FROM assets WHERE {base} GROUP BY 1",
         (min_iaa,)).fetchall()
