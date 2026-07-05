@@ -462,12 +462,17 @@ def _as_db_scores(scores: Dict[str, Optional[float]]) -> Dict[str, Optional[floa
 
 
 def run(limit: Optional[int] = None, corpus: Optional[str] = None,
-        device: Optional[str] = None, resume: bool = True) -> dict:
+        device: Optional[str] = None, resume: bool = True,
+        verdict: Optional[str] = None, order: str = "asc") -> dict:
+    # ponytail: 双进程并行用 asc+desc 两端夹击（resume 的 NOT EXISTS 保证不重扫），
+    # 比加 shard 参数省事；若需 >2 进程再上真分片
+
     runner = MixedIAARunner(device=device or config.IAA_DEVICE)
     conn = db.connect()
     run_id = db.start_run(conn, "iaa", {
         "device": device or config.IAA_DEVICE,
         "corpus": corpus,
+        "verdict": verdict,
         "artimuse_weight": runner.artimuse_weight,
         "charm_weight": runner.charm_weight,
         "resume": resume,
@@ -479,7 +484,13 @@ def run(limit: Optional[int] = None, corpus: Optional[str] = None,
     if corpus:
         where.append("a.corpus=?")
         params.append(corpus)
-    sql = f"SELECT a.asset_id, a.path FROM assets a WHERE {' AND '.join(where)} ORDER BY a.asset_id"
+    if verdict:
+        # 优先灌 construct 会用到的池（keep 10.2 万），全量 13.5 万 ~1s/张跑不完整夜
+        vs = [v.strip() for v in verdict.split(",") if v.strip()]
+        where.append(f"a.auto_verdict IN ({','.join('?' * len(vs))})")
+        params.extend(vs)
+    sql = (f"SELECT a.asset_id, a.path FROM assets a WHERE {' AND '.join(where)} "
+           f"ORDER BY a.asset_id{' DESC' if order == 'desc' else ''}")
     if limit:
         sql += f" LIMIT {int(limit)}"
     todo = conn.execute(sql, params).fetchall()
@@ -517,12 +528,16 @@ def main() -> None:
     ap.add_argument("--corpus", default=None)
     ap.add_argument("--device", default=None)
     ap.add_argument("--no-resume", action="store_true")
+    ap.add_argument("--verdict", default=None, help="按 auto_verdict 过滤，如 keep 或 keep,review")
+    ap.add_argument("--order", default="asc", choices=("asc", "desc"), help="扫描方向（双进程夹击用）")
     args = ap.parse_args()
     print(json.dumps(run(
         limit=args.limit,
         corpus=args.corpus,
         device=args.device,
         resume=not args.no_resume,
+        verdict=args.verdict,
+        order=args.order,
     ), ensure_ascii=False))
 
 
