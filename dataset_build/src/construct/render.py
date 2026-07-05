@@ -1,11 +1,13 @@
 """Unified source-conditioned render: apply ONE preset to ONE source photo.
 
-  param (xmp/lrtemplate) -> real Lightroom render via the LrC farm (render_via_lr)
+  param (xmp/lrtemplate) -> core.render_backend 双路分流：有残差 LUT 的标定 preset
+                            走本地 GPU（gpu_render, batch=16, cuda:1），其余走
+                            LrC 农场（render_via_lr）；本地失败自动回退农场
   lut   (.cube/.3dl)     -> code 3D-LUT trilinear (LR has no .cube develop-preset form;
                             this is how the 6-probe previews were made — preset_qa.py:14)
 
 Returns {ok, after_path, engine} or {ok:False, error_code}. ponytail: thin dispatch over
-the two proven paths (lr_render.render_via_lr + pilot_preset._apply_cube/_parser).
+the two proven paths (core.render_backend + pilot_preset._apply_cube/_parser).
 """
 from __future__ import annotations
 
@@ -16,7 +18,8 @@ import uuid
 
 from PIL import Image
 
-from dataset_build.source_qa import config, lr_render
+from dataset_build.core import render_backend
+from dataset_build.source_qa import config
 from dataset_build.source_qa import preset_qa as PQ  # _parser().load_cube + _apply_cube
 
 RENDERS_ROOT = os.path.join(config.OUT_ROOT, "renders")   # content-addressed sharded render store
@@ -46,7 +49,8 @@ def shard_save(tmp_path: str) -> str:
 def render_preset(preset_path: str, kind: str, fmt: str, source_path: str,
                   lut_longedge: int = 1024) -> dict:
     if kind == "param":
-        r = lr_render.render_via_lr(preset_path, fmt, source_path)
+        # 双路后端：残差 LUT 已标定的 preset 本地 GPU 渲，其余 LR 农场（保真第一）。
+        r = render_backend.render_one(preset_path, fmt, source_path)
         if r.get("ok") and r.get("after_path"):
             r["after_path"] = shard_save(r["after_path"])
         return r

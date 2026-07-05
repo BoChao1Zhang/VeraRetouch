@@ -3,9 +3,12 @@
 
 Phase 0 shipped the out-of-process vLLM broker (``core.broker``). Phase 2 adds
 the synchronous ``core`` facade the business consumes — ``core.vllm`` /
-``core.sam3`` / ``core.iqa`` / ``core.render`` / ``core.lr`` — relocating
-ownership of the renderer + render_lock into ``core.render`` while preserving the
-existing thread-based overlap orchestration and byte-identical output.
+``core.sam3`` / ``core.iqa`` / ``core.render`` / ``core.lr``.
+
+渲染后端替换（2026-07）：teacher renderer（llava_qwen2 教师模型）已废弃。
+``core.render_backend`` 是统一渲染入口（LR 农场 + 本地 gpu_render batch=16
+@cuda:1 双路分流）；``core.render``（RenderClient）保留旧签名、内部代理到
+render_backend，teacher 模型加载路径不再触发。
 """
 
 from __future__ import annotations
@@ -13,12 +16,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+from . import render_backend
 from .client import IqaClient, LrClient, Sam3Client, VLLMClient
+from .render_backend import RenderBackend, get_backend
 from .render_worker import RenderClient, downscale_rgb
 
 __all__ = [
     "Core", "build_core", "build_lr_client",
     "VLLMClient", "Sam3Client", "IqaClient", "LrClient", "RenderClient",
+    "RenderBackend", "render_backend", "get_backend",
     "downscale_rgb",
 ]
 
@@ -74,12 +80,12 @@ def build_core(
 ) -> Core:
     """Assemble a :class:`Core` from already-constructed collaborators.
 
-    ``render`` is always present (its ``renderer`` may be ``None`` — it then
-    returns all-None like the historical inline path). ``vllm``/``sam3``/``iqa``
-    exist only when their collaborator was built. ``gpu`` is a shared
-    :class:`~dataset_build.core.gpu_compute.GpuCompute` so render / live-SAM3 /
-    IQA serialize on a shared card via the lease->render_lock contract; pass
-    ``None`` to leave render serialized by ``render_lock`` alone.
+    ``render`` is always present, and is now a *proxy* to
+    ``core.render_backend``（LR 农场 + 本地 gpu_render 双路）——``renderer``
+    参数仅为签名兼容而保留，传入非 None 会被忽略并告警（teacher 已废弃，
+    调用方不应再加载教师模型）。``vllm``/``sam3``/``iqa`` exist only when
+    their collaborator was built. ``gpu``/``device`` 仍传给 SAM3/IQA 的
+    lease 契约；render 不再参与 lease（本地渲固定 cuda:1，后端自持互斥）。
     """
     has_sam3 = masker is not None or sam3_live_masker is not None
     return Core(
@@ -87,6 +93,7 @@ def build_core(
         sam3=(Sam3Client(cached_masker=masker, live_masker=sam3_live_masker,
                          gpu=gpu, device=device) if has_sam3 else None),
         iqa=(IqaClient(iqa_scorer, gpu=gpu, device=device) if iqa_scorer is not None else None),
-        render=RenderClient(renderer, _render_kw_from_config(config), gpu=gpu, device=device),
+        # renderer 故意不再透传：RenderClient 内部走 render_backend。
+        render=RenderClient(renderer, _render_kw_from_config(config), gpu=None, device=device),
         lr=(LrClient(lr_submit_fn) if lr_submit_fn is not None else None),
     )
