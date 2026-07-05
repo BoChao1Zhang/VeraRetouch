@@ -463,7 +463,7 @@ def _as_db_scores(scores: Dict[str, Optional[float]]) -> Dict[str, Optional[floa
 
 def run(limit: Optional[int] = None, corpus: Optional[str] = None,
         device: Optional[str] = None, resume: bool = True,
-        verdict: Optional[str] = None, order: str = "asc") -> dict:
+        verdict: Optional[str] = None, order: str = "asc", bq3: bool = False) -> dict:
     # ponytail: 双进程并行用 asc+desc 两端夹击（resume 的 NOT EXISTS 保证不重扫），
     # 比加 shard 参数省事；若需 >2 进程再上真分片
 
@@ -489,6 +489,8 @@ def run(limit: Optional[int] = None, corpus: Optional[str] = None,
         vs = [v.strip() for v in verdict.split(",") if v.strip()]
         where.append(f"a.auto_verdict IN ({','.join('?' * len(vs))})")
         params.extend(vs)
+    if bq3:
+        where.append("a.b_quality=3")   # construct 源池硬条件，不浪费算力在不可用行
     sql = (f"SELECT a.asset_id, a.path FROM assets a WHERE {' AND '.join(where)} "
            f"ORDER BY a.asset_id{' DESC' if order == 'desc' else ''}")
     if limit:
@@ -530,6 +532,7 @@ def main() -> None:
     ap.add_argument("--no-resume", action="store_true")
     ap.add_argument("--verdict", default=None, help="按 auto_verdict 过滤，如 keep 或 keep,review")
     ap.add_argument("--order", default="asc", choices=("asc", "desc"), help="扫描方向（双进程夹击用）")
+    ap.add_argument("--bq3", action="store_true", help="只扫 b_quality=3（construct 可用池）")
     args = ap.parse_args()
     print(json.dumps(run(
         limit=args.limit,
@@ -538,6 +541,7 @@ def main() -> None:
         resume=not args.no_resume,
         verdict=args.verdict,
         order=args.order,
+        bq3=args.bq3,
     ), ensure_ascii=False))
 
 
