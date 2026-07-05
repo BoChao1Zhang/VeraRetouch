@@ -37,8 +37,9 @@ COVERED_PREFIX = (
     "RedHue", "RedSaturation", "GreenHue", "GreenSaturation", "BlueHue", "BlueSaturation", "ShadowTint",
     "HueAdjustment", "SaturationAdjustment", "LuminanceAdjustment", "ConvertToGrayscale", "GrayMixer",
     "SplitToning", "ColorGrade", "Vibrance", "Saturation", "Sharpness", "Sharpen", "LuminanceSmoothing",
-    "ColorNoiseReduction", "Grain", "PostCropVignette", "VignetteAmount", "IncrementalTemperature",
-    "IncrementalTint", "Temperature", "Tint", "WhiteBalance",
+    "LuminanceNoiseReduction",   # Detail/Contrast 子键与 LuminanceSmoothing 同族消费（replay._SKIP_PREFIXES）
+    "ColorNoiseReduction", "Grain", "PostCropVignette", "VignetteAmount", "VignetteMidpoint",
+    "IncrementalTemperature", "IncrementalTint", "Temperature", "Tint", "WhiteBalance",
 )
 # 明确忽略的键（几何/元数据/无像素效果）——不算未覆盖
 IGNORE_PREFIX = (
@@ -49,6 +50,7 @@ IGNORE_PREFIX = (
     "AutoWhiteVersion", "AutoTone", "AutoGrayscale", "AutoBrightness", "AutoContrast",
     "ParametricShadowSplit", "ParametricMidtoneSplit", "ParametricHighlightSplit", "id",
     "internalName", "type",
+    "Amount", "Stubbed",   # lrtemplate 元数据键（replay 同名忽略），非像素效果
 )
 
 
@@ -92,7 +94,9 @@ def route_preset(path: str, fmt: str, measured_de=None, threshold: float = 6.0) 
             uncovered.append(k)
     if uncovered:
         return {"route": "farm", "reason": f"uncovered keys: {uncovered[:4]}"}
-    if prof and prof not in ("Adobe Standard", "Adobe Color", "", "None"):
+    # profile 判定大小写不敏感；Embedded/Default 对 JPEG 源等价于不套 raw profile
+    if prof and prof.strip().lower() not in (
+            "adobe standard", "adobe color", "adobe", "embedded", "default color", "", "none"):
         return {"route": "farm", "reason": f"exotic profile: {prof}"}
     return {"route": "local", "reason": "well-covered (heuristic)"}
 

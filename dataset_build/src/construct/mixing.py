@@ -52,6 +52,14 @@ def _alloc(targets: Dict[str, float], supply: Dict[str, int], total: int) -> Dic
             alloc[k] = alloc.get(k, 0) + g
         remaining = total - sum(alloc.values())
         w = {k: wt for k, wt in w.items() if supply[k] - alloc.get(k, 0) > 0}
+    # 小 total 时 round 可能全 0：按权重序补齐余量
+    if remaining > 0:
+        for k, _wt in sorted(targets.items(), key=lambda kv: -kv[1]):
+            while remaining > 0 and supply.get(k, 0) - alloc.get(k, 0) > 0:
+                alloc[k] = alloc.get(k, 0) + 1
+                remaining -= 1
+            if remaining <= 0:
+                break
     return alloc
 
 

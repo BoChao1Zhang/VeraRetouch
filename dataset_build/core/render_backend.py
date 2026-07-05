@@ -145,12 +145,21 @@ def params_to_xmp(params: Dict[str, Any], out_path: str) -> str:
 class RenderBackend:
     """进程内单例（get_backend()）：本地 GPU 串行互斥 + 农场并发提交 + 统计。"""
 
-    def __init__(self, gpu_batch: int = GPU_BATCH, farm_workers: int = FARM_WORKERS) -> None:
+    def __init__(self, gpu_batch: int = GPU_BATCH, farm_workers: int = FARM_WORKERS,
+                 policy: Optional[str] = None) -> None:
         self.gpu_batch = int(gpu_batch)
         self.farm_workers = max(1, int(farm_workers))
+        # 分流策略：
+        #   fidelity（默认）——只有专属残差 LUT 的标定 preset 走本地，其余农场（LR 保真优先）；
+        #   throughput ——键覆盖良好的 param preset 也走本地（_global 残差兜底），
+        #     仅 mask/未覆盖键/exotic profile 走农场。全量 databuild 用它：
+        #     构建的自洽性（recipe 由本管线定义与执行）优先于对 Adobe 的逐像素保真，
+        #     且农场 77/min 撑不住 10 万级渲染。
+        self.policy = policy or os.environ.get("RENDER_BACKEND_POLICY", "fidelity")
         # gpu_render 的 replay 链（含缓存的 fits/残差）非线程安全 → 全局互斥。
         self._gpu_lock = threading.Lock()
         self._preset_cache: Dict[tuple, dict] = {}   # (realpath, mtime, fmt) -> parse_preset()
+        self._route_cache: Dict[str, bool] = {}      # realpath -> throughput 模式下可本地渲
         self._stats_lock = threading.Lock()
         self.stats: Dict[str, int] = {
             "local_images": 0,        # 本地 GPU 成功张数
@@ -190,6 +199,20 @@ class RenderBackend:
             self._preset_cache[key] = pre
         return pre
 
+    def _local_capable(self, preset_path: str, fmt: str) -> bool:
+        """throughput 策略：用 gpu_render.route 的启发式判 preset 是否可本地渲
+        （无 local-mask / 无未覆盖键 / 非 exotic profile）。"""
+        rp = os.path.realpath(preset_path)
+        hit = self._route_cache.get(rp)
+        if hit is None:
+            try:
+                from gpu_render.route import route_preset
+                hit = route_preset(rp, fmt).get("route") == "local"
+            except Exception:
+                hit = False
+            self._route_cache[rp] = hit
+        return hit
+
     def _render_local(self, preset_path: str, fmt: str, jobs: List[tuple],
                       preset_id: str) -> List[bool]:
         """整批本地渲染；返回逐 job 是否产出。异常向上抛（由 render() 回退农场）。"""
@@ -228,13 +251,17 @@ class RenderBackend:
                     "n_local": 0, "n_farm": 0, "stats": self.stats_snapshot()}
 
         go_local = has_residual(pid)
+        local_res_id = pid
+        if not go_local and self.policy == "throughput" and self._local_capable(preset_path, fmt):
+            go_local = True
+            local_res_id = "_global"     # 未标定 preset 用全局残差 LUT 兜底
         farm_idx: List[int] = list(range(n))
         n_local = 0
 
         if go_local:
             jobs = [(image_paths[i], out_paths[i]) for i in range(n)]
             try:
-                oks = self._render_local(preset_path, fmt, jobs, pid)  # type: ignore[arg-type]
+                oks = self._render_local(preset_path, fmt, jobs, local_res_id)  # type: ignore[arg-type]
             except Exception as e:  # noqa: BLE001 - 本地整批失败 → 全量回退农场
                 print(f"[render_backend] 本地 GPU 渲染失败({pid})，整批回退农场: {e}",
                       file=sys.stderr)
