@@ -284,6 +284,17 @@ qa:
   max_retries: 3                       # retry-and-keep-failures -> free RL preference pairs
   annotation_mode: "vlm"               # "vlm" enriches instruction/think/scene tags for quality;
                                        # "template" is a throughput mode for bulk generation.
+  # --- construct tier: winner 的 VLM instruct/reasoning 标注（src/construct/annotate.py） -----
+  vlm_annotate:
+    enabled: true                      # tier.build 选出 winner 后用 35B 单次合并调用替换模板
+                                       # instruction/reasoning；失败回退无泄露模板
+    style_frac: 0.5                    # global 样本中 style 任务（instruction 点名风格名）的比例；
+                                       # 其余为 auto/param —— 防泄露：全文本不得出现 GT 风格名
+    max_leak_retries: 2                # 防泄露 guard（代码断言层）命中后带反馈重试次数，耗尽降级模板
+    max_fail_streak: 5                 # vLLM 连续 transport 失败 N 次后熔断，本进程回退模板
+    max_tokens: 900                    # 合并调用（reasoning+instruction JSON）的输出预算
+  verify_band: [0.45, 0.70]            # 仅 q 在此带内的 winner 走 vlm_clean.verify（before+after
+                                       # 双图）；结果进 qa 字段，不进训练文本；带外跳过（省预算）
   vlm_override_answer: false           # keep deterministic recipe/MMArt/degrade answers as GT;
                                        # VLM reasoning may explain them but must not overwrite them.
   tag_global: false                    # TUNABLE: global S5/S6 don't use the region tag to build a mask;
