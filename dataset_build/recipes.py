@@ -97,13 +97,56 @@ LOCAL_MASK_MARKERS: Tuple[str, ...] = (
 )
 
 #: Per-operator Gaussian sigma profile for Track-B degrade sampling.
-#: Keyed by the "aether_tab8" profile name in config.yaml (degrade.sigma_profile)
-#: / impl_plan_A §2.1. Sigmas are in RAW LR units. Exposure2012 is in EV (tiny);
-#: every other slider is the -100..+100 family. These are deliberately modest so
-#: composited region-local edits stay realistic (not blown out).
+#: Keyed by the "aether_tab8" profile name in config.yaml (degrade.sigma_profile).
+#: Sigmas are in RAW LR units（Exposure2012 为 EV，其余 -100..+100 滑杆族）。
+#: 2026-07-05: 逐值对齐论文 App A Tab 8（P0_001 PDF p.10，人工修图数据集统计导出的
+#: 真实 σ），替换此前手调圆整值——旧值既非统计导出也与 profile 名不符。
+#: 旧手调档保留为 "modest_legacy"（历史 shards S1/S7 用它产出，复现审计用）。
 SIGMA_PROFILES: Dict[str, Dict[str, float]] = {
     "aether_tab8": {
-        # Light (EV for exposure, slider units otherwise)
+        # Light Adjustment
+        "Exposure2012": 0.6543,
+        "Contrast2012": 12.6789,
+        "Highlights2012": 21.5888,
+        "Shadows2012": 16.2265,
+        "Whites2012": 16.4355,
+        "Blacks2012": 15.5995,
+        "ParametricShadows": 7.2495,
+        "ParametricDarks": 15.8214,
+        "ParametricLights": 7.6688,
+        "ParametricHighlights": 9.1287,
+        # Global Color Adjustment
+        "IncrementalTemperature": 15.0,
+        "IncrementalTint": 15.0,
+        "Vibrance": 7.8137,
+        "Saturation": 7.4315,
+        # Specific Color Adjustment（24 通道逐值）
+        "HueAdjustmentRed": 5.8140,
+        "HueAdjustmentOrange": 8.3549,
+        "HueAdjustmentYellow": 15.1914,
+        "HueAdjustmentGreen": 8.4875,
+        "HueAdjustmentAqua": 19.8922,
+        "HueAdjustmentBlue": 11.8419,
+        "HueAdjustmentPurple": 10.1451,
+        "HueAdjustmentMagenta": 19.0949,
+        "SaturationAdjustmentRed": 19.8318,
+        "SaturationAdjustmentOrange": 9.6656,
+        "SaturationAdjustmentYellow": 18.2479,
+        "SaturationAdjustmentGreen": 17.7113,
+        "SaturationAdjustmentAqua": 7.4975,
+        "SaturationAdjustmentBlue": 15.6967,
+        "SaturationAdjustmentPurple": 21.7025,
+        "SaturationAdjustmentMagenta": 27.8002,
+        "LuminanceAdjustmentRed": 10.0289,
+        "LuminanceAdjustmentOrange": 13.4234,
+        "LuminanceAdjustmentYellow": 16.2116,
+        "LuminanceAdjustmentGreen": 28.3202,
+        "LuminanceAdjustmentAqua": 17.1250,
+        "LuminanceAdjustmentBlue": 22.4162,
+        "LuminanceAdjustmentPurple": 18.2913,
+        "LuminanceAdjustmentMagenta": 25.4936,
+    },
+    "modest_legacy": {
         "Exposure2012": 0.50,
         "Contrast2012": 18.0,
         "Highlights2012": 25.0,
@@ -114,17 +157,15 @@ SIGMA_PROFILES: Dict[str, Dict[str, float]] = {
         "ParametricDarks": 15.0,
         "ParametricLights": 15.0,
         "ParametricHighlights": 15.0,
-        # Color & Temperature
         "IncrementalTemperature": 20.0,
         "IncrementalTint": 15.0,
         "Vibrance": 25.0,
         "Saturation": 20.0,
     },
-    # Specific-color (HSL) bands all share one sigma (filled below).
 }
-# HSL bands: a single shared sigma for every Hue/Sat/Lum adjustment key.
+# legacy 档 HSL 带共享 σ（与历史产物一致）
 for _k in COLORMIXER_KEYS:
-    SIGMA_PROFILES["aether_tab8"].setdefault(_k, 18.0)
+    SIGMA_PROFILES["modest_legacy"].setdefault(_k, 18.0)
 
 #: Which PARAM_KEYS belong to each Direction-A aspect (L / GC / SC). Used to
 #: select the perturbed operators for a given degrade combo.
