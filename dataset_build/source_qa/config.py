@@ -92,6 +92,12 @@ IAA_CHARM_CHECKPOINT = os.environ.get(
     os.path.join(IAA_CHARM_MODEL_DIR, "Ava_large_charm.pth"),
 )
 IAA_CHARM_PATCH_SELECTION = os.environ.get("SOURCE_QA_CHARM_PATCH_SELECTION", "frequency")
+# Charm 输入长边上限（0=关）。官方对 para/spaq 固定 1024，ava 不设——但 AVA 训练
+# 分布是小图，5K px 原图既 OOD 又把 token 数推到 2 万+（eager attention 前向把
+# 显存尖到 47GB、单张 GPU 0.8s）。50 张 A/B（2026-07-05, vs 旧全分辨率实现）:
+#   cap=2048: |Δcharm| p95=0.88, |Δiaa_mixed| p95=0.468 < 0.5 ✓（验收线）
+#   cap=1024: |Δiaa_mixed| p95=0.774 ✗ → 不要降到 1024
+IAA_CHARM_MAX_LONGEDGE = int(os.environ.get("SOURCE_QA_CHARM_MAX_LONGEDGE", "2048"))
 IAA_CHARM_TRAINING_DATASET = os.environ.get("SOURCE_QA_CHARM_TRAINING_DATASET", "ava")
 IAA_CHARM_BACKBONE = os.environ.get("SOURCE_QA_CHARM_BACKBONE", "facebook/dinov2-large")
 IAA_ARTIMUSE_WEIGHT = float(os.environ.get("SOURCE_QA_ARTIMUSE_WEIGHT", "0.75"))
