@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 
 from dataset_build.source_qa import db, config
-from . import sf_client, render, qa, tier, mask_synth, mask_sam3
+from . import sf_client, render, qa, tier, mask_synth, mask_sam3, mixing
 from .bank import PresetBank
 
 FULL = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full"
@@ -51,6 +51,8 @@ class Selector:
         self.idx = {pid: i for i, pid in enumerate(self.ids)}
         self.feat = {f["preset_id"]: f for f in self.bank.feats}
         self.img_mu = self._bg_mean()
+        self._quota = mixing.FamilyQuota()   # run 级风格族计数
+        self._farm_cache: dict = {}
 
     def _bg_mean(self):
         if os.path.exists(_BG_MEAN):
@@ -71,8 +73,23 @@ class Selector:
         v = sf_client.embed_images([src_path])[0]
         vc = _unit(v - self.img_mu)
         sims = self.pemb_c @ vc
-        top = np.argsort(-sims)[:k]
-        return [self.feat[self.ids[i]] for i in top]
+        # 超取 4k 再按「风格族配额 + 农场路由上限」挑 k（mixing，run 级计数）
+        top = np.argsort(-sims)[: max(4 * k, k + 12)]
+        cands = [self.feat[self.ids[i]] for i in top]
+        return mixing.pick_candidates(cands, k, self._quota, is_farm=self._is_farm)
+
+    def _is_farm(self, feat: dict) -> bool:
+        """preset 是否只能农场渲（mask/未覆盖键/exotic profile）；结果按 preset_id 缓存。"""
+        pid = feat.get("preset_id") or ""
+        hit = self._farm_cache.get(pid)
+        if hit is None:
+            try:
+                from gpu_render.route import route_preset
+                hit = route_preset(feat["path"], feat.get("fmt") or "xmp").get("route") == "farm"
+            except Exception:
+                hit = True
+            self._farm_cache[pid] = hit
+        return hit
 
 
 def process_source(sel: Selector, src: dict, render_n: int, render_workers: int = 6) -> dict:
@@ -223,11 +240,8 @@ def run(n: int, render_n: int, out_dir: str, src_workers: int = 12, local: bool 
     conn.commit()
     # Route 1 (geometric mask-only) applies to ANY photo; b_subject is for Route 2 (SAM3 semantic).
     min_iaa = getattr(config, "CONSTRUCT_SOURCE_IAA_MIN", config.GATE["iaa_keep_above"])
-    rows = [dict(r) for r in conn.execute(
-        "SELECT asset_id, path, is_portrait_pool, iaa_mixed FROM assets WHERE asset_type='image' "
-        "AND b_quality=3 AND iaa_mixed IS NOT NULL AND iaa_mixed >= ? "
-        "AND dup_of IS NULL AND saturation_mean IS NOT NULL ORDER BY asset_id",
-        (min_iaa,)).fetchall()]
+    # 场景分层抽样（PARA 启发配额，见 mixing）；超取 2n 抗 resume/缺文件损耗
+    rows = [dict(r) for r in mixing.stratified_sources(conn, total=2 * n, min_iaa=min_iaa)]
     conn.close()
     rows = [r for r in rows if os.path.exists(r["path"])]
     random.Random(0).shuffle(rows)

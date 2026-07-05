@@ -119,6 +119,40 @@ class FamilyQuota:
         return picked
 
 
+def pick_candidates(cands: List[dict], k: int, quota: FamilyQuota,
+                    is_farm=None, farm_cap_frac: float = 0.25,
+                    fam_of=None) -> List[dict]:
+    """按相关性降序的候选 → k 个：风格族配额 + 农场路由上限（默认 ≤25%/source）。
+    农场渲染 77/min 是稀缺资源，mask 类 preset 只能农场渲，按比例放行保多样性。"""
+    fam_of = fam_of or (lambda c: ((c.get("axes") or {}).get("grade_family")) or "stylized")
+    is_farm = is_farm or (lambda c: False)
+    farm_cap = max(1, int(k * farm_cap_frac))
+    picked: List[dict] = []
+    deferred: List[dict] = []
+    n_farm = 0
+    for c in cands:
+        if len(picked) >= k:
+            break
+        farm = bool(is_farm(c))
+        if farm and n_farm >= farm_cap:
+            deferred.append(c)
+            continue
+        if quota._over(fam_of(c)):
+            deferred.append(c)
+            continue
+        picked.append(c)
+        n_farm += int(farm)
+    for c in deferred:                      # 不足回填（保 k 个）
+        if len(picked) >= k:
+            break
+        picked.append(c)
+        n_farm += int(bool(is_farm(c)))
+    for c in picked:
+        quota.counts[fam_of(c)] += 1
+        quota.total += 1
+    return picked
+
+
 def _preview() -> None:
     sys.path.insert(0, "/home/bc/VeraRetouch")
     from dataset_build.source_qa import db
