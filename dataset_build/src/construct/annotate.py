@@ -14,21 +14,43 @@
             指令；vlm_function 仅作为 reasoning 的措辞参考，风格名在全部文本中被 guard 禁止。
   local   : instruction 只描述区域 + 用户意图层面的诉求；由 GT local_params 翻译来的方向词
             （提亮/压暗/加强对比…）在 instruction 中被 guard 禁止（reasoning 里允许）。
-  degrade : degrade_info 非空（退化链，未来接入）。instruction = 用户抱怨式，从图观察；
+  degrade : degrade_info 非空（退化链）。instruction = 用户抱怨式，从图观察；
             reasoning 可引用退化类型与修复方向，但 instruction 禁止具体参数值/参数名。
-  全任务  : vlm_caption 的 Δ 技术量（ΔL/Δa*/Δb*/ΔE…）与 caption 长片段在**任何**训练文本中
+  全任务  : vlm_caption 的 Δ 技术量（ΔL/Δa*/Δb*…）与 caption 长片段在**任何**训练文本中
             都被 guard 禁止 —— 不只靠 prompt，返回前用代码断言过滤，命中即带反馈重试，
             重试耗尽则抛错降级模板。
+
+v2（2026-07-06，按用户反馈"模板化严重：degrade 链 23% 同前缀 / global style 7.7%"升级）：
+  1. img caption 条件化：source_captions 表（PG，102k，caption+main_subject+subjects）按
+     源图 path 查询（LRU 缓存），prompt 锚定主体/场景，要求 instruction 提到具体画面内容
+     （"人物的肤色/山脊的轮廓"），杜绝无信息的"这张照片"。
+  2. 论文式三方面 CoT：reasoning 按【光影】【全局色彩】【特定色彩】组织 观察→问题→处理方向
+     （VeraRetouch 论文 Auto 模板："state the problems found in the image (from 3 aspects:
+     lighting, global_color, specific color), and give the solution"）；轻量格式校验
+     （≥2 方面实质覆盖）不过则带反馈重试。
+  3. metric 分数写入 reasoning：global 传 source_iaa/after_iaa/q，degrade 传 degrade_de +
+     source_iaa，要求自然引用（"整体美学评分从 56.2 提升至 63.4"）。guard 对这些**传入
+     数值精确白名单**放行（含 degrade 的"ΔE≈值"指标写法），继续封杀 GT 参数值与
+     vlm_caption 的 Δ 技术量。
+  4. 去模板化：per-sample 确定性种子轮换用户 persona（8 种）+ 开头方式提示；禁以
+     "这张照片/这张图/帮我把/请把这张/麻烦把"开头（guard 自检）；degrade 抱怨措辞由
+     degrade_info.aspects 的症状线索驱动，且须与图上实际可见症状一致。
+  违规分两级：泄露类 = hard（重试耗尽抛错回退模板）；质量类（CoT 覆盖不足/未引用 metric/
+  违禁开头）= soft（重试后仍不达标则接受 + STATS.soft_accept 计数），验收由冒烟统计口径
+  兜底（前缀 top1 <8%、三方面 CoT ≥90%、metric 引用 ≥80%）。
 
 调用预算打点：STATS 记录 annotate/verify 实际调用次数，冒烟脚本据此打印单样本口径
 （目标：annotate ~1 次/winner + verify 条件带内 ~0.15 次/winner）。
 """
 from __future__ import annotations
 
+import functools
+import hashlib
 import json
+import random
 import re
 import threading
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import requests
 
@@ -95,7 +117,7 @@ def verify_band() -> tuple:
 # 调用预算打点 + vLLM 熔断
 # --------------------------------------------------------------------------- #
 STATS = {"winners": 0, "annotate_calls": 0, "annotate_ok": 0, "annotate_fallback": 0,
-         "leak_retries": 0, "verify_calls": 0}
+         "leak_retries": 0, "soft_accept": 0, "verify_calls": 0}
 _STATS_LOCK = threading.Lock()
 _FAIL_STREAK = 0          # 连续 transport 失败次数（成功清零；泄露重试不计入）
 
@@ -120,6 +142,54 @@ class AnnotateError(RuntimeError):
 
 def _circuit_open() -> bool:
     return _FAIL_STREAK >= int(_load_cfg()["max_fail_streak"])
+
+
+# --------------------------------------------------------------------------- #
+# img caption 条件化：source_captions 表（PG）按源图 path 查 caption/main_subject
+# --------------------------------------------------------------------------- #
+_CAP_CONN = None
+_CAP_CONN_LOCK = threading.Lock()
+
+
+@functools.lru_cache(maxsize=16384)
+def source_caption(path: str) -> Optional[dict]:
+    """源图 path -> {"caption", "main_subject", "main_subject_cn"}；查不到/DB 失败返回 None。
+
+    main_subject_cn 取 subjects json 里 main=true 项的 cn（比英文 main_subject 更适配中文
+    prompt）。连接懒建 + 出错重建，LRU 缓存避免同源多 winner 重复查询。
+    """
+    global _CAP_CONN
+    if not path:
+        return None
+    with _CAP_CONN_LOCK:
+        try:
+            if _CAP_CONN is None:
+                from dataset_build.source_qa import db
+                _CAP_CONN = db.connect()
+            rows = _CAP_CONN.execute(
+                "SELECT sc.caption, sc.main_subject, sc.subjects FROM assets a "
+                "JOIN source_captions sc ON sc.asset_id = a.asset_id "
+                "WHERE a.path = ? LIMIT 1", (path,)).fetchall()
+        except Exception:  # noqa: BLE001 - caption 是增强条件，DB 抖动不阻塞标注
+            try:
+                _CAP_CONN.close()
+            except Exception:  # noqa: BLE001
+                pass
+            _CAP_CONN = None
+            return None
+    if not rows:
+        return None
+    r = dict(rows[0])
+    cn = None
+    try:
+        for s in json.loads(r.get("subjects") or "[]"):
+            if s.get("main"):
+                cn = s.get("cn")
+                break
+    except Exception:  # noqa: BLE001
+        pass
+    return {"caption": r.get("caption") or "", "main_subject": r.get("main_subject") or "",
+            "main_subject_cn": cn or ""}
 
 
 # --------------------------------------------------------------------------- #
@@ -179,17 +249,50 @@ def _caption_fragments(caption: str) -> List[str]:
     return [f for f in frags if len(f) >= 8]
 
 
+def metric_whitelist(metrics: Optional[dict]) -> List[str]:
+    """传入 metric 数值的精确匹配白名单（多种常见格式化写法）。
+
+    IAA/q/ΔE 是质量指标不是 GT 参数：这些**传入**的数值在 guard 的数字/Δ 检查前被
+    掩掉（精确匹配），GT 参数值与 caption 的 Δ 技术量照常封杀。
+    """
+    wl: List[str] = []
+    for v in (metrics or {}).values():
+        if not isinstance(v, (int, float)):
+            continue
+        cands = {f"{v:.2f}", f"{v:.1f}", f"{round(v, 2):g}", f"{round(v, 1):g}", f"{v:.0f}"}
+        # len>=2：单个数字（如 q=1 的 "1"）做子串掩码/引用判定都会误伤，丢弃
+        wl.extend(c for c in cands if len(c) >= 2)
+    return sorted(set(wl), key=len, reverse=True)   # 长串先掩，防 63.4 被 63 部分掩掉
+
+
+def _mask_metrics(text: str, whitelist: Optional[List[str]], allow_delta_e: bool) -> str:
+    """把白名单 metric 数值（及 degrade 链的『ΔE≈值』指标写法）从文本中掩掉，
+    再交给 Δ/数字 guard —— 剩下的数字/Δ 才是真泄露。"""
+    for s in (whitelist or []):
+        text = text.replace(s, "")
+    if allow_delta_e:
+        # 仅放行独立的 ΔE / ΔE00 指标记号（值已被上面掩掉）；Δb*/Δa*/ΔL 等 caption 指纹照抓
+        text = re.sub(r"[Δ∆]\s*E(?:00)?(?![*\w])", "", text)
+    return text
+
+
 def find_leaks(ann: dict, task_type: str, preset_meta: Optional[dict],
-               banned_dirs: Optional[List[str]] = None) -> List[str]:
-    """返回违规列表（空 = 干净）。instruction = long+short；reasoning 单独一档。"""
+               banned_dirs: Optional[List[str]] = None,
+               metrics: Optional[dict] = None) -> List[str]:
+    """hard 违规列表（空 = 干净）：泄露类，重试耗尽则整体拒绝。instruction = long+short。"""
     meta = preset_meta or {}
     name = (meta.get("vlm_name") or "").strip()
     caption = meta.get("vlm_caption") or ""
     instr = f'{ann.get("instruction_long", "")}\n{ann.get("instruction_short", "")}'
     all_text = f'{instr}\n{ann.get("reasoning", "")}'
+    wl = metric_whitelist(metrics)
+    allow_de = bool(metrics and "degrade_de" in metrics)
+    masked_all = _mask_metrics(all_text, wl, allow_de)
+    masked_instr = _mask_metrics(instr, wl, allow_de)
     v: List[str] = []
     # 全任务：Δ 技术量 / caption 片段 / LR 内部参数键名 —— 任何训练文本禁止
-    if _DELTA_RE.search(all_text):
+    # （Δ/数字检查跑在 metric 掩码后的文本上：白名单指标放行，caption Δ 指纹照抓）
+    if _DELTA_RE.search(masked_all):
         v.append("delta_metric")
     for frag in _caption_fragments(caption):
         if frag in all_text:
@@ -212,9 +315,47 @@ def find_leaks(ann: dict, task_type: str, preset_meta: Optional[dict],
         m = _LOCAL_DIR_RE.search(instr)
         if m:
             v.append(f"tech_direction:{m.group(0)}")
-    # degrade：instruction 禁止具体参数值
-    if task_type == "degrade" and _NUM_VAL_RE.search(instr):
+    # degrade：instruction 禁止具体参数值（metric 白名单已掩掉，剩下的数字才是泄露）
+    if task_type == "degrade" and _NUM_VAL_RE.search(masked_instr):
         v.append("param_value")
+    return v
+
+
+# --------------------------------------------------------------------------- #
+# soft 质量校验（去模板化 + 论文式 CoT + metric 引用）：重试提质，耗尽仍接受并计数
+# --------------------------------------------------------------------------- #
+# 三方面 CoT 的段落标记（论文 Auto 模板的 lighting / global_color / specific color）
+_ASPECT_MARKS = (
+    ("光影", ("【光影】", "【光线】", "光影：", "光影:")),
+    ("全局色彩", ("【全局色彩】", "【整体色调】", "全局色彩：", "全局色彩:")),
+    ("特定色彩", ("【特定色彩】", "【局部色彩】", "特定色彩：", "特定色彩:", "【具体颜色】")),
+)
+_BANNED_OPENINGS = ("这张照片", "这张图", "帮我把", "请把这张", "麻烦把", "请帮我把", "帮我修")
+
+
+def cot_coverage(reasoning: str) -> int:
+    """reasoning 覆盖的三方面数：某方面标记出现且其后有 >=4 字实质内容（"基本保持"也算观察）。"""
+    n = 0
+    for _name, marks in _ASPECT_MARKS:
+        for m in marks:
+            i = reasoning.find(m)
+            if i >= 0 and len(reasoning[i + len(m):].strip(" ：:")) >= 4:
+                n += 1
+                break
+    return n
+
+
+def quality_issues(ann: dict, metrics: Optional[dict] = None) -> List[str]:
+    """soft 违规列表：不泄露但不达 v2 质量约定 —— 触发带反馈重试，耗尽则接受并计数。"""
+    v: List[str] = []
+    instr_long = ann.get("instruction_long", "")
+    if cot_coverage(ann.get("reasoning", "")) < 2:
+        v.append("cot_missing")            # 三方面 CoT 覆盖不足（至少 2 方面实质观察）
+    if any(instr_long.startswith(b) for b in _BANNED_OPENINGS):
+        v.append("banned_opening")         # 模板化开头（"这张照片/帮我把…"）
+    wl = metric_whitelist(metrics)
+    if wl and not any(s in ann.get("reasoning", "") for s in wl):
+        v.append("metric_missing")         # reasoning 未引用任何传入的质量指标数值
     return v
 
 
@@ -225,15 +366,85 @@ _SYS = (
     "你是资深商业修图师，同时为修图训练数据写标注。你会看到两张图：第一张是【原图】，"
     "第二张是对原图完成某次修图后的【成片】。\n"
     "请产出两样东西：\n"
-    "1. reasoning：修图师接到用户请求后的思考过程——先指出原图上可见的画面证据"
-    "（主体、光线、色彩、氛围各自的现状），再解释这次修图往哪个方向调整、成片达到了什么效果。"
-    "必须引用图上看得到的证据，泛泛之词（如『提升了质感』『更有高级感』而无画面依据）不合格。\n"
-    "2. instruction：模拟真实用户拿着原图向修图师提出的修图请求（自然中文、用户口吻、祈使句），"
-    "该请求的理想结果正是第二张成片——请求内容必须与两张图的实际视觉差异一致。\n"
+    "1. reasoning：修图师接到用户请求后的思考过程，必须按三方面组织，每方面先写图上"
+    "观察到的现状/问题、再写处理方向与成片达到的效果，格式：\n"
+    "   【光影】曝光/明暗对比/高光阴影的观察→问题→处理方向；\n"
+    "   【全局色彩】整体色调/色温/白平衡/整体饱和的观察→问题→处理方向；\n"
+    "   【特定色彩】具体颜色（肤色、天空的蓝、植物的绿等）的观察→问题→处理方向。\n"
+    "   某方面确实无明显改动就一句『基本保持』带过；引用图上看得到的证据，"
+    "泛泛之词（『提升质感』『更高级』而无画面依据）不合格。\n"
+    "2. instruction：模拟指定身份的用户拿着原图向修图师提出的修图请求（自然中文、用户口吻），"
+    "该请求的理想结果正是第二张成片——请求内容必须与两张图的实际视觉差异一致，并且要提到"
+    "画面里的具体内容（人物、天空、山脊、街道这类可指认的东西），不要只说『这张照片』。\n"
     "只输出一个 JSON 对象，不要输出 JSON 以外的任何文字：\n"
-    '{"reasoning": "<3-5句中文>", "instruction_long": "<2-3句用户口吻请求>", '
+    '{"reasoning": "<按【光影】【全局色彩】【特定色彩】组织，中文>", '
+    '"instruction_long": "<2-3句用户口吻请求>", '
     '"instruction_short": "<不超过15个字的简短请求>"}'
 )
+
+# 去模板化：per-sample 确定性轮换的用户 persona 与开头方式（种子 = sha1(image|task)）
+_PERSONAS = (
+    "挑剔的商业图库客户，对色彩还原和细节要求苛刻",
+    "刚玩摄影的新手，只会用生活化的词形容想要的感觉",
+    "职业风光/人像摄影师，用词专业但克制",
+    "旅行博主，在意氛围感和照片发出去好不好看",
+    "婚礼客户，最关心人物好不好看、肤色自然不自然",
+    "电商店主，要求画面干净讨喜、颜色可信",
+    "给家人整理照片的普通用户，口语化甚至有点啰嗦",
+    "杂志美术编辑，重视影调层次与画面质感",
+)
+_OPENING_HINTS = (
+    "直接从画面里的主体或最显眼的东西说起",
+    "从你最不满意的问题说起",
+    "从想要的最终感觉或照片用途说起",
+    "从拍摄场景、天气或当时的光线说起",
+)
+
+
+def _persona_clause(sample_key: str) -> str:
+    rng = random.Random(int.from_bytes(hashlib.sha1(sample_key.encode()).digest()[:4], "big"))
+    persona = rng.choice(_PERSONAS)
+    hint = rng.choice(_OPENING_HINTS)
+    return (f"你要模拟的用户身份：{persona}。instruction 的开头方式：{hint}；"
+            "严禁以『这张照片/这张图/帮我把/请把这张/麻烦把/请帮我把/帮我修』开头，"
+            "指代画面时用具体内容（如『雪山那张』『人物的脸』），不要用无信息的『这张照片』。")
+
+
+def _caption_clause(img_caption: Optional[dict]) -> str:
+    if not img_caption or not img_caption.get("caption"):
+        return ""
+    subj = img_caption.get("main_subject_cn") or img_caption.get("main_subject") or ""
+    s = f"画面内容参考（帮助你指认主体/场景，措辞仍须与你看到的图一致）：{img_caption['caption']}"
+    if subj:
+        s += f"（主体：{subj}）"
+    return s + "\ninstruction 和 reasoning 都要落到这些具体画面内容上。"
+
+
+def _metrics_clause(metrics: Optional[dict]) -> str:
+    m = metrics or {}
+    parts: List[str] = []
+    si, ai = m.get("source_iaa"), m.get("after_iaa")
+    if isinstance(si, (int, float)) and isinstance(ai, (int, float)):
+        parts.append(f"画面整体美学评分（百分制）修图前约 {si:.1f}、修图后约 {ai:.1f}")
+    elif isinstance(si, (int, float)):
+        parts.append(f"原图整体美学评分约 {si:.1f}（百分制）")
+    if isinstance(m.get("q"), (int, float)):
+        parts.append(f"该成片在同源候选中的综合质量分 q≈{m['q']:.2f}（0-1）")
+    if isinstance(m.get("degrade_de"), (int, float)):
+        parts.append(f"退化幅度 ΔE≈{m['degrade_de']:.1f}（色差单位，越大偏离原片越远）")
+    if not parts:
+        return ""
+    return ("客观质量指标：" + "；".join(parts) + "。"
+            "请在 reasoning 中自然引用其中至少一个数值（如『整体美学评分从 X 提升至 Y』），"
+            "不要堆砌，也不要把这些数字写进 instruction。")
+
+
+# degrade 链：aspects -> 用户可感的症状线索（抱怨措辞的驱动词，仍须与图一致）
+_ASPECT_SYMPTOMS = {
+    "L": "曝光/明暗类——过亮、过暗、发灰没层次、对比刺眼、死白死黑",
+    "GC": "整体偏色类——发黄、发蓝、发绿、偏品红、色温不对、像蒙了层色罩",
+    "SC": "特定颜色类——肤色不对劲、天空/植物的颜色怪异、某种颜色过艳或发闷",
+}
 
 
 def _task_clause(task_type: str, preset_meta: Optional[dict], degrade_info: Optional[dict],
@@ -266,36 +477,45 @@ def _task_clause(task_type: str, preset_meta: Optional[dict], degrade_info: Opti
         return (
             f"任务类型：局部修图。这次修图只作用于画面中的【{local_region or '目标'}】区域，"
             "画面其余部分基本不变。\n"
-            "instruction 只描述该区域与用户意图层面的诉求——由你对比两张图判断该区域的问题"
-            "（例如『这个区域看起来有点闷，帮我处理一下』『希望人物从背景里更突出』）。"
-            "instruction 里严禁出现技术性的调整方向指令（如提亮/压暗/加对比/增饱和/收高光等）"
-            "和任何风格名。\n"
+            "instruction 只描述该区域与用户意图层面的诉求——由你对比两张图判断该区域的问题。"
+            "严格规则：instruction（含 instruction_short）里**一个技术方向词都不能出现**，"
+            "包括但不限于：提亮、调亮、压暗、调暗、加深、加对比、增对比、增饱和、增艳、"
+            "收高光、压高光、提阴影、拉阴影、加清晰、锐化、去雾——这些是修图师的话术，"
+            "不是用户诉求；也不得出现任何风格名。\n"
+            "反例（不合格）：『把左下的树林提亮一点』『帮我压暗天空』。\n"
+            "正例（合格）：『左下的树林看着发闷，帮我弄舒服点』『希望人物从背景里更突出』"
+            "『这块雪地看不出质感，帮我处理下』。\n"
             "reasoning 里才允许写方向性的调整描述：该区域朝什么方向调、为什么这样调。")
     if task_type == "degrade":
-        kinds = ""
+        aspects = []
         if isinstance(degrade_info, dict):
-            kinds = "、".join(str(k) for k in (degrade_info.get("kinds")
-                                               or degrade_info.get("aspects") or [])) \
-                or str(degrade_info.get("kind") or "")
+            aspects = [str(a) for a in (degrade_info.get("aspects")
+                                        or degrade_info.get("kinds") or [])]
+        hints = "；".join(_ASPECT_SYMPTOMS[a] for a in aspects if a in _ASPECT_SYMPTOMS)
         return (
             "任务类型：坏图修复。第一张原图存在画质/色彩问题，第二张是修复后的成片。\n"
-            "instruction 写成用户抱怨式（例如『这张照片发灰又偏色，帮我修一下』）——抱怨的内容"
-            "必须是第一张图上肉眼可见的问题，严禁出现任何具体参数值、参数名或技术术语。\n"
-            f"reasoning 可以引用退化类型（{kinds or '按图判断'}）与对应的修复方向。")
+            "instruction 写成用户抱怨式——抱怨的内容必须是第一张图上肉眼可见的具体症状"
+            "（说清楚是画面里的什么东西出了什么问题，比如『人脸黄得吓人』『天空灰成一片』），"
+            "严禁出现任何具体参数值、参数名或技术术语。\n"
+            + (f"本图已知的退化方面与症状线索（从中找图上真实可见的来抱怨，不要照抄）：{hints}\n"
+               if hints else "")
+            + f"reasoning 按三方面组织时重点展开退化涉及的方面（{('、'.join(aspects)) or '按图判断'}），"
+              "写清对应的修复方向。")
     raise AnnotateError(f"unknown task_type: {task_type}")
 
 
 # --------------------------------------------------------------------------- #
 # vLLM 调用（HTTP；复用 qa 的图片编码 + 全局 admission gate；解析用 vlm_clean.loads_lenient）
 # --------------------------------------------------------------------------- #
-def _post(user_text: str, images: List[str], retries: int = 3) -> str:
+def _post(user_text: str, images: List[str], retries: int = 3,
+          temperature: float = 0.3) -> str:
     """一次 chat/completions。transport 级重试 + 429 退避；耗尽抛 AnnotateError。"""
     from . import qa as _qa   # 局部 import 避免环
     import time
     content = [{"type": "image_url", "image_url": {"url": _qa._uri(p)}} for p in images]
     content.append({"type": "text", "text": user_text})
     payload = {"model": config.VLLM_MODEL, "max_tokens": int(_load_cfg()["max_tokens"]),
-               "temperature": 0.3,
+               "temperature": temperature,
                "messages": [{"role": "system", "content": _SYS},
                             {"role": "user", "content": content}]}
     if not config.VLLM_ENABLE_THINKING:
@@ -339,10 +559,15 @@ def _normalize(raw: str) -> Optional[dict]:
 def annotate_winner(image_path: str, task_type: str, preset_meta: Optional[dict],
                     degrade_info: Optional[dict] = None, local_region: Optional[str] = None,
                     local_params: Optional[dict] = None,
-                    source_path: Optional[str] = None) -> dict:
+                    source_path: Optional[str] = None,
+                    img_caption: Optional[dict] = None,
+                    metrics: Optional[dict] = None) -> dict:
     """winner 样本 -> {"instruction_long", "instruction_short", "reasoning"}。
 
     image_path = winner 成片；source_path = 原图（给出时模型看 before+after 双图，单次调用）。
+    img_caption = source_captions 的 {caption, main_subject[_cn]}（锚定主体/场景）；
+    metrics = 质量指标（source_iaa/after_iaa/q/degrade_de），要求 reasoning 自然引用，
+    guard 侧对这些数值精确白名单放行。
     失败（vLLM 不可用 / 熔断 / 防泄露重试耗尽）抛 AnnotateError，调用方回退无泄露模板。
     """
     global _FAIL_STREAK
@@ -356,17 +581,26 @@ def annotate_winner(image_path: str, task_type: str, preset_meta: Optional[dict]
         raise AnnotateError(f"circuit_open (fail_streak={_FAIL_STREAK})")
 
     banned_dirs = gt_direction_words(local_params) if task_type == "local" else []
-    clause = _task_clause(task_type, preset_meta, degrade_info, local_region)
     images = [p for p in (source_path, image_path) if p]
-    base_text = ("第一张是【原图】，第二张是【成片】。\n" if len(images) == 2
-                 else "这张图是修图后的【成片】（原图未提供，请从成片逆推）。\n") + clause
+    parts = [("第一张是【原图】，第二张是【成片】。" if len(images) == 2
+              else "这张图是修图后的【成片】（原图未提供，请从成片逆推）。"),
+             _task_clause(task_type, preset_meta, degrade_info, local_region),
+             _persona_clause(f"{image_path}|{task_type}"),
+             _caption_clause(img_caption),
+             _metrics_clause(metrics)]
+    base_text = "\n".join(p for p in parts if p)
 
     feedback = ""
     max_leak = int(_load_cfg()["max_leak_retries"])
+    ann_soft = None                          # 仅剩 soft 违规的最新一版（耗尽时接受）
+    soft_last: List[str] = []
     for attempt in range(1 + max_leak):
         _bump("annotate_calls")
         try:
-            raw = _post(base_text + feedback, images)
+            # 重试升温：0.3 的低温会让模型反复落回同一措辞吸引子（local 链的"提亮"
+            # 三连即此症状）；违规重试时抬到 0.6 增大跳出概率。
+            raw = _post(base_text + feedback, images,
+                        temperature=0.3 if attempt == 0 else 0.6)
         except AnnotateError:
             with _STATS_LOCK:
                 _FAIL_STREAK += 1               # transport 失败计入熔断
@@ -375,17 +609,21 @@ def annotate_winner(image_path: str, task_type: str, preset_meta: Optional[dict]
             _FAIL_STREAK = 0                    # 服务在线：熔断计数清零
         ann = _normalize(raw)
         if ann is None:
-            leaks = ["parse_failed"]
+            hard, soft = ["parse_failed"], []
         else:
-            leaks = find_leaks(ann, task_type, preset_meta, banned_dirs)
-        if not leaks:
+            hard = find_leaks(ann, task_type, preset_meta, banned_dirs, metrics=metrics)
+            soft = quality_issues(ann, metrics=metrics)
+        if not hard and not soft:
             _bump("annotate_ok")
             return ann
+        if not hard:
+            ann_soft, soft_last = ann, soft     # 无泄露：留作耗尽时的可接受版本
         if attempt < max_leak:
             _bump("leak_retries")
             banned_terms = [t for t in ([((preset_meta or {}).get("vlm_name") or "")]
                                         if task_type != "style" else []) + banned_dirs if t]
-            feedback = ("\n\n【重写要求】上一次输出违反了标注规范（" + "、".join(leaks[:4]) + "）。"
+            issues = hard + soft
+            feedback = ("\n\n【重写要求】上一次输出不合规（" + "、".join(issues[:5]) + "）。"
                         "请重新输出同样的 JSON，务必：不出现技术量/参数名/Δ 指标；"
                         + (f"以下词语严禁出现在 instruction 中：{'、'.join(banned_terms)}；"
                            if banned_terms else "")
@@ -393,8 +631,19 @@ def annotate_winner(image_path: str, task_type: str, preset_meta: Optional[dict]
                            "只写区域观感与用户诉求（方向性描述放 reasoning）；"
                            if task_type == "local" else "")
                         + ("style 任务的 instruction 必须点名风格名称；" if task_type == "style" else "")
-                        + "instruction 保持用户口吻。")
-    raise AnnotateError(f"leak_guard_exhausted: {leaks}")
+                        + ("reasoning 必须按【光影】【全局色彩】【特定色彩】三段组织；"
+                           if "cot_missing" in soft else "")
+                        + ("instruction 换一个开头，不要以『这张照片/帮我把』这类套话开头；"
+                           if "banned_opening" in soft else "")
+                        + ("reasoning 里自然引用给出的质量指标数值；"
+                           if "metric_missing" in soft else "")
+                        + "instruction 保持用户口吻并提到具体画面内容。")
+    if ann_soft is not None:
+        _bump("soft_accept")                    # 无泄露但质量约定未全达标：接受 + 计数
+        _bump("annotate_ok")
+        ann_soft["_soft_issues"] = soft_last    # 调用方可选择性落 qa 字段（不进训练文本）
+        return ann_soft
+    raise AnnotateError(f"leak_guard_exhausted: {hard}")
 
 
 # --------------------------------------------------------------------------- #

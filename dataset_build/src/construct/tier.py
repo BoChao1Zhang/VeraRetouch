@@ -69,12 +69,36 @@ def _merit_phrase(qa: dict) -> str:
     return "、".join(_MERIT_CN[h] for h in hits if h in _MERIT_CN) or "整体观感提升"
 
 
-def _instruction(cap: dict, task_type: str = "style") -> str:
+def _tpl_rng(key: str):
+    import random
+    return random.Random(int.from_bytes(hashlib.sha1(key.encode()).digest()[:4], "big"))
+
+
+# 回退模板的种子化变体（v2 去模板化：annotate 失败回退时也不产生单一前缀）。全部无泄露。
+_STYLE_TPLS = ("请把这张照片调成「{n}」的风格。",
+               "想要「{n}」的感觉，帮我把这张照片调过去。",
+               "帮我按「{n}」的风格处理一下这张。",
+               "这张想试试「{n}」风格，麻烦调一下。")
+_AUTO_TPLS = ("原片看着有点平，请帮我调得更好看、更耐看。",
+              "帮我优化下这张的整体观感，让它更舒服耐看。",
+              "总觉得原片差点意思，请帮我调得更有质感。",
+              "麻烦调一下整体的色调和光感，让它更讨喜。")
+_LOCAL_TPLS = ("{r}那一块看着和整体不太搭，帮我处理一下。",
+               "{r}这部分帮我弄得舒服自然一点。",
+               "照片里{r}区域的观感差点意思，请调整优化一下。",
+               "请针对{r}区域做些调整，让画面更协调耐看。")
+_SAM3_TPLS = ("请把这张照片的{r}调成「{n}」的风格。",
+              "想让{r}有「{n}」的感觉，其余部分保持不动。",
+              "帮我只对{r}用「{n}」风格处理一下。")
+
+
+def _instruction(cap: dict, task_type: str = "style", seed_key: str = "") -> str:
     """回退模板。防泄露：只有 style 任务（风格名=任务输入）才点名 GT 风格名。"""
+    rng = _tpl_rng(seed_key or "tpl")
     if task_type == "style":
         name = (cap or {}).get("vlm_name") or "电影感调色"
-        return f"请把这张照片调成「{name}」的风格。"
-    return "请帮我把这张照片修得更好看，整体观感更舒服、更耐看。"   # auto/param：不点名风格
+        return rng.choice(_STYLE_TPLS).format(n=name)
+    return rng.choice(_AUTO_TPLS)   # auto/param：不点名风格
 
 
 def _reasoning(cap: dict, qa: dict, is_portrait: bool, task_type: str = "style") -> str:
@@ -121,10 +145,11 @@ def make_sft_record(group: dict, c: dict, rank: int, caps: dict) -> dict:
     lc = c.get("local")
     task = _task_type(src, c)
     region = lparams = None
+    seed_key = f"{src}|{c.get('preset_id')}"
     if lc and lc.get("route") == "sam3":
         cap = caps.get(lc.get("base_preset_id"), {})
         name = cap.get("vlm_name") or "所选调色"
-        instr = f"请把这张照片的{lc['concept_cn']}调成「{name}」的风格。"
+        instr = _tpl_rng(seed_key).choice(_SAM3_TPLS).format(r=lc["concept_cn"], n=name)
         reason = f"只对{lc['concept_cn']}局部应用「{name}」，" + _merit_phrase(c["qa"]) + "。"
         local = {"mask_unit_id": lc["mask_unit_id"], "concept": lc["concept"],
                  "C_GT": lc["cgt_path"], "base_preset_id": lc.get("base_preset_id")}
@@ -133,24 +158,30 @@ def make_sft_record(group: dict, c: dict, rank: int, caps: dict) -> dict:
         cap = caps.get(lc.get("base_preset_id"), {})
         edit = _local_edit_phrase(lc.get("local_params") or {})
         # 回退模板防泄露：instruction 不含 GT 方向词（指令即答案）；方向词只进 reasoning。
-        instr = f"请调整这张照片的{lc['region']}区域，让它和整体画面更协调。"
+        instr = _tpl_rng(seed_key).choice(_LOCAL_TPLS).format(r=lc["region"])
         reason = (f"对{lc['region']}区域局部{edit}，" + _merit_phrase(c["qa"]) + "。")
         local = {"mask_unit_id": lc["mask_unit_id"], "geom": lc["geom"], "C_GT": lc["cgt_path"],
                  "base_preset_id": lc.get("base_preset_id")}
         region, lparams = lc.get("region"), lc.get("local_params")
     else:
         cap = caps.get(c["preset_id"], {})
-        instr = _instruction(cap, task)
+        instr = _instruction(cap, task, seed_key)
         reason = _reasoning(cap, c["qa"], isp, task)
         local = None
     # --- VLM 标注（单次合并调用）：成功则替换模板；失败回退上面的无泄露模板 ---
+    # v2：img caption 锚定主体/场景 + 质量指标（source_iaa/after_iaa/q）供 reasoning 引用
     instr_short, annot_src = None, "template"
     annotate._bump("winners")
     if annotate.enabled():
         try:
+            metrics = {k: v for k, v in {
+                "source_iaa": group.get("source_iaa") or c["qa"].get("source_iaa"),
+                "after_iaa": c["qa"].get("iaa_mixed"),
+                "q": c["qa"].get("q")}.items() if isinstance(v, (int, float))}
             ann = annotate.annotate_winner(
                 c["after_path"], task, cap, local_region=region,
-                local_params=lparams, source_path=src)
+                local_params=lparams, source_path=src,
+                img_caption=annotate.source_caption(src), metrics=metrics)
             instr, instr_short = ann["instruction_long"], ann["instruction_short"]
             reason, annot_src = ann["reasoning"], "vlm"
         except Exception as e:  # noqa: BLE001 - 标注失败必须回退模板而非丢样本

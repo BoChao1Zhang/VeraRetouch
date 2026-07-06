@@ -78,15 +78,25 @@ def _fallback_instruction(rng: random.Random) -> Dict[str, str]:
             "reasoning": ""}   # 模板回退不产 reasoning（宁缺毋泄露）
 
 
-def _annotate(degraded_path: str, spec) -> Optional[Dict[str, str]]:
+def _annotate(degraded_path: str, spec, src: Dict[str, Any],
+              de: float) -> Optional[Dict[str, str]]:
+    """v2：双图（第一张=退化图=用户手里的"原图"，第二张=源图=修复目标）+ img caption
+    锚定主体 + metrics（degrade_de/source_iaa）供 reasoning 引用；抱怨措辞由
+    aspects 症状线索驱动（annotate._ASPECT_SYMPTOMS），泄露 guard 在 annotate 侧。"""
     try:
-        from construct.annotate import annotate_winner
+        from construct.annotate import annotate_winner, source_caption
     except Exception:
         return None
     try:
-        r = annotate_winner(degraded_path, task_type="auto", preset_meta=None,
+        metrics = {"degrade_de": round(float(de), 1)}
+        if src.get("iaa_mixed") is not None:
+            metrics["source_iaa"] = round(float(src["iaa_mixed"]), 1)
+        r = annotate_winner(src["path"], task_type="auto", preset_meta=None,
                             degrade_info={"aspects": spec.aspects,
-                                          "ops": sorted(spec.op_params)})
+                                          "ops": sorted(spec.op_params)},
+                            source_path=degraded_path,
+                            img_caption=source_caption(src["path"]),
+                            metrics=metrics)
         if r and r.get("instruction_long"):
             return {"instruction": r["instruction_long"],
                     "instruction_short": r.get("instruction_short", ""),
@@ -163,7 +173,7 @@ def build(n_sources: int, out_dir: str, min_iaa: float = 55.0,
                     stats["gate_clip"] += 1
                 os.unlink(deg_p)
                 continue
-            ann = _annotate(deg_p, spec) if use_annotate else None
+            ann = _annotate(deg_p, spec, src, de) if use_annotate else None
             with slock:
                 stats["annotate_vlm" if ann else "annotate_tpl"] += 1
             if not ann:

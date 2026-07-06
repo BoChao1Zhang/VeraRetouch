@@ -74,8 +74,9 @@ def main() -> None:
                 continue
             qa_new = dict(c.get("qa") or {})
             qa_new.update({"q": round(q, 4), "iaa_mixed": iaa and round(iaa, 3),
-                           "retier": True})
-            rec = tier.sft_record(g, c["preset_id"], c["after_path"], qa_new)
+                           "source_iaa": src_iaa and round(src_iaa, 3), "retier": True})
+            c2 = dict(c); c2["qa"] = qa_new
+            rec = tier.make_sft_record(g, c2, picked, tier._caps())
             sf.write(json.dumps(rec, ensure_ascii=False) + "\n")
             have.add(key)
             picked += 1
