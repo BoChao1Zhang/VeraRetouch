@@ -508,8 +508,9 @@ def qa_rank(source_path: str, variants: List[Tuple[str, str]], scene: Optional[s
         return {"ranking": [], "scores": {}}
     src_stats = _stats(source_path)
     src_cf = src_stats["cf"]
-    # 源图 + 全部候选一批打分（ArtiMuse 单前向 batch，qa_rank 主耗时 ~8× 提速）
-    objscore.score_many([source_path] + [p for _, p in variants])
+    # 注意：不要用 score_many 批路径——生产实测批内打分被系统性压低 12-19 分
+    # （单独重打 60-69 vs 批内记录 44-50，2026-07-06；根因待查，回填场景的 A/B 未覆盖
+    # 本混合内容批），导致 SFT 产率 1.7→0.11/组。逐张 ~0.13s 足够快。
     src_obj = objscore.score(source_path)
     src_iaa = objscore.mixed_value(src_obj)
 
