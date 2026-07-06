@@ -103,8 +103,76 @@ def _task_type(src: str, c: dict) -> str:
     return "param" if c.get("kind") == "param" else "auto"
 
 
+def _recipe_of(c: dict) -> dict:
+    lc = c.get("local")
+    if lc and lc.get("route") == "sam3":
+        return {"kind": "lut_in_sam3", "base_preset_id": lc.get("base_preset_id"),
+                "base_preset_path": lc.get("base_preset_path"), "concept": lc["concept"]}
+    if lc:
+        return {"kind": "local_param", "mask_type": lc["mask_type"], "geom": lc["geom"],
+                "local_params": lc["local_params"], "base_preset_id": lc.get("base_preset_id")}
+    return {"preset_id": c["preset_id"], "kind": c["kind"], "path": c["preset_path"],
+            "fmt": c.get("fmt"), "content_hash": c.get("content_hash")}
+
+
+def make_sft_record(group: dict, c: dict, rank: int, caps: dict) -> dict:
+    """单条 SFT 记录构造（模板/VLM 标注/verify 全链）。build 与 retier 离线回收共用。"""
+    src = group["source"]; isp = group.get("is_portrait", False)
+    lc = c.get("local")
+    task = _task_type(src, c)
+    region = lparams = None
+    if lc and lc.get("route") == "sam3":
+        cap = caps.get(lc.get("base_preset_id"), {})
+        name = cap.get("vlm_name") or "所选调色"
+        instr = f"请把这张照片的{lc['concept_cn']}调成「{name}」的风格。"
+        reason = f"只对{lc['concept_cn']}局部应用「{name}」，" + _merit_phrase(c["qa"]) + "。"
+        local = {"mask_unit_id": lc["mask_unit_id"], "concept": lc["concept"],
+                 "C_GT": lc["cgt_path"], "base_preset_id": lc.get("base_preset_id")}
+        region = lc.get("concept_cn")
+    elif lc:
+        cap = caps.get(lc.get("base_preset_id"), {})
+        edit = _local_edit_phrase(lc.get("local_params") or {})
+        # 回退模板防泄露：instruction 不含 GT 方向词（指令即答案）；方向词只进 reasoning。
+        instr = f"请调整这张照片的{lc['region']}区域，让它和整体画面更协调。"
+        reason = (f"对{lc['region']}区域局部{edit}，" + _merit_phrase(c["qa"]) + "。")
+        local = {"mask_unit_id": lc["mask_unit_id"], "geom": lc["geom"], "C_GT": lc["cgt_path"],
+                 "base_preset_id": lc.get("base_preset_id")}
+        region, lparams = lc.get("region"), lc.get("local_params")
+    else:
+        cap = caps.get(c["preset_id"], {})
+        instr = _instruction(cap, task)
+        reason = _reasoning(cap, c["qa"], isp, task)
+        local = None
+    # --- VLM 标注（单次合并调用）：成功则替换模板；失败回退上面的无泄露模板 ---
+    instr_short, annot_src = None, "template"
+    annotate._bump("winners")
+    if annotate.enabled():
+        try:
+            ann = annotate.annotate_winner(
+                c["after_path"], task, cap, local_region=region,
+                local_params=lparams, source_path=src)
+            instr, instr_short = ann["instruction_long"], ann["instruction_short"]
+            reason, annot_src = ann["reasoning"], "vlm"
+        except Exception as e:  # noqa: BLE001 - 标注失败必须回退模板而非丢样本
+            annotate._bump("annotate_fallback")
+            print(f"[annotate-fallback] {os.path.basename(c['after_path'])[:24]} "
+                  f"{task}: {type(e).__name__}: {str(e)[:80]}")
+    rec = {"I_in": src, "I_tar": c["after_path"], "recipe": _recipe_of(c), "local": local,
+           "task_type": task, "instruction": instr, "instruction_short": instr_short,
+           "reasoning": reason, "annot_src": annot_src,
+           "qa": {"q": c["qa"].get("q"), "merit_score": c["qa"].get("merit_score"), "rank": rank,
+                  "merit_hits": c["qa"].get("merit_hits"), "facets": c["qa"].get("facets")}}
+    # --- verify 条件化：仅 q ∈ qa.verify_band 的 winner 走 before+after 双图 verify；
+    #     结果进 qa 字段（诊断信号），绝不进训练文本。 ---
+    if annotate.enabled() and annotate.should_verify(c["qa"].get("q")):
+        v = annotate.verify_winner(src, c["after_path"], instr)
+        if v:
+            rec["qa"]["verify"] = v
+    return rec
+
+
 def build(group: dict) -> Tuple[List[dict], List[dict]]:
-    src = group["source"]; isp = group["is_portrait"]
+    src = group["source"]
     caps = _caps()
     cands = [c for c in group["candidates"] if c.get("qa")]
     _q = lambda c: c["qa"].get("q", -99)
@@ -114,71 +182,7 @@ def build(group: dict) -> Tuple[List[dict], List[dict]]:
                   key=lambda c: -_q(c))
     rejects = sorted(cands, key=_q)   # worst-q first (veto / unreliable / low merit)
 
-    def recipe(c):
-        lc = c.get("local")
-        if lc and lc.get("route") == "sam3":
-            return {"kind": "lut_in_sam3", "base_preset_id": lc.get("base_preset_id"),
-                    "base_preset_path": lc.get("base_preset_path"), "concept": lc["concept"]}
-        if lc:
-            return {"kind": "local_param", "mask_type": lc["mask_type"], "geom": lc["geom"],
-                    "local_params": lc["local_params"], "base_preset_id": lc.get("base_preset_id")}
-        return {"preset_id": c["preset_id"], "kind": c["kind"], "path": c["preset_path"],
-                "fmt": c.get("fmt"), "content_hash": c.get("content_hash")}
-
-    def sft_record(c, rank):
-        lc = c.get("local")
-        task = _task_type(src, c)
-        region = lparams = None
-        if lc and lc.get("route") == "sam3":
-            cap = caps.get(lc.get("base_preset_id"), {})
-            name = cap.get("vlm_name") or "所选调色"
-            instr = f"请把这张照片的{lc['concept_cn']}调成「{name}」的风格。"
-            reason = f"只对{lc['concept_cn']}局部应用「{name}」，" + _merit_phrase(c["qa"]) + "。"
-            local = {"mask_unit_id": lc["mask_unit_id"], "concept": lc["concept"],
-                     "C_GT": lc["cgt_path"], "base_preset_id": lc.get("base_preset_id")}
-            region = lc.get("concept_cn")
-        elif lc:
-            cap = caps.get(lc.get("base_preset_id"), {})
-            edit = _local_edit_phrase(lc.get("local_params") or {})
-            # 回退模板防泄露：instruction 不含 GT 方向词（指令即答案）；方向词只进 reasoning。
-            instr = f"请调整这张照片的{lc['region']}区域，让它和整体画面更协调。"
-            reason = (f"对{lc['region']}区域局部{edit}，" + _merit_phrase(c["qa"]) + "。")
-            local = {"mask_unit_id": lc["mask_unit_id"], "geom": lc["geom"], "C_GT": lc["cgt_path"],
-                     "base_preset_id": lc.get("base_preset_id")}
-            region, lparams = lc.get("region"), lc.get("local_params")
-        else:
-            cap = caps.get(c["preset_id"], {})
-            instr = _instruction(cap, task)
-            reason = _reasoning(cap, c["qa"], isp, task)
-            local = None
-        # --- VLM 标注（单次合并调用）：成功则替换模板；失败回退上面的无泄露模板 ---
-        instr_short, annot_src = None, "template"
-        annotate._bump("winners")
-        if annotate.enabled():
-            try:
-                ann = annotate.annotate_winner(
-                    c["after_path"], task, cap, local_region=region,
-                    local_params=lparams, source_path=src)
-                instr, instr_short = ann["instruction_long"], ann["instruction_short"]
-                reason, annot_src = ann["reasoning"], "vlm"
-            except Exception as e:  # noqa: BLE001 - 标注失败必须回退模板而非丢样本
-                annotate._bump("annotate_fallback")
-                print(f"[annotate-fallback] {os.path.basename(c['after_path'])[:24]} "
-                      f"{task}: {type(e).__name__}: {str(e)[:80]}")
-        rec = {"I_in": src, "I_tar": c["after_path"], "recipe": recipe(c), "local": local,
-               "task_type": task, "instruction": instr, "instruction_short": instr_short,
-               "reasoning": reason, "annot_src": annot_src,
-               "qa": {"q": c["qa"].get("q"), "merit_score": c["qa"].get("merit_score"), "rank": rank,
-                      "merit_hits": c["qa"].get("merit_hits"), "facets": c["qa"].get("facets")}}
-        # --- verify 条件化：仅 q ∈ qa.verify_band 的 winner 走 before+after 双图 verify；
-        #     结果进 qa 字段（诊断信号），绝不进训练文本。 ---
-        if annotate.enabled() and annotate.should_verify(c["qa"].get("q")):
-            v = annotate.verify_winner(src, c["after_path"], instr)
-            if v:
-                rec["qa"]["verify"] = v
-        return rec
-
-    sft = [sft_record(c, rank) for rank, c in
+    sft = [make_sft_record(group, c, rank, caps) for rank, c in
            enumerate(k for k in keep if _q(k) >= TAU_SFT) if rank < 2]
 
     dpo = []
@@ -190,9 +194,9 @@ def build(group: dict) -> Tuple[List[dict], List[dict]]:
             margin = _q(chosen) - _q(rej)
             if rej["qa"].get("veto") or margin >= MARGIN_DPO:
                 dpo.append({"I_in": src,
-                            "chosen": {"I_tar": chosen["after_path"], "recipe": recipe(chosen),
+                            "chosen": {"I_tar": chosen["after_path"], "recipe": _recipe_of(chosen),
                                        "q": _q(chosen), "merit_score": chosen["qa"].get("merit_score")},
-                            "rejected": {"I_tar": rej["after_path"], "recipe": recipe(rej),
+                            "rejected": {"I_tar": rej["after_path"], "recipe": _recipe_of(rej),
                                          "q": _q(rej), "merit_score": rej["qa"].get("merit_score"),
                                          "veto": rej["qa"].get("veto")},
                             "margin": round(margin, 3)})
