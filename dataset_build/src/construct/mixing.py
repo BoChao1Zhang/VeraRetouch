@@ -17,13 +17,12 @@ import sys
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional
 
-# 场景目标比例：9 实类均匀采样（2026-07-06 需求变更，弃 PARA 加权比例）。
-# any（未细分/不可分类桶）不再参与采样——scene_backfill 已把池内 any 细分到 9 类，
-# 剩下的 any 是 vLLM 也无法归类的图。某类供给不足时 _alloc 仍按余量重分保总量。
+# 场景目标比例：PARA 加权、人像/风光领先（2026-07-06 定稿）。any（scene_backfill
+# 细分后仍不可归类的图）不参与采样。某类供给不足时 _alloc 按余量重分保总量。
 SCENE_TARGETS: Dict[str, float] = {
-    "portrait": 1.0, "landscape": 1.0, "food": 1.0,
-    "still_life": 1.0, "architecture": 1.0, "night": 1.0,
-    "street": 1.0, "wedding": 1.0, "product": 1.0,
+    "portrait": 16.0, "landscape": 14.0, "food": 12.0,
+    "still_life": 10.0, "architecture": 9.0, "night": 9.0,
+    "street": 8.0, "wedding": 6.0, "product": 4.0,
 }
 
 # preset 风格目标比例（grade_family 5 类；bank 原始分布 stylized 78% 需压制）
