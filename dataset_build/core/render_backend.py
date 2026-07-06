@@ -30,8 +30,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Sequence
@@ -53,6 +55,31 @@ CALIB_PRESETS_JSONL = os.environ.get(
 
 GPU_BATCH = 16          # 本地 GPU 批大小（显存 ~16.3GB @ cuda:1，实测约束）
 FARM_WORKERS = 6        # 农场提交端并发（真正的农场准入在 lr_render._FARM_GATE）
+# 本地渲染显存守卫：cuda:1 空闲低于此值整批直接走农场，不去分配（避免 OOM churn
+# 且不在卡 1 留 CUDA 上下文挤压共卡进程如 retier/vLLM）；对方退出后自动恢复本地路。
+LOCAL_MIN_FREE_MB = int(os.environ.get("RENDER_LOCAL_MIN_FREE_MB", "18000"))
+
+_vram_cache: tuple = (0.0, 0)   # (checked_at, free_mb)
+_vram_lock = threading.Lock()
+
+
+def _gpu1_free_mb() -> int:
+    """nvidia-smi 查 cuda:1 空闲显存，30s 缓存（nvml 查询无 CUDA 上下文开销）。"""
+    global _vram_cache
+    with _vram_lock:
+        ts, free = _vram_cache
+        if time.monotonic() - ts < 30:
+            return free
+        try:
+            out = subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.free",
+                 "--format=csv,noheader,nounits", "-i", "1"],
+                capture_output=True, text=True, timeout=10).stdout
+            free = int(out.strip().splitlines()[0])
+        except Exception:
+            free = 1 << 20  # ponytail: 查询失败按充足放行，保持旧行为（OOM 会回退农场）
+        _vram_cache = (time.monotonic(), free)
+        return free
 
 _FARM_FMTS = ("xmp", "lrtemplate")   # 双路都只吃 LR develop preset；lut 由调用方自渲
 
@@ -255,6 +282,13 @@ class RenderBackend:
         if not go_local and self.policy == "throughput" and self._local_capable(preset_path, fmt):
             go_local = True
             local_res_id = "_global"     # 未标定 preset 用全局残差 LUT 兜底
+        if go_local:
+            free = _gpu1_free_mb()
+            if free < LOCAL_MIN_FREE_MB:
+                print(f"[render_backend] cuda:1 空闲 {free}MB < {LOCAL_MIN_FREE_MB}MB，"
+                      f"本批({pid})直接走农场", file=sys.stderr)
+                self._bump("local_skip_vram", n)
+                go_local = False
         farm_idx: List[int] = list(range(n))
         n_local = 0
 
