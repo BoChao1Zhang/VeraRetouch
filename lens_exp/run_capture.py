@@ -133,6 +133,7 @@ def main():
                 rec["grid"] = np.int32(grid)
                 np.savez_compressed(os.path.join(dump_dir, r["key"] + ".npz"), **rec)
                 recorder.last = None
+            torch.cuda.empty_cache()  # renders at varying full-res sizes fragment the cache
             if (bi + 1) % 10 == 0:
                 print(f"[lens] {bi+1}/{len(todo)} done ({r['key']})", flush=True)
         except Exception as e:

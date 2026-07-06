@@ -63,6 +63,10 @@ def main():
     args = ap.parse_args()
 
     torch.manual_seed(0); np.random.seed(0)
+    # fp32 cublasSgemm fails (CUBLAS_STATUS_NOT_INITIALIZED) for the decoder's
+    # Linear(512->3) backward at >200k rows in this torch2.10/cu128 env; the
+    # TF32/cublasLt path works, and TF32 precision is ample for this training.
+    torch.backends.cuda.matmul.allow_tf32 = True
     split = get_split()
     tr_keys = split["train"]
     rng = random.Random(1)
