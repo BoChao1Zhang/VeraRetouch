@@ -38,9 +38,13 @@ def load_head_decoder(device="cuda", dtype=torch.bfloat16):
 
 
 def latents_at_layer(npz, layer):
-    """concat [light, colortemp, colormixer] latents at tuple index `layer` -> [1, 2688]"""
-    v = np.concatenate([npz[f"lat_{t}"][layer].astype(np.float32)
-                        for t in ("light", "colortemp", "colormixer")])
+    """concat [light, colortemp, colormixer] latents -> [1, 2688].
+    `layer` is an int (same tuple index for all tokens) or a 3-sequence of
+    per-token indices (light, colortemp, colormixer)."""
+    if isinstance(layer, (int, np.integer)):
+        layer = (layer, layer, layer)
+    v = np.concatenate([npz[f"lat_{t}"][int(l)].astype(np.float32)
+                        for t, l in zip(("light", "colortemp", "colormixer"), layer)])
     return torch.from_numpy(v).unsqueeze(0)
 
 

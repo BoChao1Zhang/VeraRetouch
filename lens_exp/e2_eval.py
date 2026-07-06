@@ -56,7 +56,10 @@ def main():
     ap.add_argument("--skip-clip", action="store_true")
     args = ap.parse_args()
 
-    l_star = json.load(open(os.path.join(RESULTS, "e1_summary.json")))["l_star"]
+    e1 = json.load(open(os.path.join(RESULTS, "e1_summary.json")))
+    pk = e1["peak_layer"]
+    l_star = (pk["light"], pk["colortemp"], pk["colormixer"])  # per-token optimal layers
+    l_lbl = "/".join(str(v) for v in l_star)
     rows = {r["key"]: r for r in load_manifest()}
     test = get_split()["test"]
     print(f"l*={l_star}, test n={len(test)}", flush=True)
@@ -94,14 +97,14 @@ def main():
     # ---------- bar + strip figure ----------
     order = ["input(no-op)", "baseline", "e2a", "e2b_ctrl", "e2b"]
     order = [v for v in order if v in df.variant.unique()]
-    labels = {"input(no-op)": "input\n(no-op)", "baseline": "baseline\nreadout L24",
-              "e2a": f"E2a swap\nL{l_star} frozen", "e2b_ctrl": "E2b-ctrl\nL24 retrained",
-              "e2b": f"E2b\nL{l_star} retrained"}
+    labels = {"input(no-op)": "input\n(no-op)", "baseline": "baseline\nL24",
+              "e2a": f"E2a frozen\nL{l_lbl}", "e2b_ctrl": "E2b-ctrl\nL24 retr.",
+              "e2b": f"E2b retr.\nL{l_lbl}"}
     colors = {"input(no-op)": ps.INK3, "baseline": ps.C_HILITE, "e2a": ps.C_ORANGE,
               "e2b_ctrl": ps.C_VIOLET, "e2b": ps.C_LIGHT}
     metrics_list = [("de00", "deltaE00 (lower better)"), ("psnr", "PSNR (higher better)"),
                     ("ssim", "SSIM (higher better)")] + ([("clip", "CLIP img-text sim")] if clip else [])
-    fig, axes = plt.subplots(1, len(metrics_list), figsize=(3.4 * len(metrics_list), 4.6))
+    fig, axes = plt.subplots(1, len(metrics_list), figsize=(3.9 * len(metrics_list), 4.6))
     rng = np.random.default_rng(0)
     for ax, (mname, mtitle) in zip(np.atleast_1d(axes), metrics_list):
         for i, v in enumerate(order):
@@ -112,12 +115,12 @@ def main():
             ax.text(i, vals.mean(), f"{vals.mean():.2f}", ha="center",
                     va="bottom", fontsize=8.5, color=ps.INK, fontweight="bold")
         ax.set_xticks(range(len(order)))
-        ax.set_xticklabels([labels[v] for v in order], fontsize=7.5)
+        ax.set_xticklabels([labels[v] for v in order], fontsize=7)
         ax.set_title(mtitle)
     base_de = df[df.variant == "baseline"].de00.mean()
     e2b_de = df[df.variant == "e2b"].de00.mean() if "e2b" in df.variant.unique() else np.nan
     ps.conclusion_title(fig,
-        f"E2: retrained L{l_star} readout reaches deltaE00 {e2b_de:.2f} vs baseline {base_de:.2f} "
+        f"E2: retrained L{l_lbl} readout reaches deltaE00 {e2b_de:.2f} vs baseline {base_de:.2f} "
         f"({e2b_de-base_de:+.2f})",
         sub=f"test split n={len(test)} (held out from decoder retraining); dots = per-sample values")
     ps.save(fig, os.path.join(RESULTS, "e2_metrics_bar.png"))
@@ -131,7 +134,6 @@ def main():
     picks = picks[:12]
     ncol = 2 + len(show_variants)
     fig, axes = plt.subplots(12, ncol, figsize=(2.3 * ncol, 12 * 1.62))
-    col_titles = ["input", "baseline L24", f"E2a L{l_star} frozen", f"E2b L{l_star} retrained", "gt (expert)"]
     col_titles = ["input"] + [labels[v].replace("\n", " ") for v in show_variants] + ["gt (expert)"]
     for ri, k in enumerate(picks):
         imgs = [rows[k]["input_path"]] + [os.path.join(variant_dirs[v], k + ".png") for v in show_variants] + [rows[k]["gt_path"]]
@@ -148,7 +150,7 @@ def main():
         axes[ri, 0].text(-0.06, 0.5, f"{k}\ndE base {d0:.1f} -> new {d1:.1f}",
                          transform=axes[ri, 0].transAxes, fontsize=7, rotation=90,
                          va="center", ha="right", color=ps.INK2)
-    ps.conclusion_title(fig, f"E2 qualitative: baseline vs layer-{l_star} readout (top: most improved; bottom rows: regressions / median)")
+    ps.conclusion_title(fig, f"E2 qualitative: baseline vs layer-{l_lbl} readout (top: most improved; bottom rows: regressions / median)")
     ps.save(fig, os.path.join(RESULTS, "e2_compare_grid.png"))
     print("E2 eval done")
 

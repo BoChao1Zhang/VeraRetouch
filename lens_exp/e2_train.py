@@ -54,13 +54,16 @@ def load_train_arrays(keys, layer):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--layer", type=int, required=True)
+    ap.add_argument("--layer", type=str, required=True,
+                    help="tuple index, either one int or 'l1,l2,l3' per token")
     ap.add_argument("--tag", required=True)
     ap.add_argument("--epochs", type=int, default=150)
     ap.add_argument("--bs", type=int, default=8)
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--patience", type=int, default=20)
     args = ap.parse_args()
+    layer = tuple(int(v) for v in args.layer.split(","))
+    layer = layer[0] if len(layer) == 1 else layer
 
     torch.manual_seed(0); np.random.seed(0)
     # fp32 cublasSgemm fails (CUBLAS_STATUS_NOT_INITIALIZED) for the decoder's
@@ -72,15 +75,15 @@ def main():
     rng = random.Random(1)
     val_keys = sorted(rng.sample(tr_keys, max(20, len(tr_keys) // 5)))
     fit_keys = [k for k in tr_keys if k not in set(val_keys)]
-    print(f"[e2b:{args.tag}] layer={args.layer} fit={len(fit_keys)} val={len(val_keys)}", flush=True)
+    print(f"[e2b:{args.tag}] layer={layer} fit={len(fit_keys)} val={len(val_keys)}", flush=True)
 
     head, decoder = load_head_decoder(dtype=torch.float32)
     head.train(); decoder.train()
     params = list(head.parameters()) + list(decoder.parameters())
     opt = torch.optim.AdamW(params, lr=args.lr, weight_decay=1e-4)
 
-    lat, x, gt = load_train_arrays(fit_keys, args.layer)
-    vlat, vx, vgt = load_train_arrays(val_keys, args.layer)
+    lat, x, gt = load_train_arrays(fit_keys, layer)
+    vlat, vx, vgt = load_train_arrays(val_keys, layer)
     lat, x, gt = lat.cuda(), x.cuda(), gt.cuda()
     vlat, vx, vgt = vlat.cuda(), vx.cuda(), vgt.cuda()
 
@@ -123,7 +126,7 @@ def main():
             break
 
     out_path = os.path.join(RESULTS, f"e2b_{args.tag}.pt")
-    torch.save(dict(state=best_state, layer=args.layer, val_l1=best, hist=hist), out_path)
+    torch.save(dict(state=best_state, layer=layer, val_l1=best, hist=hist), out_path)
     print(f"[e2b:{args.tag}] saved {out_path} best_val_l1={best:.4f}", flush=True)
 
 

@@ -93,10 +93,13 @@ def main():
         ax.set_xlabel("hidden_states index (0=emb, 24=final)")
         ax.legend(fontsize=8, loc="lower center")
     axes[0].set_ylabel("probe R² (5-fold OOF, mean over targets)")
-    verdict = ("suboptimal" if gate else "near-optimal")
-    ps.conclusion_title(fig,
-        f"E1: retouch info peaks at layer {l_star} vs final 24 (mean ΔR²={gap_mean:+.03f}) — "
-        f"final-layer readout is {verdict}",
+    gl = gaps["light"]
+    if gate:
+        verdict = (f"E1: light info peaks mid-stack (L{summary['peak_layer']['light']}, ΔR²={gl:+.2f} vs final); "
+                   f"color tokens peak near top — final-layer readout is suboptimal for light")
+    else:
+        verdict = f"E1: all tokens peak near the final layer (max ΔR²={max(gaps.values()):+.02f}) — final-layer readout is near-optimal"
+    ps.conclusion_title(fig, verdict,
         sub=f"ridge probes, N={len(keys)} ArtEdit-Lr samples (CN+EN), targets derived from (input, gt) pairs; "
             f"red dot = current readout [-1]; dashed line = per-token peak")
     ps.save(fig, os.path.join(RESULTS, "e1_layer_curve.png"))

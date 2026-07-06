@@ -106,6 +106,9 @@ def main():
             iou_layers = np.array([topk_iou(att[l], box_mask, valid)[0] for l in range(att.shape[0])]) \
                 if box_mask.any() else np.full(att.shape[0], np.nan)
             per_layer_iou[t].append(iou_layers)
+            att_g = get_att(d, t, "gen")
+            iou_layers_gen = np.array([topk_iou(att_g[l], box_mask, valid)[0] for l in range(att_g.shape[0])]) \
+                if box_mask.any() else np.full(att_g.shape[0], np.nan)
             ent = np.mean([entropy_norm(att[l], valid) for l in range(att.shape[0])])
             # luminance lift
             att_m = att.mean(0)
@@ -117,6 +120,7 @@ def main():
                 box_patches=k, valid_patches=V,
                 iou_best=np.nanmax(iou_layers) if box_mask.any() else np.nan,
                 iou_meanL=np.nanmean(iou_layers) if box_mask.any() else np.nan,
+                iou_best_gen=np.nanmax(iou_layers_gen) if box_mask.any() else np.nan,
                 chance_iou=chance_iou(k, V) if k else np.nan,
                 entropy=ent, lum_lift=lift, de00=de00,
                 img_mass_mean=float(d[f"att_{t}_self_mass"].mean()) if f"att_{t}_self_mass" in d.files else np.nan,
