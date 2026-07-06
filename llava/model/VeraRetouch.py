@@ -247,6 +247,15 @@ class VeraRetouchForCausalLLM_Unified(LlavaQwen2ForCausalLM):
             
             cur_new_input_embeds = [x.to(self.device) for x in cur_new_input_embeds]
 
+            # [lens-exp] record image token span (positions before padding) for representation analysis
+            if getattr(self, 'lens_track_spans', False):
+                _seg_lens = [x.shape[0] for x in cur_new_input_embeds]
+                _img_start = _seg_lens[0]
+                _img_end = _img_start + (cur_image_features.shape[0] if num_images > 0 else 0)
+                if not hasattr(self, 'lens_image_spans') or batch_idx == 0:
+                    self.lens_image_spans = []
+                self.lens_image_spans.append((_img_start, _img_end, sum(_seg_lens)))
+
             cur_new_input_embeds = torch.cat(cur_new_input_embeds)
             cur_new_labels = torch.cat(cur_new_labels)
 
@@ -391,9 +400,25 @@ class VeraRetouchForCausalLLM_Unified(LlavaQwen2ForCausalLM):
             
             # Get hidden state corresponding to the first token that meets the condition for each sample ([-1] represents the last layer hidden state)
             # Each element in hidden_states tuple is [bs, seq_len, hidden_size], take the i-th sample's hidden state
-            light_latent = hidden_states[light_indices[0]][-1][i].squeeze()  # [hidden_size]
-            colortemp_latent = hidden_states[colortemp_indices[0]][-1][i].squeeze()  # [hidden_size]
-            colormixer_latent = hidden_states[colormixer_indices[0]][-1][i].squeeze()  # [hidden_size]
+            # [lens-exp] readout layer is configurable (default -1 == original behavior)
+            _lens_layer = getattr(self, 'lens_readout_layer', -1)
+            light_latent = hidden_states[light_indices[0]][_lens_layer][i].squeeze()  # [hidden_size]
+            colortemp_latent = hidden_states[colortemp_indices[0]][_lens_layer][i].squeeze()  # [hidden_size]
+            colormixer_latent = hidden_states[colormixer_indices[0]][_lens_layer][i].squeeze()  # [hidden_size]
+
+            # [lens-exp] optional recorder for representation analysis (E1/E3/E4)
+            _lens_recorder = getattr(self, 'lens_recorder', None)
+            if _lens_recorder is not None:
+                _lens_recorder.record(
+                    sample_in_batch=i,
+                    hidden_states=hidden_states,
+                    attentions=getattr(outputs, 'attentions', None),
+                    output_ids=output_ids,
+                    token_steps={'light': int(light_indices[0]),
+                                 'colortemp': int(colortemp_indices[0]),
+                                 'colormixer': int(colormixer_indices[0])},
+                    image_spans=getattr(self, 'lens_image_spans', None),
+                )
             
             # 2.3 Concatenate and process latent for current sample
             retouch_latent = torch.stack([light_latent, colortemp_latent, colormixer_latent]).view(-1).unsqueeze(0)  # [1, 3*hidden_size]
