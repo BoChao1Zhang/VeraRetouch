@@ -240,8 +240,14 @@ def run(n: int, render_n: int, out_dir: str, src_workers: int = 12, local: bool 
     conn.commit()
     # Route 1 (geometric mask-only) applies to ANY photo; b_subject is for Route 2 (SAM3 semantic).
     min_iaa = getattr(config, "CONSTRUCT_SOURCE_IAA_MIN", config.GATE["iaa_keep_above"])
+    # 源 iaa 上界（可选）：q=0.72·abs+0.28·rel 对高分源有天花板效应——iaa>65 的源
+    # preset 渲染普遍打不过它，SFT 产率 1.7→0.34/源（2026-07-06 实测）。中带源既保质量
+    # 又有提升空间。CONSTRUCT_SOURCE_IAA_MAX 不设则不启用。
+    max_iaa = os.environ.get("CONSTRUCT_SOURCE_IAA_MAX", "")
+    extra = f"iaa_mixed < {float(max_iaa)}" if max_iaa else ""
     # 场景分层抽样（PARA 启发配额，见 mixing）；超取 2n 抗 resume/缺文件损耗
-    rows = [dict(r) for r in mixing.stratified_sources(conn, total=2 * n, min_iaa=min_iaa)]
+    rows = [dict(r) for r in mixing.stratified_sources(conn, total=2 * n, min_iaa=min_iaa,
+                                                       extra_where=extra)]
     conn.close()
     rows = [r for r in rows if os.path.exists(r["path"])]
     random.Random(0).shuffle(rows)
