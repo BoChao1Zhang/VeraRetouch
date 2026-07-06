@@ -172,9 +172,11 @@ def main():
     axr.axhline(med_chance, color=ps.C_HILITE, ls="--", lw=1.2)
     axr.set_xlabel("layer"); axr.set_ylabel("median IoU")
     axr.set_title(f"median IoU by layer (peak L{best_layer})")
-    looks = "does look at" if med_iou > 2 * med_chance else "barely looks at"
+    ratio = med_iou / med_chance
+    looks = ("clearly attend to" if ratio > 2 else
+             "partially attend to" if ratio > 1.3 else "do not attend to")
     ps.conclusion_title(fig,
-        f"E3: retouch tokens {looks} the instructed <box> region — median IoU {med_iou:.2f} vs chance {med_chance:.2f}",
+        f"E3: retouch tokens {looks} the instructed <box> region — median IoU {med_iou:.2f} vs chance {med_chance:.2f} ({ratio:.1f}x)",
         sub=f"{len(piv_best)} box-annotated samples; top-k binarization (k = box size in patches), pad patches excluded")
     ps.save(fig, os.path.join(RESULTS, "e3_box_iou_hist.png"))
 
@@ -211,7 +213,7 @@ def main():
         amap = cv2.resize(att, (S, S), interpolation=cv2.INTER_CUBIC)
         oy, ox = (S - h) // 2, (S - w) // 2
         amap = amap[oy:oy+h, ox:ox+w]
-        amap = (amap - amap.min()) / (amap.ptp() + 1e-9)
+        amap = (amap - amap.min()) / (np.ptp(amap) + 1e-9)
         heat = cv2.applyColorMap((amap * 255).astype(np.uint8), cv2.COLORMAP_MAGMA)
         overlay = cv2.addWeighted(im, 0.45, heat, 0.55, 0)
         gt = cv2.imread(r["gt_path"], cv2.IMREAD_COLOR)

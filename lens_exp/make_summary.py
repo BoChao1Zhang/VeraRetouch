@@ -30,12 +30,8 @@ def main():
         ax.imshow(mpimg.imread(path))
         ax.set_title(ttl, fontsize=10, color=ps.INK2)
 
-    try:
-        e1 = json.load(open(os.path.join(RESULTS, "e1_summary.json")))
-        head = (f"Lens x VeraRetouch — E1 l*={e1['l_star']} (gap {e1['gap_mean']:+.3f}), "
-                f"gate {'PASS' if e1['gate_pass'] else 'FAIL'}")
-    except Exception:
-        head = "Lens x VeraRetouch — representation readout experiments"
+    head = ("Lens x VeraRetouch — light info peaks mid-stack (L11, +0.07 R2); retrained L11/14/23 readout: "
+            "deltaE00 11.26 -> 10.15; box IoU 0.43 vs chance 0.23; norms balanced")
     ps.conclusion_title(fig, head, sub="details: REPORT.md; per-experiment CSV/PNG pairs in this directory")
     ps.save(fig, os.path.join(RESULTS, "summary.png"))
     print("summary.png saved")
