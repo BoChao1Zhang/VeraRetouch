@@ -232,6 +232,14 @@ def run(n: int, render_n: int, out_dir: str, src_workers: int = 12, local: bool 
     os.makedirs(out_dir, exist_ok=True)
     cgt_dir = os.path.join(out_dir, "cgt")
     sel = Selector()   # both routes need vlemb (global: the look; local: the base preset for the mask)
+    # QA-IAA scorer 必须在 lanes 并发前单线程预热：ArtiMuse 加载用临时 sys.modules shim
+    # （iaa._temporary_artimuse_compat_modules），与其他线程的 import 竞争会把预处理链
+    # 换成 stub → 打分退化成 ~46-50 窄带常数（2026-07-06 生产事故，同文件独立进程重打
+    # 正常 55-69）。预热在单线程窗口完成加载即避开竞争。
+    from . import objscore
+    _scorer = objscore._runner()
+    if hasattr(_scorer, "load"):
+        _scorer.load()
     route_label = (route if local else "global")
     conn = db.connect()
     run_id = db.start_run(conn, f"construct_{route_label}",
