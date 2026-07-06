@@ -1,10 +1,8 @@
 """样本混入策略：源图按场景分层配额 + preset 按 grade_family 风格配额。
 
-场景配额参照 PARA 的 semantic 类别分布（portrait 15.6% / scene 13.7% / food 11.9%
-/ stilllife 10.1% / indoor 9.2% / building 9.1% / plant 8.9% / nightScene 8.7%
-/ animal 12.3%），映射到本库 assets.scene 的 10 类受控词表（无 animal/plant/indoor，
-有 street/wedding/product/any——any 当未细分桶）。某类供给不足时按比例把缺口
-重分给其余类，保证总量。
+场景配额：9 实类（portrait/landscape/food/still_life/architecture/night/street/
+wedding/product）均匀采样；any 桶已由 scene_backfill 细分，残余 any 不参与采样。
+某类供给不足时按比例把缺口重分给其余类，保证总量。
 
 preset 风格配额用 bank features.jsonl 的 axes.grade_family（5 类）。bank 里
 stylized 占 78%，直接按召回相关性取会严重偏斜；配额化后在整个构建 run 的
@@ -19,11 +17,13 @@ import sys
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional
 
-# 场景目标比例（PARA 启发，归一前权重；any=未细分桶）
+# 场景目标比例：9 实类均匀采样（2026-07-06 需求变更，弃 PARA 加权比例）。
+# any（未细分/不可分类桶）不再参与采样——scene_backfill 已把池内 any 细分到 9 类，
+# 剩下的 any 是 vLLM 也无法归类的图。某类供给不足时 _alloc 仍按余量重分保总量。
 SCENE_TARGETS: Dict[str, float] = {
-    "portrait": 16.0, "landscape": 14.0, "food": 12.0, "any": 12.0,
-    "still_life": 10.0, "architecture": 9.0, "night": 9.0,
-    "street": 8.0, "wedding": 6.0, "product": 4.0,
+    "portrait": 1.0, "landscape": 1.0, "food": 1.0,
+    "still_life": 1.0, "architecture": 1.0, "night": 1.0,
+    "street": 1.0, "wedding": 1.0, "product": 1.0,
 }
 
 # preset 风格目标比例（grade_family 5 类；bank 原始分布 stylized 78% 需压制）
