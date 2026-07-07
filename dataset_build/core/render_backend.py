@@ -55,16 +55,18 @@ CALIB_PRESETS_JSONL = os.environ.get(
 
 GPU_BATCH = 16          # 本地 GPU 批大小（显存 ~16.3GB @ cuda:1，实测约束）
 FARM_WORKERS = 6        # 农场提交端并发（真正的农场准入在 lr_render._FARM_GATE）
-# 本地渲染显存守卫：cuda:1 空闲低于此值整批直接走农场，不去分配（避免 OOM churn
-# 且不在卡 1 留 CUDA 上下文挤压共卡进程如 retier/vLLM）；对方退出后自动恢复本地路。
+# 本地渲染显存守卫：渲染卡空闲低于此值整批直接走农场，不去分配（避免 OOM churn
+# 且不在共卡进程如 vLLM/IAA 旁留 CUDA 上下文）；余量恢复后自动放行本地路。
 LOCAL_MIN_FREE_MB = int(os.environ.get("RENDER_LOCAL_MIN_FREE_MB", "18000"))
+# 守卫查的 GPU 跟随渲染设备（MONETGPT_TORCH_DEVICE，上面已 setdefault cuda:1）
+_RENDER_GPU_IDX = os.environ.get("MONETGPT_TORCH_DEVICE", "cuda:1").rsplit(":", 1)[-1]
 
 _vram_cache: tuple = (0.0, 0)   # (checked_at, free_mb)
 _vram_lock = threading.Lock()
 
 
 def _gpu1_free_mb() -> int:
-    """nvidia-smi 查 cuda:1 空闲显存，30s 缓存（nvml 查询无 CUDA 上下文开销）。"""
+    """nvidia-smi 查渲染卡空闲显存，30s 缓存（nvml 查询无 CUDA 上下文开销）。"""
     global _vram_cache
     with _vram_lock:
         ts, free = _vram_cache
@@ -73,7 +75,7 @@ def _gpu1_free_mb() -> int:
         try:
             out = subprocess.run(
                 ["nvidia-smi", "--query-gpu=memory.free",
-                 "--format=csv,noheader,nounits", "-i", "1"],
+                 "--format=csv,noheader,nounits", "-i", _RENDER_GPU_IDX],
                 capture_output=True, text=True, timeout=10).stdout
             free = int(out.strip().splitlines()[0])
         except Exception:
@@ -285,7 +287,7 @@ class RenderBackend:
         if go_local:
             free = _gpu1_free_mb()
             if free < LOCAL_MIN_FREE_MB:
-                print(f"[render_backend] cuda:1 空闲 {free}MB < {LOCAL_MIN_FREE_MB}MB，"
+                print(f"[render_backend] cuda:{_RENDER_GPU_IDX} 空闲 {free}MB < {LOCAL_MIN_FREE_MB}MB，"
                       f"本批({pid})直接走农场", file=sys.stderr)
                 self._bump("local_skip_vram", n)
                 go_local = False
