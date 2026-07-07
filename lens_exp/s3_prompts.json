@@ -1,0 +1,173 @@
+{
+  "_note": "S3 language-perturbation variants for the 34 box test samples. del = spatial/object referent removed (operations kept). flip = referent box mirrored on flip_axis (direction words swapped where present), written as a template with {FBOX}; flip_axis null = box too global to mirror (excluded from flip condition).",
+  "CN_19": {
+    "del": "我想让这张照片有一种史诗般的奇幻感，增强日落的戏剧性。把整体色调调得非常暖，并让细节更突出。",
+    "flip": "我想让这张照片有一种史诗般的奇幻感，增强日落的戏剧性。把整体色调调得非常暖，并让左侧的树林 {FBOX} 细节更突出。",
+    "flip_axis": "x"
+  },
+  "CN_2": {
+    "del": "我想营造一种冷酷、有神秘感的都市夜景氛围。能不能加强画面里光影的戏剧性，同时渲染出一种清冷的蓝绿色，让照片看起来更有故事感和高级质感。",
+    "flip": "我想营造一种冷酷、有神秘感的都市夜景氛围。能不能加强画面里光影的戏剧性，同时把左边的主体部分 {FBOX} 渲染成一种清冷的蓝绿色，让照片看起来更有故事感和高级质感。",
+    "flip_axis": "x"
+  },
+  "CN_24": {
+    "del": "把这张图调出一种深夜的氛围感，整体偏向冷峻的蓝色。我想让它有种高级质感，突出眼神，同时让画面不那么清晰，带点朦胧感。",
+    "flip": "把这张图调出一种深夜的氛围感，整体偏向冷峻的蓝色。我想让它有种高级质感，突出人物 {FBOX} 的眼神，同时让画面不那么清晰，带点朦胧感。",
+    "flip_axis": "x"
+  },
+  "CN_38": {
+    "del": "这张照片曝光不足，很多细节都看不清。麻烦帮忙把阴影部分提亮，让轮廓更清晰。再加一点冷色调，让整个夜景显得更干净通透，更有高级质感。",
+    "flip": null,
+    "flip_axis": null
+  },
+  "CN_40": {
+    "del": "整体色调偏冷，对比度强一些，画面更清晰，然后把颜色调淡。",
+    "flip": "整体色调偏冷，对比度强一些，画面更清晰，然后把这个木盒 {FBOX} 的颜色调淡。",
+    "flip_axis": "x"
+  },
+  "CN_41": {
+    "del": "请把颜色调成暖色调，像是明亮的金黄色，然后整体提亮。",
+    "flip": "请把这个水花 {FBOX} 的颜色调成暖色调，像是明亮的金黄色，然后整体提亮，让它在画面里更突出。",
+    "flip_axis": "y"
+  },
+  "CN_57": {
+    "del": "让蓝色更深邃，极光也更鲜艳。整体色调调得冷一点，对比度再强一些，让画面更有层次感。",
+    "flip": "让天空 {FBOX} 的蓝色更深邃，极光也更鲜艳。整体色调调得冷一点，对比度再强一些，让画面更有层次感。",
+    "flip_axis": "y"
+  },
+  "CN_66": {
+    "del": "麻烦把这张照片的色调调得非常暖，像是日落黄昏时的那种金黄色。整体感觉要柔和一些，有点朦胧感，但不要太糊，同时让画面更清晰突出一点。",
+    "flip": "麻烦把这张照片的色调调得非常暖，像是日落黄昏时的那种金黄色。整体感觉要柔和一些，有点朦胧感，但不要太糊，同时让人物 {FBOX} 更清晰突出一点。",
+    "flip_axis": "x"
+  },
+  "CN_68": {
+    "del": "整体色调调整一下，我想要一种强烈的电影感。改成暖色调，然后人物的肤色和衣服的质感也处理得更突出，更有高级感。",
+    "flip": "整体色调调整一下，我想要一种强烈的电影感。把后面的背景{FBOX}改成暖色调，然后人物的肤色和衣服的质感也处理得更突出，更有高级感。",
+    "flip_axis": "y"
+  },
+  "CN_69": {
+    "del": "我想要一个“暖冬”或者“日落黄昏”风格的滤镜，把原来冷冰冰的感觉去掉，营造出一种温暖、宁静的氛围。",
+    "flip": null,
+    "flip_axis": null
+  },
+  "CN_71": {
+    "del": "把整体调暗一点，但色彩更浓郁，有那种复古胶片的感觉。",
+    "flip": null,
+    "flip_axis": null
+  },
+  "CN_77": {
+    "del": "我想要一种时尚杂志的风格，让画面有高级质感。色彩要浓郁，背景更有氛围感，皮肤可以稍微柔化。",
+    "flip": "我想要一种时尚杂志的风格，让画面有高级质感。色彩要浓郁，背景更有氛围感，皮肤可以稍微柔化，同时让眼睛 {FBOX} 更有神采。",
+    "flip_axis": "x"
+  },
+  "CN_82": {
+    "del": "增强明暗对比，让阴影更深邃。把颜色调得鲜艳一点。",
+    "flip": null,
+    "flip_axis": null
+  },
+  "CN_84": {
+    "del": "可以营造一种宁静又充满生命力的氛围吗？希望画面有一种雨后森林的清新感，色彩鲜活但不刺眼。",
+    "flip": "可以营造一种宁静又充满生命力的氛围吗？希望画面有一种雨后森林的清新感，色彩鲜活但不刺眼。让那个僧人 {FBOX} 更自然地融入到这个静谧的场景里。",
+    "flip_axis": "x"
+  },
+  "CN_87": {
+    "del": "把整个画面的明暗对比调得更强，让颜色更鲜明。色调往暖色方向调整一下，然后把天空太白的地方压暗，让蓝色显现出来。",
+    "flip": null,
+    "flip_axis": null
+  },
+  "CN_89": {
+    "del": "营造一种充满活力和诱人的氛围。让色彩变得鲜明生动，增强明暗对比，让整个画面看起来更高级、更有冲击力。",
+    "flip": null,
+    "flip_axis": null
+  },
+  "CN_93": {
+    "del": "让照片整体色彩更鲜艳生动，同时增强明暗对比。我想提亮一些，让杂乱感降低。",
+    "flip": "让照片整体色彩更鲜艳生动，同时增强明暗对比。我想把人物 {FBOX} 提亮一些，让背景的杂乱感降低，使她更突出。",
+    "flip_axis": "x"
+  },
+  "CN_94": {
+    "del": "能不能营造出一种日落黄昏的温暖感和故事感？把整体画面提亮，让明暗对比更柔和。颜色调得有油画质感，色彩更浓郁。",
+    "flip": "能不能营造出一种日落黄昏的温暖感和故事感？把整体画面提亮，让明暗对比更柔和。颜色调得有油画质感，让骆驼 {FBOX} 和墙壁的色彩更浓郁。",
+    "flip_axis": "x"
+  },
+  "EN_10": {
+    "del": "Make it darker with more contrast, with warmer tones.",
+    "flip": "Make it darker with more contrast, and make the person {FBOX} pop with warmer skin tones.",
+    "flip_axis": "x"
+  },
+  "EN_13": {
+    "del": "This is way too dark, please brighten it up a lot. I want the colors to be richer and more vibrant. Lift the shadows so you can see more detail, but don't let the brights get blown out.",
+    "flip": "This is way too dark, please brighten it up a lot. I want the colors to be richer and more vibrant. Lift the shadows so you can see more detail, but don't let the brights get blown out. Also, could you specifically make the food in the bowl {FBOX} pop a little more?",
+    "flip_axis": "x"
+  },
+  "EN_16": {
+    "del": "The whole picture is too dark. Please brighten it up significantly, and make the colors incredibly vibrant and saturated.",
+    "flip": "The whole picture is too dark. Please brighten it up significantly, and make the colors on the bird {FBOX} incredibly vibrant and saturated to make it stand out.",
+    "flip_axis": "y"
+  },
+  "EN_32": {
+    "del": "I want this to feel more magical and futuristic. Please change the firework colors to a neon purple and make the scene darker and moodier.",
+    "flip": "I want this to feel more magical and futuristic. Please change the firework colors to a neon purple and make the scene, especially the sky {FBOX}, darker and moodier.",
+    "flip_axis": "y"
+  },
+  "EN_38": {
+    "del": "Make this photo feel more like a scene from a sci-fi movie. Give it a cool, moody atmosphere with a blue cast. Please brighten it but control the brightest lights so they don't look blown out.",
+    "flip": null,
+    "flip_axis": null
+  },
+  "EN_39": {
+    "del": "Apply a bright, clean foodie filter. I want it to look vibrant and appetizing. Make it look crisp and clear, but a little softer so it's not distracting.",
+    "flip": "Apply a bright, clean foodie filter. I want it to look vibrant and appetizing. Make the food look crisp and clear, but can you make this area {FBOX} a little softer so it's not distracting?",
+    "flip_axis": "x"
+  },
+  "EN_44": {
+    "del": "I want to create a mysterious, moonlight atmosphere. Could you apply a cool, blueish glow to make it feel magical and dreamy?",
+    "flip": null,
+    "flip_axis": null
+  },
+  "EN_47": {
+    "del": "I want a warm, nostalgic street photography style. Increase the contrast to make it more dramatic. The whole image should feel more vibrant and textured.",
+    "flip": null,
+    "flip_axis": null
+  },
+  "EN_5": {
+    "del": "This is too dark and dull. Can you brighten it up and make it much warmer, like it was taken during golden hour? Lift the shadows to show more detail, and bring out the texture.",
+    "flip": "This is too dark and dull. Can you brighten it up and make it much warmer, like it was taken during golden hour? Lift the shadows to show more detail, and bring out the texture on the wall here {FBOX}.",
+    "flip_axis": "x"
+  },
+  "EN_55": {
+    "del": "The original is too dark and muted. Please brighten it significantly and increase the contrast to make it pop. I want a much cooler, blueish tone throughout the image. Also, make it look incredibly sharp and clear.",
+    "flip": null,
+    "flip_axis": null
+  },
+  "EN_58": {
+    "del": "This picture looks too gray and washed out. I'd like you to warm it up significantly and make the colors more vivid. Boost the yellow and green tones. Lighten the dark areas a bit but keep the highlights from being too bright.",
+    "flip": "This picture looks too gray and washed out. I'd like you to warm it up significantly and make the colors more vivid. Boost the yellow and green tones, especially for the trees on the right {FBOX}. Lighten the dark areas a bit but keep the highlights from being too bright.",
+    "flip_axis": "x"
+  },
+  "EN_65": {
+    "del": "Can you make the photo a bit warmer and brighter overall? I'd like more contrast to make the darks deeper and the lights pop. Also, could you sharpen the details a bit.",
+    "flip": "Can you make the photo a bit warmer and brighter overall? I'd like more contrast to make the darks deeper and the lights pop. Also, could you sharpen the details on the woman {FBOX} while keeping her skin looking soft and natural.",
+    "flip_axis": "x"
+  },
+  "EN_70": {
+    "del": "Make the whole photo much warmer and brighter, with a strong yellow-orange tint. Please increase the contrast but soften the details for a glowing effect. I want the yellow flowers to be more vibrant.",
+    "flip": null,
+    "flip_axis": null
+  },
+  "EN_74": {
+    "del": "Give this a cinematic, moody blue tint, like a still from a dark fantasy film. Make it gritty with some film grain and really punch up the contrast to make it intense. Also, brighten it.",
+    "flip": "Give this a cinematic, moody blue tint, like a still from a dark fantasy film. Make it gritty with some film grain and really punch up the contrast to make it intense. Also, brighten this area {FBOX}.",
+    "flip_axis": "x"
+  },
+  "EN_86": {
+    "del": "Let's darken the whole picture and punch up the contrast for a more powerful feel. Can you cool down the colors, shifting away from the warm tones toward blues and purples? The details seem a bit soft; please make them clearer.",
+    "flip": "Let's darken the whole picture and punch up the contrast for a more powerful feel. Can you cool down the colors, shifting away from the warm tones toward blues and purples? The details on the wooden seats {FBOX} seem a bit soft; please make them clearer.",
+    "flip_axis": "y"
+  },
+  "EN_98": {
+    "del": "Can we bring the details back? Then, boost the contrast, make the shadows softer, and give the whole image a warm, romantic glow.",
+    "flip": "Can we bring the details back into the sky {FBOX}? Then, boost the contrast, make the shadows on us softer, and give the whole image a warm, romantic glow.",
+    "flip_axis": "y"
+  }
+}
