@@ -47,15 +47,11 @@ def main():
     sae = TopKSAE(HID, sck["expansion"], sck["k"]).cuda().eval()
     sae.load_state_dict(sck["state"])
 
-    con = pd.read_csv(os.path.join(RESULTS_R2, "e9_concepts.csv"))
+    cand = json.load(open(os.path.join(RESULTS_R2, "e9_steer_candidates.json")))
     feats = []
-    for dim, tok in TARGET_DIMS.items():
-        sub = con[(con.dim == dim) & (con.token == tok)].reindex(
-            con[(con.dim == dim) & (con.token == tok)].rho_train.abs().sort_values(ascending=False).index)
-        if len(sub) < 2:  # fall back: any token owning that dim correlation
-            sub = con[con.dim == dim].reindex(con[con.dim == dim].rho_train.abs().sort_values(ascending=False).index)
-        feats += [dict(feature=int(r.feature), token=r.token, dim=dim, rho=float(r.rho_train))
-                  for r in sub.head(2).itertuples()]
+    for dim in TARGET_DIMS:
+        feats += [dict(feature=c["feature"], token=c["token"], dim=dim, rho=c["rho"])
+                  for c in cand[dim][:2]]
     print("[e9steer] features:", feats)
 
     rows = {r["key"]: r for r in load_manifest_r2()}

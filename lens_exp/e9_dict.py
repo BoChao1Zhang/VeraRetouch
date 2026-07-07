@@ -96,6 +96,21 @@ def main():
                    rho_gate=args.rho, n_train=n_tr, n_test=len(keys["test"])),
               open(os.path.join(RESULTS_R2, "e9_dict_summary.json"), "w"), indent=1)
 
+    # steering candidates: per target dim, top features by |rho| computed for that dim
+    # at the token that owns it (not the feature's best dim) — robust for e9_steer
+    steer = {}
+    for dim, tok in (("dL_mean", "light"), ("dCCT_mired", "colortemp")):
+        di = DIM_NAMES.index(dim)
+        A = acts[tok]["train"]
+        live = (A > 0).sum(axis=0) >= max(10, n_tr // 20)
+        Ar = rankdata(A, axis=0)
+        Ar = (Ar - Ar.mean(0)) / (Ar.std(0) + 1e-9)
+        r = (Ar.T @ Tr[:, di]) / n_tr
+        r[~live] = 0
+        top = np.argsort(-np.abs(r))[:5]
+        steer[dim] = [dict(feature=int(f), token=tok, rho=float(r[f])) for f in top]
+    json.dump(steer, open(os.path.join(RESULTS_R2, "e9_steer_candidates.json"), "w"), indent=1)
+
     # ---------- figure: top-20 features x 26 dims ----------
     top = cand[:20]
     fig, ax = plt.subplots(figsize=(12.5, max(5.2, 0.42 * len(top) + 2.2)))

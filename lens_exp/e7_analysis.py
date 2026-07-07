@@ -182,7 +182,8 @@ def main():
         ax.set_title(f"{ps.TOKEN_LABELS[t]}\nmax median IoU {np.nanmax(mats[t]):.2f}", color=ps.TOKEN_COLORS[t], fontsize=9)
         ax.set_xlabel("head"); ax.set_ylabel("layer" if t == TOKENS[0] else "")
         ax.grid(False)
-    fig.colorbar(imh, ax=axes, shrink=0.8, label="median IoU vs <box> (top-p 0.5 binarized)")
+    cax = fig.add_axes([0.925, 0.12, 0.014, 0.58])
+    fig.colorbar(imh, cax=cax, label="median IoU vs <box> (top-p 0.5 binarized)")
     best_all = max(np.nanmax(mats[t]) for t in TOKENS)
     hm_med = np.median([summ[t]["headmean_median_iou_topp"] for t in TOKENS])
     ch = np.median([summ[t]["chance_median"] for t in TOKENS])
@@ -192,7 +193,7 @@ def main():
         f"E7: best single-head median IoU {best_all:.2f} vs head-mean {hm_med:.2f} (chance {ch:.2f}) — {verdict}",
         sub=f"median over {len(train_keys)} box train samples; circles = positive heads (top 5%), "
             f"x = negative heads (bottom 5% among high image-mass); dilution stats on {len(test_keys)} test samples")
-    fig.subplots_adjust(top=0.76, bottom=0.09)
+    fig.subplots_adjust(left=0.06, right=0.905, top=0.76, bottom=0.09, wspace=0.25)
     fig.savefig(os.path.join(out_dir, "e7_head_matrix.png"), bbox_inches="tight")
     plt.close(fig)
     print("E7 analysis done ->", out_dir)
