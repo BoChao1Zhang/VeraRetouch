@@ -144,7 +144,7 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     rng = random.Random(int.from_bytes(hashlib.sha1(path.encode()).digest()[:4], "big"))
 
     def _one(_i):
-        g = mask_synth.sample_geom(bank, rng)
+        g = mask_synth.sample_geom_v3(bank, rng, image_path=path)
         geom = mask_synth.perturb(g["geom"], rng)
         geom["__what__"] = g["what"]; geom["__type__"] = g["mask_type"]
         s = mask_synth.make_local_sample(path, base["path"], geom, cgt_dir, rng)

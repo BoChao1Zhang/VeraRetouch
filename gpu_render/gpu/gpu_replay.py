@@ -226,6 +226,11 @@ def replay_batch(out: torch.Tensor, preset: dict, fits_dir: str = FITS_DIR,
         if any(_f(attrs, k) for k in ("PostCropVignetteAmount", "VignetteAmount")):
             if reg("Vignette", vig):
                 consumed.update(vig)
+    # 13. 局部修正（MaskGroupBasedCorrections / 语义 α）——与 replay.replay 一致
+    if _on("local") and preset.get("locals"):
+        from gpu_render.gpu.local_gpu import apply_locals_batch
+        out, lfb = apply_locals_batch(out, preset["locals"], fits_dir, fallback)
+        fb_ops.extend(lfb)
 
     return out, {"consumed": consumed, "fallback_ops": fb_ops, "skipped_ops": sk_ops}
 

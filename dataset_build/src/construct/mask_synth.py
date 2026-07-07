@@ -144,6 +144,20 @@ def perturb(geom: dict, rng: random.Random) -> dict:
     return dict(geom)   # geometry is already synthesized in-frame + jittered; keep API for agent
 
 
+def sample_geom_v3(bank: dict, rng: random.Random, image_path: str | None = None) -> dict:
+    """Mask v3 主体感知几何：SAM3 cache 有合格主体 → 径向长椭圆(覆盖主体)/线性分区
+    (主体完整落一侧)；无主体 → 线性二分；cache 缺失/异常 → 退回 v2 随机几何。"""
+    if image_path:
+        try:
+            from . import subject_geom
+            g = subject_geom.sample_for_image(image_path, rng)
+            if g:
+                return g
+        except Exception:  # noqa: BLE001 — cache 异常不阻塞产线
+            pass
+    return sample_geom(bank, rng)
+
+
 # --------------------------------------------------------------------------- #
 # XMP synthesis: base preset (global, minus localizable) + one mask correction
 # --------------------------------------------------------------------------- #

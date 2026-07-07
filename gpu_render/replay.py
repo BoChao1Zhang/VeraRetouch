@@ -55,7 +55,8 @@ def parse_preset(path: str, fmt: str) -> dict:
                         curves[ck] = pts
         except ET.ParseError:
             pass
-        return {"attrs": attrs, "curves": curves}
+        from gpu_render.local_replay import parse_locals
+        return {"attrs": attrs, "curves": curves, "locals": parse_locals(txt)}
     # lrtemplate：用 LR 农场同款转换器，保证语义一致
     sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "lrc_scripts", "utils"))
     from lua_converter import LuaConverter
@@ -335,6 +336,11 @@ def replay(img: np.ndarray, preset: dict, registry: dict, apply_cfg,
             if reg("Vignette", vig):
                 consumed.update(vig)
     _snap("vignette")
+    # 13. 局部修正（MaskGroupBasedCorrections / 语义 α）
+    if _on("local") and preset.get("locals"):
+        from gpu_render.local_replay import apply_locals
+        out = apply_locals(out, preset["locals"], registry, apply_cfg, fits_dir)
+    _snap("local")
 
     leftover = [k for k, v in attrs.items()
                 if k not in consumed and _f(attrs, k)
