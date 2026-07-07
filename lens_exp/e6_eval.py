@@ -111,7 +111,7 @@ def main():
            "e6c": "E6c affine\n+peak", "e6b": "E6b fuse\nL11/14/23/24"}
     col = {"input(no-op)": ps.INK3, "baseline": ps.C_HILITE, "e6_ctrl": ps.C_VIOLET,
            "e6a": ps.C_LIGHT, "e6c": ps.C_ORANGE, "e6b": ps.C_COLORTEMP}
-    fig, ax = plt.subplots(figsize=(9.4, 5.0))
+    fig, ax = plt.subplots(figsize=(12.2, 5.2))
     rng = np.random.default_rng(0)
     for i, v in enumerate(order):
         vals = piv[v].dropna().values
@@ -123,10 +123,10 @@ def main():
     ax.set_xticks(range(len(order))); ax.set_xticklabels([lbl[v] for v in order], fontsize=8)
     ax.set_ylabel("deltaE00 vs expert gt (lower = better)")
     ax.set_ylim(0, np.percentile(np.concatenate([piv[v].dropna().values for v in order]), 97))
-    verdict = ("fusion/affine helps" if gate else "fusion/affine gain < 0.15 — layer choice, not capacity, is the story")
+    verdict = ("fusion/affine helps" if gate else "plain peak-layer readout wins")
     ps.conclusion_title(fig,
         f"E6: peak-layer retrain {mean.get('e6a', float('nan')):.2f} vs ctrl-L24 {mean.get('e6_ctrl', float('nan')):.2f} "
-        f"(swap gain {swap_gain:+.2f}); fusion {gain_b:+.2f}, affine {gain_c:+.2f} vs E6a — {verdict}",
+        f"(swap +{swap_gain:.2f}); fusion {gain_b:+.2f}, affine {gain_c:+.2f} — {verdict}",
         sub=f"test n={len(test)} (8:2 split, ~{640} train imgs); bars = mean +/- SEM, dots = samples; "
             f"Wilcoxon p(e6a vs ctrl)={pvals['e6a_vs_e6_ctrl']:.2g}, p(e6b vs e6a)={pvals['e6b_vs_e6a']:.2g}, "
             f"p(e6c vs e6a)={pvals['e6c_vs_e6a']:.2g}")

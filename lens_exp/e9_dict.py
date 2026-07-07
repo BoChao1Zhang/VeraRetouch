@@ -73,11 +73,12 @@ def main():
     best_rho = rho_mat[np.arange(D), best_dim]
     cand = np.where(np.abs(best_rho) > args.rho)[0]
     cand = cand[np.argsort(-np.abs(best_rho[cand]))]
+    ranked = np.argsort(-np.abs(best_rho))[:30]  # keep figure/grids informative when gate ~empty
     print(f"[e9dict] candidates |rho|>{args.rho}: {len(cand)}")
 
-    # verify on TEST split
+    # verify on TEST split (top-30 by |rho|, gate flag per row)
     rec = []
-    for f in cand:
+    for f in ranked:
         t = TOKENS[best_tok[f]]
         a_te = acts[t]["test"][:, f]
         y_te = tg["test"][:, best_dim[f]]
@@ -87,12 +88,14 @@ def main():
             r_te, p_te = np.nan, np.nan
         rec.append(dict(feature=int(f), token=t, dim=DIM_NAMES[best_dim[f]],
                         rho_train=float(best_rho[f]), rho_test=float(r_te), p_test=float(p_te),
+                        passes_gate=bool(np.abs(best_rho[f]) > args.rho),
                         act_freq=float((acts[t]["train"][:, f] > 0).mean())))
     df = pd.DataFrame(rec)
     df.to_csv(os.path.join(RESULTS_R2, "e9_concepts.csv"), index=False)
-    n_confirm = int((np.sign(df.rho_test) == np.sign(df.rho_train)).fillna(False)
-                    .where(np.abs(df.rho_test) > 0.2).sum()) if len(df) else 0
-    json.dump(dict(n_candidates=len(df), n_test_confirmed=n_confirm,
+    gated = df[df.passes_gate]
+    n_confirm = int((np.sign(gated.rho_test) == np.sign(gated.rho_train)).fillna(False)
+                    .where(np.abs(gated.rho_test) > 0.2).sum()) if len(gated) else 0
+    json.dump(dict(n_candidates=len(cand), n_test_confirmed=n_confirm,
                    rho_gate=args.rho, n_train=n_tr, n_test=len(keys["test"])),
               open(os.path.join(RESULTS_R2, "e9_dict_summary.json"), "w"), indent=1)
 
@@ -112,7 +115,7 @@ def main():
     json.dump(steer, open(os.path.join(RESULTS_R2, "e9_steer_candidates.json"), "w"), indent=1)
 
     # ---------- figure: top-20 features x 26 dims ----------
-    top = cand[:20]
+    top = ranked[:20]
     fig, ax = plt.subplots(figsize=(12.5, max(5.2, 0.42 * len(top) + 2.2)))
     M = rho_mat[top]
     im = ax.imshow(M, aspect="auto", cmap="RdBu_r", vmin=-0.7, vmax=0.7)
@@ -123,16 +126,16 @@ def main():
     ax.grid(False)
     fig.colorbar(im, ax=ax, shrink=0.75, label="Spearman rho (train)")
     ps.conclusion_title(fig,
-        f"E9 concept dictionary: {len(df)} SAE features pass |rho|>{args.rho} on train; "
-        f"{n_confirm} keep |rho|>0.2 same-sign on test",
-        sub=f"TopK-SAE (L{args.layer}, x{ck['expansion']}, k={ck['k']}); activation at retouch-token position vs "
-            f"26 photometric deltas; y-label shows test-split rho")
+        f"E9 concept dictionary: only {len(cand)} SAE feature(s) pass |rho|>{args.rho} on train "
+        f"({n_confirm} confirmed on test) — edit signal is distributed, not single-feature",
+        sub=f"TopK-SAE (L{args.layer}, x{ck['expansion']}, k={ck['k']}); rows = top-20 features by train |rho|; "
+            f"activation at retouch-token position vs 26 photometric deltas; y-label shows test-split rho")
     ps.save(fig, os.path.join(RESULTS_R2, "e9_concept_matrix.png"))
 
     # ---------- top-8 activation grids for the strongest 8 candidates ----------
     grid_dir = os.path.join(RESULTS_R2, "e9_feature_grids")
     os.makedirs(grid_dir, exist_ok=True)
-    for f in cand[:8]:
+    for f in ranked[:8]:
         t = TOKENS[best_tok[f]]
         a = acts[t]["train"][:, f]
         order = np.argsort(-a)[:8]

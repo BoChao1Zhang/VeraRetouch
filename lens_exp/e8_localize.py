@@ -143,11 +143,11 @@ def main():
         ax.text(i, vals.mean(), f"{vals.mean():.2f}", ha="center", va="bottom", fontsize=9, fontweight="bold")
     ax.set_xticks(range(len(order))); ax.set_xticklabels([lbl[v] for v in order], fontsize=8)
     ax.set_ylabel("deltaE00 vs gt (lower = better)")
-    verdict = "attention-as-output PASSES gate" if gate else \
+    verdict = "gate passes" if gate else \
         ("localization itself has no gain" if local_gain <= 0 else "attention mask too inaccurate (gap > 0.3)")
     ps.conclusion_title(fig,
-        f"E8: localized blend — oracle {mean['oracle_box']:.2f} vs global {mean['global']:.2f} "
-        f"(gain {local_gain:+.2f}); pos-head attn mask {mean['attn_pos']:.2f} (oracle+{attn_gap:.2f}) — {verdict}",
+        f"E8: attn blend {mean['attn_pos']:.2f} beats global {mean['global']:.2f}, matches oracle "
+        f"{mean['oracle_box']:.2f} ({verdict}) — but no gain over no-op {mean['input(no-op)']:.2f}",
         sub=f"box test samples n={len(keys)}; M = blurred soft mask; blend = M*render + (1-M)*input; "
             f"Wilcoxon p(oracle vs global)={summ['p_oracle_vs_global']:.2g}, p(attn vs oracle)={summ['p_attn_vs_oracle']:.2g}")
     ps.save(fig, os.path.join(RESULTS_R2, "e8_metrics_bar.png"))

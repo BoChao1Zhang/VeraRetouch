@@ -33,6 +33,7 @@ def main():
     ap.add_argument("--readout", default=None, help="e6 variant for the replay path (default: from e6 summary)")
     ap.add_argument("--n-samples", type=int, default=30)
     ap.add_argument("--max-side", type=int, default=512)
+    ap.add_argument("--replot", action="store_true", help="rebuild figure/summary from existing CSV")
     args = ap.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -74,6 +75,11 @@ def main():
 
     tok_idx = {t: i for i, t in enumerate(TOKENS)}
     nl = len(layers) if lat_kind == "fused" else 1
+    csv_path = os.path.join(RESULTS_R2, "e9_steering.csv")
+    if args.replot and os.path.exists(csv_path):
+        df = pd.read_csv(csv_path)
+        make_figure(df, feats, keys, variant, args)
+        return
     recs = []
     for k in keys:
         d = np.load(os.path.join(C0_DIR, k + ".npz"))
@@ -103,41 +109,55 @@ def main():
                                  alpha=a, dL=ph["dL"], dCCT=ph["dCCT"]))
         torch.cuda.empty_cache()
     df = pd.DataFrame(recs)
-    df.to_csv(os.path.join(RESULTS_R2, "e9_steering.csv"), index=False)
+    df.to_csv(csv_path, index=False)
+    make_figure(df, feats, keys, variant, args)
 
-    # ---- dose-response + direction consistency ----
+
+def make_figure(df, feats, keys, variant, args):
+    """dose-response relative to alpha=0 (median + IQR + per-sample spaghetti) + consistency."""
     from scipy.stats import spearmanr
     summ = {"readout": variant, "n_samples": len(keys)}
-    fig, axes = plt.subplots(1, len(feats), figsize=(3.6 * len(feats), 4.4), sharex=True)
+    fig, axes = plt.subplots(1, len(feats), figsize=(3.6 * len(feats), 4.6), sharex=True)
     cons_all = []
     for ax, fs in zip(np.atleast_1d(axes), feats):
         f = fs["feature"]
         met = "dL" if fs["dim"] == "dL_mean" else "dCCT"
-        sub = df[df.feature == f]
+        sub = df[(df.feature == f) & (df.dim == fs["dim"]) & (df.token == fs["token"])]
         exp_sign = np.sign(fs["rho"])
-        cons = []
+        cons, curves = [], []
         for k, g in sub.groupby("key"):
             g = g.sort_values("alpha")
             r, _ = spearmanr(g.alpha, g[met])
             cons.append(np.sign(r) == exp_sign)
+            rel = g[met].values - g[met].values[list(g.alpha).index(0.0)]
+            curves.append(rel)
+            ax.plot(g.alpha, rel, color=ps.TOKEN_COLORS[fs["token"]], alpha=0.15, lw=0.8)
         cons = float(np.mean(cons))
         cons_all.append(cons)
-        m = sub.groupby("alpha")[met].agg(["mean", "sem"])
-        ax.errorbar(m.index, m["mean"], yerr=m["sem"], marker="o", color=ps.TOKEN_COLORS[fs["token"]], capsize=3)
+        C = np.stack(curves)                     # [n_samples, n_alpha]
+        alphas = sorted(sub.alpha.unique())
+        med = np.median(C, axis=0)
+        q1, q3 = np.percentile(C, 25, axis=0), np.percentile(C, 75, axis=0)
+        ax.plot(alphas, med, marker="o", color=ps.INK, lw=2.2, zorder=5)
+        ax.fill_between(alphas, q1, q3, color=ps.TOKEN_COLORS[fs["token"]], alpha=0.25, linewidths=0)
         ax.axhline(0, color=ps.INK3, lw=0.8)
+        lo, hi = np.percentile(C, 2), np.percentile(C, 98)
+        pad = 0.15 * max(hi - lo, 1e-3)
+        ax.set_ylim(lo - pad, hi + pad)  # keep single extreme outliers from crushing the panel
         ax.set_title(f"f{f} ({fs['token']})\n{fs['dim']} rho={fs['rho']:+.2f} | consist {cons:.0%}", fontsize=9)
         ax.set_xlabel("steering alpha (x sigma)")
-        ax.set_ylabel(("render dL* vs input" if met == "dL" else "render dCCT (mired) vs input"))
-        summ[f"f{f}"] = dict(dim=fs["dim"], rho_train=fs["rho"], consistency=cons,
-                             slope=float(np.polyfit(m.index, m["mean"], 1)[0]))
+        ax.set_ylabel(("dL* change vs alpha=0" if met == "dL" else "dCCT change (mired) vs alpha=0"))
+        summ[f"f{f}_{fs['dim']}"] = dict(dim=fs["dim"], rho_train=fs["rho"], consistency=cons,
+                                         median_slope=float(np.polyfit(alphas, med, 1)[0]))
     mean_cons = float(np.mean(cons_all))
     summ["mean_consistency"] = mean_cons
-    verdict = ("steering moves outputs in the expected direction" if mean_cons >= 0.7
-               else "steering effect weak/inconsistent")
+    slopes = [abs(v["median_slope"]) for k, v in summ.items() if isinstance(v, dict)]
+    verdict = ("direction consistent but effect magnitude small" if mean_cons >= 0.7 else
+               "steering effect weak/inconsistent")
     ps.conclusion_title(fig,
-        f"E9 steering: mean direction-consistency {mean_cons:.0%} over {len(keys)} samples — {verdict}",
-        sub=f"latent edit +/- alpha*sigma along SAE decoder direction at L{args.layer} retouch-token, "
-            f"replayed offline through the {variant} readout (correlation != causation check)")
+        f"E9 steering: direction-consistency {mean_cons:.0%} over {len(keys)} samples — {verdict}",
+        sub=f"latent edit +/- alpha*sigma along SAE decoder direction at L{args.layer} retouch-token, replayed "
+            f"offline through the {variant} readout; black = median, band = IQR, thin lines = samples (vs alpha=0)")
     ps.save(fig, os.path.join(RESULTS_R2, "e9_steering_curves.png"))
     json.dump(summ, open(os.path.join(RESULTS_R2, "e9_steer_summary.json"), "w"), indent=1)
     print(json.dumps(summ, indent=1))

@@ -64,9 +64,9 @@ def main():
     direction = "improves" if strongest["mean_delta"] < 0 and strongest["wilcoxon_p"] < 0.05 else \
                 "worsens" if strongest["mean_delta"] > 0 and strongest["wilcoxon_p"] < 0.05 else "does not significantly change"
     ps.conclusion_title(fig,
-        f"E7 intervention: amplifying positive / suppressing negative heads {direction} retouch quality "
-        f"(best |effect| {strongest['mean_delta']:+.2f} deltaE00)",
-        sub="V-SEAM-style rescale on image-token attention columns, renormalized; box test subset; below diagonal = improved")
+        f"E7 intervention: head rescale {direction} quality (best effect {strongest['mean_delta']:+.2f} dE00)",
+        sub="V-SEAM-style: amplify positive / suppress negative heads on image-token attention columns, renormalized; "
+            "box test subset; below diagonal = improved")
     ps.save(fig, os.path.join(RESULTS_R2, "e7_intervention_scatter.png"))
     json.dump(summ, open(os.path.join(RESULTS_R2, "e7_int_summary.json"), "w"), indent=1)
     print(json.dumps(summ, indent=1))
