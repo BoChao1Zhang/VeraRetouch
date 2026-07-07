@@ -79,10 +79,14 @@ class LensRecorderR2:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--keys-file", default=None, help="only process keys listed in this file (one per line)")
     ap.add_argument("--max-new-tokens", type=int, default=1200)
     args = ap.parse_args()
 
     rows = load_manifest_r2()
+    if args.keys_file:
+        keep = {l.strip() for l in open(args.keys_file) if l.strip()}
+        rows = [r for r in rows if r["key"] in keep]
     if args.limit:
         # smoke: take a mix guaranteeing box + CN + EN coverage
         box = [r for r in rows if r["has_box"]][:2]
