@@ -133,6 +133,12 @@ def _recipe_of(c: dict) -> dict:
         return {"kind": "lut_in_sam3", "base_preset_id": lc.get("base_preset_id"),
                 "base_preset_path": lc.get("base_preset_path"), "concept": lc["concept"]}
     if lc:
+        if not lc.get("local_params"):
+            return {"kind": "local_preset", "mask_type": lc["mask_type"],
+                    "geom": lc["geom"], "blend_mode": lc.get("blend_mode", "exact"),
+                    "base_preset_id": lc.get("base_preset_id"),
+                    "base_preset_path": lc.get("base_preset_path"),
+                    "base_preset_content_hash": lc.get("base_preset_content_hash")}
         return {"kind": "local_param", "mask_type": lc["mask_type"], "geom": lc["geom"],
                 "local_params": lc["local_params"], "base_preset_id": lc.get("base_preset_id")}
     return {"preset_id": c["preset_id"], "kind": c["kind"], "path": c["preset_path"],
@@ -156,13 +162,20 @@ def make_sft_record(group: dict, c: dict, rank: int, caps: dict) -> dict:
         region = lc.get("concept_cn")
     elif lc:
         cap = caps.get(lc.get("base_preset_id"), {})
-        edit = _local_edit_phrase(lc.get("local_params") or {})
         # 回退模板防泄露：instruction 不含 GT 方向词（指令即答案）；方向词只进 reasoning。
         instr = _tpl_rng(seed_key).choice(_LOCAL_TPLS).format(r=lc["region"])
-        reason = (f"对{lc['region']}区域局部{edit}，" + _merit_phrase(c["qa"]) + "。")
+        if lc.get("local_params"):
+            edit = _local_edit_phrase(lc["local_params"])
+            reason = (f"对{lc['region']}区域局部{edit}，" + _merit_phrase(c["qa"]) + "。")
+            lparams = lc["local_params"]
+        else:
+            name = cap.get("vlm_name") or "所选调色"
+            reason = (f"只对{lc['region']}区域应用「{name}」，画面其余部分保持不变，"
+                      + _merit_phrase(c["qa"]) + "。")
         local = {"mask_unit_id": lc["mask_unit_id"], "geom": lc["geom"], "C_GT": lc["cgt_path"],
-                 "base_preset_id": lc.get("base_preset_id")}
-        region, lparams = lc.get("region"), lc.get("local_params")
+                 "base_preset_id": lc.get("base_preset_id"),
+                 "blend_mode": lc.get("blend_mode", "exact")}
+        region = lc.get("region")
     else:
         cap = caps.get(c["preset_id"], {})
         instr = _instruction(cap, task, seed_key)

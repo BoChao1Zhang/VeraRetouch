@@ -1,10 +1,12 @@
-"""Unified source-conditioned render: apply ONE preset to ONE source photo.
+"""Unified source-conditioned render helpers.
 
   param (xmp/lrtemplate) -> core.render_backend 双路分流：有残差 LUT 的标定 preset
                             走本地 GPU（gpu_render, batch=16, cuda:1），其余走
                             LrC 农场（render_via_lr）；本地失败自动回退农场
   lut   (.cube/.3dl)     -> code 3D-LUT trilinear (LR has no .cube develop-preset form;
                             this is how the 6-probe previews were made — preset_qa.py:14)
+  local preset           -> render the complete base preset once, then composite one or more
+                            per-image CGT alpha variants back over the untouched source
 
 Returns {ok, after_path, engine} or {ok:False, error_code}. ponytail: thin dispatch over
 the two proven paths (core.render_backend + pilot_preset._apply_cube/_parser).
@@ -66,6 +68,48 @@ def render_preset(preset_path: str, kind: str, fmt: str, source_path: str,
         return {"ok": True, "after_path": shard_save(out), "engine": "lut_trilinear"}
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error_code": "lut_apply_failed", "error": str(e)[:200]}
+
+
+def render_local_preset_variants(base_preset_path: str, fmt: str, source_path: str,
+                                 specs: list, preset_id: str | None = None,
+                                 store: bool = True) -> dict:
+    """Render a complete base preset once and localize it with one CGT spec per output.
+
+    ``specs`` are flat ``{mask_type, geom, amount?}`` (geometric) or
+    ``{mask_type: "semantic", alpha, amount?}`` dictionaries; either form may carry an
+    optional ``cgt_path`` — it is popped here and forwarded so the backend writes the
+    actually-composited alpha as a single-channel PNG (result rows carry ``cgt_path``
+    back; missing/None means no CGT PNG, backward compatible). The backend applies any
+    preset residual to the edited branch before exact alpha compositing, so alpha-zero
+    pixels remain the source image rather than receiving a global residual correction.
+    Successful temporary outputs are moved into the content-addressed render store
+    (``store=False`` keeps them in RENDER_STAGE — for ephemeral preview passes);
+    CGT PNGs stay at the caller-given ``cgt_path`` (not content-addressed).
+    """
+    os.makedirs(config.RENDER_STAGE, exist_ok=True)
+    variants = []
+    for spec in specs:
+        spec = dict(spec)                       # 不改调用方对象
+        cgt_path = spec.pop("cgt_path", None)   # CGT PNG 由后端产出（性能项1+3）
+        variants.append(
+            {"spec": spec, "cgt_path": cgt_path,
+             "out_path": os.path.join(
+                 config.RENDER_STAGE, f"localpreset_{uuid.uuid4().hex[:12]}.jpg")})
+    res = render_backend.get_backend().render_local_variants(
+        base_preset_path, fmt, source_path, variants, preset_id=preset_id)
+    for row in res.get("results") or []:
+        tmp = row.get("after_path") or row.get("out_path")
+        if row.get("ok") and tmp and os.path.exists(tmp):
+            if store:
+                saved = shard_save(tmp)
+                row["after_path"] = saved
+                row["out_path"] = saved
+        elif tmp and os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+    return res
 
 
 def _smoke() -> None:

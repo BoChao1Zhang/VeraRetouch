@@ -8,12 +8,13 @@ import math
 import numpy as np
 import torch
 
-from gpu_render.local_replay import LOCAL_OP_MAP, _f
+from gpu_render.local_replay import (
+    _EPS, _GMAX, _GMIN, LOCAL_OP_MAP, _f, _smoothstep, _use_smooth_gain)
 
 
 def raster_alpha_t(mask_type: str, geom: dict, h: int, w: int,
-                   device) -> torch.Tensor:
-    """local_replay.raster_alpha 的 torch 版：(H,W) float32 on device。"""
+                   device, *, smoothstep: bool = False) -> torch.Tensor:
+    """Torch mirror of ``local_replay.raster_alpha`` on ``device``."""
     yy, xx = torch.meshgrid(torch.arange(h, device=device, dtype=torch.float32),
                             torch.arange(w, device=device, dtype=torch.float32),
                             indexing="ij")
@@ -35,9 +36,27 @@ def raster_alpha_t(mask_type: str, geom: dict, h: int, w: int,
         dxv, dyv = fx - zx, fy - zy
         L2 = dxv * dxv + dyv * dyv + 1e-6
         m = (((x - zx) * dxv + (y - zy) * dyv) / L2).clamp(0.0, 1.0)
+    if smoothstep:
+        m = _smoothstep(m)
     if str(geom.get("Flipped", "false")).lower().lstrip("+") == "true":
         m = 1.0 - m
     return m
+
+
+def smooth_gain_t(base: torch.Tensor, edited: torch.Tensor,
+                  alpha: torch.Tensor) -> torch.Tensor:
+    """local_replay.smooth_gain_np 的 torch 版:线性域 α 调制平滑增益。base/edited:(B,3,H,W)。"""
+    from gpu_render.gpu.spatial import _gaussian, _linear_to_srgb, _srgb_to_linear
+    _, _, h, w = base.shape
+    sigma = max(2.0, min(h, w) * 0.015)
+    lin_b = _srgb_to_linear(base)
+    lin_e = _srgb_to_linear(edited)
+    bb = _gaussian(lin_b, sigma)
+    be = _gaussian(lin_e, sigma)
+    G = ((be + _EPS) / (bb + _EPS)).clamp(_GMIN, _GMAX)
+    a = alpha[None, None]
+    out_lin = lin_b * (1.0 + a * (G - 1.0))
+    return _linear_to_srgb(out_lin.clamp(0.0, 1.0))
 
 
 def corr_alpha_t(corr: dict, h: int, w: int, device) -> torch.Tensor:
@@ -97,6 +116,9 @@ def apply_locals_batch(out: torch.Tensor, corrections: list, fits_dir: str,
         edited = out.clone()
         for _, op, v in ops:
             edited = scalar(edited, op, v)
-        a = alpha[None, None]           # (1,1,H,W) 广播整个 batch
-        out = (out * (1.0 - a) + edited * a).clamp(0.0, 1.0)
+        if _use_smooth_gain(corr):
+            out = smooth_gain_t(out, edited, alpha)
+        else:
+            a = alpha[None, None]       # (1,1,H,W) 广播整个 batch
+            out = (out * (1.0 - a) + edited * a).clamp(0.0, 1.0)
     return out, fb_ops

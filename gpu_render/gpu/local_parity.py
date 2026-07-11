@@ -1,8 +1,8 @@
 """Local edit 的 CPU↔GPU parity 验收（对标 gpu/parity.py 标准：ΔE00 de_mean<0.5）。
 
 三层对拍：
-  A. α 光栅 golden ↔ dataset_build cgt_raster（语义同源断言，可选）
-  B. α 光栅 CPU(numpy) ↔ GPU(torch)（max|Δ|）
+  A. 生成式 smoothstep 光栅 ↔ dataset_build cgt_raster（语义同源断言，可选）
+  B. 真实 Lightroom 线性光栅 CPU(numpy) ↔ GPU(torch)（max|Δ|）
   C. 端到端：replay(全局+local) ↔ replay_batch(全局+local)，ΔE00 per case
      （含 radial/gradient/semantic α、亮/暗组合、全局preset+local 叠加、batch 广播）
 
@@ -86,12 +86,11 @@ def main() -> None:
     import torch  # noqa: F401
 
     from gpu_render import ops_v2
-    from gpu_render.local_replay import apply_locals, raster_alpha
+    from gpu_render.local_replay import raster_alpha
     from gpu_render.replay import replay
     from gpu_render.gpu.gpu_replay import (DEVICE, _apply_cfg_np, replay_batch,
                                            to_batch, to_hwc_list)
     from gpu_render.gpu.local_gpu import raster_alpha_t
-    from gpu_render.local_apply import FITS_DIR
 
     imgs = [np.asarray(Image.open(p).convert("RGB"), np.float32) / 255
             for p in args.images]
@@ -101,7 +100,7 @@ def main() -> None:
         imgs = [im if im.shape[:2] == (h, w) else cv2.resize(im, (w, h))
                 for im in imgs]  # batch 锁步需同形
 
-    # ---- A. golden ↔ dataset_build cgt_raster ----
+    # ---- A. generated local-preset smoothstep ↔ dataset_build cgt_raster ----
     try:
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(_HERE)),
                                         "dataset_build", "src"))
@@ -110,15 +109,18 @@ def main() -> None:
         for _, corrs, _ in CASES:
             for c in corrs:
                 for m in c["masks"]:
-                    d = np.abs(raster_alpha(m["mask_type"], m["geom"], h, w)
-                               - cgt_raster(m["mask_type"], m["geom"], h, w)).max()
+                    smooth = raster_alpha(
+                        m["mask_type"], m["geom"], h, w, smoothstep=True)
+                    d = np.abs(
+                        smooth - cgt_raster(m["mask_type"], m["geom"], h, w)
+                    ).max()
                     worst = max(worst, float(d))
-        print(f"A. raster golden↔cgt_raster max|Δ| = {worst:.2e} "
+        print(f"A. smoothstep raster↔cgt_raster max|Δ| = {worst:.2e} "
               f"{'PASS' if worst < 1e-5 else 'FAIL'}")
     except Exception as e:  # noqa: BLE001
         print(f"A. cgt_raster 对拍跳过（{type(e).__name__}: {e}）")
 
-    # ---- B. raster CPU ↔ GPU ----
+    # ---- B. legacy Lightroom linear raster CPU ↔ GPU ----
     worst = 0.0
     for _, corrs, _ in CASES:
         for c in corrs:

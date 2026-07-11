@@ -24,7 +24,8 @@ from dataset_build.source_qa import db
 
 # every rendered variant is one of these engines (derived from candidate.kind)
 _ENGINE = {"param": "lr_farm", "lut": "lut_trilinear",
-           "local_from_preset": "lr_farm", "lut_in_sam3": "lut_composite"}
+           "local_from_preset": "lr_farm", "local_preset": "gpu_local_preset",
+           "lut_in_sam3": "lut_composite"}
 
 
 def _render_meta(path: str) -> tuple:
@@ -115,7 +116,7 @@ CREATE TABLE IF NOT EXISTS construct_renders (
     preset_id       TEXT,
     kind            TEXT,
     fmt             TEXT,
-    engine          TEXT,                -- lr_farm | lut_trilinear | lut_composite
+    engine          TEXT,                -- gpu_local_preset | farm_local_composite | lr_farm | LUT
     after_path      TEXT,                -- the saved render jpg on disk
     sha256          TEXT,                -- content hash of the render bytes (dedup / integrity)
     size_bytes      BIGINT,
@@ -164,9 +165,11 @@ def persist_run(run_id: str, groups: list, sft: list, dpo: list, route: str) -> 
             qa = c.get("qa") or {}
             if ap and os.path.exists(ap):   # register every saved render with content hash + size
                 sha, sz = _render_meta(ap)
+                engine = (c.get("local") or {}).get("engine") \
+                    or _ENGINE.get(c.get("kind"), c.get("kind"))
                 rrows.append((uuid.uuid4().hex, run_id, gid, route, g["source"],
                               g.get("source_asset_id"), c.get("preset_id"), c.get("kind"),
-                              c.get("fmt"), _ENGINE.get(c.get("kind"), c.get("kind")), ap, sha, sz))
+                              c.get("fmt"), engine, ap, sha, sz))
             if ap in sft_by_tar:
                 role, rank = "sft", (sft_by_tar[ap].get("qa") or {}).get("rank")
             elif ap in chosen_tar:

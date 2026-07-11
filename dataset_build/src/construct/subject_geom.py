@@ -3,14 +3,15 @@
 用户定稿的原则（2026-07-06）：
   - 主体质心/占幅只决定覆盖范围，不决定 mask 类型：有主体时径向/线性都可用。
   - 径向 = PCA 长椭圆完整覆盖主体（外扩 + 最小伸长率）；线性 = 分区，主体完整落在一侧。
-  - preset 由 GLOBAL 流程选（本模块只出几何），应用在 mask 内或 mask 外（50/50）。
-  - 无明确主体：只用线性对画面二分，不用径向。
+  - preset 由 GLOBAL 流程选（本模块只出几何），只应用在 mask 内，mask 外不动。
+  - 无明确主体（无非背景的够大主体）：只用线性二分，不用径向/束状/线性侧分区。
   - 线性过渡带必须软（画面自然第一）。
   - 主体来源：预计算 SAM3 cache 的 regions.json + concept mask PNG，按背景词表过滤。
 
-输出 dict 与 mask_synth.sample_geom 同形：{mask_type, what, geom, ...}，
-geom 为 LR XMP 几何（CircularGradient: Top/Left/Bottom/Right/Angle/Feather/Flipped；
-Gradient: ZeroX/ZeroY/FullX/FullY），可直接进 synth_local_xmp / cgt_raster。
+输出 dict：{mask_type, what, geom, ...}，geom 为 LR XMP 几何
+（CircularGradient: Top/Left/Bottom/Right/Angle/Feather/Flipped；
+Gradient: ZeroX/ZeroY/FullX/FullY），可直接进 cgt_raster / GPU raster_alpha_t。
+Mask v4 入口：sample_plan（8-mask 组成计划，见文件下方）。
 
 CLI:  python -m construct.subject_geom verify --src-dir D --mask-dir M [--iaa]
       （用外部目录的源图+主体mask 预览两模式几何并可选 IAA 对比，不依赖 LR 农场）
@@ -29,15 +30,23 @@ import numpy as np
 
 SAM3_CACHE = os.environ.get(
     "CONSTRUCT_SAM3_CACHE", "/home/bc/data/datasets/vera_directionA_1M/sam3_cache")
+# Mask v4：实例级主体 cache（sam3_subject_instances 产出：VLM 选主体 + 守卫 + 清理）
+SUBJECT_CACHE = os.environ.get(
+    "CONSTRUCT_SUBJECT_CACHE", "/home/bc/data/datasets/vera_directionA_1M/subject_cache")
 
-# 背景概念：山川河流天地墙面等环境类不作主体（人物/动物/物件可以）
+# 背景概念：山川河流天地、建筑结构、植被等环境类不作主体（人物/动物/物件/食物可以）
 _BACKGROUND_RE = re.compile(
     r"(sky|cloud|mountain|hill|water|sea|ocean|river|lake|pond|ground|soil|dirt|grass|"
-    r"lawn|field|meadow|forest|wood|tree|bush|road|street|path|pavement|wall|floor|"
-    r"ceiling|beach|sand|snow|horizon|background|landscape|terrain|cliff|rock_face|"
-    r"foliage|vegetation)", re.I)
+    r"lawn|field|meadow|forest|wood|tree|trees|bush|shrub|hedge|leaf|leaves|foliage|"
+    r"vegetation|plant|road|street|path|pavement|sidewalk|wall|floor|ceiling|beach|sand|"
+    r"snow|horizon|background|backdrop|landscape|terrain|cliff|rock_face|"
+    # 建筑/结构类环境（本身不作前景主体，除非画面无其它前景则退 bisect）
+    r"building|buildings|house|roof|rooftop|facade|window|windows|door|doorway|"
+    r"fence|railing|gate|balcony|awning|pillar|column|staircase|stair|steps?|"
+    r"brick|architecture|structure|curtain|skyscraper|tower_block|"
+    r"paved|pavement|plaza|courtyard|patio|parking|deck|square)", re.I)
 
-AREA_LO, AREA_HI = 0.02, 0.55
+AREA_LO, AREA_HI = 0.06, 0.55   # 主体占幅下限：低于 6% 视为"没有够大主体"→ 线性二分（收清晰小主体如猫 0.069）
 MIN_BBOX_FILL = 0.20      # mask 面积 / bbox 面积，过滤碎片化 mask
 MIN_LINEAR_ROOM = 0.20    # 线性分区要求主体对侧至少留这么多画幅
 MARGIN_MAX, MARGIN_MIN = 1.60, 1.02   # 外扩系数上/下限（小主体↔大主体）
@@ -95,8 +104,17 @@ def _size_factor(area: float) -> float:
 
 
 def _mask_pca(mask01: np.ndarray):
-    """归一化坐标 PCA：返回 (center, major_vec, a_extent, b_extent, area_frac)；点太少 → None。"""
+    """归一化坐标 PCA：返回 (center, major_vec, a_extent, b_extent, area_frac)；点太少 → None。
+    先降采样到短边 ≤512（归一化坐标下椭圆参数不变），native 分辨率全前景点集
+    的 PCA 是 p95 ~1.9s 的热点。"""
     h, w = mask01.shape
+    if min(h, w) > 512:
+        import cv2
+        s = 512.0 / min(h, w)
+        mask01 = cv2.resize(mask01.astype(np.float32),
+                            (max(1, int(round(w * s))), max(1, int(round(h * s)))),
+                            interpolation=cv2.INTER_NEAREST)
+        h, w = mask01.shape
     ys, xs = np.nonzero(mask01 > 0.5)
     if xs.size < 32:
         return None
@@ -182,12 +200,17 @@ def _gradient_geom(pc, base_axis_deg: float, half: float, toward_high: bool,
 
 
 def linear_geom(bbox, rng: random.Random, apply_subject_side: bool,
-                area: Optional[float] = None) -> Optional[dict]:
+                area: Optional[float] = None,
+                side: Optional[str] = None) -> Optional[dict]:
     """线性侧分区：主体完整落在一侧，分割线允许倾斜。软过渡（宽 ramp）。
-    分割线离主体的距离随主体占比自适应：大主体贴边，小主体推远。"""
+    分割线离主体的距离随主体占比自适应：大主体贴边，小主体推远。
+    side 显式指定方向（v4 四方向轮询用），缺省取对侧空间最大方向。"""
     x0, y0, x1, y1 = bbox
     rooms = {"left": x0, "right": 1 - x1, "top": y0, "bottom": 1 - y1}
-    side, room = max(rooms.items(), key=lambda kv: kv[1])  # 对侧空间最大的方向
+    if side is None:
+        side, room = max(rooms.items(), key=lambda kv: kv[1])  # 对侧空间最大的方向
+    else:
+        room = rooms[side]
     if room < MIN_LINEAR_ROOM:
         return None
     wdt = min(rng.uniform(*LINEAR_RAMP), room * 0.9)
@@ -244,7 +267,7 @@ def sample_from_subject(regions: Dict[str, Dict[str, Any]],
     if concept is None:
         return dict(bisect_geom(rng), _subject=None)
     r = regions[concept]
-    apply_inside = rng.random() < 0.5
+    apply_inside = True   # preset 只在 mask 内应用，mask 外不动
     # 模式权重：径向 0.4 / 束状 0.3 / 线性侧分区 0.3；失败沿序退阶
     u = rng.random()
     order = (["radial", "band", "linear"] if u < 0.4 else
@@ -270,7 +293,7 @@ def sample_from_subject(regions: Dict[str, Dict[str, Any]],
 def sample_for_image(image_path: str, rng: random.Random,
                      cache_dir: str = SAM3_CACHE) -> Optional[dict]:
     """从预计算 SAM3 cache 读 regions + 主体 mask，产出主体感知几何。
-    cache 缺失 → None（调用方 fallback 到 mask_synth.sample_geom）。"""
+    cache 缺失 → None。"""
     from dataset_build.mask_cache import CachedMasker
 
     cm = CachedMasker(cache_dir)
@@ -282,6 +305,117 @@ def sample_for_image(image_path: str, rng: random.Random,
     if mask01 is not None and not mask01.any():
         mask01 = None
     return sample_from_subject(regions, mask01, rng)
+
+
+# --------------------------------------------------------------------------- #
+# Mask v4：实例级主体 cache + 8-mask 组成计划（1 径向 + 1 语义 + 2 束状 + 4 线性）
+# --------------------------------------------------------------------------- #
+FEATHER_JITTER = (0.7, 1.4)      # 羽化宽度抖动（数据多样性；C_GT 存实际 α，无副作用）
+FEATHER_MAX_EDGE = 1024          # 羽化在 ≤1024 短边上算（性能项6）；渲染端 resize 回源图
+# v4 面积门与 v3 的 AREA_LO/HI 不同：VLM 选主体已在 50 张审核中验证保留小主体
+# （3.8% 的人像正确入选，旧 6% 下限会误杀），上界由预计算守卫（0.85/包络 0.67）把关。
+# 这里只挡真正退化的极小 mask（羽化后近不可见的编辑）。
+AREA_MIN_V4 = 0.005
+
+
+class SubjectCacheMiss(RuntimeError):
+    """源图尚未被 sam3_subject_instances 预计算（subject.json 缺失）。"""
+
+
+def load_subject(image_path: str, cache_dir: str = SUBJECT_CACHE) -> dict:
+    """读实例级主体 cache。返回 {"status": ..., "mask01": HxW float32 或 None, "meta": {...}}。
+    status != ready 时 mask01 为 None（调用方走全组 bisect）。cache 缺失 → SubjectCacheMiss。"""
+    import json as _json
+
+    from dataset_build.mask_cache import path_key
+
+    d = os.path.join(cache_dir, path_key(image_path))
+    meta_path = os.path.join(d, "subject.json")
+    if not os.path.exists(meta_path):
+        raise SubjectCacheMiss(f"no subject.json for {image_path} (run sam3_subject_instances)")
+    meta = _json.load(open(meta_path))
+    if meta.get("status") != "ready":
+        return {"status": meta.get("status"), "mask01": None, "meta": meta}
+    from PIL import Image
+    m = np.asarray(Image.open(os.path.join(d, "subject.png")).convert("L"),
+                   np.float32) / 255.0
+    return {"status": "ready", "mask01": (m > 0.5).astype(np.float32), "meta": meta}
+
+
+def semantic_feather(mask01: np.ndarray, rng: random.Random) -> tuple:
+    """语义主体 α：占幅自适应距离羽化 × 抖动（方案1 定稿，2026-07-11）。
+    内宽 = 短边×(0.8%+1.7%×√area)×U[0.7,1.4]，外宽 = 内/3，mask 外精确 0。
+    在 ≤FEATHER_MAX_EDGE 短边上计算；渲染端负责 resize 回源图（契约 §1）。"""
+    import cv2
+
+    from dataset_build.tools.evaluate_mask_feather import feather_binary
+
+    m = np.asarray(mask01, np.float32)
+    h, w = m.shape
+    if min(h, w) > FEATHER_MAX_EDGE:
+        s = FEATHER_MAX_EDGE / min(h, w)
+        m = cv2.resize(m, (max(1, int(round(w * s))), max(1, int(round(h * s)))),
+                       interpolation=cv2.INTER_NEAREST)
+    hard = m > 0.5
+    area = float(hard.mean())
+    f_in = (0.008 + 0.017 * math.sqrt(max(area, 1e-4))) * rng.uniform(*FEATHER_JITTER)
+    alpha = feather_binary(hard, f_in, f_in / 3.0).astype(np.float32)
+    return alpha, {"f_in": round(f_in, 5), "f_out": round(f_in / 3.0, 5),
+                   "area": round(area, 4)}
+
+
+def _bisect_spec(rng: random.Random) -> dict:
+    g = bisect_geom(rng)
+    return dict(g, amount=1.0)
+
+
+def sample_plan(image_path: str, rng: random.Random, n: int = 8,
+                cache_dir: str = SUBJECT_CACHE) -> list:
+    """一个源图的 local 变体组成计划（用户定稿 2026-07-11）：
+    1 径向 + 1 语义 + 2 束状 + 4 线性（四方向轮询，room≥0.2 的方向轮流，槽位不足
+    bisect 补位）；无主体 / 守卫舍弃 → 全组 bisect。任何几何失败退 bisect。
+    返回 n 个 spec dict：几何 {mask_type, geom, amount, _mode...}；
+    语义 {mask_type:"semantic", alpha, amount, _mode:"semantic", _feather}。"""
+    sub = load_subject(image_path, cache_dir)
+    plan: list = []
+    if sub["mask01"] is None or float(sub["mask01"].mean()) < AREA_MIN_V4:
+        status = sub["status"] if sub["mask01"] is None else "subject_too_small"
+        plan = [dict(_bisect_spec(rng), _subject_status=status) for _ in range(n)]
+        return plan
+    mask01 = sub["mask01"]
+    meta = sub["meta"]
+    subject_info = {"concept": meta.get("sam_prompt"), "scope": meta.get("scope"),
+                    "area": meta.get("mask_area_cleaned"),
+                    "n_members": meta.get("n_members")}
+    ys, xs = np.nonzero(mask01 > 0.5)
+    h, w = mask01.shape
+    bbox = (float(xs.min()) / w, float(ys.min()) / h,
+            float(xs.max() + 1) / w, float(ys.max() + 1) / h)
+    area = float(mask01.mean())
+
+    # 1 径向
+    g = radial_geom(mask01, rng, apply_inside=True)
+    plan.append(dict(g, amount=1.0) if g else _bisect_spec(rng))
+    # 1 语义
+    alpha, feather_meta = semantic_feather(mask01, rng)
+    plan.append({"mask_type": "semantic", "alpha": alpha, "amount": 1.0,
+                 "_mode": "semantic", "_apply": "inside", "_feather": feather_meta})
+    # 2 束状
+    for _ in range(2):
+        g = band_geom(mask01, rng, apply_inside=True)
+        plan.append(dict(g, amount=1.0) if g else _bisect_spec(rng))
+    # 4 线性：可行方向（room≥MIN_LINEAR_ROOM）按空间降序轮询
+    rooms = {"left": bbox[0], "right": 1 - bbox[2], "top": bbox[1], "bottom": 1 - bbox[3]}
+    sides = [s for s, r in sorted(rooms.items(), key=lambda kv: -kv[1])
+             if r >= MIN_LINEAR_ROOM]
+    for i in range(4):
+        g = (linear_geom(bbox, rng, apply_subject_side=True, area=area,
+                         side=sides[i % len(sides)]) if sides else None)
+        plan.append(dict(g, amount=1.0) if g else _bisect_spec(rng))
+
+    for spec in plan:
+        spec.setdefault("_subject", subject_info)
+    return plan[:n]
 
 
 # --------------------------------------------------------------------------- #

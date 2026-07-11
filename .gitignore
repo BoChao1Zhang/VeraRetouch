@@ -27,3 +27,10 @@ dataset_build/source_qa/pilot/
 lr_caches
 CLAUDE.md
 assets/lightroom_windows_client_20260616_231400 (2).zip
+
+# 实验产物（评审 sheet / 本地小批构建 / lens 实验输出 / 专用 venv），均可再生
+_mask_review/
+_local_build_test20/
+lens_exp_results*/
+.venv-lens/
+docs/ppt_assets_*/

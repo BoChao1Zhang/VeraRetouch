@@ -52,6 +52,7 @@ class Selector:
         self.feat = {f["preset_id"]: f for f in self.bank.feats}
         self.img_mu = self._bg_mean()
         self._quota = mixing.FamilyQuota()   # run 级风格族计数
+        self._quota_lock = threading.Lock()
         self._farm_cache: dict = {}
 
     def _bg_mean(self):
@@ -69,14 +70,39 @@ class Selector:
         np.save(_BG_MEAN, mu)
         return mu
 
-    def recall(self, src_path: str, k: int) -> list:
+    def candidate_pool(self, src_path: str, k: int) -> list:
+        """Return a relevance-ranked over-recall pool without consuming run quotas."""
         v = sf_client.embed_images([src_path])[0]
         vc = _unit(v - self.img_mu)
         sims = self.pemb_c @ vc
-        # 超取 4k 再按「风格族配额 + 农场路由上限」挑 k（mixing，run 级计数）
         top = np.argsort(-sims)[: max(4 * k, k + 12)]
-        cands = [self.feat[self.ids[i]] for i in top]
-        return mixing.pick_candidates(cands, k, self._quota, is_farm=self._is_farm)
+        return [self.feat[self.ids[i]] for i in top]
+
+    def select_candidates(self, candidates: list, k: int) -> list:
+        """Select and commit candidates to the run-level family quota."""
+        farm_by_identity = {id(c): self._is_farm(c) for c in candidates}
+        with self._quota_lock:
+            return mixing.pick_candidates(
+                candidates, k, self._quota,
+                is_farm=lambda c: farm_by_identity[id(c)])
+
+    def recall(self, src_path: str, k: int) -> list:
+        # 超取 4k 再按「风格族配额 + 农场路由上限」挑 k（mixing，run 级计数）
+        return self.select_candidates(self.candidate_pool(src_path, k), k)
+
+    def select_local_base(self, src_path: str) -> dict | None:
+        """LOCAL Route 1 选基：召回 → param/xmp/无内嵌local 资格过滤 → GPU 路优先 →
+        风格族配额取 1（agent 与 local_pipeline 共用）。"""
+        recalled = self.candidate_pool(src_path, 40)
+        eligible = [c for c in recalled
+                    if c.get("kind") == "param"
+                    and str(c.get("path", "")).endswith(".xmp")
+                    and not c.get("has_local_mask")]
+        routed = [(c, self._is_farm(c)) for c in eligible]
+        gpu_eligible = [c for c, is_farm in routed if not is_farm]
+        farm_eligible = [c for c, is_farm in routed if is_farm]
+        selected = self.select_candidates(gpu_eligible or farm_eligible, 1)
+        return selected[0] if selected else None
 
     def _is_farm(self, feat: dict) -> bool:
         """preset 是否只能农场渲（mask/未覆盖键/exotic profile）；结果按 preset_id 缓存。"""
@@ -116,54 +142,27 @@ def process_source(sel: Selector, src: dict, render_n: int, render_workers: int 
     }
 
 
-_MASK_BANK = None
-
-
-def _mask_bank():
-    global _MASK_BANK
-    if _MASK_BANK is None:
-        import os as _os
-        _MASK_BANK = mask_synth.load_bank() if _os.path.exists(mask_synth._BANK_PATH) else mask_synth.build_bank()
-    return _MASK_BANK
-
-
-def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
-                         render_workers: int = 6) -> dict | None:
-    """LOCAL pipeline (Mask v2 Route 1): the GLOBAL-selected preset's look applied ONLY inside a mask.
-    vlemb picks an appropriate param-XMP preset (the look); we sample n mask regions and render the
-    preset confined to each; QA picks the best region. local={mask_unit_id, geom, C_GT, ...}."""
+def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str) -> dict | None:
+    """LOCAL Route 1 (Mask v4): render one selected complete preset, then localize it
+    into the per-source plan (1 radial + 1 semantic + 2 band + 4 linear; bisect fills)."""
+    from . import subject_geom
     path = src["path"]
-    # base preset = top vlemb param-XMP candidate (needs an .xmp to inject the mask into)
-    base = next((c for c in sel.recall(path, 20)
-                 if c.get("kind") == "param" and str(c.get("path", "")).endswith(".xmp")), None)
+    base = sel.select_local_base(path)
     if not base:
         return None
-    bank = _mask_bank()
-    # sha1, not builtin hash(): PYTHONHASHSEED randomizes hash() per process, which
-    # would sample different mask geometries for the same source across restarts.
-    rng = random.Random(int.from_bytes(hashlib.sha1(path.encode()).digest()[:4], "big"))
-
-    def _one(_i):
-        g = mask_synth.sample_geom_v3(bank, rng, image_path=path)
-        geom = mask_synth.perturb(g["geom"], rng)
-        geom["__what__"] = g["what"]; geom["__type__"] = g["mask_type"]
-        s = mask_synth.make_local_sample(path, base["path"], geom, cgt_dir, rng)
-        return (g, s) if s else None
-    with ThreadPoolExecutor(max_workers=render_workers) as ex:
-        samples = [x for x in ex.map(_one, range(n_masks)) if x]
+    # Per-source RNG keeps the whole plan deterministic regardless of worker scheduling.
+    seed = int.from_bytes(hashlib.sha1(path.encode()).digest()[:4], "big")
+    plan = subject_geom.sample_plan(path, random.Random(seed), n=n_masks)
+    rendered = mask_synth.make_local_samples(path, base, plan, cgt_dir)
+    samples = [(plan[s["variant_index"]], s) for s in rendered]
     variants = [(s["mask_unit_id"], s["after_path"]) for _, s in samples]
     is_portrait = bool(src.get("is_portrait_pool"))
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
     return {
         "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
         "source_iaa": src.get("iaa_mixed"), "local": True,
-        "candidates": [{"preset_id": s["mask_unit_id"], "kind": "local_from_preset",
-                        "after_path": s["after_path"], "qa": qres["scores"].get(s["mask_unit_id"]),
-                        "local": {"mask_unit_id": s["mask_unit_id"], "mask_type": g["mask_type"],
-                                  "geom": {k: v for k, v in s["geom"].items() if not k.startswith("__")},
-                                  "cgt_path": s["cgt_path"], "region": s["region"],
-                                  "local_params": s["local_params"],
-                                  "base_preset_id": base["preset_id"], "base_preset_path": base["path"]}}
+        "candidates": [mask_synth.local_candidate(base, g, s,
+                                                  qres["scores"].get(s["mask_unit_id"]))
                        for g, s in samples],
     }
 

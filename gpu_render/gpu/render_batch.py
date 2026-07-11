@@ -49,8 +49,12 @@ def _upload(imgs_u8: list, device: str) -> torch.Tensor:
 
 
 def _download_u8(out_bchw: torch.Tensor) -> list:
-    u8 = out_bchw.clamp(0, 1).mul(255.0).add_(0.5).to(torch.uint8).cpu().numpy()
-    return [np.ascontiguousarray(u8[b].transpose(1, 2, 0)) for b in range(u8.shape[0])]
+    """u8 量化与 BCHW→BHWC permute 全在 GPU 上完成后一次 D2H（float 传输 ÷4；
+    CPU 侧零拷贝切分，不再逐图 transpose+copy）。
+    取整语义与 float 路径逐位一致：trunc(clamp(x,0,1)*255+0.5)。"""
+    u8 = (out_bchw.clamp(0, 1).mul(255.0).add_(0.5).to(torch.uint8)
+          .permute(0, 2, 3, 1).contiguous().cpu().numpy())
+    return [u8[b] for b in range(u8.shape[0])]
 
 
 def render_files(preset: dict, jobs: list, batch: int = 16, quality: int = 92,

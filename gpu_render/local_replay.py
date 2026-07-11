@@ -6,8 +6,8 @@
     edited = 对当前图按 LR 管线相对次序施加 Local*（tone → localcon → sat）。
   - Local* 数值语义 = 同名全局标定算子的 LR 值（LocalExposure2012 即 EV），
     CPU 走 ops_v2.REGISTRY / fits apply_scalar_op，与全局路径同源。
-  - 几何光栅化与 dataset_build construct.mask_synth.cgt_raster 逐像素一致
-    （local_parity.py 里有对拍断言）。
+  - 真实 Lightroom mask 的过渡保持线性；CPU/GPU 在 local_parity.py 中对拍。
+    生成式 local-preset 的 exp-radial smoothstep 是独立语义，由调用方显式启用。
   - 语义 mask（SAM3 主体等）无法进 XMP：correction dict 直接带 "alpha"
     (H,W) float01 ndarray（subject_geom.semantic_alpha 的输出）。
 
@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import math
+import os
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -44,10 +45,36 @@ def _f(d, k, default=0.0):
         return default
 
 
+def _smoothstep(m):
+    """线性 ramp → C1 连续的 smoothstep(去端点折角/Mach banding，对齐 exp_radial radial_alpha)。"""
+    return m * m * (3.0 - 2.0 * m)
+
+
+# exp_radial layer2 的线性域平滑增益参数（比值裁剪范围 + 防 0 除）
+_GMIN, _GMAX, _EPS = 0.25, 4.0, 1e-4
+# 兼容旧的进程级开关，但必须显式设置才启用；默认保持精确的 α-lerp 语义。
+_SMOOTH_GAIN_ENV = os.environ.get("LOCAL_SMOOTH_GAIN")
+_SMOOTH_GAIN = _SMOOTH_GAIN_ENV is not None and _SMOOTH_GAIN_ENV != "0"
+
+
+def _use_smooth_gain(corr: dict) -> bool:
+    """显式 correction 模式优先，否则退回显式设置的兼容环境开关。"""
+    mode = corr.get("blend_mode")
+    if mode is not None:
+        return str(mode).strip().lower() == "smooth_gain"
+    return _SMOOTH_GAIN
+
+
 # --------------------------------------------------------------------------- #
-# 几何 α 光栅（与 construct.mask_synth.cgt_raster 语义逐行一致）
+# 真实 Lightroom 几何 α（默认线性；生成式 CGT 可显式启用 smoothstep）
 # --------------------------------------------------------------------------- #
-def raster_alpha(mask_type: str, geom: dict, h: int, w: int) -> np.ndarray:
+def raster_alpha(mask_type: str, geom: dict, h: int, w: int, *,
+                 smoothstep: bool = False) -> np.ndarray:
+    """Raster one Lightroom geometry mask.
+
+    Genuine Lightroom Local* replay uses the native linear ramp. Generated
+    local-preset CGTs may opt into the exp-radial smoothstep easing explicitly.
+    """
     yy, xx = np.mgrid[0:h, 0:w].astype("float32")
     x, y = xx / w, yy / h
     if mask_type == "circulargradient":
@@ -68,9 +95,30 @@ def raster_alpha(mask_type: str, geom: dict, h: int, w: int) -> np.ndarray:
         dxv, dyv = fx - zx, fy - zy
         L2 = dxv * dxv + dyv * dyv + 1e-6
         m = np.clip(((x - zx) * dxv + (y - zy) * dyv) / L2, 0, 1).astype("float32")
+    if smoothstep:
+        m = _smoothstep(m)
     if str(geom.get("Flipped", "false")).lower().lstrip("+") == "true":
         m = 1.0 - m
     return m
+
+
+def smooth_gain_np(base: np.ndarray, edited: np.ndarray, alpha: np.ndarray) -> np.ndarray:
+    """exp_radial layer2 式合成:线性域内用 α 调制一个空间平滑的乘性增益场，
+    而非在 sRGB 域对均匀强 delta 做 α-lerp —— 后者会把整幅编辑压进过渡带成僵硬接缝。
+    G = blur(edited_lin)/blur(base_lin) 逐通道裁剪；out_lin = base_lin·(1+α·(G-1))。"""
+    import cv2
+
+    from gpu_render.image_ops.non_gimp_ops import _linear_to_srgb, _srgb_to_linear
+    h, w = base.shape[:2]
+    sigma = max(2.0, min(h, w) * 0.015)          # ≈24px @ 长边 1600，增益场平滑尺度
+    lin_b = _srgb_to_linear(base).astype(np.float32)
+    lin_e = _srgb_to_linear(edited).astype(np.float32)
+    bb = cv2.GaussianBlur(lin_b, (0, 0), sigma)
+    be = cv2.GaussianBlur(lin_e, (0, 0), sigma)
+    G = np.clip((be + _EPS) / (bb + _EPS), _GMIN, _GMAX)
+    a = alpha[..., None]
+    out_lin = lin_b * (1.0 + a * (G - 1.0))
+    return _linear_to_srgb(np.clip(out_lin, 0.0, 1.0)).astype(np.float32)
 
 
 def corr_alpha(corr: dict, h: int, w: int) -> np.ndarray:
@@ -99,7 +147,7 @@ def parse_locals(xmp_text: str) -> list:
     ns = {"crs": _CRS, "rdf": _RDF}
     out = []
     for grp in root.iter(f"{{{_CRS}}}MaskGroupBasedCorrections"):
-        for li in grp.findall(f"./rdf:Seq/rdf:li", ns):
+        for li in grp.findall("./rdf:Seq/rdf:li", ns):
             cd = li.find("./rdf:Description", ns)
             src = cd if cd is not None else li
             attrs = {k.split("}")[-1]: v for k, v in src.attrib.items()}
@@ -165,6 +213,9 @@ def apply_locals(img: np.ndarray, corrections: list, registry: dict, apply_cfg,
         edited = out.copy()
         for _, op, v in ops:
             edited = _scalar(edited, op, v, registry, apply_cfg, fits_dir)
-        a3 = alpha[..., None]
-        out = np.clip(out * (1.0 - a3) + edited * a3, 0.0, 1.0).astype(np.float32)
+        if _use_smooth_gain(corr):
+            out = smooth_gain_np(out, edited, alpha)
+        else:
+            a3 = alpha[..., None]
+            out = np.clip(out * (1.0 - a3) + edited * a3, 0.0, 1.0).astype(np.float32)
     return out
