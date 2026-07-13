@@ -1,15 +1,12 @@
 """Preset bank for the 50k construct agent — VL-text + 24-d LAB, rebuilt from the
 LIVE DB (assets.pass_c=1, >=6 canonical probes), NOT the stale recipe_index.
 
-Two stages, deliberately split so R1 can iterate the doc-text / instruction
-WITHOUT re-reading the 6 probe JPGs per preset:
+Single stage（embed/doc_text 已随 vlemb 召回退役，2026-07-13）:
 
   extract  DB + 6 probe before/after JPGs
              -> lab_vec[24] = [dL,da,db,dC] x (red,yellow,green,blue,skin,neutral)
              -> axes = tag_preset_function(sigs)  (temperature/tint/.../grade_family)
              -> features.jsonl (+ lab.npz aligned ids/lab_vec). SLOW, run once.
-  embed    features.jsonl -> doc_text(template) -> VL text embedding
-             -> text_emb.<tag>.npz {ids, emb}. FAST, re-run per R1 variant.
 
 Reuse (load-bearing): source_qa.pilot_preset {_lab_sig, _PROBE_ORDER, MANIFEST},
 source_qa.qa_clean.tag_preset_function, source_qa.db. The probe RESPONSE — never
@@ -17,7 +14,6 @@ the probe image — is what characterizes a preset (design §1).
 
 CLI:
   python -m construct.bank extract [--out DIR] [--kind param|lut|all] [--limit-per-kind N]
-  python -m construct.bank embed   [--out DIR] [--template axes|rich] [--instruction STR]
 """
 from __future__ import annotations
 
@@ -32,18 +28,11 @@ import numpy as np
 from dataset_build.source_qa import db
 from dataset_build.source_qa import pilot_preset as PP
 from dataset_build.source_qa import qa_clean as QC
-from . import sf_client
 
 _PROBE_ORDER = PP._PROBE_ORDER          # (red, yellow, green, blue, skin, neutral)
 _SIG_KEYS = ("dL", "da", "db", "dC")
 VEC_DIM = len(_PROBE_ORDER) * len(_SIG_KEYS)  # 24
 _DEFAULT_OUT = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_v2"
-
-# grade_family -> human phrase for the doc text
-_FAM = {"bw": "black-and-white", "teal_orange": "teal-and-orange cinematic",
-        "vintage_film": "faded vintage film", "clean_natural": "clean natural",
-        "stylized": "stylized", "unknown": "unspecified"}
-
 
 # --------------------------------------------------------------------------- #
 # extract
@@ -139,46 +128,12 @@ def extract(out_dir: str = _DEFAULT_OUT, kind: str = "all",
     return summary
 
 
-# --------------------------------------------------------------------------- #
-# doc text  (the thing that gets VL-embedded; R1 iterates this)
-# --------------------------------------------------------------------------- #
-def _slot(lab_vec: List[float], name: str) -> Dict[str, float]:
-    j = _PROBE_ORDER.index(name) * len(_SIG_KEYS)
-    return dict(zip(_SIG_KEYS, lab_vec[j:j + len(_SIG_KEYS)]))
-
-
-# "punchy": drop the boilerplate scaffolding (identical across all presets) and
-# lead with genuinely DIFFERENT, repeated descriptor phrases per axis value, so a
-# warm vs cool preset diverge across most of the (short) text instead of by a
-# single washed-out token. Targets the R1 single-token-washout failure.
-_PUNCHY = {
-    ("grade_family", "teal_orange"): "Teal-and-orange cinematic blockbuster look.",
-    ("grade_family", "vintage_film"): "Vintage faded retro film emulation.",
-    ("grade_family", "clean_natural"): "Clean natural true-to-life colors.",
-    ("grade_family", "bw"): "Black and white monochrome, no color.",
-    ("grade_family", "stylized"): "Stylized creative color grade.",
-    ("temperature", "warm"): "Warm golden amber tones.",
-    ("temperature", "cool"): "Cool blue icy tones.",
-    ("tint", "magenta"): "Magenta pink cast.",
-    ("tint", "green"): "Green cast.",
-    ("saturation", "vibrant"): "Vivid saturated punchy colors.",
-    ("saturation", "muted"): "Muted desaturated faded colors.",
-    ("saturation", "bw"): "Desaturated to grayscale.",
-    ("contrast", "punchy"): "High contrast bold and crunchy.",
-    ("contrast", "flat"): "Low contrast flat soft matte.",
-    ("tone", "lifted"): "Lifted milky raised shadows.",
-    ("tone", "crushed"): "Crushed deep inky blacks.",
-    ("exposure", "high_key"): "Bright high-key airy exposure.",
-    ("exposure", "low_key"): "Dark low-key moody exposure.",
-}
-
-
 _CAPTIONS = "/home/bc/VeraRetouch/dataset_build/source_qa/pilot/round_10/preset_tags.jsonl"  # 绝对路径：进程 cwd 不可假设（2026-07-12 pilot tier-skip 事故）
 
 
 def load_captions(path: str = _CAPTIONS) -> Dict[str, dict]:
-    """asset_id -> {vlm_name, vlm_caption, vlm_function} (8027 real VLM captions,
-    100% unique — the high-cardinality semantic text R1 actually needs)."""
+    """asset_id -> {vlm_name, vlm_caption, vlm_function}（8027 条 VLM 标注；
+    tier/annotate 的 style 任务点名风格用）。"""
     out = {}
     for l in open(path):
         if not l.strip():
@@ -188,79 +143,20 @@ def load_captions(path: str = _CAPTIONS) -> Dict[str, dict]:
     return out
 
 
-def doc_text(feat: dict, template: str = "rich") -> str:
-    ax = feat["axes"]
-    if template == "vlm":
-        # real VLM caption: name + caption + function. Falls back to rich if absent.
-        if feat.get("vlm_caption"):
-            parts = [feat.get("vlm_name") or "", feat["vlm_caption"], feat.get("vlm_function") or ""]
-            return "。".join(p for p in parts if p)
-        template = "rich"
-    if template == "punchy":
-        parts = [_PUNCHY[(k, ax.get(k))] for k in
-                 ("grade_family", "temperature", "tint", "saturation", "contrast", "tone", "exposure")
-                 if (k, ax.get(k)) in _PUNCHY]
-        return " ".join(parts) or "Neutral unstyled color."
-    fam = _FAM.get(ax.get("grade_family"), "stylized")
-    base = (f"A {fam} color grade. White balance {ax['temperature']}, "
-            f"tint {ax['tint']}, saturation {ax['saturation']}, contrast {ax['contrast']}, "
-            f"shadows {ax['tone']}, exposure {ax['exposure']}.")
-    if template == "axes":
-        return base
-    # rich: append directional clauses from the measured probe response
-    skin, blue = _slot(feat["lab_vec"], "skin"), _slot(feat["lab_vec"], "blue")
-    m = feat.get("metrics", {})
-    cl: List[str] = []
-    if skin["db"] > 3: cl.append("warms skin tones")
-    elif skin["db"] < -3: cl.append("cools skin tones")
-    if skin["dC"] > 4: cl.append("boosts skin saturation")
-    elif skin["dC"] < -4: cl.append("mutes skin")
-    if m.get("teal_rot", 0) < -8: cl.append("pushes blues toward teal")
-    elif blue["dC"] > 6: cl.append("intensifies blues")
-    if m.get("shadow_dL", 0) > 6: cl.append("lifts the shadows")
-    elif m.get("shadow_dL", 0) < -6: cl.append("crushes the blacks")
-    return base + (" It " + ", ".join(cl) + "." if cl else "")
-
-
-def embed(out_dir: str = _DEFAULT_OUT, template: str = "rich",
-          instruction: Optional[str] = None, tag: Optional[str] = None,
-          captions: Optional[str] = None) -> str:
-    feats = [json.loads(l) for l in open(os.path.join(out_dir, "features.jsonl")) if l.strip()]
-    if template == "vlm" or captions:
-        caps = load_captions(captions or _CAPTIONS)
-        for f in feats:
-            f.update(caps.get(f["preset_id"], {}))
-    texts = [doc_text(f, template) for f in feats]
-    emb = sf_client.embed_texts(texts, instruction=instruction)
-    tag = tag or (template + ("_instr" if instruction else "_plain"))
-    path = os.path.join(out_dir, f"text_emb.{tag}.npz")
-    np.savez(path, ids=np.array([f["preset_id"] for f in feats]), emb=emb)
-    print(f"bank.embed: {len(feats)} presets, template={template}, instr={bool(instruction)} -> {path}")
-    print("  sample doc:", texts[0][:160])
-    return path
-
-
 # --------------------------------------------------------------------------- #
 class PresetBank:
-    """Loaded bank: aligned ids + text_emb[N,4096] + lab[N,24] + feature dicts."""
+    """Loaded bank: aligned ids + lab[N,24] + feature dicts（emb 已随召回退役）。"""
 
-    def __init__(self, ids, emb, lab, feats):
-        self.ids, self.emb, self.lab = ids, emb, lab
+    def __init__(self, ids, lab, feats):
+        self.ids, self.lab = ids, lab
         self.feats = feats
         self.by_id = {f["preset_id"]: i for i, f in enumerate(feats)}
 
     @classmethod
-    def load(cls, out_dir: str = _DEFAULT_OUT, emb_tag: Optional[str] = None) -> "PresetBank":
-        """ids/lab/feats from features.jsonl + lab.npz (the production recall path needs
-        no VL embedding — R1 verdict). emb_tag loads a text_emb npz only if given (e.g.
-        the VL-embedding ablation arm); otherwise emb=None and ids come from features."""
+    def load(cls, out_dir: str = _DEFAULT_OUT) -> "PresetBank":
         feats = [json.loads(l) for l in open(os.path.join(out_dir, "features.jsonl")) if l.strip()]
         labz = np.load(os.path.join(out_dir, "lab.npz"), allow_pickle=True)
-        ids, emb = labz["ids"], None
-        if emb_tag:
-            ez = np.load(os.path.join(out_dir, f"text_emb.{emb_tag}.npz"), allow_pickle=True)
-            ids, emb = ez["ids"], ez["emb"]
-        return cls(ids, emb, labz["lab"], feats)
+        return cls(labz["ids"], labz["lab"], feats)
 
     def __len__(self) -> int:
         return len(self.ids)
@@ -274,17 +170,9 @@ def main() -> None:
     e.add_argument("--kind", default="all", choices=["param", "lut", "all"])
     e.add_argument("--limit-per-kind", type=int, default=None)
     e.add_argument("--workers", type=int, default=12)
-    m = sub.add_parser("embed")
-    m.add_argument("--out", default=_DEFAULT_OUT)
-    m.add_argument("--template", default="rich", choices=["axes", "rich", "punchy", "vlm"])
-    m.add_argument("--instruction", default=None)
-    m.add_argument("--tag", default=None)
-    m.add_argument("--captions", default=None)
     a = ap.parse_args()
     if a.cmd == "extract":
         extract(a.out, a.kind, a.limit_per_kind, a.workers)
-    elif a.cmd == "embed":
-        embed(a.out, a.template, a.instruction, a.tag, a.captions)
 
 
 if __name__ == "__main__":

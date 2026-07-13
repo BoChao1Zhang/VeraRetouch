@@ -41,11 +41,13 @@ PREVIEW_STAGE = os.path.join(config.OUT_ROOT, "renders_stage", "local_preview")
 # S：全量选基（复用 agent 的资格过滤与配额逻辑）
 # --------------------------------------------------------------------------- #
 def select_bases(sel, sources: list) -> list:
-    """[(src_dict, base_feat)]；无合格 base 的源丢弃（Selector.select_local_base 共享逻辑）。"""
+    """[(src_dict, base_feat)]；无合格 base 的源丢弃（Selector.select_local_base 共享逻辑）。
+    style_major 记到 src["_style_major"]（group 落库带走，跨 run 大类均摊依赖它）。"""
     out = []
     for src in sources:
-        base = sel.select_local_base(src)
+        major, base = sel.select_local_base(src)
         if base:
+            src["_style_major"] = major
             out.append((src, base))
     return out
 
@@ -143,6 +145,7 @@ def process_one(src: dict, base: dict, cgt_dir: str) -> Optional[dict]:
     return {
         "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
         "source_iaa": src.get("iaa_mixed"), "local": True,
+        "style_major": src.get("_style_major"),
         "two_level": {"preview_n": len(pv_rows), "shortlist_n": len(rows),
                       "final_n": len(final)},
         "candidates": [mask_synth.local_candidate(base, r["spec"], r,

@@ -40,7 +40,8 @@ class Selector:
         self.bank = PresetBank.load(FULL)
         self.feat = {f["preset_id"]: f for f in self.bank.feats}
         self.sampler = mixing.StyleSampler(os.path.join(FULL, "taxonomy.jsonl"),
-                                           prior_major=self._major_prior())
+                                           prior_major=self._major_prior(),
+                                           valid_ids=set(self.feat))
         self._farm_cache: dict = {}
 
     @staticmethod
@@ -76,19 +77,21 @@ class Selector:
             tried.add(major)
         return None, []
 
-    def select_local_base(self, src) -> dict | None:
+    def select_local_base(self, src) -> tuple:
         """LOCAL Route 1 选基：param/xmp/无内嵌 local 资格过滤，GPU 路优先，
-        大类→小类采样取 1（agent 与 local_pipeline 共用）。"""
+        大类→小类采样取 1（agent 与 local_pipeline 共用）。返回 (style_major, feat|None)
+        —— major 必须随 group 落库（provenance style_major），否则 local 消费
+        对跨 run 大类均摊不可见（review 2026-07-13）。"""
         if not isinstance(src, dict):     # local_pipeline 传 path 的兼容
             src = {"path": src}
 
         def _elig(f):
             return (f.get("kind") == "param" and str(f.get("path", "")).endswith(".xmp")
                     and not f.get("has_local_mask"))
-        _, feats = self.sample(src, 1, eligible=lambda f: _elig(f) and not self._is_farm(f))
+        major, feats = self.sample(src, 1, eligible=lambda f: _elig(f) and not self._is_farm(f))
         if not feats:
-            _, feats = self.sample(src, 1, eligible=_elig)
-        return feats[0] if feats else None
+            major, feats = self.sample(src, 1, eligible=_elig)
+        return major, (feats[0] if feats else None)
 
     def _is_farm(self, feat: dict) -> bool:
         """preset 是否只能农场渲（mask/未覆盖键/exotic profile）；结果按 preset_id 缓存。"""
@@ -133,7 +136,7 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str)
     into the per-source plan (1 radial + 1 semantic + 2 band + 4 linear; bisect fills)."""
     from . import subject_geom
     path = src["path"]
-    base = sel.select_local_base(src)
+    major, base = sel.select_local_base(src)
     if not base:
         return None
     # Per-source RNG keeps the whole plan deterministic regardless of worker scheduling.
@@ -146,7 +149,7 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str)
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
     return {
         "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
-        "source_iaa": src.get("iaa_mixed"), "local": True,
+        "source_iaa": src.get("iaa_mixed"), "local": True, "style_major": major,
         "candidates": [mask_synth.local_candidate(base, g, s,
                                                   qres["scores"].get(s["mask_unit_id"]))
                        for g, s in samples],
@@ -160,7 +163,7 @@ def process_source_sam3(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     path = src["path"]
     if not mask_sam3.has_cache(path):
         return None
-    _, luts = sel.sample(src, 1, eligible=lambda f: f.get("kind") == "lut")
+    major, luts = sel.sample(src, 1, eligible=lambda f: f.get("kind") == "lut")
     lut = luts[0] if luts else None
     cons = mask_sam3.candidate_concepts(path, n_masks)
     if not lut or not cons:
@@ -176,7 +179,7 @@ def process_source_sam3(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
     return {
         "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
-        "source_iaa": src.get("iaa_mixed"), "local": True,
+        "source_iaa": src.get("iaa_mixed"), "local": True, "style_major": major,
         "candidates": [{"preset_id": s["mask_unit_id"], "kind": "lut_in_sam3",
                         "after_path": s["after_path"], "qa": qres["scores"].get(s["mask_unit_id"]),
                         "local": {"route": "sam3", "mask_unit_id": s["mask_unit_id"],

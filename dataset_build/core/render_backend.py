@@ -207,7 +207,7 @@ class RenderBackend:
         self.policy = policy or os.environ.get("RENDER_BACKEND_POLICY", "throughput")
         # gpu_render 的 replay 链（含缓存的 fits/残差）非线程安全 → 全局互斥。
         self._gpu_lock = threading.Lock()
-        self._preset_cache: Dict[tuple, dict] = {}   # (realpath, mtime, fmt) -> parse_preset()
+        self._preset_cache: Dict[tuple, Any] = {}    # (realpath, mtime, fmt) -> parse_preset() dict 或 cube tuple
         self._route_cache: Dict[tuple, bool] = {}    # (realpath, mtime_ns, fmt) -> 可本地渲
         self._locals_cache: Dict[tuple, bool] = {}   # (realpath, mtime_ns) -> 含内嵌 local 校正
         self._stats_lock = threading.Lock()
@@ -301,7 +301,14 @@ class RenderBackend:
 
     # -- GPU 3D-LUT 路（烘焙 param 与原生 .cube 共用） -------------------------
     def _cube_cached(self, cube_path: str):
-        """load_cube 解析缓存（(grid[n,n,n,3] float32 0..1, dmin, dmax)，索引序 [R,G,B]）。"""
+        """load_cube 解析缓存 (grid[n,n,n,3] float32 0..1, dmin, dmax)。
+
+        轴序注意（review 2026-07-13 实证）：load_cube 对标准 .cube 返回的 grid 实为
+        [B][G][R] 排布，而本引擎与 CPU 参照 preset_qa._apply_cube 都按 [R,G,B] 索引
+        ——即对原生 LUT 实际执行 f(B,G,R)。这是仓库全体资产（探针 lab_vec、bank、
+        taxonomy、VLM 打标）共同基于的既有约定，GPU/CPU 一致、管线自洽，勿单侧
+        “修正”。烘焙 .cube 由 bake_luts.write_cube 反向行序写出恰好补偿，对
+        Lightroom 输出保真（ΔE 验收护住）。"""
         import numpy as np
         rp = os.path.realpath(cube_path)
         key = (rp, os.path.getmtime(rp), "cube")
@@ -323,8 +330,9 @@ class RenderBackend:
 
     def _render_cube_gpu(self, cube_path: str, image_paths: Sequence[str],
                          out_paths: Sequence[str], long_edge: int = 0) -> List[bool]:
-        """GPU trilinear 3D-LUT（grid_sample）。坐标语义与 preset_qa._apply_cube 一致：
-        grid 索引序 [R,G,B]；grid_sample 采样坐标最后维是 (x=W,y=H,z=D)=(B,G,R)。
+        """GPU trilinear 3D-LUT（grid_sample），与 CPU 参照 preset_qa._apply_cube
+        逐像素一致（含其轴序约定，见 _cube_cached docstring）。
+        grid_sample 采样坐标最后维 (x=W,y=H,z=D) 对应 grid 轴 (2,1,0)。
         异常向上抛，由调用方回退 CPU trilinear 或农场。"""
         import numpy as np
         import torch
@@ -582,17 +590,25 @@ class RenderBackend:
             return {"ok": False, "route": "none", "results": [dict(err) for _ in range(n)],
                     "n_local": 0, "n_farm": 0, "stats": self.stats_snapshot()}
 
-        # 分流优先级：专属残差 > 烘焙 LUT（ΔE 验收过的“标定”另一形态，不看 policy）
-        # > throughput 下键覆盖良好走 _global 残差 > 农场兜底。
+        # 分流优先级：专属残差 > 烘焙 LUT（仅 throughput；fidelity 契约=只放行专属
+        # 残差，与 render_local_variants 一致）> 键覆盖良好走 _global 残差 > 农场兜底。
         go_local = has_residual(pid)
         local_res_id = pid
-        baked = None if go_local else baked_lut_path(pid)
-        if baked and _gpu1_free_mb() >= LOCAL_MIN_FREE_MB:
+        baked = None if (go_local or self.policy != "throughput") else baked_lut_path(pid)
+        if baked:
+            free = _gpu1_free_mb()
+            if free < LOCAL_MIN_FREE_MB:
+                print(f"[render_backend] cuda:{_RENDER_GPU_IDX} 空闲 {free}MB < "
+                      f"{LOCAL_MIN_FREE_MB}MB，烘焙路({pid})跳过", file=sys.stderr)
+                self._bump("local_skip_vram", n)
+                baked = None
+        if baked:
             try:
                 oks = self._render_cube_gpu(baked, image_paths, out_paths)
             except Exception as e:  # noqa: BLE001 - 烘焙路失败 → 继续常规分流
                 print(f"[render_backend] baked LUT 渲染失败({pid})，回退常规分流: {e}",
                       file=sys.stderr)
+                self._bump("local_fallback_farm", n)
             else:
                 for i, ok in enumerate(oks):
                     if ok:
@@ -605,6 +621,7 @@ class RenderBackend:
                     return {"ok": True, "route": "local", "results": results,
                             "n_local": n, "n_farm": 0, "stats": self.stats_snapshot()}
                 # 个别失败张继续走农场兜底
+                self._bump("local_fallback_farm", len(farm_idx))
                 n_farm_ok = 0
                 def _one_b(i: int) -> tuple:
                     return i, self._render_farm_one(preset_path, fmt, image_paths[i], out_paths[i])

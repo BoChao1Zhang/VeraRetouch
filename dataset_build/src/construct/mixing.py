@@ -45,17 +45,27 @@ class StyleSampler:
     """
 
     def __init__(self, taxonomy_path: str,
-                 prior_major: Optional[Dict[str, Dict[str, int]]] = None):
+                 prior_major: Optional[Dict[str, Dict[str, int]]] = None,
+                 valid_ids: Optional[set] = None):
         # tree: major -> minor -> [preset_id]（加载序即 bank 序，稳定）
+        # valid_ids：bank features 在册的 preset 集合。taxonomy 领先/落后 bank 时，
+        # 不在册的 pid 必须挡在采样池外——否则 Selector.feat[pid] KeyError 会把
+        # 落到该大类的整源毒死（review 2026-07-13 实测触发）。
         self.tree: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
         self.major_of: Dict[str, str] = {}
         self._minor_of: Dict[str, str] = {}
+        n_skip = 0
         with open(taxonomy_path) as f:
             for line in f:
                 r = json.loads(line)
+                if valid_ids is not None and r["preset_id"] not in valid_ids:
+                    n_skip += 1
+                    continue
                 self.tree[r["major"]][r["minor"]].append(r["preset_id"])
                 self.major_of[r["preset_id"]] = r["major"]
                 self._minor_of[r["preset_id"]] = r["minor"]
+        if n_skip:
+            print(f"[StyleSampler] taxonomy 有 {n_skip} 个 preset 不在 bank features 中，已排除")
 
         self.majors = sorted(self.tree)
         self._prior = prior_major or {}          # source_key -> {major: n}（跨 run）

@@ -224,7 +224,11 @@ def build(group: dict) -> Tuple[List[dict], List[dict]]:
     # their q is already deducted -> they fall out of SFT naturally and can serve as DPO rejecteds.
     keep = sorted([c for c in cands if c["qa"].get("reliable") and not c["qa"].get("veto")],
                   key=lambda c: -_q(c))
-    rejects = sorted(cands, key=_q)   # worst-q first (veto / unreliable / low merit)
+    # rejected 只收「真差」（veto 或可靠低分）。打分失败（reliable=False 且非 veto，
+    # q=0.0 是 missing_iaa 占位）不是负样本——它只是没被评过，进 DPO 会教模型
+    # 讨厌一张可能不差的渲染（review 2026-07-13 确认曾实际发生）。
+    rejects = sorted([c for c in cands if c["qa"].get("veto") or c["qa"].get("reliable")],
+                     key=_q)   # worst-q first (veto / reliable low merit)
 
     sft = [make_sft_record(group, c, rank, caps) for rank, c in
            enumerate(k for k in keep if _q(k) >= TAU_SFT) if rank < 2]
