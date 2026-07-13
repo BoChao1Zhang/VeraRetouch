@@ -1,11 +1,13 @@
-"""R4 end-to-end pipeline: source photo -> vlemb recall -> render N -> 12-dim QA -> tier records.
+"""R4 end-to-end pipeline: source photo -> style-taxonomy sampling -> render N -> QA -> tier records.
 
-Locked design (after R1/R2/R3):
-  recall  = vlemb: source VL image-embed, centered, cosine vs centered preset-caption embeds -> top-N
-            (R2: beats random/reranker across all saturation bands)
-  render  = render.render_preset (param->LR farm, lut->trilinear)
-  QA      = qa.qa_rank (12-dim binary F⊕R, JSON output, 2-phase, det cross-validated) -> veto + merit
-  tier    = tier.build (top-2 by merit -> SFT; whole group -> DPO chosen/rejected)
+Locked design (2026-07-12 重构：两级风格采样取代 vlemb 召回):
+  select  = taxonomy 两级采样: 大类 per-source least-used(跨 run 历史) -> 组内小类轮转
+            各取 1(不足 k 则 round-robin 补齐) -> 小类内 preset least-used。无 embedding、
+            无相关性——组内同大类让 IAA 排序只比「同风格下谁执行得好」，消除跨风格 bias；
+            多样性/覆盖由采样结构保证(mixing.StyleSampler)。
+  render  = render.render_preset (param->GPU/LR farm, lut->trilinear)
+  QA      = qa.qa_rank (IAA ArtiMuse+Charm) -> veto + merit
+  tier    = tier.build (top-2 by merit -> SFT[全部 style 任务]; DPO 为副产物)
 
 ponytail: deterministic fan-out (recall, N concurrent renders, concurrent pairwise QA) — plain
 Python + ThreadPoolExecutor, NOT LangChain. No LLM routing decisions to make here; a DAG framework
@@ -24,85 +26,69 @@ import random
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import numpy as np
-
 from dataset_build.source_qa import db, config
-from . import sf_client, render, qa, tier, mask_synth, mask_sam3, mixing
+from . import render, qa, tier, mask_synth, mask_sam3, mixing
 from .bank import PresetBank
 
 FULL = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full"
-_BG_MEAN = os.path.join(FULL, "img_bg_mean.npy")
-
-
-def _unit(x):
-    return x / (np.linalg.norm(x, axis=-1, keepdims=True) + 1e-9)
 
 
 class Selector:
-    """vlemb selector: centered cross-modal cosine (source image ↔ preset caption embeds)."""
+    """taxonomy 两级风格采样器（global 与 local 的 preset 选择共用同一逻辑）。"""
 
     def __init__(self):
         self.bank = PresetBank.load(FULL)
-        z = np.load(os.path.join(FULL, "text_emb.vlm_plain.npz"), allow_pickle=True)
-        self.ids = list(z["ids"])
-        pemb = z["emb"].astype("float32")
-        self.pmu = pemb.mean(0)
-        self.pemb_c = _unit(pemb - self.pmu)
-        self.idx = {pid: i for i, pid in enumerate(self.ids)}
         self.feat = {f["preset_id"]: f for f in self.bank.feats}
-        self.img_mu = self._bg_mean()
-        self._quota = mixing.FamilyQuota()   # run 级风格族计数
-        self._quota_lock = threading.Lock()
+        self.sampler = mixing.StyleSampler(os.path.join(FULL, "taxonomy.jsonl"),
+                                           prior_major=self._major_prior())
         self._farm_cache: dict = {}
 
-    def _bg_mean(self):
-        if os.path.exists(_BG_MEAN):
-            return np.load(_BG_MEAN)
-        conn = db.connect()
-        min_iaa = getattr(config, "CONSTRUCT_SOURCE_IAA_MIN", config.GATE["iaa_keep_above"])
-        rows = conn.execute("SELECT path FROM assets WHERE asset_type='image' AND b_quality=3 "
-                            "AND iaa_mixed IS NOT NULL AND iaa_mixed >= ? "
-                            "AND dup_of IS NULL ORDER BY asset_id LIMIT 4000", (min_iaa,)).fetchall()
-        conn.close()
-        paths = [r["path"] for r in rows if os.path.exists(r["path"])]
-        paths = paths[::max(1, len(paths) // 256)][:256]
-        mu = sf_client.embed_images(paths).mean(0)
-        np.save(_BG_MEAN, mu)
-        return mu
+    @staticmethod
+    def _major_prior() -> dict:
+        """跨 run 的 per-source 大类使用计数（construct_groups.style_major），
+        保证同源多次采样渐进覆盖全部大类。表/列不存在或 DB 不可达时从零开始。"""
+        try:
+            conn = db.connect()
+            rows = conn.execute(
+                "SELECT source_asset_id, style_major, COUNT(*) AS n FROM construct_groups "
+                "WHERE style_major IS NOT NULL GROUP BY 1, 2").fetchall()
+            conn.close()
+        except Exception:
+            return {}
+        prior: dict = {}
+        for r in rows:
+            prior.setdefault(r["source_asset_id"], {})[r["style_major"]] = r["n"]
+        return prior
 
-    def candidate_pool(self, src_path: str, k: int) -> list:
-        """Return a relevance-ranked over-recall pool without consuming run quotas."""
-        v = sf_client.embed_images([src_path])[0]
-        vc = _unit(v - self.img_mu)
-        sims = self.pemb_c @ vc
-        top = np.argsort(-sims)[: max(4 * k, k + 12)]
-        return [self.feat[self.ids[i]] for i in top]
+    def sample(self, src: dict, k: int, eligible=None) -> tuple:
+        """(大类, [feat×≤k])。锁定 per-source least-used 大类采一组；该大类被
+        eligible 滤空则换下一个大类重试（local 的资格过滤很窄，global 不会触发）。"""
+        key = str(src.get("asset_id") or src.get("path") or src)
+        elig_pid = (lambda pid: bool(eligible(self.feat[pid]))) if eligible else None
+        tried: set = set()
+        for _ in range(len(self.sampler.majors)):
+            major = self.sampler.pick_major(key, exclude=tried)
+            pids = self.sampler.sample_group(
+                major, k, key, eligible=elig_pid,
+                is_farm=lambda pid: self._is_farm(self.feat[pid]))
+            if pids:
+                return major, [self.feat[p] for p in pids]
+            tried.add(major)
+        return None, []
 
-    def select_candidates(self, candidates: list, k: int) -> list:
-        """Select and commit candidates to the run-level family quota."""
-        farm_by_identity = {id(c): self._is_farm(c) for c in candidates}
-        with self._quota_lock:
-            return mixing.pick_candidates(
-                candidates, k, self._quota,
-                is_farm=lambda c: farm_by_identity[id(c)])
+    def select_local_base(self, src) -> dict | None:
+        """LOCAL Route 1 选基：param/xmp/无内嵌 local 资格过滤，GPU 路优先，
+        大类→小类采样取 1（agent 与 local_pipeline 共用）。"""
+        if not isinstance(src, dict):     # local_pipeline 传 path 的兼容
+            src = {"path": src}
 
-    def recall(self, src_path: str, k: int) -> list:
-        # 超取 4k 再按「风格族配额 + 农场路由上限」挑 k（mixing，run 级计数）
-        return self.select_candidates(self.candidate_pool(src_path, k), k)
-
-    def select_local_base(self, src_path: str) -> dict | None:
-        """LOCAL Route 1 选基：召回 → param/xmp/无内嵌local 资格过滤 → GPU 路优先 →
-        风格族配额取 1（agent 与 local_pipeline 共用）。"""
-        recalled = self.candidate_pool(src_path, 40)
-        eligible = [c for c in recalled
-                    if c.get("kind") == "param"
-                    and str(c.get("path", "")).endswith(".xmp")
-                    and not c.get("has_local_mask")]
-        routed = [(c, self._is_farm(c)) for c in eligible]
-        gpu_eligible = [c for c, is_farm in routed if not is_farm]
-        farm_eligible = [c for c, is_farm in routed if is_farm]
-        selected = self.select_candidates(gpu_eligible or farm_eligible, 1)
-        return selected[0] if selected else None
+        def _elig(f):
+            return (f.get("kind") == "param" and str(f.get("path", "")).endswith(".xmp")
+                    and not f.get("has_local_mask"))
+        _, feats = self.sample(src, 1, eligible=lambda f: _elig(f) and not self._is_farm(f))
+        if not feats:
+            _, feats = self.sample(src, 1, eligible=_elig)
+        return feats[0] if feats else None
 
     def _is_farm(self, feat: dict) -> bool:
         """preset 是否只能农场渲（mask/未覆盖键/exotic profile）；结果按 preset_id 缓存。"""
@@ -121,24 +107,24 @@ class Selector:
 def process_source(sel: Selector, src: dict, render_n: int, render_workers: int = 6) -> dict:
     """One source through the full pipeline. Returns the processed group (candidates + qa)."""
     path = src["path"]
-    cands = sel.recall(path, render_n)
+    major, cands = sel.sample(src, render_n)
 
     def _r(f):
-        res = render.render_preset(f["path"], f["kind"], f.get("fmt"), path)
-        return (f, res["after_path"]) if res.get("ok") else None
+        res = render.render_preset(f["path"], f["kind"], f.get("fmt"), path,
+                                   preset_id=f["preset_id"])
+        return (f, res["after_path"], res.get("engine")) if res.get("ok") else None
     with ThreadPoolExecutor(max_workers=render_workers) as ex:
         rendered = [x for x in ex.map(_r, cands) if x]
-    variants = [(f["preset_id"], ap) for f, ap in rendered]
+    variants = [(f["preset_id"], ap) for f, ap, _ in rendered]
     is_portrait = bool(src.get("is_portrait_pool"))
     qres = qa.qa_rank(path, variants, is_portrait=is_portrait)
-    after = {f["preset_id"]: ap for f, ap in rendered}
     return {
         "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
-        "source_iaa": src.get("iaa_mixed"),
+        "source_iaa": src.get("iaa_mixed"), "style_major": major,
         "candidates": [{"preset_id": f["preset_id"], "kind": f["kind"], "fmt": f.get("fmt"),
                         "preset_path": f["path"], "content_hash": f.get("preset_content_hash"),
-                        "after_path": after[f["preset_id"]],
-                        "qa": qres["scores"].get(f["preset_id"])} for f, _ in rendered],
+                        "after_path": ap, "engine": eng,
+                        "qa": qres["scores"].get(f["preset_id"])} for f, ap, eng in rendered],
     }
 
 
@@ -147,7 +133,7 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str)
     into the per-source plan (1 radial + 1 semantic + 2 band + 4 linear; bisect fills)."""
     from . import subject_geom
     path = src["path"]
-    base = sel.select_local_base(path)
+    base = sel.select_local_base(src)
     if not base:
         return None
     # Per-source RNG keeps the whole plan deterministic regardless of worker scheduling.
@@ -169,12 +155,13 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str)
 
 def process_source_sam3(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
                         render_workers: int = 6) -> dict | None:
-    """LOCAL Route 2: a vlemb-selected LUT composited into a SAM3 semantic region (numpy). Candidates
+    """LOCAL Route 2: a taxonomy-sampled LUT composited into a SAM3 semantic region (numpy). Candidates
     = the LUT applied to the top-K SAM3 concepts; QA picks the best region. local C_GT = SAM3 mask."""
     path = src["path"]
     if not mask_sam3.has_cache(path):
         return None
-    lut = next((c for c in sel.recall(path, 30) if c.get("kind") == "lut"), None)
+    _, luts = sel.sample(src, 1, eligible=lambda f: f.get("kind") == "lut")
+    lut = luts[0] if luts else None
     cons = mask_sam3.candidate_concepts(path, n_masks)
     if not lut or not cons:
         return None
@@ -230,7 +217,7 @@ def run(n: int, render_n: int, out_dir: str, src_workers: int = 12, local: bool 
     with resume=True skips already-done sources."""
     os.makedirs(out_dir, exist_ok=True)
     cgt_dir = os.path.join(out_dir, "cgt")
-    sel = Selector()   # both routes need vlemb (global: the look; local: the base preset for the mask)
+    sel = Selector()   # both routes share taxonomy sampling (global: the group; local: the base preset)
     # QA-IAA scorer 必须在 lanes 并发前单线程预热：ArtiMuse 加载用临时 sys.modules shim
     # （iaa._temporary_artimuse_compat_modules），与其他线程的 import 竞争会把预处理链
     # 换成 stub → 打分退化成 ~46-50 窄带常数（2026-07-06 生产事故，同文件独立进程重打

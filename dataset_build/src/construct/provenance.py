@@ -56,8 +56,10 @@ CREATE TABLE IF NOT EXISTS construct_groups (
     source_asset_id TEXT,
     is_portrait     BOOLEAN,
     n_candidates    INTEGER,
+    style_major     TEXT,                 -- taxonomy 大类（每组一个；旧数据 NULL）
     created_at      TIMESTAMPTZ DEFAULT now()
 );
+ALTER TABLE construct_groups ADD COLUMN IF NOT EXISTS style_major TEXT;
 CREATE TABLE IF NOT EXISTS construct_candidates (
     cand_id      TEXT PRIMARY KEY,
     group_id     TEXT,
@@ -158,15 +160,16 @@ def persist_run(run_id: str, groups: list, sft: list, dpo: list, route: str) -> 
         gid = uuid.uuid4().hex
         src2gid[g["source"]] = gid
         grows.append((gid, run_id, route, g["source"], g.get("source_asset_id"),
-                      g.get("is_portrait"), len(g["candidates"])))
+                      g.get("is_portrait"), len(g["candidates"]), g.get("style_major")))
         for c in g["candidates"]:
             cid = uuid.uuid4().hex
             ap = c.get("after_path")
             qa = c.get("qa") or {}
             if ap and os.path.exists(ap):   # register every saved render with content hash + size
                 sha, sz = _render_meta(ap)
-                engine = (c.get("local") or {}).get("engine") \
-                    or _ENGINE.get(c.get("kind"), c.get("kind"))
+                engine = (c.get("engine")                      # 真实渲染引擎（2026-07-13 起随候选记录）
+                          or (c.get("local") or {}).get("engine")
+                          or _ENGINE.get(c.get("kind"), c.get("kind")))   # 旧数据回退猜测标签
                 rrows.append((uuid.uuid4().hex, run_id, gid, route, g["source"],
                               g.get("source_asset_id"), c.get("preset_id"), c.get("kind"),
                               c.get("fmt"), engine, ap, sha, sz))
@@ -194,7 +197,9 @@ def persist_run(run_id: str, groups: list, sft: list, dpo: list, route: str) -> 
 
     def _w():
         if grows:
-            conn.executemany("INSERT INTO construct_groups VALUES (?,?,?,?,?,?,?,now()) "
+            conn.executemany("INSERT INTO construct_groups (group_id, run_id, route, "
+                             "source_path, source_asset_id, is_portrait, n_candidates, "
+                             "style_major, created_at) VALUES (?,?,?,?,?,?,?,?,now()) "
                              "ON CONFLICT (group_id) DO NOTHING", grows)
         if crows:
             conn.executemany("INSERT INTO construct_candidates VALUES "

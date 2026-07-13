@@ -98,6 +98,17 @@ def _interp1d(x, xp, fp):
     return y
 
 
+def _q_lastdim(t, q, keepdim=False):
+    """torch.quantile 输入超 2^24 元素会直接报错（大图 batch 触发，2026-07-13
+    demo100 回退农场 7 次的根因）；超限沿最后维均匀子采样——统计用途对均匀
+    抽样不敏感。"""
+    cap = (1 << 24) - 1
+    if t.numel() > cap:
+        step = -(-t.numel() // cap)
+        t = t[..., ::step]
+    return torch.quantile(t, q, dim=-1, keepdim=keepdim)
+
+
 def _srgb_to_lin(x):
     return torch.where(x > 0.04045, ((x + 0.055) / 1.055) ** 2.4, x / 12.92)
 
@@ -341,8 +352,8 @@ def _lr_temperature_core(img, value: float):
     flat_lms = lms.reshape(B, -1, 3)
     flat_lum = lum.reshape(B, -1)
     gw = flat_lms.mean(dim=1)                        # (B,3)
-    lo = torch.quantile(flat_lum, 0.60, dim=1, keepdim=True)
-    hi = torch.quantile(flat_lum, 0.95, dim=1, keepdim=True)
+    lo = _q_lastdim(flat_lum, 0.60, keepdim=True)
+    hi = _q_lastdim(flat_lum, 0.95, keepdim=True)
     sel = (flat_lum >= lo) & (flat_lum <= hi)       # (B,N)
     cnt = sel.sum(dim=1)                            # (B,)
     selm = sel.unsqueeze(-1).to(dt)

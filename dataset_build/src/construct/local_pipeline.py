@@ -1,7 +1,7 @@
 """LOCAL Route 1 两级编排（Phase 2，用户定稿 2026-07-11）。
 
 政策（preview_native_eval_v1 的 conservative_768，8/8 精确复原 native top-2）：
-  S 选基:   全量源先选 preset（vlemb + 风格族配额，逻辑同 agent.process_source_local）
+  S 选基:   全量源先选 preset（taxonomy 大类→小类采样，逻辑同 agent.process_source_local）
   P 预览:   768 长边渲 8 变体（1 径向+1 语义+2 束状+4 线性；C_GT 不存）
   Q1 初筛:  QA 8 预览 → shortlist 5 = 语义 + 径向 + 最佳束状 + 最佳线性 + 其余最高分
   N 原生:   native 渲 shortlist 5（C_GT 由后端产出）
@@ -44,7 +44,7 @@ def select_bases(sel, sources: list) -> list:
     """[(src_dict, base_feat)]；无合格 base 的源丢弃（Selector.select_local_base 共享逻辑）。"""
     out = []
     for src in sources:
-        base = sel.select_local_base(src["path"])
+        base = sel.select_local_base(src)
         if base:
             out.append((src, base))
     return out

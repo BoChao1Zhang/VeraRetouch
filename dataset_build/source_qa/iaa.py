@@ -192,9 +192,13 @@ class ArtiMuseScorer:
         import transformers
         ver = tuple(int(x) for x in transformers.__version__.split(".")[:2])
         if ver < (4, 37):
+            import sys as _sys
             raise RuntimeError(
                 f"transformers=={transformers.__version__} 无 Qwen2 支持，ArtiMuse 起不来；"
-                "请用隔离 venv 运行: /home/bc/.venvs/iaa437/bin/python -m dataset_build.source_qa.iaa ..."
+                "请用隔离 venv 运行: /home/bc/.venvs/iaa437/bin/python -m dataset_build.source_qa.iaa ...\n"
+                f"  [diag] exe={_sys.executable}\n"
+                f"  [diag] transformers={transformers.__file__}\n"
+                f"  [diag] sys.path[:6]={_sys.path[:6]}"
             )
         if not self.model_path.exists():
             raise FileNotFoundError(f"ArtiMuse model path not found: {self.model_path}")
@@ -549,6 +553,92 @@ class CharmScorer:
         # 走 preprocess_pil（含 max_longedge），保证逐张/批量两条路径分数一致
         self._load()
         return self.score_pre(self.preprocess_pil(_decode_rgb(path)))
+
+
+class OneAlignRunner:
+    """Q-Align/OneAlign 美学打分 runner（2026-07-13 起 construct 生产后端）。
+
+    demo100 人工审阅结论：OneAlign 的组内排序最贴人审美（对照 ArtiMuse+Charm/
+    AesExpert/HumanAesExpert）。接口与 MixedIAARunner 同形（load/score_path/
+    preprocess_path/score_batch_pre），输出 {"iaa_mixed": 0..100, "onealign": 同值}
+    —— 沿用 iaa_mixed 键名保持 qa/objscore 下游零改动。
+    注意：OneAlign-q 分布整体低于 ArtiMuse 体系（demo100 中位 0.516 vs 0.577），
+    TAU_SFT 需配 0.50（tier.py）。
+    """
+
+    REPO_DIR = "/home/bc/code/iaa_models/Q-Align"
+    MODEL_PATH = "/home/bc/data/models/OneAlign"
+
+    def __init__(self, device: Optional[str] = None):
+        self.device = device or config.IAA_DEVICE
+        self.scorer = None
+        self._lock = threading.Lock()
+
+    def load(self) -> None:
+        if self.scorer is not None:
+            return
+        import transformers
+        ver = tuple(int(x) for x in transformers.__version__.split(".")[:2])
+        if ver < (4, 37):
+            import sys as _sys
+            raise RuntimeError(
+                f"transformers=={transformers.__version__} 过旧，OneAlign(LLaVA) 起不来；"
+                "请用隔离 venv: /home/bc/.venvs/iaa437/bin/python\n"
+                f"  [diag] exe={_sys.executable}")
+        if self.REPO_DIR not in sys.path:
+            sys.path.insert(0, self.REPO_DIR)
+        # transformers>=4.37 兼容 patch（同 iaa_benchmark/run_onealign_predictions.py）
+        import torch.nn as _nn  # noqa: F401 - q_align import 链需要 torch 先就位
+        import transformers.pytorch_utils as pytorch_utils
+        if not hasattr(pytorch_utils, "find_pruneable_heads_and_indices"):
+            def _fphi(heads, n_heads, head_size, already_pruned_heads):
+                heads = set(heads) - already_pruned_heads
+                mask = torch.ones(n_heads, head_size)
+                for head in heads:
+                    head = head - sum(1 if h < head else 0 for h in already_pruned_heads)
+                    mask[head] = 0
+                mask = mask.view(-1).contiguous().eq(1)
+                index = torch.arange(len(mask), dtype=torch.long)[mask].long()
+                return heads, index
+            pytorch_utils.find_pruneable_heads_and_indices = _fphi
+        from q_align.evaluate.scorer import QAlignAestheticScorer
+        import q_align.model.modeling_llama2 as modeling_llama2
+        from transformers.models.llama.modeling_llama import (
+            _prepare_4d_causal_attention_mask_for_sdpa)
+        if not hasattr(modeling_llama2, "_prepare_4d_causal_attention_mask_for_sdpa"):
+            modeling_llama2._prepare_4d_causal_attention_mask_for_sdpa = \
+                _prepare_4d_causal_attention_mask_for_sdpa
+        self.scorer = QAlignAestheticScorer(
+            pretrained=self.MODEL_PATH, device=self.device).eval()
+
+    def _score_pils(self, images: List[Any]) -> List[float]:
+        self.load()
+        with self._lock, torch.inference_mode():
+            raw = self.scorer(images).detach().float().cpu().tolist()
+        return [max(0.0, min(100.0, float(s) * 100.0)) for s in raw]
+
+    def score_path(self, path: str) -> Dict[str, Optional[float]]:
+        try:
+            s = self._score_pils([_decode_rgb(path)])[0]
+            return {"iaa_mixed": s, "onealign": s}
+        except Exception:  # noqa: BLE001 - 单张失败交上游按 missing 处理
+            return {"iaa_mixed": None, "onealign": None}
+
+    def preprocess_path(self, path: str) -> Dict[str, Any]:
+        return {"pil": _decode_rgb(path)}
+
+    def score_batch_pre(self, items: List[Dict[str, Any]]) -> List[Dict[str, Optional[float]]]:
+        outs: List[Dict[str, Optional[float]]] = [{"iaa_mixed": None, "onealign": None}
+                                                  for _ in items]
+        idx = [i for i, it in enumerate(items) if it.get("pil") is not None]
+        if idx:
+            try:
+                ss = self._score_pils([items[i]["pil"] for i in idx])
+                for i, s in zip(idx, ss):
+                    outs[i] = {"iaa_mixed": s, "onealign": s}
+            except Exception:  # noqa: BLE001
+                pass
+        return outs
 
 
 class MixedIAARunner:

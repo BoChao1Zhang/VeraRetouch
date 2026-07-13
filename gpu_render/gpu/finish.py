@@ -216,7 +216,8 @@ def _dehaze(img: torch.Tensor, ctx: dict) -> torch.Tensor:
     idx = dcf.reshape(B, n_px).topk(k, dim=1).indices                     # B,k (top-1%)
     img_flat = img.reshape(B, 3, n_px)
     a_top = torch.gather(img_flat, 2, idx.unsqueeze(1).expand(B, 3, k)).mean(dim=2)
-    a_q95 = torch.quantile(img_flat, 0.95, dim=2)
+    from gpu_render.gpu.color import _q_lastdim
+    a_q95 = _q_lastdim(img_flat, 0.95)          # dim=2 即最后维；超 2^24 自动子采样
     a_col = torch.maximum(a_top, a_q95).clamp(0.0, 1.0)                    # B,3
 
     dcc = _box(dc_raw, max(8, int(round(short * 0.25))))                   # 粗暗通道
@@ -235,7 +236,8 @@ def _dehaze(img: torch.Tensor, ctx: dict) -> torch.Tensor:
     dark_frac = (driver < dthr).float().mean(dim=(1, 2, 3)).view(B, 1, 1, 1)
     kq = float(p.get("kq", 0.0))
     if abs(kq) > 1e-6:
-        q95 = torch.quantile(driver.reshape(B, -1), 0.95, dim=1).view(B, 1, 1, 1)
+        from gpu_render.gpu.color import _q_lastdim
+        q95 = _q_lastdim(driver.reshape(B, -1), 0.95).view(B, 1, 1, 1)
         k1_t = k1 * (1.0 + kq * (q95 - 0.7)).clamp_min(0.0)
     else:
         k1_t = torch.full((B, 1, 1, 1), k1, device=dev)

@@ -12,18 +12,22 @@ import threading
 from typing import Any, Optional
 
 from dataset_build.source_qa import config
-from dataset_build.source_qa.iaa import MixedIAARunner, blend_scores
+from dataset_build.source_qa.iaa import MixedIAARunner, OneAlignRunner, blend_scores
 
 _DEV = os.environ.get("CONSTRUCT_IAA_DEVICE", config.IAA_DEVICE)
+# IAA 后端（2026-07-13 起默认 onealign）：demo100 人工审阅确认 OneAlign 组内排序
+# 最贴人审美；旧混分保留为 CONSTRUCT_IAA_BACKEND=artimuse_charm（TAU 记得配回 0.55）。
+BACKEND = os.environ.get("CONSTRUCT_IAA_BACKEND", "onealign")
 _LOCK = threading.Lock()
-_RUNNER: Optional[MixedIAARunner] = None
+_RUNNER = None
 _CACHE: dict[str, dict[str, Optional[float]]] = {}
 
 
-def _runner() -> MixedIAARunner:
+def _runner():
     global _RUNNER
     if _RUNNER is None:
-        _RUNNER = MixedIAARunner(device=_DEV)
+        _RUNNER = (OneAlignRunner(device=_DEV) if BACKEND == "onealign"
+                   else MixedIAARunner(device=_DEV))
     return _RUNNER
 
 

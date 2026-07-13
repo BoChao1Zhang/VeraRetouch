@@ -49,21 +49,26 @@ def shard_save(tmp_path: str) -> str:
 
 
 def render_preset(preset_path: str, kind: str, fmt: str, source_path: str,
-                  lut_longedge: int = 1024) -> dict:
+                  lut_longedge: int = 1024, preset_id: str | None = None) -> dict:
     if kind == "param":
-        # 双路后端：残差 LUT 已标定的 preset 本地 GPU 渲，其余 LR 农场（保真第一）。
-        r = render_backend.render_one(preset_path, fmt, source_path)
+        # 本地 GPU 为核心：专属残差 > 烘焙 LUT（按 preset_id 命中，必须传）>
+        # 键覆盖 _global 残差；农场只兜底（2026-07-13 重构）。
+        r = render_backend.render_one(preset_path, fmt, source_path, preset_id=preset_id)
         if r.get("ok") and r.get("after_path"):
             r["after_path"] = shard_save(r["after_path"])
         return r
-    # lut
+    # lut：GPU grid_sample 优先（2026-07-13 重构：本地 GPU 为核心），CPU trilinear 兜底
+    os.makedirs(config.RENDER_STAGE, exist_ok=True)
+    out = os.path.join(config.RENDER_STAGE, f"lut_{uuid.uuid4().hex[:12]}.jpg")
+    r = render_backend.get_backend().render_cube(
+        preset_path, [source_path], [out], long_edge=lut_longedge)
+    if r.get("ok"):
+        return {"ok": True, "after_path": shard_save(out), "engine": "gpu_lut"}
     try:
         cube = PQ._parser().load_cube(preset_path)
         im = Image.open(source_path).convert("RGB")
         im.thumbnail((lut_longedge, lut_longedge))
         after = PQ._apply_cube(im, cube)
-        os.makedirs(config.RENDER_STAGE, exist_ok=True)
-        out = os.path.join(config.RENDER_STAGE, f"lut_{uuid.uuid4().hex[:12]}.jpg")
         after.save(out, "JPEG", quality=95)
         return {"ok": True, "after_path": shard_save(out), "engine": "lut_trilinear"}
     except Exception as e:  # noqa: BLE001

@@ -543,13 +543,13 @@ def qa_rank(source_path: str, variants: List[Tuple[str, str]], scene: Optional[s
             "source_iaa": None if src_iaa is None else round(float(src_iaa), 3),
             "iaa_impr": round(impr, 4),
             "beat_source": bool(iaa is not None and src_iaa is not None and iaa > src_iaa),
-            "qa_mode": "artimuse_charm_mixed",
+            "qa_mode": objscore.BACKEND,
             "why": "" if reliable else "missing_iaa",
         }
     ranking = sorted(scores, key=lambda l: (scores[l]["veto"], -scores[l]["q"]))
     return {"ranking": ranking, "scores": scores, "qa_fail_frac": 0.0,
             "source_iaa": None if src_iaa is None else round(float(src_iaa), 3),
-            "qa_mode": "artimuse_charm_mixed"}
+            "qa_mode": objscore.BACKEND}
 
 
 def _smoke() -> None:

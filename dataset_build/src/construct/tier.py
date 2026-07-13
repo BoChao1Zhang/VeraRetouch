@@ -32,7 +32,9 @@ from typing import List, Tuple
 from . import annotate
 from .bank import load_captions
 
-TAU_SFT = 0.55     # q = P(beat a field-average render); per-source winners land ~0.65-0.85
+# OneAlign 后端（2026-07-13 默认）q 分布整体偏低（demo100 中位 0.516 vs 旧体系
+# 0.577），TAU 配 0.50（≈SFT 1.6/组）；切回 artimuse_charm 时用 CONSTRUCT_TAU_SFT=0.55。
+TAU_SFT = float(os.environ.get("CONSTRUCT_TAU_SFT", "0.50"))
 MARGIN_DPO = 0.15  # min q gap for a chosen/rejected DPO pair
 _CAPS = None
 
@@ -116,15 +118,13 @@ def _reasoning(cap: dict, qa: dict, is_portrait: bool, task_type: str = "style")
 
 def _task_type(src: str, c: dict) -> str:
     """按候选确定 task_type。local 两路：sam3=『风格入区域』(style+region)，geom=local。
-    global 按 (source,preset) 确定性哈希切分：style_frac 比例为 style（instruction 点名风格），
-    其余按 kind 归 param/auto —— 这两类 instruction/reasoning 不得出现风格名。"""
+    global 一律 style（2026-07-12 重构：每组锁定一个风格大类后，同源多组的 winner 风格
+    各异，无风格条件的 auto/param 会成为同图多峰监督——auto 样本改由 FiveK/PPR10K
+    专家 GT 通路提供，preset 通路 instruction 全部点名风格）。"""
     lc = c.get("local")
     if lc:
         return "style" if lc.get("route") == "sam3" else "local"
-    h = int.from_bytes(hashlib.sha1(f"{src}|{c['preset_id']}".encode()).digest()[:2], "big")
-    if h / 65536.0 < annotate.style_frac():
-        return "style"
-    return "param" if c.get("kind") == "param" else "auto"
+    return "style"
 
 
 def _recipe_of(c: dict) -> dict:

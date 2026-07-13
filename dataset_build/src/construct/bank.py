@@ -173,7 +173,7 @@ _PUNCHY = {
 }
 
 
-_CAPTIONS = "dataset_build/source_qa/pilot/round_10/preset_tags.jsonl"
+_CAPTIONS = "/home/bc/VeraRetouch/dataset_build/source_qa/pilot/round_10/preset_tags.jsonl"  # 绝对路径：进程 cwd 不可假设（2026-07-12 pilot tier-skip 事故）
 
 
 def load_captions(path: str = _CAPTIONS) -> Dict[str, dict]:

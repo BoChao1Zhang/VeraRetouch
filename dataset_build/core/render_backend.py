@@ -1,14 +1,16 @@
-"""统一渲染后端 ``core.render_backend`` —— LR 农场 + 本地 GPU 双路分流。
+"""统一渲染后端 ``core.render_backend`` —— 本地 GPU 为核心路径，LR 农场只兜底。
 
-取代进程内常驻的 teacher renderer（llava_qwen2 教师模型，见 render_worker.py 的
-历史注释）：build/QA 侧所有 preset 渲染统一走本模块，teacher 模型加载路径不再触发。
 
-分流规则（保真第一）：
-  * preset_id 在 ``gpu_render/fits/residual/`` 有 **专属** 残差 LUT（100 个标定
-    preset）→ 本地 GPU 渲染（gpu_render.render_files，batch=16，cuda:1）；
-  * 其余（未标定 / mask / lut 无法本地保真的）→ LR 农场
-    （source_qa.lr_render.render_via_lr，提交端并发 gate 由 lr_render._FARM_GATE 统一管）。
-  * 本地渲染失败 → 逐张回退农场（统计 local_fallback_farm）。
+分流规则（2026-07-13 重构定稿：本地优先，农场是兜底不是主路）：
+  * 专属残差 LUT（``gpu_render/fits/residual/<pid>.npz``，标定 preset）→ 本地 GPU；
+  * 烘焙 LUT（``BAKED_DIR/<pid>.cube``，纯全局色彩 preset 经农场 HALD 采样烘焙，
+    tools/bake_luts.py 产出并 ΔE 验收）→ 本地 GPU 3D-LUT（grid_sample）；
+  * 其余键覆盖良好的 param（含空间算子，gpu_render.route 判定）→ 本地 GPU
+    （``_global`` 残差兜底）；
+  * 农场仅三种兜底：键不覆盖/内嵌 mask/exotic profile、渲染卡显存守卫触发、
+    本地渲染抛异常（逐张回退，统计 local_fallback_farm）。
+  * RENDER_BACKEND_POLICY=fidelity 可切回严格模式（只放行专属残差，逐像素保真
+    对齐 Adobe 时用）；默认 throughput。
 
 约束：GPU 只用 cuda:1（MONETGPT_TORCH_DEVICE=cuda:1；卡 0 留给他人 + IAA），
 batch=16；GPU 路径进程内单例 + 互斥锁（gpu_render 的 replay 链非线程安全）。
@@ -53,6 +55,10 @@ if _REPO not in sys.path:  # gpu_render 是仓库根下的顶层包
 
 #: 残差 LUT 目录（有 <preset_id>.npz 才算“已标定可本地渲”；_global.npz 不算）。
 RES_DIR = os.path.join(_REPO, "gpu_render", "fits", "residual")
+#: 烘焙 3D-LUT 目录（纯全局色彩 param 的农场 HALD 采样产物，tools/bake_luts.py 写入
+#: <preset_id>.cube，验收通过才落盘；分流优先级在专属残差之后、_global 覆盖之前）。
+BAKED_DIR = os.environ.get("RENDER_BACKEND_BAKED_DIR",
+                           os.path.join(_REPO, "gpu_render", "fits", "baked"))
 #: 标定 preset 清单（preset_id <-> path 映射；100 条与 RES_DIR 一一对应）。
 CALIB_PRESETS_JSONL = os.environ.get(
     "RENDER_BACKEND_CALIB_JSONL",
@@ -102,6 +108,14 @@ def _norm_fmt(preset_path: str, fmt: Optional[str]) -> str:
 def has_residual(preset_id: Optional[str]) -> bool:
     """该 preset 是否有专属残差 LUT（分流依据；不接受 _global 兜底）。"""
     return bool(preset_id) and os.path.exists(os.path.join(RES_DIR, f"{preset_id}.npz"))
+
+
+def baked_lut_path(preset_id: Optional[str]) -> Optional[str]:
+    """该 preset 的烘焙 3D-LUT（.cube）路径，无则 None。"""
+    if not preset_id:
+        return None
+    p = os.path.join(BAKED_DIR, f"{preset_id}.cube")
+    return p if os.path.exists(p) else None
 
 
 # --- preset 路径 -> 标定 preset_id 的惰性映射（调用方没传 preset_id 时兜底） ----
@@ -184,12 +198,13 @@ class RenderBackend:
         self.gpu_batch = int(gpu_batch)
         self.farm_workers = max(1, int(farm_workers))
         # 分流策略：
-        #   fidelity（默认）——只有专属残差 LUT 的标定 preset 走本地，其余农场（LR 保真优先）；
-        #   throughput ——键覆盖良好的 param preset 也走本地（_global 残差兜底），
-        #     仅 mask/未覆盖键/exotic profile 走农场。全量 databuild 用它：
+        #   throughput（默认，2026-07-13 起）——本地 GPU 是核心路径：专属残差 > 烘焙
+        #     LUT > 键覆盖良好走 _global 残差；农场仅兜底（不可本地/显存守卫/异常）。
         #     构建的自洽性（recipe 由本管线定义与执行）优先于对 Adobe 的逐像素保真，
-        #     且农场 77/min 撑不住 10 万级渲染。
-        self.policy = policy or os.environ.get("RENDER_BACKEND_POLICY", "fidelity")
+        #     且农场 ~71/min 撑不住 10 万级渲染。曾因默认 fidelity + env -i 启动丢
+        #     环境变量导致 pilot600 农场占 88%（2026-07-13），默认值遂翻转。
+        #   fidelity ——严格模式：只放行专属残差标定 preset，逐像素对齐 Adobe 时用。
+        self.policy = policy or os.environ.get("RENDER_BACKEND_POLICY", "throughput")
         # gpu_render 的 replay 链（含缓存的 fits/残差）非线程安全 → 全局互斥。
         self._gpu_lock = threading.Lock()
         self._preset_cache: Dict[tuple, dict] = {}   # (realpath, mtime, fmt) -> parse_preset()
@@ -283,6 +298,87 @@ class RenderBackend:
             preset = self._parse_cached(preset_path, fmt)
             render_files(preset, jobs, batch=self.gpu_batch, residual_id=preset_id)
         return [os.path.exists(dst) and os.path.getsize(dst) > 0 for _, dst in jobs]
+
+    # -- GPU 3D-LUT 路（烘焙 param 与原生 .cube 共用） -------------------------
+    def _cube_cached(self, cube_path: str):
+        """load_cube 解析缓存（(grid[n,n,n,3] float32 0..1, dmin, dmax)，索引序 [R,G,B]）。"""
+        import numpy as np
+        rp = os.path.realpath(cube_path)
+        key = (rp, os.path.getmtime(rp), "cube")
+        hit = self._preset_cache.get(key)
+        if hit is None:
+            from dataset_build.source_qa import preset_qa as PQ
+            grid, dmin, dmax = PQ._parser().load_cube(rp)
+            grid = np.asarray(grid, dtype="float32")
+            if grid.ndim == 2 and grid.shape[1] == 3:
+                n = round(grid.shape[0] ** (1 / 3))
+                grid = grid.reshape(n, n, n, 3)
+            if float(grid.max()) > 1.5:
+                grid = grid / 255.0
+            hit = (grid, np.asarray(dmin, dtype="float32"), np.asarray(dmax, dtype="float32"))
+            if len(self._preset_cache) > 256:
+                self._preset_cache.clear()
+            self._preset_cache[key] = hit
+        return hit
+
+    def _render_cube_gpu(self, cube_path: str, image_paths: Sequence[str],
+                         out_paths: Sequence[str], long_edge: int = 0) -> List[bool]:
+        """GPU trilinear 3D-LUT（grid_sample）。坐标语义与 preset_qa._apply_cube 一致：
+        grid 索引序 [R,G,B]；grid_sample 采样坐标最后维是 (x=W,y=H,z=D)=(B,G,R)。
+        异常向上抛，由调用方回退 CPU trilinear 或农场。"""
+        import numpy as np
+        import torch
+        import torch.nn.functional as F
+        from PIL import Image
+        grid, dmin, dmax = self._cube_cached(cube_path)
+        oks: List[bool] = []
+        with self._gpu_lock:
+            from gpu_render.gpu.gpu_replay import DEVICE
+            vol = torch.from_numpy(grid).permute(3, 0, 1, 2)[None].to(DEVICE)  # (1,3,R,G,B)
+            span = np.where((dmax - dmin) == 0, 1.0, dmax - dmin)
+            arrays = []
+            try:
+                with torch.no_grad():
+                    for sp in image_paths:
+                        im = Image.open(sp).convert("RGB")
+                        if long_edge:
+                            im.thumbnail((long_edge, long_edge))
+                        a = torch.from_numpy(
+                            np.asarray(im, dtype=np.float32) / 255.0).to(DEVICE)
+                        c = ((a - torch.as_tensor(dmin, device=DEVICE))
+                             / torch.as_tensor(span, device=DEVICE)).clamp(0, 1)
+                        # (1,1,H,W,3) 采样点，xyz=(B,G,R)，align_corners 网格端点对齐
+                        pts = (c[..., [2, 1, 0]] * 2 - 1)[None, None]
+                        out = F.grid_sample(vol, pts, mode="bilinear",
+                                            padding_mode="border", align_corners=True)
+                        arrays.append(out[0, :, 0].permute(1, 2, 0)
+                                      .clamp(0, 1).mul(255).to(torch.uint8).cpu().numpy())
+            finally:
+                del vol
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+        for arr, dst in zip(arrays, out_paths):
+            try:
+                self._save_rgb_u8(arr, dst, quality=95)
+                oks.append(True)
+            except Exception:  # noqa: BLE001 - 单张编码失败不拖累整批
+                oks.append(False)
+        return oks
+
+    def render_cube(self, cube_path: str, image_paths: Sequence[str],
+                    out_paths: Sequence[str], long_edge: int = 0) -> dict:
+        """原生 .cube/.3dl 的公共入口：GPU 优先（显存守卫），CPU trilinear 由调用方兜底。"""
+        if _gpu1_free_mb() < LOCAL_MIN_FREE_MB:
+            return {"ok": False, "error_code": "vram_guard", "results": []}
+        try:
+            oks = self._render_cube_gpu(cube_path, image_paths, out_paths, long_edge)
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error_code": "gpu_lut_failed", "error": str(e)[:200],
+                    "results": []}
+        self._bump("local_images", sum(oks))
+        return {"ok": all(oks), "engine": "gpu_lut",
+                "results": [{"ok": ok, "out_path": dp, "after_path": dp,
+                             "engine": "gpu_lut"} for ok, dp in zip(oks, out_paths)]}
 
     @staticmethod
     def _save_rgb_u8(arr: Any, dst: str, quality: int = 92) -> None:
@@ -486,8 +582,45 @@ class RenderBackend:
             return {"ok": False, "route": "none", "results": [dict(err) for _ in range(n)],
                     "n_local": 0, "n_farm": 0, "stats": self.stats_snapshot()}
 
+        # 分流优先级：专属残差 > 烘焙 LUT（ΔE 验收过的“标定”另一形态，不看 policy）
+        # > throughput 下键覆盖良好走 _global 残差 > 农场兜底。
         go_local = has_residual(pid)
         local_res_id = pid
+        baked = None if go_local else baked_lut_path(pid)
+        if baked and _gpu1_free_mb() >= LOCAL_MIN_FREE_MB:
+            try:
+                oks = self._render_cube_gpu(baked, image_paths, out_paths)
+            except Exception as e:  # noqa: BLE001 - 烘焙路失败 → 继续常规分流
+                print(f"[render_backend] baked LUT 渲染失败({pid})，回退常规分流: {e}",
+                      file=sys.stderr)
+            else:
+                for i, ok in enumerate(oks):
+                    if ok:
+                        results[i] = {"ok": True, "out_path": out_paths[i],
+                                      "after_path": out_paths[i],
+                                      "engine": "gpu_baked_lut", "preset_id": pid}
+                self._bump("local_images", sum(oks))
+                farm_idx = [i for i, ok in enumerate(oks) if not ok]
+                if not farm_idx:
+                    return {"ok": True, "route": "local", "results": results,
+                            "n_local": n, "n_farm": 0, "stats": self.stats_snapshot()}
+                # 个别失败张继续走农场兜底
+                n_farm_ok = 0
+                def _one_b(i: int) -> tuple:
+                    return i, self._render_farm_one(preset_path, fmt, image_paths[i], out_paths[i])
+                with ThreadPoolExecutor(max_workers=min(self.farm_workers, len(farm_idx))) as ex:
+                    for i, r in ex.map(_one_b, farm_idx):
+                        if r.get("ok"):
+                            r.setdefault("engine", "lrc")
+                            r["out_path"] = out_paths[i]
+                            n_farm_ok += 1
+                        results[i] = r
+                self._bump("farm_images", n_farm_ok)
+                self._bump("failed", len(farm_idx) - n_farm_ok)
+                return {"ok": all(r and r.get("ok") for r in results),
+                        "route": "local+farm_fallback", "results": results,
+                        "n_local": n - len(farm_idx), "n_farm": n_farm_ok,
+                        "stats": self.stats_snapshot()}
         if not go_local and self.policy == "throughput" and self._local_capable(preset_path, fmt):
             go_local = True
             local_res_id = "_global"     # 未标定 preset 用全局残差 LUT 兜底
