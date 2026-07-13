@@ -26,8 +26,13 @@ _CACHE: dict[str, dict[str, Optional[float]]] = {}
 def _runner():
     global _RUNNER
     if _RUNNER is None:
-        _RUNNER = (OneAlignRunner(device=_DEV) if BACKEND == "onealign"
-                   else MixedIAARunner(device=_DEV))
+        if BACKEND == "onealign":
+            _RUNNER = OneAlignRunner(device=_DEV)
+        elif BACKEND == "artimuse":
+            # 纯 ArtiMuse（无 Charm 混分）：local edit 排序实验用（2026-07-13）
+            _RUNNER = MixedIAARunner(device=_DEV, enable_charm=False)
+        else:
+            _RUNNER = MixedIAARunner(device=_DEV)
     return _RUNNER
 
 

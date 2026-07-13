@@ -5,13 +5,13 @@ Locked design (2026-07-12 重构：两级风格采样取代 vlemb 召回):
             各取 1(不足 k 则 round-robin 补齐) -> 小类内 preset least-used。无 embedding、
             无相关性——组内同大类让 IAA 排序只比「同风格下谁执行得好」，消除跨风格 bias；
             多样性/覆盖由采样结构保证(mixing.StyleSampler)。
-  render  = render.render_preset (param->GPU/LR farm, lut->trilinear)
-  QA      = qa.qa_rank (IAA ArtiMuse+Charm) -> veto + merit
+  render  = render.render_preset (本地 GPU 为核心: 残差/烘焙/_global, lut->gpu_lut; 农场兜底)
+  QA      = qa.qa_rank (OneAlign IAA) -> veto + merit
   tier    = tier.build (top-2 by merit -> SFT[全部 style 任务]; DPO 为副产物)
 
 ponytail: deterministic fan-out (recall, N concurrent renders, concurrent pairwise QA) — plain
 Python + ThreadPoolExecutor, NOT LangChain. No LLM routing decisions to make here; a DAG framework
-would be pure ceremony. Concurrency keeps the 3 resources (SiliconFlow embed / LR farm / vLLM QA)
+would be pure ceremony. Concurrency keeps the resources (GPU render / LR farm / IAA / vLLM annotate)
 busy by having multiple sources in flight.
 
 CLI:  python -m construct.agent run [--n 100] [--render-n 8] [--out DIR]
@@ -27,7 +27,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dataset_build.source_qa import db, config
-from . import render, qa, tier, mask_synth, mask_sam3, mixing
+from . import render, qa, tier, mask_synth, mixing
 from .bank import PresetBank
 
 FULL = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full"
@@ -61,14 +61,17 @@ class Selector:
             prior.setdefault(r["source_asset_id"], {})[r["style_major"]] = r["n"]
         return prior
 
-    def sample(self, src: dict, k: int, eligible=None) -> tuple:
+    def sample(self, src: dict, k: int, eligible=None,
+               exclude_majors: frozenset = frozenset()) -> tuple:
         """(大类, [feat×≤k])。锁定 per-source least-used 大类采一组；该大类被
         eligible 滤空则换下一个大类重试（local 的资格过滤很窄，global 不会触发）。"""
         key = str(src.get("asset_id") or src.get("path") or src)
         elig_pid = (lambda pid: bool(eligible(self.feat[pid]))) if eligible else None
-        tried: set = set()
+        tried: set = set(exclude_majors)
         for _ in range(len(self.sampler.majors)):
             major = self.sampler.pick_major(key, exclude=tried)
+            if major in exclude_majors:      # 全部大类被排除时 pick_major 会回退全池
+                break
             pids = self.sampler.sample_group(
                 major, k, key, eligible=elig_pid,
                 is_farm=lambda pid: self._is_farm(self.feat[pid]))
@@ -88,9 +91,11 @@ class Selector:
         def _elig(f):
             return (f.get("kind") == "param" and str(f.get("path", "")).endswith(".xmp")
                     and not f.get("has_local_mask"))
-        major, feats = self.sample(src, 1, eligible=lambda f: _elig(f) and not self._is_farm(f))
+        ex = mixing.StyleSampler.LOCAL_EXCLUDE_MAJORS
+        major, feats = self.sample(src, 1, exclude_majors=ex,
+                                   eligible=lambda f: _elig(f) and not self._is_farm(f))
         if not feats:
-            major, feats = self.sample(src, 1, eligible=_elig)
+            major, feats = self.sample(src, 1, eligible=_elig, exclude_majors=ex)
         return major, (feats[0] if feats else None)
 
     def _is_farm(self, feat: dict) -> bool:
@@ -156,38 +161,6 @@ def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str)
     }
 
 
-def process_source_sam3(sel: "Selector", src: dict, n_masks: int, cgt_dir: str,
-                        render_workers: int = 6) -> dict | None:
-    """LOCAL Route 2: a taxonomy-sampled LUT composited into a SAM3 semantic region (numpy). Candidates
-    = the LUT applied to the top-K SAM3 concepts; QA picks the best region. local C_GT = SAM3 mask."""
-    path = src["path"]
-    if not mask_sam3.has_cache(path):
-        return None
-    major, luts = sel.sample(src, 1, eligible=lambda f: f.get("kind") == "lut")
-    lut = luts[0] if luts else None
-    cons = mask_sam3.candidate_concepts(path, n_masks)
-    if not lut or not cons:
-        return None
-
-    def _one(cn):
-        slug, png, _area = cn
-        return (slug, mask_sam3.make_lut_local_sample(path, lut, slug, png, cgt_dir))
-    with ThreadPoolExecutor(max_workers=render_workers) as ex:
-        samples = [(slug, s) for slug, s in ex.map(_one, cons) if s]
-    variants = [(s["mask_unit_id"], s["after_path"]) for _, s in samples]
-    is_portrait = bool(src.get("is_portrait_pool"))
-    qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
-    return {
-        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
-        "source_iaa": src.get("iaa_mixed"), "local": True, "style_major": major,
-        "candidates": [{"preset_id": s["mask_unit_id"], "kind": "lut_in_sam3",
-                        "after_path": s["after_path"], "qa": qres["scores"].get(s["mask_unit_id"]),
-                        "local": {"route": "sam3", "mask_unit_id": s["mask_unit_id"],
-                                  "concept": s["concept"], "concept_cn": s["concept_cn"],
-                                  "cgt_path": s["cgt_path"], "area": s["area"],
-                                  "base_preset_id": lut["preset_id"], "base_preset_path": lut["path"]}}
-                       for _, s in samples],
-    }
 
 
 PERSIST_CHUNK = 25   # groups per incremental provenance write
@@ -271,8 +244,8 @@ def run(n: int, render_n: int, out_dir: str, src_workers: int = 12, local: bool 
     def _proc(s):
         if not local:
             return _safe(process_source, sel, s, render_n, fail_f=fail_f, fail_lock=fail_lock)
-        fn = process_source_sam3 if route == "sam3" else process_source_local
-        return _safe(fn, sel, s, render_n, cgt_dir, fail_f=fail_f, fail_lock=fail_lock)
+        return _safe(process_source_local, sel, s, render_n, cgt_dir,
+                     fail_f=fail_f, fail_lock=fail_lock)
 
     pend_g, pend_s, pend_d = [], [], []   # provenance chunk buffers
     ptotals: dict = {}
@@ -347,8 +320,8 @@ def main() -> None:
     r.add_argument("--render-n", type=int, default=8)
     r.add_argument("--out", default="/home/bc/data/datasets/vera_directionA_1M/r4_pilot")
     r.add_argument("--local", action="store_true", help="local mask pipeline (Mask v2)")
-    r.add_argument("--route", choices=["geom", "sam3"], default="geom",
-                   help="geom=Route1 preset-tone-in-mask; sam3=Route2 LUT in SAM3 region")
+    r.add_argument("--route", choices=["geom"], default="geom",
+                   help="local 只保留 Route1（sam3 区域×LUT 的 Route2 已删除，2026-07-13）")
     r.add_argument("--no-db", action="store_true", help="skip Postgres provenance (dry test)")
     r.add_argument("--src-workers", type=int, default=12,
                    help="sources in flight (lane overlap window; real resources are "

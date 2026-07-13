@@ -25,7 +25,7 @@ from dataset_build.source_qa import db
 # every rendered variant is one of these engines (derived from candidate.kind)
 _ENGINE = {"param": "lr_farm", "lut": "lut_trilinear",
            "local_from_preset": "lr_farm", "local_preset": "gpu_local_preset",
-           "lut_in_sam3": "lut_composite"}
+           }
 
 
 def _render_meta(path: str) -> tuple:
@@ -51,7 +51,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS construct_groups (
     group_id        TEXT PRIMARY KEY,
     run_id          TEXT,
-    route           TEXT,                 -- global | geom | sam3
+    route           TEXT,                 -- global | geom（sam3 已删除，历史数据仍有）
     source_path     TEXT,
     source_asset_id TEXT,
     is_portrait     BOOLEAN,

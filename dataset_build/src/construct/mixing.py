@@ -77,6 +77,10 @@ class StyleSampler:
     def _minor_name(self, major: str, pid: str) -> str:
         return self._minor_of.get(pid, "")
 
+    # local（Route 1）不采样的大类：反转/黑白对「局部区域调整」语义不成立
+    # ——mask 内一块反色/黑白与其说是修图不如说是贴片（2026-07-13 用户定案）。
+    LOCAL_EXCLUDE_MAJORS = frozenset({"反转黑白"})
+
     def pick_major(self, source_key: str, exclude: Optional[set] = None) -> str:
         """该源 least-used 的大类（跨 run 历史 + run 内计数）；exclude 供采空重试用。"""
         with self._lock:

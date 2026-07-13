@@ -89,9 +89,6 @@ _LOCAL_TPLS = ("{r}那一块看着和整体不太搭，帮我处理一下。",
                "{r}这部分帮我弄得舒服自然一点。",
                "照片里{r}区域的观感差点意思，请调整优化一下。",
                "请针对{r}区域做些调整，让画面更协调耐看。")
-_SAM3_TPLS = ("请把这张照片的{r}调成「{n}」的风格。",
-              "想让{r}有「{n}」的感觉，其余部分保持不动。",
-              "帮我只对{r}用「{n}」风格处理一下。")
 
 
 def _instruction(cap: dict, task_type: str = "style", seed_key: str = "") -> str:
@@ -117,21 +114,16 @@ def _reasoning(cap: dict, qa: dict, is_portrait: bool, task_type: str = "style")
 
 
 def _task_type(src: str, c: dict) -> str:
-    """按候选确定 task_type。local 两路：sam3=『风格入区域』(style+region)，geom=local。
-    global 一律 style（2026-07-12 重构：每组锁定一个风格大类后，同源多组的 winner 风格
-    各异，无风格条件的 auto/param 会成为同图多峰监督——auto 样本改由 FiveK/PPR10K
-    专家 GT 通路提供，preset 通路 instruction 全部点名风格）。"""
-    lc = c.get("local")
-    if lc:
-        return "style" if lc.get("route") == "sam3" else "local"
-    return "style"
+    """按候选确定 task_type。local（Route 1）=local；global 一律 style
+    （2026-07-12 重构：每组锁定一个风格大类后，同源多组的 winner 风格各异，
+    无风格条件的 auto/param 会成为同图多峰监督——auto 样本改由 FiveK/PPR10K
+    专家 GT 通路提供，preset 通路 instruction 全部点名风格）。
+    Route 2（sam3 区域×LUT）已删除（2026-07-13 用户定案：local 只保留 Route 1）。"""
+    return "local" if c.get("local") else "style"
 
 
 def _recipe_of(c: dict) -> dict:
     lc = c.get("local")
-    if lc and lc.get("route") == "sam3":
-        return {"kind": "lut_in_sam3", "base_preset_id": lc.get("base_preset_id"),
-                "base_preset_path": lc.get("base_preset_path"), "concept": lc["concept"]}
     if lc:
         if not lc.get("local_params"):
             return {"kind": "local_preset", "mask_type": lc["mask_type"],
@@ -152,15 +144,7 @@ def make_sft_record(group: dict, c: dict, rank: int, caps: dict) -> dict:
     task = _task_type(src, c)
     region = lparams = None
     seed_key = f"{src}|{c.get('preset_id')}"
-    if lc and lc.get("route") == "sam3":
-        cap = caps.get(lc.get("base_preset_id"), {})
-        name = cap.get("vlm_name") or "所选调色"
-        instr = _tpl_rng(seed_key).choice(_SAM3_TPLS).format(r=lc["concept_cn"], n=name)
-        reason = f"只对{lc['concept_cn']}局部应用「{name}」，" + _merit_phrase(c["qa"]) + "。"
-        local = {"mask_unit_id": lc["mask_unit_id"], "concept": lc["concept"],
-                 "C_GT": lc["cgt_path"], "base_preset_id": lc.get("base_preset_id")}
-        region = lc.get("concept_cn")
-    elif lc:
+    if lc:
         cap = caps.get(lc.get("base_preset_id"), {})
         # 回退模板防泄露：instruction 不含 GT 方向词（指令即答案）；方向词只进 reasoning。
         instr = _tpl_rng(seed_key).choice(_LOCAL_TPLS).format(r=lc["region"])
