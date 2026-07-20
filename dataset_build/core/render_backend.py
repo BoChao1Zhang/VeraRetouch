@@ -72,6 +72,47 @@ LOCAL_MIN_FREE_MB = int(os.environ.get("RENDER_LOCAL_MIN_FREE_MB", "18000"))
 # 守卫查的 GPU 跟随渲染设备（MONETGPT_TORCH_DEVICE，上面已 setdefault cuda:1）
 _RENDER_GPU_IDX = os.environ.get("MONETGPT_TORCH_DEVICE", "cuda:1").rsplit(":", 1)[-1]
 
+# 预解析 LUT 包（2026-07-18）：tools/pack_lut_npz.py 把全部 native LUT 解析进
+# luts.npz（grid 成品形态）+ luts_meta.json（path/domain）。lut-only 采样下用它
+# 免去每次 load_cube 的 Python 解析税（GIL 串行 → GPU 饥饿）。首次访问懒加载全量
+# 进内存 {realpath: (grid, dmin, dmax)}（~2-3GB）；文件缺失则回退逐次 load_cube。
+_LUT_PACK_DIR = os.environ.get(
+    "RENDER_LUT_PACK_DIR", "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full")
+_lut_pack: Optional[dict] = None
+_lut_pack_lock = threading.Lock()
+
+
+def _get_lut_pack() -> dict:
+    global _lut_pack
+    if _lut_pack is None:
+        with _lut_pack_lock:
+            if _lut_pack is None:
+                _lut_pack = _load_lut_pack()
+    return _lut_pack
+
+
+def _load_lut_pack() -> dict:
+    import numpy as np
+    npz = os.path.join(_LUT_PACK_DIR, "luts.npz")
+    meta_p = os.path.join(_LUT_PACK_DIR, "luts_meta.json")
+    if not (os.path.exists(npz) and os.path.exists(meta_p)):
+        print(f"[render_backend] 无 LUT 预解析包（{npz}），回退逐次 load_cube", file=sys.stderr)
+        return {}
+    import json as _json
+    meta = _json.load(open(meta_p))
+    data = np.load(npz)
+    pack = {}
+    for pid, m in meta.items():
+        try:
+            pack[m["path"]] = (np.asarray(data[pid], dtype="float32"),
+                               np.asarray(m["dmin"], dtype="float32"),
+                               np.asarray(m["dmax"], dtype="float32"))
+        except KeyError:
+            continue
+    print(f"[render_backend] LUT 预解析包已载入: {len(pack)} 个网格", file=sys.stderr)
+    return pack
+
+
 _vram_cache: tuple = (0.0, 0)   # (checked_at, free_mb)
 _vram_lock = threading.Lock()
 
@@ -206,7 +247,10 @@ class RenderBackend:
         #   fidelity ——严格模式：只放行专属残差标定 preset，逐像素对齐 Adobe 时用。
         self.policy = policy or os.environ.get("RENDER_BACKEND_POLICY", "throughput")
         # gpu_render 的 replay 链（含缓存的 fits/残差）非线程安全 → 全局互斥。
-        self._gpu_lock = threading.Lock()
+        # 渲染 GPU 并发（2026-07-17）：输入 1024 化（RENDER_INPUT_SHORT_EDGE）后单流
+        # 显存尖峰消失，单锁改信号量放 RENDER_GPU_CONCURRENCY 条并发流（默认 1=旧行为）。
+        self._gpu_lock = threading.BoundedSemaphore(
+            max(1, int(os.environ.get("RENDER_GPU_CONCURRENCY", "1"))))
         self._preset_cache: Dict[tuple, Any] = {}    # (realpath, mtime, fmt) -> parse_preset() dict 或 cube tuple
         self._route_cache: Dict[tuple, bool] = {}    # (realpath, mtime_ns, fmt) -> 可本地渲
         self._locals_cache: Dict[tuple, bool] = {}   # (realpath, mtime_ns) -> 含内嵌 local 校正
@@ -237,16 +281,35 @@ class RenderBackend:
             return False
 
     # -- 本地 GPU 路 ----------------------------------------------------------
+    # 解析缓存（2026-07-18 提吞吐）：旧策略「256 条一满全清」在 7778 preset 随机
+    # 访问下命中率趋零，load_cube 纯 Python 解析 64ms~1.8s/次且持 GIL，实测把
+    # 标定吞吐压到 ~1260 组/h。改真 LRU、容量 4096（parsed grid ~0.4-3MB/个，
+    # 全量 lut 驻留 ~2-3GB RAM）。dict 单操作 GIL 原子，条目竞态最多导致重解析。
+    _CACHE_CAP = int(os.environ.get("RENDER_PRESET_CACHE_CAP", "4096"))
+
+    def _cache_get(self, key):
+        hit = self._preset_cache.get(key)
+        if hit is not None:
+            self._preset_cache.pop(key, None)
+            self._preset_cache[key] = hit          # LRU 触达移到队尾
+        return hit
+
+    def _cache_put(self, key, val) -> None:
+        while len(self._preset_cache) >= self._CACHE_CAP:
+            try:
+                self._preset_cache.pop(next(iter(self._preset_cache)))
+            except (StopIteration, KeyError):
+                break
+        self._preset_cache[key] = val
+
     def _parse_cached(self, preset_path: str, fmt: str) -> dict:
         from gpu_render.replay import parse_preset
         rp = os.path.realpath(preset_path)
         key = (rp, os.path.getmtime(rp), fmt)
-        pre = self._preset_cache.get(key)
+        pre = self._cache_get(key)
         if pre is None:
             pre = parse_preset(rp, fmt)
-            if len(self._preset_cache) > 256:   # 防无界增长
-                self._preset_cache.clear()
-            self._preset_cache[key] = pre
+            self._cache_put(key, pre)
         return pre
 
     def _local_capable(self, preset_path: str, fmt: str) -> bool:
@@ -294,7 +357,7 @@ class RenderBackend:
                       preset_id: str) -> List[bool]:
         """整批本地渲染；返回逐 job 是否产出。异常向上抛（由 render() 回退农场）。"""
         from gpu_render.gpu.render_batch import render_files
-        with self._gpu_lock:                     # cuda:1 单租户串行
+        with self._gpu_lock:                     # cuda:1 并发受 RENDER_GPU_CONCURRENCY 约束
             preset = self._parse_cached(preset_path, fmt)
             render_files(preset, jobs, batch=self.gpu_batch, residual_id=preset_id)
         return [os.path.exists(dst) and os.path.getsize(dst) > 0 for _, dst in jobs]
@@ -303,34 +366,29 @@ class RenderBackend:
     def _cube_cached(self, cube_path: str):
         """load_cube 解析缓存 (grid[n,n,n,3] float32 0..1, dmin, dmax)。
 
-        轴序注意（review 2026-07-13 实证）：load_cube 对标准 .cube 返回的 grid 实为
-        [B][G][R] 排布，而本引擎与 CPU 参照 preset_qa._apply_cube 都按 [R,G,B] 索引
-        ——即对原生 LUT 实际执行 f(B,G,R)。这是仓库全体资产（探针 lab_vec、bank、
-        taxonomy、VLM 打标）共同基于的既有约定，GPU/CPU 一致、管线自洽，勿单侧
-        “修正”。烘焙 .cube 由 bake_luts.write_cube 反向行序写出恰好补偿，对
-        Lightroom 输出保真（ΔE 验收护住）。"""
+        轴序（2026-07-17 修复定案）：load_cube 对标准 .cube 返回 grid[b][g][r]
+        （B 最外层、R 最快），本引擎与 canonical CPU oracle 均按该布局
+        正确索引 f(R,G,B)。历史事故：2026-07-13
+        起曾按 [R,G,B] 误索引（实际 f(B,G,R)，红蓝互换），致 native LUT 半库被
+        误判「反转黑白」；bake_luts.write_cube 当时反向行序写出补偿，修复时已随
+        存量烘焙 .cube 一并迁回标准行序。"""
         import numpy as np
         rp = os.path.realpath(cube_path)
+        packed = _get_lut_pack().get(rp)
+        if packed is not None:
+            return packed                            # 预解析命中：免 load_cube
         key = (rp, os.path.getmtime(rp), "cube")
-        hit = self._preset_cache.get(key)
+        hit = self._cache_get(key)
         if hit is None:
-            from dataset_build.source_qa import preset_qa as PQ
-            grid, dmin, dmax = PQ._parser().load_cube(rp)
-            grid = np.asarray(grid, dtype="float32")
-            if grid.ndim == 2 and grid.shape[1] == 3:
-                n = round(grid.shape[0] ** (1 / 3))
-                grid = grid.reshape(n, n, n, 3)
-            if float(grid.max()) > 1.5:
-                grid = grid / 255.0
-            hit = (grid, np.asarray(dmin, dtype="float32"), np.asarray(dmax, dtype="float32"))
-            if len(self._preset_cache) > 256:
-                self._preset_cache.clear()
-            self._preset_cache[key] = hit
+            from dataset_build.lut_io import load_lut
+
+            hit = load_lut(rp)
+            self._cache_put(key, hit)
         return hit
 
     def _render_cube_gpu(self, cube_path: str, image_paths: Sequence[str],
                          out_paths: Sequence[str], long_edge: int = 0) -> List[bool]:
-        """GPU trilinear 3D-LUT（grid_sample），与 CPU 参照 preset_qa._apply_cube
+        """GPU trilinear 3D-LUT（grid_sample），与 canonical CPU oracle
         逐像素一致（含其轴序约定，见 _cube_cached docstring）。
         grid_sample 采样坐标最后维 (x=W,y=H,z=D) 对应 grid 轴 (2,1,0)。
         异常向上抛，由调用方回退 CPU trilinear 或农场。"""
@@ -342,21 +400,24 @@ class RenderBackend:
         oks: List[bool] = []
         with self._gpu_lock:
             from gpu_render.gpu.gpu_replay import DEVICE
-            vol = torch.from_numpy(grid).permute(3, 0, 1, 2)[None].to(DEVICE)  # (1,3,R,G,B)
+            vol = torch.from_numpy(grid).permute(3, 0, 1, 2)[None].to(DEVICE)  # (1,3,D=b,H=g,W=r)
             span = np.where((dmax - dmin) == 0, 1.0, dmax - dmin)
             arrays = []
             try:
                 with torch.no_grad():
                     for sp in image_paths:
-                        im = Image.open(sp).convert("RGB")
+                        from gpu_render.gpu.render_batch import _open_input
+                        im = _open_input(sp)   # RENDER_INPUT_SHORT_EDGE 输入降采样
                         if long_edge:
                             im.thumbnail((long_edge, long_edge))
                         a = torch.from_numpy(
                             np.asarray(im, dtype=np.float32) / 255.0).to(DEVICE)
                         c = ((a - torch.as_tensor(dmin, device=DEVICE))
                              / torch.as_tensor(span, device=DEVICE)).clamp(0, 1)
-                        # (1,1,H,W,3) 采样点，xyz=(B,G,R)，align_corners 网格端点对齐
-                        pts = (c[..., [2, 1, 0]] * 2 - 1)[None, None]
+                        # (1,1,H,W,3) 采样点 xyz=(R,G,B)：vol 轴 (D=b,H=g,W=r)，
+                        # grid_sample x→W(r) y→H(g) z→D(b)，与 DiskLutApplier 一致。
+                        # 2026-07-17 修复：此前 xyz=(B,G,R) 实际执行 f(B,G,R)。
+                        pts = (c * 2 - 1)[None, None]
                         out = F.grid_sample(vol, pts, mode="bilinear",
                                             padding_mode="border", align_corners=True)
                         arrays.append(out[0, :, 0].permute(1, 2, 0)
@@ -389,22 +450,47 @@ class RenderBackend:
                              "engine": "gpu_lut"} for ok, dp in zip(oks, out_paths)]}
 
     @staticmethod
+    def _maybe_shrink(im, edge: Optional[int] = None):
+        """落盘降采样（RENDER_SAVE_SHORT_EDGE>0 时短边压到该值，LANCZOS）。
+
+        2026-07-14 r5 全量生产启用（=1024）：训练侧只用 512p（data/infer_dataset
+        resize2_512p），落盘存源图原始分辨率（2048~4000px）纯属空间浪费（磁盘按
+        ~20GB/h 增长撑不完 10w 目标）；recipe/源图俱全，需要高分辨率随时可复渲。
+        CGT 可经 RENDER_CGT_SHORT_EDGE 单独设更小值（软羽化 α 是平滑场，512 对
+        512p 训练无损，PNG 体积是磁盘大头）。默认 0=关闭，bake/校准工具不受影响。"""
+        if edge is None:
+            edge = int(os.environ.get("RENDER_SAVE_SHORT_EDGE", "0"))
+        if edge <= 0:
+            return im
+        w, h = im.size
+        s = min(w, h)
+        if s <= edge:
+            return im
+        from PIL import Image
+        r = edge / s
+        return im.resize((max(1, round(w * r)), max(1, round(h * r))), Image.LANCZOS)
+
+    @staticmethod
     def _save_rgb_u8(arr: Any, dst: str, quality: int = 92) -> None:
         """Encode one RGB uint8 result. PNG stays lossless; other suffixes use JPEG."""
         from PIL import Image
         os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
+        im = RenderBackend._maybe_shrink(Image.fromarray(arr, "RGB"))
         ext = os.path.splitext(dst)[1].lower()
         if ext == ".png":
-            Image.fromarray(arr, "RGB").save(dst, "PNG")
+            im.save(dst, "PNG")
         else:
-            Image.fromarray(arr, "RGB").save(dst, "JPEG", quality=quality)
+            im.save(dst, "JPEG", quality=quality)
 
     @staticmethod
     def _save_alpha_png(arr_u8: Any, dst: str) -> None:
-        """单通道 CGT alpha PNG。compress_level=1：CGT 是训练中间产物，速度优先。"""
+        """单通道 CGT alpha PNG。compress_level=6：编码在锁外线程池，CPU 换体积
+        （level=1 的软羽化 α 几乎不压缩，实测是 r5 磁盘增长大头）。"""
         from PIL import Image
+        edge = int(os.environ.get("RENDER_CGT_SHORT_EDGE", "0")) or None
         os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
-        Image.fromarray(arr_u8, "L").save(dst, "PNG", compress_level=1)
+        RenderBackend._maybe_shrink(Image.fromarray(arr_u8, "L"), edge).save(
+            dst, "PNG", compress_level=6)
 
     def _render_local_preset_gpu(self, preset_path: str, fmt: str, source_path: str,
                                  specs: Sequence[dict], out_paths: Sequence[str],
@@ -570,6 +656,15 @@ class RenderBackend:
             os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
             shutil.move(r["after_path"], dst)
             r["after_path"] = dst
+            if int(os.environ.get("RENDER_SAVE_SHORT_EDGE", "0")) > 0:
+                try:  # 农场回传为全分辨率 JPEG：与本地路同规则落盘降采样
+                    from PIL import Image
+                    im = Image.open(dst); im.load()
+                    small = self._maybe_shrink(im)
+                    if small is not im:
+                        small.save(dst, "JPEG", quality=92)
+                except Exception:  # noqa: BLE001 - 降采样失败保留原图，不丢渲染
+                    pass
         return r
 
     # -- 统一入口 ---------------------------------------------------------------

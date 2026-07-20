@@ -79,17 +79,17 @@ def read_lut(rendered_path: str) -> np.ndarray:
 
 
 def write_cube(grid: np.ndarray, out_path: str) -> None:
-    """grid[R,G,B,3] → .cube，行序匹配库内 load_cube 的解析约定。
+    """grid[R,G,B,3] → 标准 .cube（red-fastest：行 idx = r + g·N + b·N²）。
 
-    实证（2026-07-13）：preset_qa.load_cube 对行做 reshape(n,n,n,3) 且 _apply_cube
-    用 [R,G,B] 索引第一/二/三轴 → 文件必须 R 最外层（B 变最快），与标准 .cube
-    相反；写错则烘焙 LUT 色相全乱（闭环 ΔE 19 事故）。"""
+    2026-07-17 修复：此前 apply 端误按 [R,G,B] 索引 load_cube 的 [b][g][r] 网格
+    （f(B,G,R) 红蓝互换），本函数曾反向行序写出补偿；apply 端修正后此处回归标准
+    行序，存量烘焙 .cube 已由 tools/migrate_baked_luts.py 一并迁移。"""
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w") as f:
         f.write(f"LUT_3D_SIZE {N}\nDOMAIN_MIN 0 0 0\nDOMAIN_MAX 1 1 1\n")
-        for r in range(N):
+        for b in range(N):
             for g in range(N):
-                for b in range(N):
+                for r in range(N):
                     v = grid[r, g, b]
                     f.write(f"{v[0]:.6f} {v[1]:.6f} {v[2]:.6f}\n")
 

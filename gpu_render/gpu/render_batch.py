@@ -26,10 +26,49 @@ from gpu_render.gpu.gpu_replay import DEVICE, replay_batch
 from gpu_render.replay import parse_preset
 
 
-def _decode(path: str) -> np.ndarray:
+from functools import lru_cache
+
+
+# 渲染输入降采样（2026-07-17）：>0 时源图先缩到短边该值再渲。A/B 实验（50 样本）放行：
+# 1024 上渲 vs 全分辨率渲后缩，ΔE2000 med 0.30、OneAlign |Δ| med 0.15、Spearman 0.998；
+# 全分辨率渲染的耗时长尾（单张 20-425s 的大源图）是 global 阶段1 480 组/h 的根因。
+# 512 直渲不通过（gpu_local 空间算子尺度变化压 IAA 分），勿低于 1024。
+_INPUT_EDGE = int(os.environ.get("RENDER_INPUT_SHORT_EDGE", "0"))
+
+
+def _target_hw(w: int, h: int) -> tuple:
+    """输入降采样后的 (H, W)；未启用或已足够小则原样（圆整与 _open_input 一致）。"""
+    if _INPUT_EDGE <= 0 or min(w, h) <= _INPUT_EDGE:
+        return h, w
+    r = _INPUT_EDGE / min(w, h)
+    return max(1, round(h * r)), max(1, round(w * r))
+
+
+def _open_input(path: str):
+    """打开渲染输入并按 RENDER_INPUT_SHORT_EDGE 降采样，返回 RGB PIL 图。
+
+    JPEG 先用 draft 在 DCT 域降到 ≥ 目标尺度（免全尺寸解码），再 LANCZOS 到精确尺寸。"""
     from PIL import Image, ImageFile
     ImageFile.LOAD_TRUNCATED_IMAGES = True
-    return np.asarray(Image.open(path).convert("RGB"))          # uint8 HWC
+    im = Image.open(path)
+    w, h = im.size
+    th, tw = _target_hw(w, h)
+    if (th, tw) != (h, w):
+        im.draft("RGB", (tw, th))               # 非 JPEG 为 no-op
+        im = im.convert("RGB")
+        if im.size != (tw, th):
+            im = im.resize((tw, th), Image.LANCZOS)
+        return im
+    return im.convert("RGB")
+
+
+@lru_cache(maxsize=32)
+def _decode(path: str) -> np.ndarray:
+    """uint8 HWC，只读数组（下游 transpose/stack 均产生拷贝）。
+
+    LRU（2026-07-15）：global 通路同一源图被 8 个 preset 的 render_files 各 decode
+    一次（每张 2048px+ 约 200ms），组内 7/8 次是纯浪费；32 槽覆盖 24 lanes 在飞源。"""
+    return np.asarray(_open_input(path))          # uint8 HWC
 
 
 def _encode(arr_u8: np.ndarray, dst: str, quality: int) -> None:
@@ -77,7 +116,7 @@ def render_files(preset: dict, jobs: list, batch: int = 16, quality: int = 92,
         buckets: dict = {}
         for src, dst in jobs:
             with Image.open(src) as im:
-                buckets.setdefault((im.size[1], im.size[0]), []).append((src, dst))
+                buckets.setdefault(_target_hw(*im.size), []).append((src, dst))
         enc_futs = []
 
         def _dec_chunk(chunk):

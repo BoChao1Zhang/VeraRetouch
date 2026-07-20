@@ -299,12 +299,21 @@ def test_gpu_route_writes_cgt_png_and_encodes_outside_lock(tmp_path, monkeypatch
     real_rgb = rb.RenderBackend._save_rgb_u8
     real_alpha = rb.RenderBackend._save_alpha_png
 
+    def gpu_slots_exhausted():
+        locked = getattr(backend._gpu_lock, "locked", None)
+        if callable(locked):
+            return locked()
+        acquired = backend._gpu_lock.acquire(blocking=False)
+        if acquired:
+            backend._gpu_lock.release()
+        return not acquired
+
     def spy_rgb(arr, dst, quality=92):
-        lock_states["rgb"].append(backend._gpu_lock.locked())
+        lock_states["rgb"].append(gpu_slots_exhausted())
         real_rgb(arr, dst, quality)
 
     def spy_alpha(arr, dst):
-        lock_states["cgt"].append(backend._gpu_lock.locked())
+        lock_states["cgt"].append(gpu_slots_exhausted())
         real_alpha(arr, dst)
 
     monkeypatch.setattr(gpu_replay, "DEVICE", "cpu")
