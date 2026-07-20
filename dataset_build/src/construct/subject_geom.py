@@ -1,508 +1,210 @@
-"""Subject-aware two-mode mask geometry (Mask v3).
-
-用户定稿的原则（2026-07-06）：
-  - 主体质心/占幅只决定覆盖范围，不决定 mask 类型：有主体时径向/线性都可用。
-  - 径向 = PCA 长椭圆完整覆盖主体（外扩 + 最小伸长率）；线性 = 分区，主体完整落在一侧。
-  - preset 由 GLOBAL 流程选（本模块只出几何），只应用在 mask 内，mask 外不动。
-  - 无明确主体（无非背景的够大主体）：只用线性二分，不用径向/束状/线性侧分区。
-  - 线性过渡带必须软（画面自然第一）。
-  - 主体来源：预计算 SAM3 cache 的 regions.json + concept mask PNG，按背景词表过滤。
-
-输出 dict：{mask_type, what, geom, ...}，geom 为 LR XMP 几何
-（CircularGradient: Top/Left/Bottom/Right/Angle/Feather/Flipped；
-Gradient: ZeroX/ZeroY/FullX/FullY），可直接进 cgt_raster / GPU raster_alpha_t。
-Mask v4 入口：sample_plan（8-mask 组成计划，见文件下方）。
-
-CLI:  python -m construct.subject_geom verify --src-dir D --mask-dir M [--iaa]
-      （用外部目录的源图+主体mask 预览两模式几何并可选 IAA 对比，不依赖 LR 农场）
-"""
+"""Subject-side radial, band, and linear geometry for canonical masks."""
 from __future__ import annotations
 
-import argparse
-import json
 import math
-import os
 import random
-import re
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import numpy as np
 
-SAM3_CACHE = os.environ.get(
-    "CONSTRUCT_SAM3_CACHE", "/home/bc/data/datasets/vera_directionA_1M/sam3_cache")
-# Mask v4：实例级主体 cache（sam3_subject_instances 产出：VLM 选主体 + 守卫 + 清理）
-SUBJECT_CACHE = os.environ.get(
-    "CONSTRUCT_SUBJECT_CACHE", "/home/bc/data/datasets/vera_directionA_1M/subject_cache")
 
-# 背景概念：山川河流天地、建筑结构、植被等环境类不作主体（人物/动物/物件/食物可以）
-_BACKGROUND_RE = re.compile(
-    r"(sky|cloud|mountain|hill|water|sea|ocean|river|lake|pond|ground|soil|dirt|grass|"
-    r"lawn|field|meadow|forest|wood|tree|trees|bush|shrub|hedge|leaf|leaves|foliage|"
-    r"vegetation|plant|road|street|path|pavement|sidewalk|wall|floor|ceiling|beach|sand|"
-    r"snow|horizon|background|backdrop|landscape|terrain|cliff|rock_face|"
-    # 建筑/结构类环境（本身不作前景主体，除非画面无其它前景则退 bisect）
-    r"building|buildings|house|roof|rooftop|facade|window|windows|door|doorway|"
-    r"fence|railing|gate|balcony|awning|pillar|column|staircase|stair|steps?|"
-    r"brick|architecture|structure|curtain|skyscraper|tower_block|"
-    r"paved|pavement|plaza|courtyard|patio|parking|deck|square)", re.I)
-
-AREA_LO, AREA_HI = 0.06, 0.55   # 主体占幅下限：低于 6% 视为"没有够大主体"→ 线性二分（收清晰小主体如猫 0.069）
-MIN_BBOX_FILL = 0.20      # mask 面积 / bbox 面积，过滤碎片化 mask
-MIN_LINEAR_ROOM = 0.20    # 线性分区要求主体对侧至少留这么多画幅
-MARGIN_MAX, MARGIN_MIN = 1.60, 1.02   # 外扩系数上/下限（小主体↔大主体）
-AREA_SMALL, AREA_LARGE = 0.04, 0.45   # 对应插值的占比端点
+MIN_LINEAR_ROOM = 0.20
+MARGIN_MAX = 1.60
+MARGIN_MIN = 1.02
+AREA_SMALL = 0.04
+AREA_LARGE = 0.45
 MIN_ELONG = 1.35
-RADIAL_FEATHERS = (55.0, 70.0, 85.0)   # LR Feather；径向也偏软
-LINEAR_RAMP = (0.22, 0.40)             # 线性过渡带宽度（画幅比例）：必须软
-ANGLE_JITTER = 18.0                    # 径向/束状轴向抖动（度）
-LINE_ANGLE_JITTER = 25.0               # 线性分割线倾角抖动（度）
-BAND_MAX_WIDTH = 0.85                  # 束宽占幅上限，超了三分区退化
-BAND_AXIS_LEN = 1.6                    # 束沿轴半长（穿出画幅 → 软边条带）
-RADIAL_MIN_B = 0.12                    # 径向短半轴绝对下限（小主体的光晕区不至于过窄）
-BAND_MIN_W = 0.12                      # 束半宽绝对下限
+RADIAL_FEATHERS = (55.0, 70.0, 85.0)
+LINEAR_RAMP = (0.22, 0.40)
+ANGLE_JITTER = 18.0
+LINE_ANGLE_JITTER = 25.0
+BAND_MAX_WIDTH = 0.85
+BAND_AXIS_LEN = 1.6
+RADIAL_MIN_B = 0.12
+BAND_MIN_W = 0.12
 
 
-# --------------------------------------------------------------------------- #
-# 主体挑选
-# --------------------------------------------------------------------------- #
-def pick_subject(regions: Dict[str, Dict[str, Any]]) -> Optional[str]:
-    """从 regions.json 里挑最大合格主体概念；无 → None（走线性二分）。"""
-    best, best_area = None, 0.0
-    for concept, r in regions.items():
-        try:
-            area = float(r["area"])
-            x0, y0, x1, y1 = r["bbox"]
-        except (KeyError, TypeError, ValueError):
-            continue
-        if not (AREA_LO <= area <= AREA_HI):
-            continue
-        if _BACKGROUND_RE.search(concept):
-            continue
-        bbox_area = max((x1 - x0) * (y1 - y0), 1e-6)
-        if area / bbox_area < MIN_BBOX_FILL:
-            continue
-        if area > best_area:
-            best, best_area = concept, area
-    return best
-
-
-# --------------------------------------------------------------------------- #
-# 几何构造（归一化坐标，LR XMP 语义与 mask_synth.cgt_raster 对齐）
-# --------------------------------------------------------------------------- #
 def adaptive_margin(area: float) -> float:
-    """外扩系数随主体占比自适应：小主体外扩大（上限 MARGIN_MAX），
-    大主体刚好覆盖（MARGIN_MIN）。占比对数插值。"""
-    a = min(max(float(area), 1e-4), 1.0)
-    t = (math.log(a) - math.log(AREA_SMALL)) / (math.log(AREA_LARGE) - math.log(AREA_SMALL))
-    return MARGIN_MAX + (MARGIN_MIN - MARGIN_MAX) * min(max(t, 0.0), 1.0)
+    value = min(max(float(area), 1e-4), 1.0)
+    position = (
+        (math.log(value) - math.log(AREA_SMALL))
+        / (math.log(AREA_LARGE) - math.log(AREA_SMALL))
+    )
+    position = min(max(position, 0.0), 1.0)
+    return MARGIN_MAX + (MARGIN_MIN - MARGIN_MAX) * position
 
 
 def _size_factor(area: float) -> float:
-    """1=小主体（外扩最大），0=大主体（刚覆盖）。"""
-    m = adaptive_margin(area)
-    return (m - MARGIN_MIN) / (MARGIN_MAX - MARGIN_MIN)
+    return (adaptive_margin(area) - MARGIN_MIN) / (MARGIN_MAX - MARGIN_MIN)
 
 
 def _mask_pca(mask01: np.ndarray):
-    """归一化坐标 PCA：返回 (center, major_vec, a_extent, b_extent, area_frac)；点太少 → None。
-    先降采样到短边 ≤512（归一化坐标下椭圆参数不变），native 分辨率全前景点集
-    的 PCA 是 p95 ~1.9s 的热点。"""
-    h, w = mask01.shape
-    if min(h, w) > 512:
+    mask = np.asarray(mask01, dtype=np.float32)
+    if mask.ndim != 2 or not mask.size:
+        return None
+    height, width = mask.shape
+    if min(height, width) > 512:
         import cv2
-        s = 512.0 / min(h, w)
-        mask01 = cv2.resize(mask01.astype(np.float32),
-                            (max(1, int(round(w * s))), max(1, int(round(h * s)))),
-                            interpolation=cv2.INTER_NEAREST)
-        h, w = mask01.shape
-    ys, xs = np.nonzero(mask01 > 0.5)
+
+        scale = 512.0 / min(height, width)
+        mask = cv2.resize(
+            mask,
+            (max(1, round(width * scale)), max(1, round(height * scale))),
+            interpolation=cv2.INTER_NEAREST,
+        )
+        height, width = mask.shape
+    ys, xs = np.nonzero(mask > 0.5)
     if xs.size < 32:
         return None
-    pts = np.stack([xs / w, ys / h], 1).astype(np.float64)
-    c = pts.mean(0)
-    cov = np.cov((pts - c).T)
-    _, evecs = np.linalg.eigh(cov)
-    major, minor = evecs[:, 1], evecs[:, 0]
-    # 98 分位投影半径：覆盖主体主干，不被伸出的单肢/杂点撑爆
-    a = float(np.quantile(np.abs((pts - c) @ major), 0.98))
-    b = float(np.quantile(np.abs((pts - c) @ minor), 0.98))
-    return c, major, a, b, float(xs.size / (h * w))
+    points = np.stack([xs / width, ys / height], axis=1).astype(np.float64)
+    center = points.mean(axis=0)
+    covariance = np.cov((points - center).T)
+    _, eigenvectors = np.linalg.eigh(covariance)
+    major = eigenvectors[:, 1]
+    minor = eigenvectors[:, 0]
+    major_extent = float(np.quantile(np.abs((points - center) @ major), 0.98))
+    minor_extent = float(np.quantile(np.abs((points - center) @ minor), 0.98))
+    return center, major, major_extent, minor_extent, float(xs.size / (height * width))
 
 
-def _ellipse_geom(c, a, b, angle, feather, apply_inside) -> dict:
-    return {"Top": round(c[1] - b, 4), "Bottom": round(c[1] + b, 4),
-            "Left": round(c[0] - a, 4), "Right": round(c[0] + a, 4),
-            "Angle": round(angle, 2), "Feather": feather,
-            "Roundness": 0.0, "Midpoint": 50.0,
-            "Flipped": "true" if apply_inside else "false"}
+def _ellipse_geom(center, major: float, minor: float, angle: float, feather: float) -> dict:
+    return {
+        "Top": round(center[1] - minor, 4),
+        "Bottom": round(center[1] + minor, 4),
+        "Left": round(center[0] - major, 4),
+        "Right": round(center[0] + major, 4),
+        "Angle": round(angle, 2),
+        "Feather": feather,
+        "Roundness": 0.0,
+        "Midpoint": 50.0,
+        "Flipped": "true",
+    }
 
 
-def radial_geom(mask01: np.ndarray, rng: random.Random, apply_inside: bool) -> Optional[dict]:
-    """PCA 主轴长椭圆完整覆盖主体，轴向带抖动（近各向同性时角度自由采样）。"""
-    p = _mask_pca(mask01)
-    if p is None:
+def radial_geom(
+    mask01: np.ndarray, rng: random.Random, apply_inside: bool = True
+) -> Optional[dict]:
+    if not apply_inside:
+        raise ValueError("canonical radial geometry must affect the subject")
+    pca = _mask_pca(mask01)
+    if pca is None:
         return None
-    c, major, a, b, area = p
-    natural_elong = a / max(b, 1e-6)
-    m = adaptive_margin(area)   # 大主体刚覆盖，小主体外扩大
-    a *= m
-    b *= m
-    b = max(b, RADIAL_MIN_B)   # 绝对下限：相对外扩在小主体端失效
-    if natural_elong < MIN_ELONG or a < b * MIN_ELONG:
-        a = b * MIN_ELONG
-    # 不设占幅守卫：大主体就用刚覆盖的椭圆（apply_outside 即薄环带编辑，合法样本）
-    if natural_elong < 1.15:     # 近各向同性：PCA 角是噪声，角度自由采样
+    center, major, extent_a, extent_b, area = pca
+    natural_elongation = extent_a / max(extent_b, 1e-6)
+    margin = adaptive_margin(area)
+    extent_a *= margin
+    extent_b = max(extent_b * margin, RADIAL_MIN_B)
+    if natural_elongation < MIN_ELONG or extent_a < extent_b * MIN_ELONG:
+        extent_a = extent_b * MIN_ELONG
+    if natural_elongation < 1.15:
         angle = rng.uniform(-90.0, 90.0)
     else:
-        angle = math.degrees(math.atan2(major[1], major[0])) \
-            + rng.uniform(-ANGLE_JITTER, ANGLE_JITTER)
-    geom = _ellipse_geom(c, a, b, angle, float(rng.choice(RADIAL_FEATHERS)), apply_inside)
-    return {"mask_type": "circulargradient", "what": "Mask/CircularGradient",
-            "geom": geom, "_mode": "radial",
-            "_apply": "inside" if apply_inside else "outside"}
+        angle = math.degrees(math.atan2(major[1], major[0])) + rng.uniform(
+            -ANGLE_JITTER, ANGLE_JITTER
+        )
+    return {
+        "mask_type": "circulargradient",
+        "what": "Mask/CircularGradient",
+        "geom": _ellipse_geom(
+            center, extent_a, extent_b, angle, float(rng.choice(RADIAL_FEATHERS))
+        ),
+        "_mode": "radial",
+        "_apply": "inside",
+    }
 
 
-def band_geom(mask01: np.ndarray, rng: random.Random, apply_inside: bool) -> Optional[dict]:
-    """束状三分区：只含主体的软边条带，画面分为 侧|束|侧。
-    实现 = 长轴穿出画幅的椭圆（LR 单 mask 可表达）；束方向 = 主体 PCA 主轴
-    （60%）或 横/竖 ± 抖动（40%），支持任意倾角。Flipped=true → 束内(主体区)。"""
-    p = _mask_pca(mask01)
-    if p is None:
+def band_geom(
+    mask01: np.ndarray, rng: random.Random, apply_inside: bool = True
+) -> Optional[dict]:
+    if not apply_inside:
+        raise ValueError("canonical band geometry must affect the subject")
+    pca = _mask_pca(mask01)
+    if pca is None:
         return None
-    c, major, _, b, area = p
-    width = b * adaptive_margin(area) * 1.05   # 束半宽 = 主体短轴自适应外扩
-    width = max(width, BAND_MIN_W)
-    if 2 * width > BAND_MAX_WIDTH:       # 束太宽，三分区退化
-        return None
+    center, major, extent_a, extent_b, area = pca
     if rng.random() < 0.6:
-        angle = math.degrees(math.atan2(major[1], major[0])) \
-            + rng.uniform(-ANGLE_JITTER, ANGLE_JITTER)
+        angle = math.degrees(math.atan2(major[1], major[0])) + rng.uniform(
+            -ANGLE_JITTER, ANGLE_JITTER
+        )
     else:
         angle = rng.choice((0.0, 90.0)) + rng.uniform(-ANGLE_JITTER, ANGLE_JITTER)
-    geom = _ellipse_geom(c, BAND_AXIS_LEN, width, angle,
-                         float(rng.choice(RADIAL_FEATHERS)), apply_inside)
-    return {"mask_type": "circulargradient", "what": "Mask/CircularGradient",
-            "geom": geom, "_mode": "band",
-            "_apply": "inside" if apply_inside else "outside"}
+    theta = math.radians(angle)
+    normal = (-math.sin(theta), math.cos(theta))
+    major_normal = major[0] * normal[0] + major[1] * normal[1]
+    subject_half_width = math.sqrt(
+        (extent_a * major_normal) ** 2
+        + (extent_b ** 2) * max(1.0 - major_normal ** 2, 0.0)
+    )
+    width = max(subject_half_width * adaptive_margin(area) * 1.05, BAND_MIN_W)
+    if 2 * width > BAND_MAX_WIDTH:
+        return None
+    return {
+        "mask_type": "circulargradient",
+        "what": "Mask/CircularGradient",
+        "geom": _ellipse_geom(
+            center, BAND_AXIS_LEN, width, angle, float(rng.choice(RADIAL_FEATHERS))
+        ),
+        "_mode": "band",
+        "_apply": "inside",
+    }
 
 
-def _gradient_geom(pc, base_axis_deg: float, half: float, toward_high: bool,
-                   rng: random.Random) -> dict:
-    """过 pc、沿 base_axis（含倾角抖动）的软 ramp。toward_high → Full 在高坐标侧。"""
-    theta = math.radians(base_axis_deg
-                         + rng.uniform(-LINE_ANGLE_JITTER, LINE_ANGLE_JITTER))
-    d = (math.cos(theta), math.sin(theta))
-    s = 1.0 if toward_high else -1.0
-    return {"ZeroX": round(pc[0] - s * half * d[0], 4),
-            "ZeroY": round(pc[1] - s * half * d[1], 4),
-            "FullX": round(pc[0] + s * half * d[0], 4),
-            "FullY": round(pc[1] + s * half * d[1], 4), "Flipped": "false"}
+def _gradient_geom(
+    point, base_axis_degrees: float, half_width: float, toward_high: bool,
+    rng: random.Random,
+) -> dict:
+    theta = math.radians(
+        base_axis_degrees + rng.uniform(-LINE_ANGLE_JITTER, LINE_ANGLE_JITTER)
+    )
+    direction = (math.cos(theta), math.sin(theta))
+    sign = 1.0 if toward_high else -1.0
+    return {
+        "ZeroX": round(point[0] - sign * half_width * direction[0], 4),
+        "ZeroY": round(point[1] - sign * half_width * direction[1], 4),
+        "FullX": round(point[0] + sign * half_width * direction[0], 4),
+        "FullY": round(point[1] + sign * half_width * direction[1], 4),
+        "Flipped": "false",
+    }
 
 
-def linear_geom(bbox, rng: random.Random, apply_subject_side: bool,
-                area: Optional[float] = None,
-                side: Optional[str] = None) -> Optional[dict]:
-    """线性侧分区：主体完整落在一侧，分割线允许倾斜。软过渡（宽 ramp）。
-    分割线离主体的距离随主体占比自适应：大主体贴边，小主体推远。
-    side 显式指定方向（v4 四方向轮询用），缺省取对侧空间最大方向。"""
+def linear_geom(
+    bbox,
+    rng: random.Random,
+    apply_subject_side: bool = True,
+    area: Optional[float] = None,
+    side: Optional[str] = None,
+) -> Optional[dict]:
+    if not apply_subject_side:
+        raise ValueError("canonical linear geometry must affect the subject side")
     x0, y0, x1, y1 = bbox
     rooms = {"left": x0, "right": 1 - x1, "top": y0, "bottom": 1 - y1}
     if side is None:
-        side, room = max(rooms.items(), key=lambda kv: kv[1])  # 对侧空间最大的方向
+        side, room = max(rooms.items(), key=lambda item: item[1])
     else:
+        if side not in rooms:
+            raise ValueError(f"invalid linear side: {side}")
         room = rooms[side]
     if room < MIN_LINEAR_ROOM:
         return None
-    wdt = min(rng.uniform(*LINEAR_RAMP), room * 0.9)
+    ramp_width = min(rng.uniform(*LINEAR_RAMP), room * 0.9)
     edge = {"left": x0, "right": x1, "top": y0, "bottom": y1}[side]
-    sgn = -1 if side in ("left", "top") else 1     # 从主体边缘往空侧偏
+    sign = -1 if side in ("left", "top") else 1
     gap = 0.15 + 0.35 * _size_factor(area) if area is not None else 0.35
-    center = edge + sgn * (gap * room)             # 分割线放主体边缘外的空区里
-    horiz = side in ("left", "right")
-    pc = (center, 0.5) if horiz else (0.5, center)
-    subj_first = sgn > 0                            # 主体在低坐标侧
-    # Full(=1, 应用侧)落在主体侧 ⇔ apply_subject_side；真值表化简为 XOR
-    toward_high = bool(subj_first) ^ bool(apply_subject_side)
-    geom = _gradient_geom(pc, 0.0 if horiz else 90.0, wdt / 2, toward_high, rng)
-    return {"mask_type": "gradient", "what": "Mask/Gradient", "geom": geom,
-            "_mode": "linear", "_side": side,
-            "_apply": "subject_side" if apply_subject_side else "env_side"}
+    center = edge + sign * gap * room
+    horizontal = side in ("left", "right")
+    point = (center, 0.5) if horizontal else (0.5, center)
+    subject_on_low_side = sign > 0
+    toward_high = not subject_on_low_side
+    return {
+        "mask_type": "gradient",
+        "what": "Mask/Gradient",
+        "geom": _gradient_geom(
+            point, 0.0 if horizontal else 90.0, ramp_width / 2, toward_high, rng
+        ),
+        "_mode": "linear",
+        "_side": side,
+        "_apply": "subject_side",
+    }
 
 
-def bisect_geom(rng: random.Random) -> dict:
-    """无主体：软过渡线性二分（位置 1/3、1/2、2/3，方向水平/垂直 + 倾角抖动）。"""
-    pos = rng.choice((1 / 3, 0.5, 2 / 3)) + rng.uniform(-0.04, 0.04)
-    wdt = rng.uniform(*LINEAR_RAMP)
-    horiz = rng.random() < 0.5
-    pc = (pos, 0.5) if horiz else (0.5, pos)
-    geom = _gradient_geom(pc, 0.0 if horiz else 90.0, wdt / 2,
-                          rng.random() < 0.5, rng)
-    return {"mask_type": "gradient", "what": "Mask/Gradient", "geom": geom,
-            "_mode": "linear_bisect", "_apply": "one_side"}
-
-
-def semantic_alpha(mask01: np.ndarray, apply_inside: bool = True) -> np.ndarray:
-    """语义 mask local edit 的 α：SAM3 主体 mask + 占比自适应软羽化。
-    LR XMP 表达不了任意语义 mask，此路线走 numpy 合成（databuild Route 2 / gpu_render）。
-    羽化 σ 随主体占比缩放：小主体细边，大主体宽过渡。"""
-    import cv2
-
-    m = np.asarray(mask01, dtype=np.float32)
-    short = min(m.shape)
-    area = float(m.mean())
-    sigma = short * (0.008 + 0.017 * math.sqrt(max(area, 1e-4)))
-    k = max(3, int(round(sigma * 6)) | 1)
-    a = np.clip(cv2.GaussianBlur(m, (k, k), sigma), 0.0, 1.0)
-    return a if apply_inside else 1.0 - a
-
-
-# --------------------------------------------------------------------------- #
-# 策略入口
-# --------------------------------------------------------------------------- #
-def sample_from_subject(regions: Dict[str, Dict[str, Any]],
-                        mask01: Optional[np.ndarray],
-                        rng: random.Random) -> Optional[dict]:
-    """有 regions（+可选主体 mask 数组）时的两模式采样；返回 None 表示无法出几何。"""
-    concept = pick_subject(regions)
-    if concept is None:
-        return dict(bisect_geom(rng), _subject=None)
-    r = regions[concept]
-    apply_inside = True   # preset 只在 mask 内应用，mask 外不动
-    # 模式权重：径向 0.4 / 束状 0.3 / 线性侧分区 0.3；失败沿序退阶
-    u = rng.random()
-    order = (["radial", "band", "linear"] if u < 0.4 else
-             ["band", "radial", "linear"] if u < 0.7 else
-             ["linear", "band", "radial"])
-    g = None
-    for mode in order:
-        if mode == "radial" and mask01 is not None:
-            g = radial_geom(mask01, rng, apply_inside)
-        elif mode == "band" and mask01 is not None:
-            g = band_geom(mask01, rng, apply_inside)
-        elif mode == "linear":
-            g = linear_geom(r["bbox"], rng, apply_subject_side=apply_inside,
-                            area=r.get("area"))
-        if g is not None:
-            break
-    if g is None:
-        return None
-    g["_subject"] = {"concept": concept, "area": r["area"], "bbox": r["bbox"]}
-    return g
-
-
-def sample_for_image(image_path: str, rng: random.Random,
-                     cache_dir: str = SAM3_CACHE) -> Optional[dict]:
-    """从预计算 SAM3 cache 读 regions + 主体 mask，产出主体感知几何。
-    cache 缺失 → None。"""
-    from dataset_build.mask_cache import CachedMasker
-
-    cm = CachedMasker(cache_dir)
-    regions = cm.regions(image_path)
-    if not regions:
-        return None
-    concept = pick_subject(regions)
-    mask01 = cm.mask(image_path, concept) if concept else None
-    if mask01 is not None and not mask01.any():
-        mask01 = None
-    return sample_from_subject(regions, mask01, rng)
-
-
-# --------------------------------------------------------------------------- #
-# Mask v4：实例级主体 cache + 8-mask 组成计划（1 径向 + 1 语义 + 2 束状 + 4 线性）
-# --------------------------------------------------------------------------- #
-FEATHER_JITTER = (0.7, 1.4)      # 羽化宽度抖动（数据多样性；C_GT 存实际 α，无副作用）
-FEATHER_MAX_EDGE = 1024          # 羽化在 ≤1024 短边上算（性能项6）；渲染端 resize 回源图
-# v4 面积门与 v3 的 AREA_LO/HI 不同：VLM 选主体已在 50 张审核中验证保留小主体
-# （3.8% 的人像正确入选，旧 6% 下限会误杀），上界由预计算守卫（0.85/包络 0.67）把关。
-# 这里只挡真正退化的极小 mask（羽化后近不可见的编辑）。
-AREA_MIN_V4 = 0.005
-
-
-class SubjectCacheMiss(RuntimeError):
-    """源图尚未被 sam3_subject_instances 预计算（subject.json 缺失）。"""
-
-
-def load_subject(image_path: str, cache_dir: str = SUBJECT_CACHE) -> dict:
-    """读实例级主体 cache。返回 {"status": ..., "mask01": HxW float32 或 None, "meta": {...}}。
-    status != ready 时 mask01 为 None（调用方走全组 bisect）。cache 缺失 → SubjectCacheMiss。"""
-    import json as _json
-
-    from dataset_build.mask_cache import path_key
-
-    d = os.path.join(cache_dir, path_key(image_path))
-    meta_path = os.path.join(d, "subject.json")
-    if not os.path.exists(meta_path):
-        raise SubjectCacheMiss(f"no subject.json for {image_path} (run sam3_subject_instances)")
-    meta = _json.load(open(meta_path))
-    if meta.get("status") != "ready":
-        return {"status": meta.get("status"), "mask01": None, "meta": meta}
-    from PIL import Image
-    m = np.asarray(Image.open(os.path.join(d, "subject.png")).convert("L"),
-                   np.float32) / 255.0
-    return {"status": "ready", "mask01": (m > 0.5).astype(np.float32), "meta": meta}
-
-
-def semantic_feather(mask01: np.ndarray, rng: random.Random) -> tuple:
-    """语义主体 α：占幅自适应距离羽化 × 抖动（方案1 定稿，2026-07-11）。
-    内宽 = 短边×(0.8%+1.7%×√area)×U[0.7,1.4]，外宽 = 内/3，mask 外精确 0。
-    在 ≤FEATHER_MAX_EDGE 短边上计算；渲染端负责 resize 回源图（契约 §1）。"""
-    import cv2
-
-    from dataset_build.tools.evaluate_mask_feather import feather_binary
-
-    m = np.asarray(mask01, np.float32)
-    h, w = m.shape
-    if min(h, w) > FEATHER_MAX_EDGE:
-        s = FEATHER_MAX_EDGE / min(h, w)
-        m = cv2.resize(m, (max(1, int(round(w * s))), max(1, int(round(h * s)))),
-                       interpolation=cv2.INTER_NEAREST)
-    hard = m > 0.5
-    area = float(hard.mean())
-    f_in = (0.008 + 0.017 * math.sqrt(max(area, 1e-4))) * rng.uniform(*FEATHER_JITTER)
-    alpha = feather_binary(hard, f_in, f_in / 3.0).astype(np.float32)
-    return alpha, {"f_in": round(f_in, 5), "f_out": round(f_in / 3.0, 5),
-                   "area": round(area, 4)}
-
-
-def _bisect_spec(rng: random.Random) -> dict:
-    g = bisect_geom(rng)
-    return dict(g, amount=1.0)
-
-
-def sample_plan(image_path: str, rng: random.Random, n: int = 8,
-                cache_dir: str = SUBJECT_CACHE) -> list:
-    """一个源图的 local 变体组成计划（用户定稿 2026-07-11）：
-    1 径向 + 1 语义 + 2 束状 + 4 线性（四方向轮询，room≥0.2 的方向轮流，槽位不足
-    bisect 补位）；无主体 / 守卫舍弃 → 全组 bisect。任何几何失败退 bisect。
-    返回 n 个 spec dict：几何 {mask_type, geom, amount, _mode...}；
-    语义 {mask_type:"semantic", alpha, amount, _mode:"semantic", _feather}。"""
-    sub = load_subject(image_path, cache_dir)
-    plan: list = []
-    if sub["mask01"] is None or float(sub["mask01"].mean()) < AREA_MIN_V4:
-        status = sub["status"] if sub["mask01"] is None else "subject_too_small"
-        plan = [dict(_bisect_spec(rng), _subject_status=status) for _ in range(n)]
-        return plan
-    mask01 = sub["mask01"]
-    meta = sub["meta"]
-    subject_info = {"concept": meta.get("sam_prompt"), "scope": meta.get("scope"),
-                    "area": meta.get("mask_area_cleaned"),
-                    "n_members": meta.get("n_members")}
-    ys, xs = np.nonzero(mask01 > 0.5)
-    h, w = mask01.shape
-    bbox = (float(xs.min()) / w, float(ys.min()) / h,
-            float(xs.max() + 1) / w, float(ys.max() + 1) / h)
-    area = float(mask01.mean())
-
-    # 1 径向
-    g = radial_geom(mask01, rng, apply_inside=True)
-    plan.append(dict(g, amount=1.0) if g else _bisect_spec(rng))
-    # 1 语义
-    alpha, feather_meta = semantic_feather(mask01, rng)
-    plan.append({"mask_type": "semantic", "alpha": alpha, "amount": 1.0,
-                 "_mode": "semantic", "_apply": "inside", "_feather": feather_meta})
-    # 2 束状
-    for _ in range(2):
-        g = band_geom(mask01, rng, apply_inside=True)
-        plan.append(dict(g, amount=1.0) if g else _bisect_spec(rng))
-    # 4 线性：可行方向（room≥MIN_LINEAR_ROOM）按空间降序轮询
-    rooms = {"left": bbox[0], "right": 1 - bbox[2], "top": bbox[1], "bottom": 1 - bbox[3]}
-    sides = [s for s, r in sorted(rooms.items(), key=lambda kv: -kv[1])
-             if r >= MIN_LINEAR_ROOM]
-    for i in range(4):
-        g = (linear_geom(bbox, rng, apply_subject_side=True, area=area,
-                         side=sides[i % len(sides)]) if sides else None)
-        plan.append(dict(g, amount=1.0) if g else _bisect_spec(rng))
-
-    for spec in plan:
-        spec.setdefault("_subject", subject_info)
-    return plan[:n]
-
-
-# --------------------------------------------------------------------------- #
-# verify：外部源图+主体 mask 目录 → 几何预览 + 可选 IAA 对比（不走 LR 农场）
-# --------------------------------------------------------------------------- #
-def _raster(mask_type: str, geom: dict, h: int, w: int) -> np.ndarray:
-    from .mask_synth import cgt_raster
-    return cgt_raster(mask_type, geom, h, w)
-
-
-def verify(src_dir: str, mask_dir: str, out_dir: str, n: int = 0, iaa: bool = False) -> None:
-    import cv2
-    from PIL import Image
-
-    from dataset_build.mask_cache import compute_regions
-
-    os.makedirs(out_dir, exist_ok=True)
-    ids = sorted(p[:-4] for p in os.listdir(src_dir) if p.endswith(".png"))
-    if n:
-        ids = ids[:n]
-    class_paths = {"subject": [], "no_subject": []}
-    for iid in ids:
-        rng = random.Random(iid)
-        img = np.asarray(Image.open(os.path.join(src_dir, iid + ".png")).convert("RGB"),
-                         np.float32) / 255
-        h, w = img.shape[:2]
-        mp = os.path.join(mask_dir, iid + ".png")
-        m = cv2.imread(mp, 0) if os.path.exists(mp) else None
-        mask01 = (m > 127).astype(np.float32) if m is not None and m.max() > 0 else None
-        regions = compute_regions({"subject": mask01}) if mask01 is not None else {}
-        g = sample_from_subject(regions, mask01, rng)
-        if g is None:
-            continue
-        alpha = _raster(g["mask_type"], g["geom"], h, w)
-        ev = rng.choice((0.85, -0.85))
-        edited = np.clip(img * (2.0 ** ev), 0, 1)
-        out = img * (1 - alpha[..., None]) + edited * alpha[..., None]
-        # 三联：源图(mask绿+几何红线) | α 图 | 预览
-        vis = (img * 255).astype(np.uint8).copy()
-        if mask01 is not None:
-            cnts, _ = cv2.findContours(mask01.astype(np.uint8), cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(vis, cnts, -1, (60, 220, 60), 3)
-        red = np.zeros_like(vis); red[..., 0] = 255
-        vis = (vis * (1 - 0.35 * alpha[..., None])
-               + red * 0.35 * alpha[..., None]).astype(np.uint8)
-        strip = np.concatenate([
-            vis, np.repeat((alpha * 255).astype(np.uint8)[..., None], 3, 2),
-            (out * 255).astype(np.uint8)], axis=1)
-        tag = f'{g["_mode"]}_{g["_apply"]}_ev{ev:+.2f}'
-        cls = "subject" if g.get("_subject") else "no_subject"
-        prev = os.path.join(out_dir, f"{iid}.{cls}.{tag}.jpg")
-        Image.fromarray(strip).save(prev, quality=90)
-        outp = os.path.join(out_dir, f"{iid}.out.png")
-        Image.fromarray((out * 255).astype(np.uint8)).save(outp)
-        class_paths[cls].append(outp)
-        print(iid, cls, tag, flush=True)
-
-    if iaa and any(class_paths.values()):
-        from . import objscore
-        print("\n=== IAA (iaa_mixed 0-100) 主体明显 vs 不明显 ===")
-        for cls, paths in class_paths.items():
-            if not paths:
-                continue
-            scores = [v["iaa_mixed"] for v in objscore.score_many(paths).values()
-                      if v.get("iaa_mixed") is not None]
-            if scores:
-                q = np.percentile(scores, [25, 50, 75])
-                print(f"{cls}: n={len(scores)} mean={np.mean(scores):.2f} "
-                      f"std={np.std(scores):.2f} q25/50/75={q[0]:.1f}/{q[1]:.1f}/{q[2]:.1f}")
-        json.dump({k: v for k, v in class_paths.items()},
-                  open(os.path.join(out_dir, "class_paths.json"), "w"), indent=1)
-
-
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    v = sub.add_parser("verify")
-    v.add_argument("--src-dir", required=True)
-    v.add_argument("--mask-dir", required=True)
-    v.add_argument("--out-dir", default="/tmp/subject_geom_verify")
-    v.add_argument("--n", type=int, default=0)
-    v.add_argument("--iaa", action="store_true")
-    a = ap.parse_args()
-    if a.cmd == "verify":
-        verify(a.src_dir, a.mask_dir, a.out_dir, a.n, a.iaa)
-
-
-if __name__ == "__main__":
-    main()
+__all__ = ["band_geom", "linear_geom", "radial_geom"]
