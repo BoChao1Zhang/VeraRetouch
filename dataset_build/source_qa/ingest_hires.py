@@ -1,9 +1,9 @@
-"""高分辨率数据集直接入库：探测尺寸，短边 >= min-side 才 upsert 进 assets（status=pending）。
+"""Ingest high-resolution images into the retained PostgreSQL source inventory.
 
-与 registry 扫描共用 asset_id 规则（src_ + sha1("<abs_path> <size>")[:16]），避免重复入库。
-PARA 走 --scene-csv 直接映射官方 sceneCategory 到本库 9 类词表，省一轮 vLLM 分类；
-其余 corpus scene=any，等 caption+scene_backfill。入库后仍需清洗链（gate/llm_qa/IAA/caption）
-才会进采样池（b_quality=3 + iaa_mixed>=55）。
+Files whose short edge meets ``--min-side`` are upserted as pending assets. PARA
+metadata may provide a scene stratum; other corpora use the explicit unknown bucket.
+Canonical eligibility is determined only by the instance-SAM3 cache and decodability,
+never by historical source-QA scores or verdicts.
 
 用法:
     python -m dataset_build.source_qa.ingest_hires --dir <图像目录> --corpus <名> [--min-side 720]
@@ -23,7 +23,7 @@ from PIL import Image
 from . import db
 
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff"}
-# PARA sceneCategory -> 本库受控词表（对不上的落 any）
+# PARA sceneCategory -> retained scene strata; unmatched values use the unknown bucket.
 PARA_SCENE_MAP = {
     "portrait": "portrait", "scene": "landscape", "food": "food",
     "stilllife": "still_life", "still life": "still_life",
@@ -55,6 +55,7 @@ def main() -> None:
                 if name:
                     scene_by_name[name] = PARA_SCENE_MAP.get(cat, "any")
 
+    db.init_db()
     conn = db.connect()
     stats = {"seen": 0, "small": 0, "bad": 0, "ingested": 0}
     for root, _dirs, files in os.walk(args.dir):

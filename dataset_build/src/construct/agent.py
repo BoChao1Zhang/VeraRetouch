@@ -1,338 +1,1006 @@
-"""R4 end-to-end pipeline: source photo -> style-taxonomy sampling -> render N -> QA -> tier records.
-
-Locked design (2026-07-12 重构：两级风格采样取代 vlemb 召回):
-  select  = taxonomy 两级采样: 大类 per-source least-used(跨 run 历史) -> 组内小类轮转
-            各取 1(不足 k 则 round-robin 补齐) -> 小类内 preset least-used。无 embedding、
-            无相关性——组内同大类让 IAA 排序只比「同风格下谁执行得好」，消除跨风格 bias；
-            多样性/覆盖由采样结构保证(mixing.StyleSampler)。
-  render  = render.render_preset (本地 GPU 为核心: 残差/烘焙/_global, lut->gpu_lut; 农场兜底)
-  QA      = qa.qa_rank (OneAlign IAA) -> veto + merit
-  tier    = tier.build (top-2 by merit -> SFT[全部 style 任务]; DPO 为副产物)
-
-ponytail: deterministic fan-out (recall, N concurrent renders, concurrent pairwise QA) — plain
-Python + ThreadPoolExecutor, NOT LangChain. No LLM routing decisions to make here; a DAG framework
-would be pure ceremony. Concurrency keeps the resources (GPU render / LR farm / IAA / vLLM annotate)
-busy by having multiple sources in flight.
-
-CLI:  python -m construct.agent run [--n 100] [--render-n 8] [--out DIR]
-"""
+"""Single TOML-driven canonical databuild orchestrator."""
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import gc
 import hashlib
 import json
 import os
-import random
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Mapping, Protocol
 
-from dataset_build.source_qa import db, config
-from . import render, qa, tier, mask_synth, mixing
-from .bank import PresetBank
-
-FULL = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full"
-
-
-class Selector:
-    """taxonomy 两级风格采样器（global 与 local 的 preset 选择共用同一逻辑）。"""
-
-    def __init__(self):
-        self.bank = PresetBank.load(FULL)
-        self.feat = {f["preset_id"]: f for f in self.bank.feats}
-        self.sampler = mixing.StyleSampler(os.path.join(FULL, "taxonomy.jsonl"),
-                                           prior_major=self._major_prior(),
-                                           valid_ids=set(self.feat))
-        self._farm_cache: dict = {}
-
-    @staticmethod
-    def _major_prior() -> dict:
-        """跨 run 的 per-source 大类使用计数（construct_groups.style_major），
-        保证同源多次采样渐进覆盖全部大类。表/列不存在或 DB 不可达时从零开始。"""
-        try:
-            conn = db.connect()
-            rows = conn.execute(
-                "SELECT source_asset_id, style_major, COUNT(*) AS n FROM construct_groups "
-                "WHERE style_major IS NOT NULL GROUP BY 1, 2").fetchall()
-            conn.close()
-        except Exception:
-            return {}
-        prior: dict = {}
-        for r in rows:
-            prior.setdefault(r["source_asset_id"], {})[r["style_major"]] = r["n"]
-        return prior
-
-    def sample(self, src: dict, k: int, eligible=None,
-               exclude_majors: frozenset = frozenset()) -> tuple:
-        """(大类, [feat×≤k])。锁定 per-source least-used 大类采一组；该大类被
-        eligible 滤空则换下一个大类重试（local 的资格过滤很窄，global 不会触发）。"""
-        key = str(src.get("asset_id") or src.get("path") or src)
-        elig_pid = (lambda pid: bool(eligible(self.feat[pid]))) if eligible else None
-        tried: set = set(exclude_majors)
-        for _ in range(len(self.sampler.majors)):
-            major = self.sampler.pick_major(key, exclude=tried)
-            if major in exclude_majors:      # 全部大类被排除时 pick_major 会回退全池
-                break
-            pids = self.sampler.sample_group(
-                major, k, key, eligible=elig_pid,
-                is_farm=lambda pid: self._is_farm(self.feat[pid]))
-            if pids:
-                return major, [self.feat[p] for p in pids]
-            tried.add(major)
-        return None, []
-
-    def select_local_base(self, src) -> tuple:
-        """LOCAL Route 1 选基：param/xmp/无内嵌 local 资格过滤，GPU 路优先，
-        大类→小类采样取 1（agent 与 local_pipeline 共用）。返回 (style_major, feat|None)
-        —— major 必须随 group 落库（provenance style_major），否则 local 消费
-        对跨 run 大类均摊不可见（review 2026-07-13）。"""
-        if not isinstance(src, dict):     # local_pipeline 传 path 的兼容
-            src = {"path": src}
-
-        def _elig(f):
-            return (f.get("kind") == "param" and str(f.get("path", "")).endswith(".xmp")
-                    and not f.get("has_local_mask"))
-        ex = mixing.StyleSampler.LOCAL_EXCLUDE_MAJORS
-        major, feats = self.sample(src, 1, exclude_majors=ex,
-                                   eligible=lambda f: _elig(f) and not self._is_farm(f))
-        if not feats:
-            major, feats = self.sample(src, 1, eligible=_elig, exclude_majors=ex)
-        return major, (feats[0] if feats else None)
-
-    def _is_farm(self, feat: dict) -> bool:
-        """preset 是否只能农场渲（mask/未覆盖键/exotic profile）；结果按 preset_id 缓存。"""
-        pid = feat.get("preset_id") or ""
-        hit = self._farm_cache.get(pid)
-        if hit is None:
-            try:
-                from gpu_render.route import route_preset
-                hit = route_preset(feat["path"], feat.get("fmt") or "xmp").get("route") == "farm"
-            except Exception:
-                hit = True
-            self._farm_cache[pid] = hit
-        return hit
+from .canonical_masks import MaskPlanError, build_mask_plan, pair_mask_slots
+from .canonical_qa import OneAlignScorer, rank_candidates
+from .config import DatabuildConfig, load_config, redact_text
+from .presets import CoverageSelector, PresetCatalog, PresetError
+from .projection import ProjectionResult, project_artifacts
+from .rendering import (
+    LocalGpuOnlyRenderer,
+    preprocess_source,
+    save_candidate_jpeg,
+    save_cgt_png,
+)
+from .responses import ResponsesAnnotator, preflight_openai_sdk
+from .sources import (
+    SourceInventoryResult,
+    SourceRecord,
+    allocate_sources,
+    build_inventory,
+    refresh_source_record,
+)
+from .state import ArtifactStore, StateError, file_digest, stable_id
+from .visibility import objective_edit_hints, visibility_metrics
 
 
-def process_source(sel: Selector, src: dict, render_n: int, render_workers: int = 6) -> dict:
-    """One source through the full pipeline. Returns the processed group (candidates + qa)."""
-    path = src["path"]
-    major, cands = sel.sample(src, render_n)
+class PipelineError(RuntimeError):
+    """The canonical lifecycle cannot make safe progress."""
 
-    def _r(f):
-        res = render.render_preset(f["path"], f["kind"], f.get("fmt"), path,
-                                   preset_id=f["preset_id"])
-        return (f, res["after_path"], res.get("engine")) if res.get("ok") else None
-    with ThreadPoolExecutor(max_workers=render_workers) as ex:
-        rendered = [x for x in ex.map(_r, cands) if x]
-    variants = [(f["preset_id"], ap) for f, ap, _ in rendered]
-    is_portrait = bool(src.get("is_portrait_pool"))
-    qres = qa.qa_rank(path, variants, is_portrait=is_portrait)
-    return {
-        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
-        "source_iaa": src.get("iaa_mixed"), "style_major": major,
-        "candidates": [{"preset_id": f["preset_id"], "kind": f["kind"], "fmt": f.get("fmt"),
-                        "preset_path": f["path"], "content_hash": f.get("preset_content_hash"),
-                        "after_path": ap, "engine": eng,
-                        "qa": qres["scores"].get(f["preset_id"])} for f, ap, eng in rendered],
+
+class Renderer(Protocol):
+    device: str
+
+    def bind_catalog(self, catalog: PresetCatalog) -> None: ...
+    def assert_ready(self) -> None: ...
+    def render(self, source: Any, preset: Any, mask: Any = None) -> Any: ...
+
+
+class Scorer(Protocol):
+    def score(self, path: str) -> float | None: ...
+
+
+class QueueDrainer(Protocol):
+    def drain(self, *, max_workers: int | None = None) -> dict[str, int]: ...
+
+
+@dataclass(slots=True)
+class PipelineDependencies:
+    inventory_loader: Callable[[DatabuildConfig], SourceInventoryResult]
+    catalog_loader: Callable[[DatabuildConfig], PresetCatalog]
+    renderer_factory: Callable[[DatabuildConfig], Renderer]
+    scorer_factory: Callable[[], Scorer]
+    sdk_preflight: Callable[[], None]
+    annotator_factory: Callable[[DatabuildConfig, ArtifactStore], QueueDrainer]
+    relabeler: Callable[[list[SourceRecord], DatabuildConfig, int], Mapping[str, str]]
+    projector: Callable[[ArtifactStore, Mapping[str, Any], DatabuildConfig], ProjectionResult]
+    now: Callable[[], datetime]
+
+
+def _default_relabeler(
+    sources: list[SourceRecord], config: DatabuildConfig, attempt: int
+) -> Mapping[str, str]:
+    from dataset_build.source_qa.sam3_subject_instances import relabel_sources
+
+    rows = [
+        {"asset_id": source.source_id, "source_path": str(source.source_path)}
+        for source in sources
+    ]
+    return relabel_sources(
+        rows,
+        cache_root=str(config.sources.subject_cache),
+        device="cuda:0",
+        seed=config.seed + attempt,
+        vlm_base_url=config.annotation.local.base_url,
+        vlm_api_key=config.annotation.local.api_key,
+        vlm_model=config.annotation.local.model,
+    )
+
+
+def default_dependencies() -> PipelineDependencies:
+    return PipelineDependencies(
+        inventory_loader=lambda config: build_inventory(
+            config.sources.subject_cache, config.sources.postgres_dsn
+        ),
+        catalog_loader=PresetCatalog.load,
+        renderer_factory=LocalGpuOnlyRenderer.create,
+        scorer_factory=lambda: OneAlignScorer.create("cuda:0"),
+        sdk_preflight=preflight_openai_sdk,
+        annotator_factory=lambda config, store: ResponsesAnnotator(config.annotation, store),
+        relabeler=_default_relabeler,
+        projector=lambda store, manifest, config: project_artifacts(
+            store, manifest, config.viewer.postgres_dsn
+        ),
+        now=lambda: datetime.now(timezone.utc),
+    )
+
+
+def _timestamp(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _add_manifest_self_artifact(manifest: dict[str, Any]) -> None:
+    """Record a verifiable scoped digest without claiming a self-referential hash."""
+    artifacts = manifest.setdefault("artifacts", {})
+    scoped_manifest = dict(manifest)
+    scoped_artifacts = dict(artifacts)
+    scoped_artifacts.pop("manifest.json", None)
+    scoped_manifest["artifacts"] = scoped_artifacts
+    canonical = json.dumps(
+        scoped_manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    entry = {
+        "sha256": hashlib.sha256(canonical).hexdigest(),
+        "hash_scope": "manifest excluding artifacts.manifest.json",
+        "records": 1,
+        "bytes": 0,
     }
+    artifacts["manifest.json"] = entry
+    for _ in range(8):
+        size = len((json.dumps(
+            manifest, ensure_ascii=False, sort_keys=True, indent=2
+        ) + "\n").encode("utf-8"))
+        if entry["bytes"] == size:
+            break
+        entry["bytes"] = size
 
 
-def process_source_local(sel: "Selector", src: dict, n_masks: int, cgt_dir: str) -> dict | None:
-    """LOCAL Route 1 (Mask v4): render one selected complete preset, then localize it
-    into the per-source plan (1 radial + 1 semantic + 2 band + 4 linear; bisect fills)."""
-    from . import subject_geom
-    path = src["path"]
-    major, base = sel.select_local_base(src)
-    if not base:
+def _load_existing_manifest(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
         return None
-    # Per-source RNG keeps the whole plan deterministic regardless of worker scheduling.
-    seed = int.from_bytes(hashlib.sha1(path.encode()).digest()[:4], "big")
-    plan = subject_geom.sample_plan(path, random.Random(seed), n=n_masks)
-    rendered = mask_synth.make_local_samples(path, base, plan, cgt_dir)
-    samples = [(plan[s["variant_index"]], s) for s in rendered]
-    variants = [(s["mask_unit_id"], s["after_path"]) for _, s in samples]
-    is_portrait = bool(src.get("is_portrait_pool"))
-    qres = qa.qa_rank(path, variants, is_portrait=is_portrait) if variants else {"scores": {}}
-    return {
-        "source": path, "source_asset_id": src.get("asset_id"), "is_portrait": is_portrait,
-        "source_iaa": src.get("iaa_mixed"), "local": True, "style_major": major,
-        "candidates": [mask_synth.local_candidate(base, g, s,
-                                                  qres["scores"].get(s["mask_unit_id"]))
-                       for g, s in samples],
-    }
-
-
-
-
-PERSIST_CHUNK = 25   # groups per incremental provenance write
-
-
-def _load_jsonl(path: str) -> list:
-    if not os.path.exists(path):
-        return []
-    out = []
-    for line in open(path):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            out.append(json.loads(line))
-        except ValueError:
-            continue   # torn tail line from a crash mid-write
-    return out
-
-
-def run(n: int, render_n: int, out_dir: str, src_workers: int = 12, local: bool = False,
-        route: str = "geom", persist: bool = True, resume: bool = True) -> dict:
-    """Lane-overlapped driver: src_workers sources in flight, each flowing
-    recall -> render -> QA -> tier. The per-lane global gates (LR farm admission in
-    lr_render, vLLM admission in qa) bound the real resources, so a wide in-flight
-    window keeps the LR farm rendering source N+1 while vLLM judges source N —
-    pipeline overlap without a queue framework. Output is STREAMED: each finished
-    group appends to groups/sft/dpo.jsonl immediately and provenance is persisted
-    every PERSIST_CHUNK groups, so a crash loses at most one chunk and a rerun
-    with resume=True skips already-done sources."""
-    os.makedirs(out_dir, exist_ok=True)
-    cgt_dir = os.path.join(out_dir, "cgt")
-    sel = Selector()   # both routes share taxonomy sampling (global: the group; local: the base preset)
-    # QA-IAA scorer 必须在 lanes 并发前单线程预热：ArtiMuse 加载用临时 sys.modules shim
-    # （iaa._temporary_artimuse_compat_modules），与其他线程的 import 竞争会把预处理链
-    # 换成 stub → 打分退化成 ~46-50 窄带常数（2026-07-06 生产事故，同文件独立进程重打
-    # 正常 55-69）。预热在单线程窗口完成加载即避开竞争。
-    from . import objscore
-    _scorer = objscore._runner()
-    if hasattr(_scorer, "load"):
-        _scorer.load()
-    route_label = (route if local else "global")
-    conn = db.connect()
-    run_id = db.start_run(conn, f"construct_{route_label}",
-                          {"n": n, "render_n": render_n, "out": out_dir, "local": local,
-                           "route": route_label}) if persist else None
-    conn.commit()
-    # Route 1 (geometric mask-only) applies to ANY photo; b_subject is for Route 2 (SAM3 semantic).
-    min_iaa = getattr(config, "CONSTRUCT_SOURCE_IAA_MIN", config.GATE["iaa_keep_above"])
-    # 源 iaa 上界（可选）：q=0.72·abs+0.28·rel 对高分源有天花板效应——iaa>65 的源
-    # preset 渲染普遍打不过它，SFT 产率 1.7→0.34/源（2026-07-06 实测）。中带源既保质量
-    # 又有提升空间。CONSTRUCT_SOURCE_IAA_MAX 不设则不启用。
-    max_iaa = os.environ.get("CONSTRUCT_SOURCE_IAA_MAX", "")
-    extra = f"iaa_mixed < {float(max_iaa)}" if max_iaa else ""
-    # 场景分层抽样（PARA 启发配额，见 mixing）；超取 2n 抗 resume/缺文件损耗
-    rows = [dict(r) for r in mixing.stratified_sources(conn, total=2 * n, min_iaa=min_iaa,
-                                                       extra_where=extra)]
-    conn.close()
-    rows = [r for r in rows if os.path.exists(r["path"])]
-    random.Random(0).shuffle(rows)
-    srcs = rows[:n]
-
-    # Resume: prior streamed output in this out_dir defines what is already done.
-    # ponytail: groups/sft/dpo stay in RAM for the final summary, same as before —
-    # at ~100k sources stream the summary instead.
-    groups = _load_jsonl(os.path.join(out_dir, "groups.jsonl")) if resume else []
-    sft = _load_jsonl(os.path.join(out_dir, "sft.jsonl")) if resume else []
-    dpo = _load_jsonl(os.path.join(out_dir, "dpo.jsonl")) if resume else []
-    done_srcs = {g["source"] for g in groups}
-    todo = [s for s in srcs if s["path"] not in done_srcs]
-    if done_srcs:
-        print(f"[resume] {len(done_srcs)} sources already in {out_dir}; {len(todo)} to go")
-
-    mode = "a" if resume else "w"
-    gf = open(os.path.join(out_dir, "groups.jsonl"), mode)
-    sf = open(os.path.join(out_dir, "sft.jsonl"), mode)
-    df = open(os.path.join(out_dir, "dpo.jsonl"), mode)
-    fail_f = open(os.path.join(out_dir, "failures.jsonl"), "a")
-    fail_lock = threading.Lock()
-
-    def _proc(s):
-        if not local:
-            return _safe(process_source, sel, s, render_n, fail_f=fail_f, fail_lock=fail_lock)
-        return _safe(process_source_local, sel, s, render_n, cgt_dir,
-                     fail_f=fail_f, fail_lock=fail_lock)
-
-    pend_g, pend_s, pend_d = [], [], []   # provenance chunk buffers
-    ptotals: dict = {}
-
-    def _flush_provenance():
-        nonlocal pend_g, pend_s, pend_d
-        if not (persist and run_id is not None and pend_g):
-            return
-        from . import provenance
-        st = provenance.persist_run(run_id, pend_g, pend_s, pend_d, route_label)
-        for k, v in st.items():
-            if isinstance(v, (int, float)):
-                ptotals[k] = ptotals.get(k, 0) + v
-        pend_g, pend_s, pend_d = [], [], []
-
-    n_done = len(done_srcs)
-    with ThreadPoolExecutor(max_workers=src_workers) as ex:
-        futs = [ex.submit(_proc, s) for s in todo]
-        for fut in as_completed(futs):
-            g = fut.result()   # _safe never raises
-            if not g:
-                continue
-            try:
-                s, d = tier.build(g)
-            except Exception as e:  # noqa: BLE001 - tier error must not lose the rendered group
-                print(f"[tier-skip] {os.path.basename(g['source'])}: {type(e).__name__}: {str(e)[:100]}")
-                s, d = [], []
-            groups.append(g); sft.extend(s); dpo.extend(d)
-            gf.write(json.dumps(g, ensure_ascii=False) + "\n"); gf.flush()
-            for r in s:
-                sf.write(json.dumps(r, ensure_ascii=False) + "\n")
-            for r in d:
-                df.write(json.dumps(r, ensure_ascii=False) + "\n")
-            sf.flush(); df.flush()
-            pend_g.append(g); pend_s.extend(s); pend_d.extend(d)
-            if len(pend_g) >= PERSIST_CHUNK:
-                _flush_provenance()
-            n_done += 1
-            print(f"[{n_done}/{len(srcs)}] {os.path.basename(g['source'])[:30]:30s} "
-                  f"cands={len(g['candidates'])} sft={len(s)} dpo_pairs={len(d)}")
-    _flush_provenance()
-    for fh in (gf, sf, df, fail_f):
-        fh.close()
-    summary = tier.summarize(groups, sft, dpo)
-    if persist and run_id is not None:
-        c2 = db.connect(); db.finish_run(c2, run_id, ptotals); c2.commit(); c2.close()
-        summary["postgres"] = {"run_id": run_id, **ptotals}
-    print("\n=== R4 SUMMARY ===\n" + json.dumps(summary, ensure_ascii=False, indent=1))
-    json.dump(summary, open(os.path.join(out_dir, "r4_summary.json"), "w"), ensure_ascii=False, indent=1)
-    return summary
-
-
-def _safe(fn, *args, fail_f=None, fail_lock=None):
-    src = args[1]   # both process_source(sel, src, ...) and process_source_local(sel, src, ...)
     try:
-        return fn(*args)
-    except Exception as e:  # noqa: BLE001 - one bad source must not kill the run
-        print(f"[skip] {os.path.basename(src['path'])}: {type(e).__name__}: {str(e)[:120]}")
-        if fail_f is not None:
-            rec = json.dumps({"source": src["path"], "stage": fn.__name__,
-                              "error": f"{type(e).__name__}: {str(e)[:200]}"}, ensure_ascii=False)
-            with (fail_lock or threading.Lock()):
-                fail_f.write(rec + "\n"); fail_f.flush()
-        return None
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise StateError(f"cannot resume invalid manifest: {path}") from exc
+    if not isinstance(value, dict):
+        raise StateError("manifest must be a JSON object")
+    return value
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    sub = ap.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("run")
-    r.add_argument("--n", type=int, default=100)
-    r.add_argument("--render-n", type=int, default=8)
-    r.add_argument("--out", default="/home/bc/data/datasets/vera_directionA_1M/r4_pilot")
-    r.add_argument("--local", action="store_true", help="local mask pipeline (Mask v2)")
-    r.add_argument("--route", choices=["geom"], default="geom",
-                   help="local 只保留 Route1（sam3 区域×LUT 的 Route2 已删除，2026-07-13）")
-    r.add_argument("--no-db", action="store_true", help="skip Postgres provenance (dry test)")
-    r.add_argument("--src-workers", type=int, default=12,
-                   help="sources in flight (lane overlap window; real resources are "
-                        "bounded by the LR farm + vLLM admission gates)")
-    r.add_argument("--fresh", action="store_true",
-                   help="overwrite out_dir output instead of resuming from it")
-    a = ap.parse_args()
-    if a.cmd == "run":
-        run(a.n, a.render_n, a.out, src_workers=a.src_workers, local=a.local,
-            route=a.route, persist=not a.no_db, resume=not a.fresh)
+class CanonicalPipeline:
+    def __init__(
+        self,
+        config: DatabuildConfig,
+        dependencies: PipelineDependencies,
+        inventory: SourceInventoryResult,
+        catalog: PresetCatalog,
+        renderer: Renderer,
+        scorer: Scorer,
+        store: ArtifactStore,
+        existing_manifest: Mapping[str, Any] | None,
+    ) -> None:
+        self.config = config
+        self.dependencies = dependencies
+        self.inventory = inventory
+        self.catalog = catalog
+        self.renderer: Renderer | None = renderer
+        self.scorer: Scorer | None = scorer
+        self.store = store
+        self.started_at = str(
+            (existing_manifest or {}).get("started_at")
+            or _timestamp(self.dependencies.now())
+        )
+        self.allocation = allocate_sources(
+            inventory.eligible,
+            build_id=config.build_id,
+            seed=config.seed,
+            target_groups=config.target_groups,
+            mix=config.mix,
+        )
+        historical = tuple(store.groups.values())
+        self.selectors = {
+            "local": CoverageSelector(
+                catalog,
+                build_id=config.build_id,
+                seed=config.seed,
+                render_mode="local",
+                preset_filter=config.preset_filter,
+                historical_groups=historical,
+            ) if self.allocation.local_target else None,
+            "global": CoverageSelector(
+                catalog,
+                build_id=config.build_id,
+                seed=config.seed,
+                render_mode="global",
+                preset_filter=config.preset_filter,
+                historical_groups=historical,
+            ) if self.allocation.global_target else None,
+        }
+
+    def _failure(
+        self,
+        *,
+        event_type: str,
+        stage: str,
+        task_id: str,
+        error_code: str,
+        message: object,
+        retryable: bool,
+        terminal: bool,
+        source: SourceRecord | None = None,
+        group_id: str | None = None,
+        candidate_id: str | None = None,
+        round_number: int | None = None,
+        attempt: int | None = None,
+        endpoint_id: str | None = None,
+        durable: bool = False,
+    ) -> bool:
+        source_id = source.source_id if source is not None else None
+        event_id = stable_id(
+            "failure", self.config.build_id, event_type, stage, task_id, error_code,
+            round_number, attempt, group_id, candidate_id, endpoint_id,
+        )
+        return self.store.append_failure({
+            "build_id": self.config.build_id,
+            "event_id": event_id,
+            "event_type": event_type,
+            "stage": stage,
+            "task_id": task_id,
+            "source_id": source_id,
+            "source_path": str(source.source_path) if source is not None else None,
+            "group_id": group_id,
+            "candidate_id": candidate_id,
+            "round": round_number,
+            "attempt": attempt,
+            "retryable": retryable,
+            "error_code": error_code,
+            "message": redact_text(message, self.config.secrets),
+            "endpoint_id": endpoint_id,
+            "terminal": terminal,
+            "timestamp": _timestamp(self.dependencies.now()),
+        }, durable=durable)
+
+    def _mode_groups(self, mode: str) -> list[dict[str, Any]]:
+        return [
+            row for row in self.store.groups.values()
+            if row.get("render_mode") == mode
+        ]
+
+    def _terminal_source_ids(self) -> set[str]:
+        return {
+            str(row["source_id"])
+            for row in self.store.failures
+            if row.get("terminal") and row.get("source_id")
+            and row.get("stage") in {"rendering", "sam3_relabel"}
+        }
+
+    def _pending_sam3_ids(self) -> set[str]:
+        queued = {
+            str(row["source_id"])
+            for row in self.store.failures
+            if row.get("error_code") == "sam3_relabel_queued" and row.get("source_id")
+        }
+        return queued.difference(self.store.completed_sources()).difference(
+            self._terminal_source_ids()
+        )
+
+    def _sam3_attempts(self, source_id: str) -> int:
+        return sum(
+            1 for row in self.store.failures
+            if row.get("source_id") == source_id
+            and row.get("stage") == "sam3_relabel"
+            and row.get("event_type") == "sam3_attempt"
+        )
+
+    def _unconsumed_sam3_ready(self, source_id: str) -> bool:
+        ready = [
+            int(row.get("attempt") or 0) for row in self.store.failures
+            if row.get("source_id") == source_id and row.get("event_type") == "sam3_ready"
+        ]
+        invalid = [
+            int(row.get("attempt") or 0) for row in self.store.failures
+            if row.get("source_id") == source_id
+            and row.get("event_type") == "sam3_ready_invalid"
+        ]
+        return bool(ready) and max(ready) > max(invalid or [0])
+
+    def _manifest(self, phase: str, status: str = "running") -> dict[str, Any]:
+        local_groups = self._mode_groups("local")
+        global_groups = self._mode_groups("global")
+        candidates = [
+            candidate
+            for group in self.store.groups.values()
+            for candidate in group.get("candidates") or []
+        ]
+        terminal_failures = [row for row in self.store.failures if row.get("terminal")]
+        annotation_failures = [
+            row for row in terminal_failures if row.get("stage") == "annotation"
+        ]
+        preset_formats: dict[str, int] = {}
+        preset_majors: dict[str, int] = {}
+        preset_minors: dict[str, int] = {}
+        for candidate in candidates:
+            for target, key in (
+                (preset_formats, "format"), (preset_majors, "major"),
+                (preset_minors, "minor"),
+            ):
+                value = str(candidate.get(key) or "unknown")
+                target[value] = target.get(value, 0) + 1
+        completed = len(local_groups) + len(global_groups)
+        local_initial = {row.source_id for row in self.allocation.local[:self.allocation.local_target]}
+        global_initial = {
+            row.source_id for row in self.allocation.global_[:self.allocation.global_target]
+        }
+        replacement_used = {
+            "local": sum(group.get("source_id") not in local_initial for group in local_groups),
+            "global": sum(group.get("source_id") not in global_initial for group in global_groups),
+        }
+        sam3_expected_ids = {
+            str(row["source_id"])
+            for row in self.store.failures
+            if row.get("error_code") == "sam3_relabel_queued" and row.get("source_id")
+        }
+        sam3_completed_ids = {
+            source_id for source_id in sam3_expected_ids
+            if self._unconsumed_sam3_ready(source_id)
+        }
+        candidate_failures: dict[str, int] = {}
+        for row in self.store.failures:
+            if row.get("stage") == "rendering" and row.get("event_type") == "attempt":
+                code = str(row.get("error_code") or "unknown")
+                candidate_failures[code] = candidate_failures.get(code, 0) + 1
+        ratio = {
+            "local": len(local_groups) / completed if completed else 0.0,
+            "global": len(global_groups) / completed if completed else 0.0,
+        }
+        return {
+            "schema_version": self.config.schema_version,
+            "build_id": self.config.build_id,
+            "phase": phase,
+            "status": status,
+            "started_at": self.started_at,
+            "updated_at": _timestamp(self.dependencies.now()),
+            "effective_config": self.config.sanitized_dict(),
+            "targets": {
+                "groups": self.config.target_groups,
+                "local": self.allocation.local_target,
+                "global": self.allocation.global_target,
+            },
+            "completed": {
+                "groups": completed,
+                "local": len(local_groups),
+                "global": len(global_groups),
+                "actual_ratio": ratio,
+                "candidates": len(candidates),
+                "winner_top1": sum(bool(row.get("winner_ids")) for row in self.store.groups.values()),
+                "winner_top2": sum(len(row.get("winner_ids") or []) >= 2
+                                   for row in self.store.groups.values()),
+                "sft": len(self.store.sft),
+            },
+            "sources": {
+                "inventory": self.inventory.counts,
+                "scene_metadata_status": self.inventory.scene_metadata_status,
+                "eligible": len(self.inventory.eligible),
+                "replacement_capacity": {
+                    "local": max(0, len(self.allocation.local) - self.allocation.local_target),
+                    "global": max(0, len(self.allocation.global_) - self.allocation.global_target),
+                },
+                "replacement_used": replacement_used,
+                "exhaustion": {
+                    "local_shortfall": max(0, self.allocation.local_target - len(local_groups)),
+                    "global_shortfall": max(0, self.allocation.global_target - len(global_groups)),
+                },
+                "terminal": len(self._terminal_source_ids()),
+            },
+            "presets": {
+                "inventory": {
+                    "local": self.catalog.inventory_counts("local"),
+                    "global": self.catalog.inventory_counts("global"),
+                },
+                "usage": {
+                    "format": dict(sorted(preset_formats.items())),
+                    "major": dict(sorted(preset_majors.items())),
+                    "minor": dict(sorted(preset_minors.items())),
+                    "selector": {
+                        mode: selector.snapshot() if selector is not None else None
+                        for mode, selector in self.selectors.items()
+                    },
+                    "candidate_failure_reasons": dict(sorted(candidate_failures.items())),
+                },
+            },
+            "sam3_relabel": {
+                "expected": len(sam3_expected_ids),
+                "completed": len(sam3_completed_ids),
+                "pending": len(self._pending_sam3_ids()),
+                "attempt_events": sum(
+                    row.get("event_type") == "sam3_attempt" for row in self.store.failures
+                ),
+                "terminal": sum(
+                    row.get("stage") == "sam3_relabel" and row.get("terminal")
+                    for row in self.store.failures
+                ),
+            },
+            "annotation": {
+                "pending": len(self.store.pending_annotation_tasks()),
+                "terminal_failures": len(annotation_failures),
+                "backends": self._annotation_counts(),
+            },
+            "failures": {
+                "events": len(self.store.failures),
+                "terminal": len(terminal_failures),
+                "by_code": self._failure_counts(),
+            },
+        }
+
+    def _failure_counts(self) -> dict[str, int]:
+        result: dict[str, int] = {}
+        for row in self.store.failures:
+            code = str(row.get("error_code") or "unknown")
+            result[code] = result.get(code, 0) + 1
+        return dict(sorted(result.items()))
+
+    def _annotation_counts(self) -> dict[str, Any]:
+        sources: dict[str, int] = {}
+        models: dict[str, int] = {}
+        usage: dict[str, int] = {}
+        for row in self.store.sft.values():
+            source = str(row.get("annot_src") or "unknown")
+            sources[source] = sources.get(source, 0) + 1
+            meta = (row.get("qa") or {}).get("annotation") or {}
+            model = str(meta.get("returned_model") or "unknown")
+            models[model] = models.get(model, 0) + 1
+            for key, value in (meta.get("usage") or {}).items():
+                if isinstance(value, int):
+                    usage[key] = usage.get(key, 0) + value
+        return {
+            "sources": dict(sorted(sources.items())),
+            "models": dict(sorted(models.items())),
+            "usage": dict(sorted(usage.items())),
+        }
+
+    def _write_phase(self, phase: str) -> None:
+        self.store.write_manifest(self._manifest(phase))
+        self.store.checkpoint()
+
+    def _queue_sam3(self, source: SourceRecord, error: MaskPlanError) -> None:
+        task_id = stable_id("sam3", self.config.build_id, source.source_id)
+        self._failure(
+            event_type="queued",
+            stage="sam3_relabel",
+            task_id=task_id,
+            error_code="sam3_relabel_queued",
+            message=f"{error.code}: {error}",
+            retryable=True,
+            terminal=False,
+            source=source,
+            durable=True,
+        )
+
+    def _terminal_source(
+        self, source: SourceRecord, stage: str, code: str, message: object
+    ) -> None:
+        self._failure(
+            event_type="terminal",
+            stage=stage,
+            task_id=stable_id(stage, self.config.build_id, source.source_id),
+            error_code=code,
+            message=message,
+            retryable=False,
+            terminal=True,
+            source=source,
+            durable=True,
+        )
+
+    def _render_source(
+        self,
+        source: SourceRecord,
+        mode: str,
+        *,
+        queue_mask_failure: bool = True,
+    ) -> str:
+        if self.renderer is None or self.scorer is None:
+            raise PipelineError("render/QA resources are not loaded")
+        selector = self.selectors[mode]
+        if selector is None:
+            raise PipelineError(f"missing {mode} selector")
+        try:
+            prepared = preprocess_source(source.source_path, self.config.render.short_edge)
+        except Exception as exc:  # noqa: BLE001 - a corrupt source is replaced in its mode
+            self._terminal_source(source, "rendering", "source_preprocess_failed", exc)
+            return "terminal"
+
+        slots: list[Any]
+        if mode == "local":
+            try:
+                plan = build_mask_plan(
+                    source,
+                    build_id=self.config.build_id,
+                    seed=self.config.seed,
+                    width=prepared.width,
+                    height=prepared.height,
+                    linear_target=self.config.masks.linear_target_alpha_mass,
+                )
+                slots = list(pair_mask_slots(
+                    plan,
+                    build_id=self.config.build_id,
+                    seed=self.config.seed,
+                    source_id=source.source_id,
+                ))
+            except MaskPlanError as exc:
+                if queue_mask_failure:
+                    self._queue_sam3(source, exc)
+                    return "sam3_queued"
+                return f"mask_failed:{exc.code}:{exc}"
+        else:
+            slots = [f"global-{index}" for index in range(8)]
+
+        excluded_majors: list[str] = []
+        for group_attempt in range(len(selector.majors)):
+            group_id = stable_id(
+                "group", self.config.build_id, source.source_id, mode, group_attempt
+            )
+            reservation = None
+            group_persisted = False
+            try:
+                reservation = selector.begin_group(
+                    source.source_id, group_attempt, exclude_majors=excluded_majors
+                )
+                candidates: list[dict[str, Any]] = []
+                exhausted = False
+                for slot_index, slot in enumerate(slots):
+                    slot_id = slot.slot_id if mode == "local" else str(slot)
+                    while True:
+                        preset_reservation = reservation.reserve_candidate(slot_id)
+                        if preset_reservation is None:
+                            exhausted = True
+                            break
+                        preset = preset_reservation.link.preset
+                        attempt_task_id = stable_id(
+                            "render-attempt", group_id, slot_id,
+                            preset_reservation.attempt, preset.preset_id,
+                        )
+                        mask = slot.mask if mode == "local" else None
+                        try:
+                            rendered = self.renderer.render(prepared, preset, mask)
+                            metrics = visibility_metrics(
+                                prepared.pixels,
+                                rendered.pixels,
+                                weight=mask.effective_alpha if mask is not None else None,
+                                short_edge=self.config.render.diff_short_edge,
+                                visible_de_min=self.config.render.visible_de_min,
+                                visible_fraction_de=self.config.render.visible_fraction_de,
+                                visible_fraction_min=self.config.render.visible_fraction_min,
+                            )
+                            if not metrics.accepted:
+                                raise PipelineError(
+                                    "visibility gate rejected candidate "
+                                    f"(de={metrics.visible_de:.6f}, "
+                                    f"fraction={metrics.visible_fraction:.6f})"
+                                )
+                            candidate_id = stable_id("candidate", group_id, slot_id)
+                            after_path = self.store.assets_root / "candidates" / f"{candidate_id}.jpg"
+                            save_candidate_jpeg(
+                                rendered.pixels, after_path,
+                                quality=self.config.render.jpeg_quality,
+                            )
+                            cgt_path: Path | None = None
+                            if mask is not None:
+                                cgt_path = self.store.assets_root / "masks" / f"{mask.mask_id}.png"
+                                save_cgt_png(mask, cgt_path)
+                            hints = objective_edit_hints(
+                                prepared.pixels,
+                                rendered.pixels,
+                                weight=mask.effective_alpha if mask is not None else None,
+                            )
+                            recipe = {
+                                "preset_id": preset.preset_id,
+                                "preset_path": str(preset.path),
+                                "format": preset.format,
+                                "render_engine": rendered.engine,
+                                "render_mode": mode,
+                            }
+                            candidate: dict[str, Any] = {
+                                "candidate_id": candidate_id,
+                                "slot_id": slot_id,
+                                "slot_index": slot_index,
+                                "preset_id": preset.preset_id,
+                                "preset_path": str(preset.path),
+                                "format": preset.format,
+                                "kind": preset.kind,
+                                "style_name": preset.style_name,
+                                "major": preset_reservation.link.major,
+                                "minor": preset_reservation.link.minor,
+                                "after_path": str(after_path),
+                                "render_engine": rendered.engine,
+                                "render_diagnostics": rendered.diagnostics,
+                                "visibility": {
+                                    "visible_de": round(metrics.visible_de, 6),
+                                    "visible_fraction": round(metrics.visible_fraction, 6),
+                                    "accepted": True,
+                                },
+                                "objective_hints": hints,
+                                "attempt_lineage": {
+                                    "group_attempt": group_attempt,
+                                    "preset_attempt": preset_reservation.attempt,
+                                    "preset_reservation_id": preset_reservation.reservation_id,
+                                },
+                                "recipe": recipe,
+                            }
+                            if mask is not None:
+                                recipe.update({"mask_id": mask.mask_id, "amount": mask.amount})
+                                candidate.update({
+                                    "slot_mode": slot.mode,
+                                    "mode_index": slot.mode_index,
+                                    "pairing_index": slot.pairing_index,
+                                    "mask_id": mask.mask_id,
+                                    "cgt_path": str(cgt_path),
+                                    "subject": source.subject,
+                                    "region": mask.region,
+                                    "geometry": mask.geometry,
+                                    "raw_alpha_mean": round(mask.raw_alpha_mean, 8),
+                                    "amount": round(mask.amount, 8),
+                                    "effective_alpha_mean": round(mask.effective_alpha_mean, 8),
+                                })
+                            reservation.accept(preset_reservation)
+                            candidates.append(candidate)
+                            break
+                        except Exception as exc:  # noqa: BLE001 - refill this exact slot
+                            code = getattr(exc, "code", None) or (
+                                "visibility_rejected"
+                                if isinstance(exc, PipelineError) else "candidate_render_failed"
+                            )
+                            self._failure(
+                                event_type="attempt",
+                                stage="rendering",
+                                task_id=attempt_task_id,
+                                error_code=str(code),
+                                message=exc,
+                                retryable=True,
+                                terminal=False,
+                                source=source,
+                                group_id=group_id,
+                                round_number=group_attempt,
+                                attempt=preset_reservation.attempt,
+                            )
+                            reservation.reject(preset_reservation)
+                    if exhausted:
+                        break
+                if exhausted or len(candidates) != 8:
+                    raise PresetError("major could not yield eight visible candidates")
+                ranked = rank_candidates(str(source.source_path), candidates, self.scorer)
+                coverage = {
+                    "major": reservation.major,
+                    "coverage_cycle": reservation.coverage_cycle,
+                    "coverage_position": reservation.coverage_position,
+                    "reservation_id": reservation.reservation_id,
+                }
+                completed_at = _timestamp(self.dependencies.now())
+                by_id = {row["candidate_id"]: row for row in ranked.candidates}
+                group = {
+                    "schema_version": 1,
+                    "build_id": self.config.build_id,
+                    "group_id": group_id,
+                    "source_id": source.source_id,
+                    "source_path": str(source.source_path),
+                    "scene": source.scene,
+                    "subject": source.subject,
+                    "render_mode": mode,
+                    "preset_filter": self.config.preset_filter,
+                    "group_attempt": group_attempt,
+                    **coverage,
+                    "candidates": list(ranked.candidates),
+                    "winner_ids": list(ranked.winner_ids),
+                    "winner_ranks": [by_id[candidate_id]["rank"]
+                                     for candidate_id in ranked.winner_ids],
+                    "source_onealign": ranked.source_score,
+                    "stage_timestamps": {
+                        "render_completed_at": completed_at,
+                        "qa_completed_at": completed_at,
+                    },
+                }
+                if not self.store.append_group(group):
+                    raise StateError(f"unexpected existing group during render: {group_id}")
+                self.store.checkpoint()
+                group_persisted = True
+                committed = reservation.commit()
+                if committed != coverage:
+                    raise StateError("coverage commit metadata changed after durable group append")
+                return "completed"
+            except Exception as exc:  # noqa: BLE001 - restart group in another major
+                if group_persisted:
+                    raise PipelineError(
+                        f"durable group {group_id} could not commit in-memory coverage"
+                    ) from exc
+                major = reservation.major if reservation is not None else "unknown"
+                if reservation is not None:
+                    reservation.abandon()
+                excluded_majors.append(major)
+                self._failure(
+                    event_type="group_attempt",
+                    stage="rendering",
+                    task_id=stable_id("render-group", group_id),
+                    error_code="major_exhausted",
+                    message=f"{major}: {type(exc).__name__}: {exc}",
+                    retryable=True,
+                    terminal=False,
+                    source=source,
+                    group_id=group_id,
+                    round_number=group_attempt,
+                    attempt=group_attempt + 1,
+                )
+        self._terminal_source(
+            source, "rendering", "preset_inventory_exhausted",
+            f"no taxonomy major yielded eight accepted {mode} candidates",
+        )
+        return "terminal"
+
+    def _fill_initial_mode(self, mode: str, sources: tuple[SourceRecord, ...], target: int) -> None:
+        terminal = self._terminal_source_ids()
+        pending = self._pending_sam3_ids() if mode == "local" else set()
+        for source in sources:
+            completed = len(self._mode_groups(mode))
+            reserved = len(pending) if mode == "local" else 0
+            if completed + reserved >= target:
+                break
+            if source.source_id in self.store.completed_sources() \
+                    or source.source_id in terminal or source.source_id in pending:
+                continue
+            result = self._render_source(source, mode)
+            if result == "sam3_queued":
+                pending.add(source.source_id)
+            elif result == "terminal":
+                terminal.add(source.source_id)
+
+    def _release_heavy_resources(self) -> None:
+        self.renderer = None
+        self.scorer = None
+        gc.collect()
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+    def _restore_heavy_resources(self) -> None:
+        renderer = self.dependencies.renderer_factory(self.config)
+        renderer.bind_catalog(self.catalog)
+        renderer.assert_ready()
+        self.renderer = renderer
+        self.scorer = self.dependencies.scorer_factory()
+
+    def _record_sam3_attempt(
+        self,
+        source: SourceRecord,
+        attempt: int,
+        code: str,
+        message: object,
+        *,
+        event_type: str = "sam3_attempt",
+    ) -> None:
+        self._failure(
+            event_type=event_type,
+            stage="sam3_relabel",
+            task_id=stable_id("sam3", self.config.build_id, source.source_id),
+            error_code=code,
+            message=message,
+            retryable=True,
+            terminal=False,
+            source=source,
+            round_number=attempt,
+            attempt=attempt,
+            durable=True,
+        )
+
+    def _terminal_sam3(self, source: SourceRecord, message: object) -> None:
+        self._terminal_source(source, "sam3_relabel", "sam3_relabel_failed", message)
+
+    def _try_ready_relabel(self, source: SourceRecord, attempt: int) -> str:
+        refreshed, reason = refresh_source_record(source)
+        if refreshed is None:
+            self._record_sam3_attempt(
+                source, attempt, "sam3_integrity_failed", reason,
+                event_type="sam3_ready_invalid",
+            )
+            return "retry"
+        result = self._render_source(refreshed, "local", queue_mask_failure=False)
+        if result == "completed":
+            return "completed"
+        if result.startswith("mask_failed:"):
+            self._record_sam3_attempt(
+                source, attempt, "sam3_geometry_failed", result,
+                event_type="sam3_ready_invalid",
+            )
+            return "retry"
+        return "terminal"
+
+    def _drain_sam3_and_replacements(self) -> None:
+        by_id = {source.source_id: source for source in self.allocation.local}
+        target = self.allocation.local_target
+        max_attempts = self.config.masks.sam3_relabel_attempts
+        while len(self._mode_groups("local")) < target:
+            pending_ids = self._pending_sam3_ids()
+            pending = [by_id[source_id] for source_id in sorted(pending_ids) if source_id in by_id]
+
+            made_progress = False
+            for source in list(pending):
+                if not self._unconsumed_sam3_ready(source.source_id):
+                    continue
+                attempt = self._sam3_attempts(source.source_id)
+                status = self._try_ready_relabel(source, attempt)
+                made_progress = True
+                if status == "retry" and attempt >= max_attempts:
+                    self._terminal_sam3(source, "ready relabel still violates canonical geometry")
+
+            pending_ids = self._pending_sam3_ids()
+            pending = [by_id[source_id] for source_id in sorted(pending_ids) if source_id in by_id]
+            exhausted = [
+                source for source in pending
+                if self._sam3_attempts(source.source_id) >= max_attempts
+                and not self._unconsumed_sam3_ready(source.source_id)
+            ]
+            for source in exhausted:
+                self._terminal_sam3(source, "SAM3 relabel attempt budget exhausted")
+                made_progress = True
+
+            pending_ids = self._pending_sam3_ids()
+            pending = [by_id[source_id] for source_id in sorted(pending_ids) if source_id in by_id]
+            candidates = [
+                source for source in pending
+                if self._sam3_attempts(source.source_id) < max_attempts
+                and not self._unconsumed_sam3_ready(source.source_id)
+            ]
+            if candidates:
+                next_attempt = min(self._sam3_attempts(row.source_id) + 1 for row in candidates)
+                batch = [
+                    row for row in candidates
+                    if self._sam3_attempts(row.source_id) + 1 == next_attempt
+                ]
+                self._release_heavy_resources()
+                try:
+                    try:
+                        statuses = self.dependencies.relabeler(batch, self.config, next_attempt)
+                    except Exception as exc:  # noqa: BLE001 - each source consumes one bounded attempt
+                        statuses = {source.source_id: f"relabel_exception:{type(exc).__name__}:{exc}"
+                                    for source in batch}
+                finally:
+                    self._restore_heavy_resources()
+                for source in batch:
+                    status = str(statuses.get(source.source_id) or "missing_relabel_status")
+                    self._record_sam3_attempt(
+                        source, next_attempt, f"sam3_{status}", status
+                    )
+                    refreshed, reason = refresh_source_record(source)
+                    if refreshed is None:
+                        if next_attempt >= max_attempts:
+                            self._terminal_sam3(source, f"{status}; integrity={reason}")
+                        continue
+                    self._record_sam3_attempt(
+                        source, next_attempt, "sam3_relabel_ready", status,
+                        event_type="sam3_ready",
+                    )
+                    result = self._try_ready_relabel(source, next_attempt)
+                    if result == "retry" and next_attempt >= max_attempts:
+                        self._terminal_sam3(source, "relabel cannot satisfy canonical geometry")
+                made_progress = True
+
+            pending_count = len(self._pending_sam3_ids())
+            before = len(self._mode_groups("local"))
+            if before + pending_count < target:
+                self._fill_initial_mode("local", self.allocation.local, target)
+                made_progress = made_progress or len(self._mode_groups("local")) > before \
+                    or len(self._pending_sam3_ids()) > pending_count
+            if not made_progress:
+                break
+
+        if self._pending_sam3_ids():
+            raise PipelineError("SAM3 relabel queue remains unresolved")
+
+    def _record_shortfalls(self) -> None:
+        for mode, target in (
+            ("local", self.allocation.local_target),
+            ("global", self.allocation.global_target),
+        ):
+            completed = len(self._mode_groups(mode))
+            if completed >= target:
+                continue
+            task_id = stable_id("target", self.config.build_id, mode)
+            self._failure(
+                event_type="terminal",
+                stage="rendering",
+                task_id=task_id,
+                error_code=f"{mode}_target_shortfall",
+                message=f"requested {target} {mode} groups, completed {completed}",
+                retryable=False,
+                terminal=True,
+                durable=True,
+            )
+
+    def execute(self) -> dict[str, Any]:
+        self._write_phase("preflight")
+        self._write_phase("rendering")
+        self._fill_initial_mode(
+            "global", self.allocation.global_, self.allocation.global_target
+        )
+        self._fill_initial_mode(
+            "local", self.allocation.local, self.allocation.local_target
+        )
+
+        self._write_phase("sam3_relabel")
+        self._drain_sam3_and_replacements()
+        self._record_shortfalls()
+
+        self._release_heavy_resources()
+        self._write_phase("annotation")
+        annotation = self.dependencies.annotator_factory(self.config, self.store).drain()
+        if annotation.get("pending") or self.store.pending_annotation_tasks():
+            self._write_phase("annotation")
+            raise PipelineError("annotation queue remains unresolved")
+
+        self._write_phase("projection")
+        terminal = any(row.get("terminal") for row in self.store.failures)
+        final_status = "complete_with_failures" if terminal else "complete"
+        final_manifest = self._manifest(final_status, final_status)
+        final_manifest["ended_at"] = _timestamp(self.dependencies.now())
+        projection = self.dependencies.projector(self.store, final_manifest, self.config)
+        final_manifest["projection"] = dataclasses.asdict(projection)
+        self.store.checkpoint()
+        final_manifest["artifacts"] = {
+            path.name: file_digest(path)
+            for path in (self.store.groups_path, self.store.sft_path, self.store.failures_path)
+            if path.exists()
+        }
+        _add_manifest_self_artifact(final_manifest)
+        self.store.write_manifest(final_manifest)
+        self.store.checkpoint()
+        return final_manifest
+
+
+def run(
+    config: DatabuildConfig,
+    *,
+    dependencies: PipelineDependencies | None = None,
+) -> dict[str, Any]:
+    """Preflight fully, then run or resume one canonical build."""
+    dependencies = dependencies or default_dependencies()
+    existing = _load_existing_manifest(config.output_root / "manifest.json")
+    if existing is not None:
+        if existing.get("build_id") != config.build_id:
+            raise StateError("output_root belongs to a different build_id")
+        old_config = existing.get("effective_config")
+        if old_config is not None and old_config != config.sanitized_dict():
+            raise StateError("resume config differs from the durable manifest")
+
+    # No authoritative artifact is opened until every startup dependency passes.
+    dependencies.sdk_preflight()
+    catalog = dependencies.catalog_loader(config)
+    inventory = dependencies.inventory_loader(config)
+    renderer = dependencies.renderer_factory(config)
+    renderer.bind_catalog(catalog)
+    renderer.assert_ready()
+    scorer = dependencies.scorer_factory()
+
+    with ArtifactStore(config.output_root, config.build_id) as store:
+        pipeline = CanonicalPipeline(
+            config, dependencies, inventory, catalog, renderer, scorer, store, existing
+        )
+        return pipeline.execute()
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m construct.agent",
+        description="Canonical GPU-only SFT databuild",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    run_parser = subparsers.add_parser("run")
+    run_parser.add_argument("--config", required=True)
+    args = parser.parse_args(argv)
+
+    config: DatabuildConfig | None = None
+    try:
+        config = load_config(args.config)
+        manifest = run(config)
+    except Exception as exc:  # noqa: BLE001 - CLI boundary must redact every failure
+        secrets = config.secrets if config is not None else ()
+        print(
+            "canonical databuild failed: "
+            + redact_text(f"{type(exc).__name__}: {exc}", secrets),
+            file=sys.stderr,
+        )
+        return 1
+    print(json.dumps({
+        "build_id": manifest["build_id"],
+        "status": manifest["status"],
+        "groups": manifest["completed"]["groups"],
+        "sft": manifest["completed"]["sft"],
+        "manifest": str(config.output_root / "manifest.json"),
+    }, ensure_ascii=False, sort_keys=True))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

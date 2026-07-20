@@ -1,32 +1,8 @@
-"""vGate — out-of-process, OpenAI-compatible vLLM broker (Phase 0).
+"""Streaming Responses proxy over discovered local vLLM replicas.
 
-A thin reverse proxy in front of 1-2 stock ``vllm serve`` replicas. It is a
-*transparent* drop-in: business code (build's ``QwenVLCleaner``, source_qa's
-``llm_qa`` / ``preset_qa``) keeps issuing the same synchronous OpenAI ``/v1``
-requests; only its ``base_url`` moves to this broker's port (default ``:8003``).
-
-What it adds over hitting a replica directly:
-  * **Replica discovery** of candidate ports (default ``8001,8002``), tolerating
-    a subset being up; served-name asserted, heterogeneous replicas isolated.
-  * **Least-outstanding routing** (argmin inflight, tie -> round-robin) — the
-    direct fix for "one replica 84GB @ 0%, the other overloaded".
-  * **Global admission budget** = ``per_replica_cap x live_replicas`` — the one
-    number that absorbs the 1<->2 card question. Over budget, requests *block*
-    (bounded) rather than fail, since not every client retries (preset_qa does
-    not); only a queue wait past the deadline yields ``429 + Retry-After``.
-  * **3-class weighted-fair queue** keyed on the ``X-vgate-class`` request header
-    (``build-annotate`` > ``qa-judge`` > ``tag``, weights 4:2:1, with an
-    anti-starvation max-wait boost). Phase 0 clients do not set the header yet
-    (Phase 1 wires it), so traffic defaults to a single class == plain FIFO.
-
-The admission core mirrors ``lrc_scripts/servers/lrc_task_server.py``'s
-``asyncio.Lock`` + ``Condition`` + pending/active pattern. Pure Python + httpx +
-FastAPI; loads no torch and never touches a GPU. Rollback = point ``base_url``
-back at a replica.
-
-Run (from the repo root so ``dataset_build`` resolves)::
-
-    /home/bc/miniconda3/bin/python -m dataset_build.core.broker.app --port 8003
+vGate supplies replica discovery, least-outstanding routing, bounded admission,
+and weighted queue classes. It exposes only ``/v1/responses`` for generation;
+the canonical producer configures its URL in ``[annotation.local]``.
 """
 
 from __future__ import annotations
@@ -52,9 +28,9 @@ logger = logging.getLogger("vgate.app")
 # --- priority classes -------------------------------------------------------
 # Weighted-fair shares; higher weight == larger slice of admission slots.
 CLASS_WEIGHTS: Dict[str, float] = {
-    "build-annotate": 4.0,   # P0: SFT deliverable; verify latency couples with render
-    "qa-judge": 2.0,         # P1: source_qa gating; not on the build latency path
-    "tag": 1.0,              # P2: tag/aesthetic backfill
+    "build-annotate": 4.0,
+    "qa-judge": 2.0,
+    "tag": 1.0,
 }
 CLASSES = list(CLASS_WEIGHTS)
 
@@ -375,13 +351,9 @@ def build_app(cfg: BrokerConfig) -> FastAPI:
 
     app = FastAPI(title="vGate vLLM broker", version="0.1.0", lifespan=lifespan)
 
-    @app.post("/v1/chat/completions")
-    async def chat_completions(request: Request):
-        return await _proxy_generative(request, "chat/completions")
-
-    @app.post("/v1/completions")
-    async def completions(request: Request):
-        return await _proxy_generative(request, "completions")
+    @app.post("/v1/responses")
+    async def responses(request: Request):
+        return await _proxy_generative(request, "responses")
 
     @app.get("/v1/models")
     async def models(request: Request):
@@ -424,7 +396,7 @@ def _parse_ports(spec: str) -> List[int]:
 
 def main(argv: Optional[List[str]] = None) -> None:
     p = argparse.ArgumentParser(prog="dataset_build.core.broker.app",
-                                description="vGate vLLM broker (transparent OpenAI /v1 proxy)")
+                                description="vGate streaming Responses broker")
     p.add_argument("--host", default=os.environ.get("VGATE_HOST", "0.0.0.0"))
     p.add_argument("--port", type=int, default=_env_int("VGATE_PORT", 8003))
     p.add_argument("--replica-ports", default=os.environ.get("VGATE_REPLICA_PORTS", "8001,8002"),

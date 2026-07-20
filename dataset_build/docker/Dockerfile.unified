@@ -1,23 +1,12 @@
 # =============================================================================
-# Unified core image for the VeraRetouch dataset pipeline (v2 architecture).
+# Runtime image for canonical databuild GPU services.
 #
-# ONE image hosts every heavy component on ONE python env:
-#   - vLLM serving (Qwen3.5-35B-A3B-FP8)      [from the base image, untouched]
-#   - SAM3 text-promptable masker             [transformers 5.7 built-in Sam3* classes]
-#   - VeraRetouch/LLaVA teacher renderer      [llava + diffusers + peft, runs on tf 5.7]
-#   - pyiqa NR-IQA (MUSIQ/CLIP-IQA+/...)       [+ openai-clip/timm]
+# The image hosts the retained heavy components on one Python environment:
+#   - Qwen3.5-35B-A3B local Responses serving through vGate
+#   - instance-level SAM3 relabeling
+#   - local GPU preset replay and OneAlign ranking
 #
-# WHY THIS WORKS (empirically validated 2026-06-16, see UNIFIED_CONCURRENCY_DESIGN_v2 §10):
-#   The base image ships torch 2.11.0+cu130 / transformers 5.7.0 / py3.12. The old
-#   split (base env tf4.57 for the renderer, monetgpt_sam3 tf5.2 for SAM3) existed
-#   only because of mutually-incompatible PINS, NOT a hard runtime constraint:
-#     * SAM3 needs transformers>=5.2  -> 5.7 has Sam3VideoModel/Sam3Processor/Sam3Model built-in (load OK).
-#     * the LLaVA/Qwen2 renderer is PINNED to tf==4.57 in its requirements.txt but RUNS on 5.7:
-#       teacher render parity vs base(4.57) = max|Δ|=2/255, PSNR 56.85 dB (rounding noise).
-#     * pyiqa requires only torch>=1.13 / transformers>=4.36 (open) -> satisfied by the base image.
-#   So we ADD the renderer/IQA deps on top WITHOUT touching torch/transformers/vllm.
-#
-# The pipeline CODE (dataset_build/, llava/, model/, configs/, data/) and the model
+# Pipeline code and model weights
 # WEIGHTS (/home/bc/data/models) are BIND-MOUNTED at runtime, NOT baked in. This image
 # is the ENVIRONMENT only.
 #
@@ -36,41 +25,21 @@ FROM vllm/vllm-openai:nightly
 # Tsinghua PyPI mirror (host-reachable; pypi.org also works via --network=host).
 ARG PIP_INDEX=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 ENV UV_INDEX_URL=${PIP_INDEX}
+# Pipeline code is bind-mounted at this fixed path; expose the canonical package so
+# the documented `python -m construct.agent ...` command remains exact in containers.
+ENV PYTHONPATH=/home/bc/VeraRetouch/dataset_build/src:/home/bc/VeraRetouch
 
 # uv for fast, resolved installs into the image's system python (/usr/bin/python3).
 RUN pip install --no-cache-dir -i ${PIP_INDEX} uv
 
-# Renderer (LLaVA/Qwen2 teacher) + pyiqa deps. EXACT versions matched to the proven
-# base env. These are pure-python / open-dep packages that do NOT pull a different
-# torch/torchvision/transformers (the image's 2.11 / 0.26 / 5.7 satisfy them).
-#   python-box, attrdict3  -> configs/renderer_config.py, utils.py
-#   peft==0.15.0           -> model/colormlp_v2.py (LoRA)
-#   diffusers==0.34.0      -> model/retouch_render.py (UNet2DConditionModel)
-#   timm==1.0.24           -> vision tower / pyiqa
-#   pyiqa                  -> NR-IQA (pulls openai-clip)
-# NOTE: SAM3's MODEL needs no extra dep (built into transformers 5.7). SAM3's
-# Sam3Processor tokenizer.json on disk is currently MALFORMED (breaks on tf 5.2 AND
-# 5.7 alike — a pre-existing data issue, not an image issue); fix the tokenizer
-# before running LIVE SAM3. Stage-0 SAM3 mask cache already exists, so build is unblocked.
+# Canonical transport is official typed Responses only. Caption and annotation
+# share the repository's exact SDK pin; strict schemas intentionally use no JSON
+# repair dependency. PostgreSQL remains ingest/viewer support, not resume state.
 RUN uv pip install --system --python /usr/bin/python3 --index-url ${PIP_INDEX} \
-        python-box \
-        attrdict3 \
-        "peft==0.15.0" \
-        "diffusers==0.34.0" \
-        "timm==1.0.24" \
-        pyiqa \
- && /usr/bin/python3 -c "import transformers,torch,torchvision; \
-print('post-install: transformers',transformers.__version__,'torch',torch.__version__,'torchvision',torchvision.__version__)"
-
-# dataset_build 业务依赖（source_qa/caption_subjects/sam3_subjects 等直接在容器内跑）：
-#   psycopg[binary] -> source_qa/db.py (Postgres traceability)
-#   json-repair     -> llm_qa/caption_subjects JSON 解析
-#   scikit-learn    -> src/construct 检索/校准
-RUN uv pip install --system --python /usr/bin/python3 --index-url ${PIP_INDEX} \
-        "psycopg[binary]" \
-        json-repair \
-        scikit-learn \
- && /usr/bin/python3 -c "import psycopg, json_repair, sklearn; print('databuild deps OK')"
+        "openai==2.46.0" \
+        "psycopg[binary]==3.2.13" \
+        "scikit-learn==1.7.2" \
+ && /usr/bin/python3 -c "import openai, psycopg, sklearn; assert openai.__version__ == '2.46.0'"
 
 # default back to the base image's vllm entrypoint; the supervisor overrides
-# --entrypoint per role (vllm serve / sleep for the core-worker+business shard).
+# --entrypoint per role (vLLM serve or canonical worker process).

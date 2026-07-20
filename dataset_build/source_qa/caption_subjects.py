@@ -1,11 +1,11 @@
-"""Source 图 caption + 主体标注：对 keep 池每张源图做一次多模态调用（Qwen3.5-35B,
+"""Source 图 caption + 主体标注：对全部已入库源图做一次多模态调用（Qwen3.5-35B,
 thinking OFF），产出修图导向中文 caption + 可分割主体列表，入库 source_captions。
 
-主体 en 名直接作为 SAM3 text-prompt（下游 sam3_subjects.py 消费），因此提示词强约束：
+主体 en 名直接作为 instance SAM3 text-prompt，因此提示词强约束：
 小写具体名词短语、可像素级分割、显著度降序、恰好一个 main。
 
 Run: python -m dataset_build.source_qa.caption_subjects [--limit N] [--concurrency K]
-     [--verdict keep,review] [--redo]
+     [--redo]
 """
 from __future__ import annotations
 
@@ -14,10 +14,8 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import json_repair
-
+from dataset_build.core.responses_vlm import encode_image_data_url, request_text
 from . import config, db
-from .llm_qa import _call_vllm, _img_data_uri
 
 _PROMPT = (
     "你是修图训练数据的图像标注员。请对这张『修图 before 源图』做两件事：\n\n"
@@ -40,52 +38,100 @@ _PROMPT = (
 _BAD_EN = {"image", "photo", "picture", "scene", "background", "foreground",
            "lighting", "mood", "composition", "colors", "color", "atmosphere"}
 
+_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["caption", "subjects"],
+    "properties": {
+        "caption": {"type": "string", "minLength": 4},
+        "subjects": {
+            "type": "array", "minItems": 1, "maxItems": 4,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["en", "cn", "main", "area"],
+                "properties": {
+                    "en": {"type": "string", "minLength": 1},
+                    "cn": {"type": "string", "minLength": 1},
+                    "main": {"type": "boolean"},
+                    "area": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                },
+            },
+        },
+    },
+}
+
 
 def _parse(raw: str) -> dict | None:
-    d = json_repair.loads(raw)
-    if not isinstance(d, dict):
+    try:
+        d = json.loads(raw)
+    except (TypeError, ValueError):
         return None
-    caption = str(d.get("caption", "")).strip()[:500]
-    subs = []
-    for s in (d.get("subjects") or [])[:4]:
-        if not isinstance(s, dict):
-            continue
-        en = str(s.get("en", "")).strip().lower()
-        if not en or en in _BAD_EN or len(en.split()) > 4:
-            continue
-        try:
-            area = max(0.0, min(1.0, float(s.get("area", 0.0))))
-        except (TypeError, ValueError):
-            area = 0.0
-        subs.append({"en": en, "cn": str(s.get("cn", "")).strip()[:40],
-                     "main": bool(s.get("main")), "area": area})
-    if not caption or not subs:
+    if not isinstance(d, dict) or set(d) != {"caption", "subjects"}:
         return None
-    if sum(s["main"] for s in subs) != 1:      # 恰好一个 main：修为首个
-        for i, s in enumerate(subs):
-            s["main"] = i == 0
-    return {"caption": caption, "subjects": subs}
+    caption = d["caption"]
+    raw_subjects = d["subjects"]
+    if not isinstance(caption, str) or caption != caption.strip() or len(caption) < 4:
+        return None
+    if not isinstance(raw_subjects, list) or not 1 <= len(raw_subjects) <= 4:
+        return None
+    subjects = []
+    for subject in raw_subjects:
+        if not isinstance(subject, dict) or set(subject) != {"en", "cn", "main", "area"}:
+            return None
+        en, cn = subject["en"], subject["cn"]
+        main, area = subject["main"], subject["area"]
+        if not isinstance(en, str) or not en or en != en.strip().lower():
+            return None
+        if en in _BAD_EN or not 1 <= len(en.split()) <= 3:
+            return None
+        if not isinstance(cn, str) or not cn or cn != cn.strip():
+            return None
+        if not isinstance(main, bool):
+            return None
+        if isinstance(area, bool) or not isinstance(area, (int, float)) \
+                or not 0.0 <= float(area) <= 1.0:
+            return None
+        subjects.append(dict(subject))
+    if sum(subject["main"] for subject in subjects) != 1:
+        return None
+    return {"caption": caption, "subjects": subjects}
 
 
 def _one(asset) -> dict | None:
-    raw = _call_vllm(_img_data_uri(asset["path"]), _PROMPT)
-    return _parse(raw)
+    response = request_text(
+        base_url=config.VLLM_BASE_URL,
+        api_key=config.VLLM_API_KEY,
+        model=config.VLLM_MODEL,
+        content=[
+            {
+                "type": "input_image",
+                "image_url": encode_image_data_url(
+                    asset["path"], longest_edge=config.VLLM_IMAGE_LONGEDGE, quality=88
+                ),
+            },
+            {"type": "input_text", "text": _PROMPT},
+        ],
+        schema_name="source_caption_subjects",
+        schema=_SCHEMA,
+        timeout=120.0,
+        max_output_tokens=config.VLLM_MAX_TOKENS,
+    )
+    return _parse(response.text)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--concurrency", type=int, default=config.VLLM_CONCURRENCY)
-    ap.add_argument("--verdict", default="keep", help="comma list of auto_verdict pools")
     ap.add_argument("--redo", action="store_true", help="ignore existing source_captions rows")
     a = ap.parse_args()
 
     db.init_db()
     conn = db.connect()
-    verd = tuple(v.strip() for v in a.verdict.split(",") if v.strip())
     rows = conn.execute(
-        "SELECT asset_id, path FROM assets WHERE asset_type='image' AND dup_of IS NULL "
-        f"AND auto_verdict IN ({','.join(['%s'] * len(verd))}) ORDER BY asset_id", verd).fetchall()
+        "SELECT asset_id, path FROM assets WHERE asset_type='image' "
+        "ORDER BY asset_id").fetchall()
     if not a.redo:
         done = {r[0] for r in conn.execute("SELECT asset_id FROM source_captions").fetchall()}
         rows = [r for r in rows if r["asset_id"] not in done]
@@ -93,7 +139,7 @@ def main() -> None:
     rows = [r for r in rows if os.path.exists(r["path"])]
     if a.limit:
         rows = rows[:a.limit]
-    run_id = db.start_run(conn, "caption_subjects", {"verdict": verd, "n": len(rows)})
+    run_id = db.start_run(conn, "caption_subjects", {"n": len(rows)})
     print(f"[caption] {len(rows)} images to caption (run {run_id})", flush=True)
 
     ok = fail = 0

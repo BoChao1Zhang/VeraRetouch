@@ -1,9 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# launch_reasoning.sh — DATA-PARALLEL (dp=2) reasoning vLLM for the
-# VeraRetouch 1M build's live annotation pass (gen_instruction + reason_params
-# + verify — all image-bearing). Tagging is already cached; this serves the
-# remaining LIVE annotation.
+# launch_reasoning.sh — data-parallel local vLLM replicas for canonical
+# Responses annotation. vGate discovers these replicas and exposes the single
+# broker URL configured in databuild.toml; databuild never addresses a replica.
 #
 # Model: Qwen3.5-35B-A3B-FP8 (MoE, multimodal, fp8). The user asked for a
 #        "Qwen3.6-35B-A3B" model; that name was empty on disk when this build
@@ -16,11 +15,9 @@
 #        supported by vllm/vllm-openai:nightly (vLLM 0.20.1rc1 + transformers 5.7).
 #
 # Topology — DATA PARALLEL, one full replica per card (NOT tensor-parallel):
-#   reason_g0 -> GPU0 -> :8001   (the build's --shard 0/2 worker hits this)
-#   reason_g1 -> GPU1 -> :8002   (the build's --shard 1/2 worker hits this)
-#   => two independent replicas of the SAME model = data parallelism across the
-#      two sharded orchestrator workers (mirrors launch_dual.sh's two-container
-#      pattern). Each container is --tensor-parallel-size 1.
+#   reason_g0 -> GPU0 -> :8001
+#   reason_g1 -> GPU1 -> :8002
+#   => two independent replicas behind vGate. Each uses tensor parallel size 1.
 #
 # PERSISTENT COMPILE / CUDA-GRAPH CACHE (the key ask):
 #   Host dir $CACHE is mounted into BOTH containers at /root/.cache/vllm and
@@ -43,7 +40,7 @@ MODE="${1:-start}"
 IMG="vllm/vllm-openai:nightly"
 MODELS="/home/bc/data/models"
 MODEL_DIR="/models/Qwen3.5-35B-A3B-FP8"          # in-container path (see -v below)
-SERVED="qwen3_5-35b-a3b"                          # MUST equal config.yaml vllm.served_model_name
+SERVED="qwen3_5-35b-a3b"                          # MUST equal annotation.local.model in TOML
 MAXLEN=32768
 
 # Persistent compile/CUDA-graph cache. Created once on the host; mounted into
@@ -92,11 +89,11 @@ case "$MODE" in
     start_replica reason_g1 1 8002
     wait_replica 8001 || { echo "[reason] reason_g0 failed to come up; see: docker logs reason_g0"; exit 1; }
     wait_replica 8002 || { echo "[reason] reason_g1 failed to come up; see: docker logs reason_g1"; exit 1; }
-    echo "[reason] BOTH replicas READY:"
-    echo "         reason_g0  GPU0  http://localhost:8001/v1  (--shard 0/2)"
-    echo "         reason_g1  GPU1  http://localhost:8002/v1  (--shard 1/2)"
+    echo "[reason] BOTH replicas READY for vGate discovery:"
+    echo "         reason_g0  GPU0  http://localhost:8001/v1"
+    echo "         reason_g1  GPU1  http://localhost:8002/v1"
     echo "[reason] compile/CUDA-graph cache persisted at $CACHE (restarts reuse it)."
-    echo "[reason] config.yaml vllm.served_model_name must be '$SERVED' (it is, per step (2))."
+    echo "[reason] databuild.toml annotation.local.model must be '$SERVED'."
     echo "[reason] stop with: bash dataset_build/docker/launch_reasoning.sh stop"
     ;;
   stop)

@@ -1,754 +1,264 @@
-"""PostgreSQL traceability layer for source QA (psycopg3).
+"""Minimal PostgreSQL support for retained source ingest and instance SAM3."""
 
-History: this used to be SQLite (WAL + busy_timeout + write_retry). Under the
-concurrent multi-writer load (iqa + llm_qa + dedup + preset/render_client + the
-web app) SQLite serialized every writer behind a single file lock and surfaced
-``database is locked`` / lock-timeout stalls. We moved to Postgres: MVCC lets
-readers run without blocking writers and writers only conflict on the same row,
-so the lock-contention class of failures disappears. The schema and the public
-helper surface are kept intentionally close to the old one so callers barely
-change.
-
-Drop-in compatibility: ``connect()`` returns a thin wrapper whose ``execute`` /
-``executemany`` accept the old ``?`` placeholders (translated to ``%s``) and
-whose rows behave like ``sqlite3.Row`` — both ``row[0]`` and ``row["col"]`` work,
-iterating yields values, and ``dict(row)`` / ``dict(list_of_2col_rows)`` keep
-working. So the only file that knows it is Postgres is this one.
-
-Tables (one row per ... unless noted):
-  assets            image|preset (+ denormalized QA rollup for the UI)
-  iqa_scores        long: (asset, metric, run)
-  llm_qa            (asset, questionnaire item): A1..,B1..,C1..,caption + graded
-  preset_previews   (preset, probe image) render + paired before/after metrics
-  render_jobs       (preset content_hash, probe, engine) real-render job + cache
-  processing_events append-only provenance (ingest|iqa|llm_qa|dedup|preset_*|gate|decision)
-  decisions         append-only keep|drop|hold; current = latest per asset
-  runs              one row per pipeline execution
-  gate_thresholds   per-(corpus,metric) calibrated NR-IQA cutoffs
-"""
 from __future__ import annotations
 
 import json
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import psycopg
 
 from . import config
 
-# --------------------------------------------------------------------------- #
-# schema (Postgres)
-# --------------------------------------------------------------------------- #
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS assets (
-    asset_id        TEXT PRIMARY KEY,
-    asset_type      TEXT NOT NULL,                 -- 'image' | 'preset'
-    corpus          TEXT,
-    path            TEXT NOT NULL,
-    -- image fields
-    scene           TEXT,
-    style           TEXT,
-    width           INTEGER,
-    height          INTEGER,
-    megapixels      DOUBLE PRECISION,
-    bytes_size      BIGINT,
-    is_portrait_pool INTEGER,
-    -- preset fields
-    kind            TEXT,                          -- param | lut
-    fmt             TEXT,                          -- xmp | cube | lrtemplate
-    pack_id         TEXT,
-    scene_affinity  TEXT,
-    is_bw           INTEGER,
-    is_technical    INTEGER,
-    has_local_mask  INTEGER,
-    has_ai_mask     INTEGER,
-    lut_size        INTEGER,
-    preset_content_hash TEXT,                      -- stable render cache key
-    -- QA rollup (denormalized for UI sorting/filtering)
-    status          TEXT NOT NULL DEFAULT 'pending',
-    pass_a          INTEGER,
-    pass_b          INTEGER,
-    pass_c          INTEGER,
-    b_quality       INTEGER,                       -- graded 0-3 (suitability)
-    b_comp          INTEGER,
-    b_subject       INTEGER,
-    b_face          INTEGER,
-    n_answered      INTEGER,                       -- questionnaire B answered/total
-    n_yes           INTEGER,
-    auto_verdict    TEXT,                          -- keep | drop | review | needs_local_render
-    final_decision  TEXT,                          -- keep | drop | hold (latest)
-    decided_by      TEXT,
-    -- cached headline scores
-    aesthetic       DOUBLE PRECISION,
-    aesthetic_vlm   DOUBLE PRECISION,
-    artimuse_score  DOUBLE PRECISION,
-    charm_score     DOUBLE PRECISION,
-    iaa_mixed       DOUBLE PRECISION,
-    musiq           DOUBLE PRECISION,
-    clipiqa         DOUBLE PRECISION,
-    niqe            DOUBLE PRECISION,
-    brisque         DOUBLE PRECISION,
-    sharpness       DOUBLE PRECISION,
-    noise_sigma     DOUBLE PRECISION,
-    jpeg_blockiness DOUBLE PRECISION,
-    max_face_frac   DOUBLE PRECISION,
-    -- dedup
-    pixel_sha256    TEXT,
-    phash           TEXT,
-    dup_of          TEXT,                          -- cluster head asset_id
-    dup_cluster     TEXT,                          -- cluster id (= head asset_id)
-    split           TEXT,                          -- train | eval (cluster-level)
-    meta_json       TEXT,
-    created_at      TIMESTAMPTZ DEFAULT now(),
-    updated_at      TIMESTAMPTZ
+    asset_id          TEXT PRIMARY KEY,
+    asset_type        TEXT NOT NULL,
+    corpus            TEXT,
+    path              TEXT NOT NULL,
+    scene             TEXT,
+    style             TEXT,
+    width             INTEGER,
+    height            INTEGER,
+    bytes_size        BIGINT,
+    is_portrait_pool  INTEGER,
+    status            TEXT NOT NULL DEFAULT 'pending',
+    aesthetic         DOUBLE PRECISION,
+    aesthetic_vlm     DOUBLE PRECISION,
+    meta_json         TEXT,
+    created_at        TIMESTAMPTZ DEFAULT now(),
+    updated_at        TIMESTAMPTZ
 );
-CREATE INDEX IF NOT EXISTS ix_assets_type_status ON assets(asset_type, status);
-CREATE INDEX IF NOT EXISTS ix_assets_corpus  ON assets(corpus);
-CREATE INDEX IF NOT EXISTS ix_assets_verdict ON assets(auto_verdict);
-CREATE INDEX IF NOT EXISTS ix_assets_pixhash ON assets(pixel_sha256);
-CREATE INDEX IF NOT EXISTS ix_assets_dupclu  ON assets(dup_cluster);
-CREATE INDEX IF NOT EXISTS ix_assets_pch     ON assets(preset_content_hash);
-
-CREATE TABLE IF NOT EXISTS iqa_scores (
-    id        BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    asset_id  TEXT NOT NULL,
-    metric    TEXT NOT NULL,
-    value     DOUBLE PRECISION,
-    higher_is_better INTEGER,
-    model_version TEXT,
-    run_id    TEXT,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS ix_iqa_asset ON iqa_scores(asset_id);
-
-CREATE TABLE IF NOT EXISTS llm_qa (
-    id         BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    asset_id   TEXT NOT NULL,
-    questionnaire TEXT NOT NULL,                   -- A | B | C | caption | meta
-    item       TEXT NOT NULL,                      -- A1.. | B_quality.. | C1.. | caption
-    answer     INTEGER,                            -- 0/1 binary; 0-3 graded; NULL n/a
-    rationale  TEXT,
-    raw        TEXT,
-    model      TEXT,
-    run_id     TEXT,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS ix_llmqa_asset ON llm_qa(asset_id);
-
--- 图像整组可信度汇总 (流程1 IMQ / 流程2 AES 共用; 一行一次问卷运行)
-CREATE TABLE IF NOT EXISTS llm_qa_runs (
-    id          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    asset_id    TEXT NOT NULL,
-    questionnaire TEXT NOT NULL,                    -- IMQ | aes
-    reliable    INTEGER,
-    reason      TEXT,
-    contradiction_count INTEGER,
-    trap_fail   TEXT,
-    trap_skipped INTEGER,
-    reduced_anchor INTEGER,
-    soft_trap_fail INTEGER,
-    reask_count INTEGER,
-    defect_count INTEGER,                           -- IMQ
-    merit_count INTEGER,                            -- aes
-    merit_n     INTEGER,
-    merit_frac  DOUBLE PRECISION,
-    raw         TEXT,
-    model       TEXT,
-    run_id      TEXT,
-    created_at  TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS ix_llmqaruns_asset ON llm_qa_runs(asset_id, questionnaire);
-
--- preset 级投票汇总 (pass_c 恒 0/1, 绝不 NULL)
-CREATE TABLE IF NOT EXISTS preset_qa_runs (
-    asset_id              TEXT,
-    questionnaire         TEXT DEFAULT 'preset',
-    pro_pass_rate         DOUBLE PRECISION,
-    intent_pass_rate      DOUBLE PRECISION,
-    coh_pass_rate         DOUBLE PRECISION,
-    coherence_score       DOUBLE PRECISION,
-    edit_direction_dispersion DOUBLE PRECISION,
-    vote_pro INTEGER, vote_intent INTEGER, vote_coh INTEGER,
-    reliable_probe_count  INTEGER, total_probe_count INTEGER,
-    near_noop             INTEGER,
-    pass_c                INTEGER,
-    auto_verdict          TEXT,
-    verdict_reason        TEXT,
-    run_id                TEXT,
-    created_at            TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY (asset_id, questionnaire)
-);
-
-CREATE TABLE IF NOT EXISTS preset_previews (
-    id          BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    asset_id    TEXT NOT NULL,
-    probe_image TEXT,
-    before_path TEXT,
-    after_path  TEXT,
-    after_iqa   TEXT,                              -- JSON of NR-IQA on the after
-    paired_metrics TEXT,                           -- JSON: deltaE/ssim/emd/clip%
-    render_engine TEXT,                            -- lrc | darktable | lut_trilinear
-    region_local INTEGER DEFAULT 0,
-    ai_mask     INTEGER DEFAULT 0,
-    job_id      TEXT,
-    run_id      TEXT,
-    created_at  TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS ix_prev_asset ON preset_previews(asset_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_prev_job ON preset_previews(job_id);
-
-CREATE TABLE IF NOT EXISTS render_jobs (
-    job_id              TEXT PRIMARY KEY,
-    recipe_id           TEXT NOT NULL,             -- = assets.asset_id (preset)
-    preset_content_hash TEXT NOT NULL,
-    probe_id            TEXT NOT NULL,
-    render_engine       TEXT NOT NULL,             -- lrc | darktable | lut_trilinear
-    region_local_flag   INTEGER NOT NULL DEFAULT 0,
-    ai_mask_flag         INTEGER NOT NULL DEFAULT 0,
-    fmt                 TEXT,
-    preset_path         TEXT,
-    probe_path          TEXT,
-    status              TEXT NOT NULL DEFAULT 'pending',  -- pending|running|done|error|skipped
-    after_tif_path      TEXT,
-    after_jpg_path      TEXT,
-    engine_version      TEXT,
-    attempts            INTEGER NOT NULL DEFAULT 0,
-    node                TEXT,
-    error               TEXT,
-    run_id              TEXT,
-    submitted_at        TIMESTAMPTZ DEFAULT now(),
-    finished_at         TIMESTAMPTZ,
-    UNIQUE(preset_content_hash, probe_id, render_engine)
-);
-CREATE INDEX IF NOT EXISTS ix_rjobs_recipe ON render_jobs(recipe_id);
-CREATE INDEX IF NOT EXISTS ix_rjobs_status ON render_jobs(status);
+CREATE INDEX IF NOT EXISTS ix_assets_type ON assets(asset_type);
+CREATE INDEX IF NOT EXISTS ix_assets_corpus ON assets(corpus);
 
 CREATE TABLE IF NOT EXISTS processing_events (
     id        BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
     asset_id  TEXT NOT NULL,
     stage     TEXT NOT NULL,
-    status    TEXT NOT NULL,                       -- ok | skip | error
+    status    TEXT NOT NULL,
     detail    TEXT,
     run_id    TEXT,
     ts        TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS ix_evt_asset ON processing_events(asset_id);
 
-CREATE TABLE IF NOT EXISTS decisions (
-    id        BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    asset_id  TEXT NOT NULL,
-    decision  TEXT NOT NULL,                       -- keep | drop | hold
-    reviewer  TEXT NOT NULL,                       -- 'auto:gate' | 'human:<name>'
-    reason    TEXT,
-    ts        TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS ix_dec_asset ON decisions(asset_id);
-
 CREATE TABLE IF NOT EXISTS runs (
-    run_id    TEXT PRIMARY KEY,
-    kind      TEXT NOT NULL,
-    config    TEXT,
-    started_at TIMESTAMPTZ DEFAULT now(),
+    run_id      TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL,
+    config      TEXT,
+    started_at  TIMESTAMPTZ DEFAULT now(),
     finished_at TIMESTAMPTZ,
-    stats     TEXT
+    stats       TEXT
 );
 
--- source 图 caption + 主体标注 (caption_subjects.py; 一行一图, 重跑覆盖)
 CREATE TABLE IF NOT EXISTS source_captions (
-    asset_id   TEXT PRIMARY KEY,
-    caption    TEXT,                    -- 中文, 修图导向 (主体/场景/光线/色彩)
-    subjects   TEXT,                    -- JSON [{en, cn, main, area}] 显著度降序
-    main_subject TEXT,                  -- subjects[0].en (冗余, 便于 SQL 过滤)
-    model      TEXT,
-    run_id     TEXT,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ
-);
-
--- SAM3 主体 mask 记录 (sam3_subjects.py; 一行一 (图, concept); PNG 在 sam3_cache)
-CREATE TABLE IF NOT EXISTS sam3_masks (
-    asset_id   TEXT NOT NULL,
-    concept    TEXT NOT NULL,           -- source_captions.subjects[].en 原文
-    slug       TEXT NOT NULL,           -- concept_slug(concept) = PNG 文件名
-    png_path   TEXT,                    -- NULL = SAM3 未检出该 concept
-    area       DOUBLE PRECISION,        -- >0.5 像素占比 (归一化)
-    bbox       TEXT,                    -- JSON [x0,y0,x1,y1] 归一化
-    centroid   TEXT,                    -- JSON [cx,cy] 归一化
-    run_id     TEXT,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY(asset_id, slug)
-);
-CREATE INDEX IF NOT EXISTS ix_sam3_masks_asset ON sam3_masks(asset_id);
-
-CREATE TABLE IF NOT EXISTS gate_thresholds (
-    corpus      TEXT NOT NULL,          -- per-corpus, or '*' for global
-    metric      TEXT NOT NULL,
-    direction   INTEGER,                -- 1 = higher better, 0 = lower better
-    n           INTEGER,
-    drop_pctile DOUBLE PRECISION,
-    drop_value  DOUBLE PRECISION,
-    keep_value  DOUBLE PRECISION,
-    p02 DOUBLE PRECISION, p05 DOUBLE PRECISION, p10 DOUBLE PRECISION,
-    p25 DOUBLE PRECISION, p50 DOUBLE PRECISION, p75 DOUBLE PRECISION,
-    p90 DOUBLE PRECISION, p95 DOUBLE PRECISION,
-    updated_at  TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY(corpus, metric)
+    asset_id     TEXT PRIMARY KEY,
+    caption      TEXT,
+    subjects     TEXT,
+    main_subject TEXT,
+    model        TEXT,
+    run_id       TEXT,
+    created_at   TIMESTAMPTZ DEFAULT now(),
+    updated_at   TIMESTAMPTZ
 );
 """
 
-# Columns added after the first schema version; ADD COLUMN IF NOT EXISTS makes
-# init_db idempotent and forward-compatible on a pre-existing database.
-_ENSURE_COLUMNS = [
-    ("assets", "megapixels", "DOUBLE PRECISION"),
-    ("assets", "preset_content_hash", "TEXT"),
-    ("assets", "b_quality", "INTEGER"),
-    ("assets", "b_comp", "INTEGER"),
-    ("assets", "b_subject", "INTEGER"),
-    ("assets", "b_face", "INTEGER"),
-    ("assets", "n_answered", "INTEGER"),
-    ("assets", "n_yes", "INTEGER"),
-    ("assets", "noise_sigma", "DOUBLE PRECISION"),
-    ("assets", "jpeg_blockiness", "DOUBLE PRECISION"),
-    ("assets", "max_face_frac", "DOUBLE PRECISION"),
-    ("assets", "artimuse_score", "DOUBLE PRECISION"),
-    ("assets", "charm_score", "DOUBLE PRECISION"),
-    ("assets", "iaa_mixed", "DOUBLE PRECISION"),
-    ("assets", "pixel_sha256", "TEXT"),
-    ("assets", "phash", "TEXT"),
-    ("assets", "dup_cluster", "TEXT"),
-    ("assets", "split", "TEXT"),
-    ("assets", "has_ai_mask", "INTEGER"),
-    ("preset_previews", "paired_metrics", "TEXT"),
-    ("preset_previews", "render_engine", "TEXT"),
-    ("preset_previews", "region_local", "INTEGER DEFAULT 0"),
-    ("preset_previews", "ai_mask", "INTEGER DEFAULT 0"),
-    ("preset_previews", "job_id", "TEXT"),
-    ("render_jobs", "ai_mask_flag", "INTEGER NOT NULL DEFAULT 0"),
-    # ---- 三套问卷 redesign 2026-06-17 (LLM_QA_QUESTIONNAIRE_DESIGN) ----------
-    # 流程1 IMQ 可信度产出列
-    ("assets", "defect_count", "INTEGER"),
-    ("assets", "qa_reliable", "INTEGER"),
-    ("assets", "qa_unreliable_reason", "TEXT"),
-    ("assets", "qa_contra_count", "INTEGER"),
-    ("assets", "reduced_anchor", "INTEGER"),
-    ("assets", "qa_trap_skipped", "INTEGER"),
-    # 共享: 图像侧 is_bw_img(区别于现仅 PRESET 填的 is_bw) + 探针选取确定性图像信号
-    ("assets", "is_bw_img", "INTEGER"),
-    ("assets", "mean_luma", "DOUBLE PRECISION"),
-    ("assets", "highlight_frac", "DOUBLE PRECISION"),
-    ("assets", "shadow_frac", "DOUBLE PRECISION"),
-    ("assets", "saturation_mean", "DOUBLE PRECISION"),
-    # 流程2 AES 软信号(排序-only, 永不 drop)
-    ("assets", "merit_count", "INTEGER"),
-    ("assets", "merit_n", "INTEGER"),
-    ("assets", "merit_frac", "DOUBLE PRECISION"),
-    ("assets", "aes_sort_key", "DOUBLE PRECISION"),
-    ("assets", "aes_keep_vote", "INTEGER"),
-    ("assets", "aes_reliable", "INTEGER"),
-    ("assets", "aes_reason", "TEXT"),
-    ("assets", "aes_contradiction_count", "INTEGER"),
-    ("assets", "aes_trap_fail", "TEXT"),
-    ("assets", "aes_soft_trap_fail", "INTEGER"),
-    # llm_qa: 6 探针同题区分(消除覆盖)
-    ("llm_qa", "probe_id", "TEXT"),
-    # 流程3 preset: 逐探针清洗结果
-    ("preset_previews", "probe_reliable", "INTEGER"),
-    ("preset_previews", "probe_reason", "TEXT"),
-    ("preset_previews", "trap_fail", "TEXT"),
-]
 
-
-# --------------------------------------------------------------------------- #
-# sqlite3.Row-compatible row + a thin connection wrapper (?-placeholder, etc.)
-# --------------------------------------------------------------------------- #
 class Row:
-    """Mimics sqlite3.Row: int AND str indexing, value iteration, dict()-able."""
+    """Small psycopg row supporting both integer and column-name indexing."""
 
     __slots__ = ("_cols", "_vals", "_map")
 
-    def __init__(self, cols, vals):
+    def __init__(self, cols: list[str], values: tuple[Any, ...]):
         self._cols = cols
-        self._vals = tuple(vals)
-        self._map = {c: i for i, c in enumerate(cols)}
+        self._vals = tuple(values)
+        self._map = {column: index for index, column in enumerate(cols)}
 
-    def __getitem__(self, k):
-        if isinstance(k, str):
-            return self._vals[self._map[k]]
-        return self._vals[k]            # int or slice
+    def __getitem__(self, key: int | slice | str) -> Any:
+        if isinstance(key, str):
+            return self._vals[self._map[key]]
+        return self._vals[key]
 
     def __iter__(self):
-        return iter(self._vals)         # value iteration -> dict(list_of_2col_rows)
+        return iter(self._vals)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._vals)
 
-    def keys(self):                     # -> dict(single_row) uses this
+    def keys(self) -> list[str]:
         return list(self._cols)
 
-    def get(self, k, default=None):
-        i = self._map.get(k)
-        return self._vals[i] if i is not None else default
+    def get(self, key: str, default: Any = None) -> Any:
+        index = self._map.get(key)
+        return self._vals[index] if index is not None else default
 
-    def __contains__(self, k):
-        return k in self._map
-
-    def __repr__(self):
-        return f"Row({dict(zip(self._cols, self._vals))!r})"
+    def __contains__(self, key: object) -> bool:
+        return key in self._map
 
 
-def _row_factory(cursor):
-    desc = cursor.description
-    cols = [c.name for c in desc] if desc else []
+def _row_factory(cursor: Any):
+    columns = [column.name for column in cursor.description] if cursor.description else []
 
-    def make(values):
-        return Row(cols, values)
+    def make(values: tuple[Any, ...]) -> Row:
+        return Row(columns, values)
 
     return make
 
 
-def _tr(sql: str) -> str:
-    """Translate the legacy sqlite ``?`` placeholders to psycopg ``%s``.
-    Safe here: no SQL string in this codebase uses ``?`` as a jsonb operator or
-    inside a literal, and LIKE wildcards live in the parameter values, not the SQL."""
+def _translate(sql: str) -> str:
     return sql.replace("?", "%s")
 
 
 class _Conn:
-    """sqlite3.Connection-shaped facade over a psycopg3 connection."""
+    def __init__(self, connection: psycopg.Connection):
+        self._connection = connection
 
-    def __init__(self, pg: psycopg.Connection):
-        self._c = pg
-
-    # query surface ---------------------------------------------------------
-    def execute(self, sql: str, params=None):
+    def execute(self, sql: str, params: Any = None):
         if params is None:
-            return self._c.execute(_tr(sql))
-        return self._c.execute(_tr(sql), params)
+            return self._connection.execute(_translate(sql))
+        return self._connection.execute(_translate(sql), params)
 
-    def executemany(self, sql: str, rows):
-        rows = list(rows)
-        if not rows:
+    def executemany(self, sql: str, rows: Any) -> None:
+        values = list(rows)
+        if not values:
             return
-        with self._c.cursor() as cur:
-            cur.executemany(_tr(sql), rows)
+        with self._connection.cursor() as cursor:
+            cursor.executemany(_translate(sql), values)
 
     def cursor(self):
-        return self._c.cursor()
+        return self._connection.cursor()
 
-    # txn / lifecycle -------------------------------------------------------
-    def commit(self):
-        self._c.commit()
+    def commit(self) -> None:
+        self._connection.commit()
 
-    def rollback(self):
-        self._c.rollback()
+    def rollback(self) -> None:
+        self._connection.rollback()
 
-    def close(self):
-        self._c.close()
+    def close(self) -> None:
+        self._connection.close()
 
     @property
-    def raw(self):
-        return self._c
+    def raw(self) -> psycopg.Connection:
+        return self._connection
 
-    def __enter__(self):
+    def __enter__(self) -> "_Conn":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(self, *exc: object) -> None:
         try:
             if exc[0] is None:
-                self._c.commit()
+                self.commit()
             else:
-                self._c.rollback()
+                self.rollback()
         finally:
-            self._c.close()
+            self.close()
 
 
-# --------------------------------------------------------------------------- #
-# connect / init
-# --------------------------------------------------------------------------- #
 def connect(dsn: Optional[str] = None) -> _Conn:
-    config.ensure_dirs()
-    pg = psycopg.connect(dsn or config.PG_DSN, autocommit=False,
-                         row_factory=_row_factory, application_name="source_qa")
-    return _Conn(pg)
+    connection = psycopg.connect(
+        dsn or config.PG_DSN,
+        autocommit=False,
+        row_factory=_row_factory,
+        application_name="source_support",
+    )
+    return _Conn(connection)
 
 
 def _split_statements(script: str) -> list[str]:
-    """Split a multi-statement SQL script on ';' AFTER stripping line comments —
-    a ';' inside a '-- ...' comment must not cut a statement. No '--' appears
-    inside a string literal in this schema, so line-stripping is safe."""
     lines = []
     for line in script.splitlines():
-        i = line.find("--")
-        lines.append(line if i < 0 else line[:i])
-    return [s.strip() for s in "\n".join(lines).split(";") if s.strip()]
+        comment = line.find("--")
+        lines.append(line if comment < 0 else line[:comment])
+    return [statement.strip() for statement in "\n".join(lines).split(";") if statement.strip()]
 
 
 def init_db(dsn: Optional[str] = None) -> None:
-    conn = connect(dsn)
-    raw = conn.raw
-    # psycopg's extended protocol forbids multiple statements per execute; split.
-    for stmt in _split_statements(SCHEMA):
-        raw.execute(stmt)
-    for table, col, coltype in _ENSURE_COLUMNS:
-        raw.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {coltype}")
-    conn.commit()
-    conn.close()
+    connection = connect(dsn)
+    try:
+        for statement in _split_statements(SCHEMA):
+            connection.raw.execute(statement)
+        connection.commit()
+    finally:
+        connection.close()
 
 
 def new_run_id(kind: str) -> str:
     return f"{kind}_{int(time.time())}_{uuid.uuid4().hex[:6]}"
 
 
-def write_retry(conn: _Conn, fn, attempts: int = 8, base: float = 0.3) -> bool:
-    """Run fn() then commit as one atomic unit, retrying the WHOLE unit on a
-    transient serialization/deadlock error (rolling back first). With Postgres
-    MVCC the old 'database is locked' path is gone; what remains is the rare
-    deadlock / serialization-failure, which a retry resolves. Raises on anything
-    else."""
-    transient = (
-        psycopg.errors.DeadlockDetected,
-        psycopg.errors.SerializationFailure,
-        psycopg.errors.LockNotAvailable,
-    )
-    for i in range(attempts):
-        try:
-            fn()
-            conn.commit()
-            return True
-        except transient:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            if i < attempts - 1:
-                time.sleep(base * (2 ** i))
-                continue
-            raise
-        except psycopg.errors.OperationalError:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            if i < attempts - 1:
-                time.sleep(base * (2 ** i))
-                continue
-            raise
-    return False
-
-
-def start_run(conn: _Conn, kind: str, cfg: Optional[dict] = None) -> str:
+def start_run(connection: _Conn, kind: str, cfg: Optional[dict] = None) -> str:
     run_id = new_run_id(kind)
-    conn.execute("INSERT INTO runs(run_id, kind, config) VALUES(?,?,?)",
-                 (run_id, kind, json.dumps(cfg or {}, ensure_ascii=False)))
-    conn.commit()
+    connection.execute(
+        "INSERT INTO runs(run_id, kind, config) VALUES(%s,%s,%s)",
+        (run_id, kind, json.dumps(cfg or {}, ensure_ascii=False)),
+    )
+    connection.commit()
     return run_id
 
 
-def finish_run(conn: _Conn, run_id: str, stats: Optional[dict] = None) -> None:
-    conn.execute("UPDATE runs SET finished_at=now(), stats=? WHERE run_id=?",
-                 (json.dumps(stats or {}, ensure_ascii=False), run_id))
-    conn.commit()
-
-
-# --- assets ------------------------------------------------------------------
-_ASSET_COLS = (
-    "asset_id asset_type corpus path scene style width height megapixels bytes_size "
-    "is_portrait_pool kind fmt pack_id scene_affinity is_bw is_technical "
-    "has_local_mask has_ai_mask lut_size preset_content_hash status pass_a pass_b pass_c "
-    "b_quality b_comp b_subject b_face n_answered n_yes auto_verdict "
-    "final_decision decided_by aesthetic aesthetic_vlm artimuse_score charm_score iaa_mixed musiq clipiqa niqe "
-    "brisque sharpness noise_sigma jpeg_blockiness max_face_frac "
-    "pixel_sha256 phash dup_of dup_cluster split meta_json"
-).split()
-
-
-# QA-owned columns: filled by the QA stages, NEVER clobbered by a re-ingest.
-# (A re-ingest only refreshes source metadata; resetting status/verdicts/scores
-# here would silently undo QA progress — the idempotency bug this guards against.)
-_QA_OWNED = frozenset(
-    "status pass_a pass_b pass_c b_quality b_comp b_subject b_face n_answered n_yes "
-    "auto_verdict final_decision decided_by aesthetic artimuse_score charm_score iaa_mixed musiq clipiqa niqe brisque sharpness "
-    "noise_sigma max_face_frac megapixels width height pixel_sha256 phash dup_of "
-    "dup_cluster split preset_content_hash has_ai_mask".split()
-)
-
-
-def upsert_asset(conn: _Conn, row: Dict[str, Any]) -> None:
-    cols = [c for c in _ASSET_COLS if c in row]
-    placeholders = ",".join("%s" for _ in cols)
-    # on conflict, refresh only source-metadata columns; preserve QA-owned ones
-    updates = ",".join(f"{c}=EXCLUDED.{c}" for c in cols
-                       if c != "asset_id" and c not in _QA_OWNED)
-    sql = (
-        f"INSERT INTO assets({','.join(cols)}, updated_at) VALUES({placeholders}, now()) "
-        f"ON CONFLICT(asset_id) DO UPDATE SET {updates + ',' if updates else ''} updated_at=now()"
+def finish_run(connection: _Conn, run_id: str, stats: Optional[dict] = None) -> None:
+    connection.execute(
+        "UPDATE runs SET finished_at=now(), stats=%s WHERE run_id=%s",
+        (json.dumps(stats or {}, ensure_ascii=False), run_id),
     )
-    conn.execute(sql, [row[c] for c in cols])
+    connection.commit()
 
 
-def update_asset_fields(conn: _Conn, asset_id: str, **fields: Any) -> None:
-    if not fields:
-        return
-    sets = ",".join(f"{k}=%s" for k in fields)
-    conn.execute(f"UPDATE assets SET {sets}, updated_at=now() WHERE asset_id=%s",
-                 [*fields.values(), asset_id])
+_ASSET_COLUMNS = (
+    "asset_id", "asset_type", "corpus", "path", "scene", "style", "width",
+    "height", "bytes_size", "is_portrait_pool", "status", "aesthetic",
+    "aesthetic_vlm", "meta_json",
+)
+_PRESERVE_ON_UPDATE = frozenset({"status", "aesthetic", "aesthetic_vlm"})
 
 
-# --- event / score / qa writers ----------------------------------------------
-def log_event(conn: _Conn, asset_id: str, stage: str, status: str,
-              detail: Any = None, run_id: Optional[str] = None) -> None:
-    conn.execute(
-        "INSERT INTO processing_events(asset_id, stage, status, detail, run_id) VALUES(%s,%s,%s,%s,%s)",
-        (asset_id, stage, status,
-         json.dumps(detail, ensure_ascii=False) if detail is not None else None, run_id))
-
-
-def add_scores(conn: _Conn, asset_id: str, scores: Dict[str, float],
-               run_id: Optional[str] = None, model_version: str = "") -> None:
-    rows = [
-        (asset_id, m, (None if v is None else float(v)),
-         1 if config.IQA_HIGHER_BETTER.get(m, True) else 0, model_version, run_id)
-        for m, v in scores.items()
+def upsert_asset(connection: _Conn, row: dict[str, Any]) -> None:
+    unknown = sorted(set(row).difference(_ASSET_COLUMNS))
+    if unknown:
+        raise ValueError("unsupported retained asset field(s): " + ", ".join(unknown))
+    for required in ("asset_id", "asset_type", "path"):
+        if not row.get(required):
+            raise ValueError(f"asset row requires {required}")
+    columns = [column for column in _ASSET_COLUMNS if column in row]
+    updates = [
+        f"{column}=EXCLUDED.{column}"
+        for column in columns
+        if column != "asset_id" and column not in _PRESERVE_ON_UPDATE
     ]
-    conn.executemany(
-        "INSERT INTO iqa_scores(asset_id, metric, value, higher_is_better, model_version, run_id) "
-        "VALUES(%s,%s,%s,%s,%s,%s)", rows)
+    updates.append("updated_at=now()")
+    connection.execute(
+        f"INSERT INTO assets({','.join(columns)},updated_at) "
+        f"VALUES({','.join('%s' for _ in columns)},now()) "
+        f"ON CONFLICT(asset_id) DO UPDATE SET {','.join(updates)}",
+        [row[column] for column in columns],
+    )
 
 
-def add_qa(conn: _Conn, asset_id: str, questionnaire: str,
-           items: Dict[str, Dict[str, Any]], model: str = "", run_id: Optional[str] = None,
-           probe_id: Optional[str] = None) -> None:
-    """items: {item_key: {"answer": int|None, "rationale": str, "raw": str?}}
-    probe_id: preset 6 探针同题区分(图像侧 None); item= claim 审计 ID(非位置码)。"""
-    rows = [(asset_id, questionnaire, probe_id, item, d.get("answer"), d.get("rationale"),
-             d.get("raw"), model, run_id) for item, d in items.items()]
-    conn.executemany(
-        "INSERT INTO llm_qa(asset_id, questionnaire, probe_id, item, answer, rationale, raw, model, run_id) "
-        "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)", rows)
+def log_event(
+    connection: _Conn,
+    asset_id: str,
+    stage: str,
+    status: str,
+    detail: Any = None,
+    run_id: Optional[str] = None,
+) -> None:
+    connection.execute(
+        "INSERT INTO processing_events(asset_id,stage,status,detail,run_id) "
+        "VALUES(%s,%s,%s,%s,%s)",
+        (
+            asset_id,
+            stage,
+            status,
+            json.dumps(detail, ensure_ascii=False) if detail is not None else None,
+            run_id,
+        ),
+    )
 
 
-def add_llm_qa_run(conn: _Conn, asset_id: str, questionnaire: str, fields: Dict[str, Any],
-                   model: str = "", run_id: Optional[str] = None) -> None:
-    """图像整组可信度落 llm_qa_runs。fields 取 qa_clean 输出子集。"""
-    cols = ["asset_id", "questionnaire", "reliable", "reason", "contradiction_count",
-            "trap_fail", "trap_skipped", "reduced_anchor", "soft_trap_fail", "reask_count",
-            "defect_count", "merit_count", "merit_n", "merit_frac", "raw", "model", "run_id"]
-    vals = [asset_id, questionnaire] + [fields.get(c) for c in cols[2:-3]] + \
-           [fields.get("raw"), model, run_id]
-    ph = ",".join(["%s"] * len(cols))
-    conn.execute(f"INSERT INTO llm_qa_runs({','.join(cols)}) VALUES({ph})", vals)
-
-
-def add_preset_qa_run(conn: _Conn, asset_id: str, fields: Dict[str, Any],
-                      run_id: Optional[str] = None) -> None:
-    """preset 级投票汇总落 preset_qa_runs(upsert; pass_c 恒 0/1)。"""
-    cols = ["pro_pass_rate", "intent_pass_rate", "coh_pass_rate", "coherence_score",
-            "edit_direction_dispersion", "vote_pro", "vote_intent", "vote_coh",
-            "reliable_probe_count", "total_probe_count", "near_noop", "pass_c",
-            "auto_verdict", "verdict_reason"]
-    allc = ["asset_id", "questionnaire"] + cols + ["run_id"]
-    vals = [asset_id, "preset"] + [fields.get(c) for c in cols] + [run_id]
-    ph = ",".join(["%s"] * len(allc))
-    upd = ",".join(f"{c}=EXCLUDED.{c}" for c in cols + ["run_id", "created_at"])
-    conn.execute(
-        f"INSERT INTO preset_qa_runs({','.join(allc)}) VALUES({ph}) "
-        f"ON CONFLICT(asset_id, questionnaire) DO UPDATE SET {upd.replace('EXCLUDED.created_at', 'now()')}",
-        vals)
-
-
-def add_decision(conn: _Conn, asset_id: str, decision: str,
-                 reviewer: str, reason: str = "") -> None:
-    conn.execute(
-        "INSERT INTO decisions(asset_id, decision, reviewer, reason) VALUES(%s,%s,%s,%s)",
-        (asset_id, decision, reviewer, reason))
-    update_asset_fields(conn, asset_id, final_decision=decision, decided_by=reviewer,
-                        status=("kept" if decision == "keep" else
-                                "dropped" if decision == "drop" else "needs_review"))
-
-
-# --- dedup -------------------------------------------------------------------
-def mark_dup(conn: _Conn, asset_id: str, head: str) -> None:
-    """Record a near/exact duplicate pointing at its cluster head (mirrors the
-    preset dup_of pattern). Non-head members get an auto 'drop' suggestion."""
-    update_asset_fields(conn, asset_id, dup_of=head, dup_cluster=head, auto_verdict="drop")
-
-
-# --- render jobs (real-Lightroom preset QA) ----------------------------------
-def add_render_job(conn: _Conn, job: Dict[str, Any]) -> None:
-    cols = ("job_id recipe_id preset_content_hash probe_id render_engine "
-            "region_local_flag ai_mask_flag fmt preset_path probe_path status run_id").split()
-    vals = [job.get(c) for c in cols]
-    conn.execute(
-        f"INSERT INTO render_jobs({','.join(cols)}) "
-        f"VALUES({','.join('%s' for _ in cols)}) "
-        "ON CONFLICT(preset_content_hash, probe_id, render_engine) DO NOTHING",
-        vals)
-
-
-def mark_job(conn: _Conn, job_id: str, status: str, **fields: Any) -> None:
-    sets = ["status=%s"]
-    vals: list = [status]
-    for k, v in fields.items():
-        sets.append(f"{k}=%s")
-        vals.append(v)
-    if status in ("done", "error", "skipped"):
-        sets.append("finished_at=now()")
-    vals.append(job_id)
-    conn.execute(f"UPDATE render_jobs SET {','.join(sets)} WHERE job_id=%s", vals)
-
-
-def cached_render(conn: _Conn, content_hash: str, probe_id: str, engine: str):
-    return conn.execute(
-        "SELECT job_id, after_tif_path, after_jpg_path, engine_version FROM render_jobs "
-        "WHERE preset_content_hash=? AND probe_id=? AND render_engine=? AND status='done'",
-        (content_hash, probe_id, engine)).fetchone()
-
-
-def add_preset_preview(conn: _Conn, asset_id: str, probe_image: str, before_path: str,
-                       after_path: str, after_iqa: dict, paired_metrics: dict,
-                       render_engine: str, region_local: int, job_id: Optional[str],
-                       run_id: Optional[str], ai_mask: int = 0) -> None:
-    conn.execute(
-        "INSERT INTO preset_previews(asset_id, probe_image, before_path, after_path, "
-        "after_iqa, paired_metrics, render_engine, region_local, ai_mask, job_id, run_id) "
-        "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(job_id) DO NOTHING",
-        (asset_id, probe_image, before_path, after_path,
-         json.dumps(after_iqa or {}), json.dumps(paired_metrics or {}),
-         render_engine, region_local, ai_mask, job_id, run_id))
-
-
-# --- read helpers (used by the web app) --------------------------------------
-def get_asset(conn: _Conn, asset_id: str):
-    return conn.execute("SELECT * FROM assets WHERE asset_id=?", (asset_id,)).fetchone()
-
-
-def asset_scores(conn: _Conn, asset_id: str) -> List[Row]:
-    return conn.execute(
-        "SELECT metric, value, higher_is_better, model_version, created_at "
-        "FROM iqa_scores WHERE asset_id=? ORDER BY id", (asset_id,)).fetchall()
-
-
-def asset_qa(conn: _Conn, asset_id: str) -> List[Row]:
-    return conn.execute(
-        "SELECT questionnaire, item, answer, rationale, raw, model, created_at "
-        "FROM llm_qa WHERE asset_id=? ORDER BY id", (asset_id,)).fetchall()
-
-
-def asset_events(conn: _Conn, asset_id: str) -> List[Row]:
-    return conn.execute(
-        "SELECT stage, status, detail, run_id, ts FROM processing_events "
-        "WHERE asset_id=? ORDER BY id", (asset_id,)).fetchall()
-
-
-def asset_decisions(conn: _Conn, asset_id: str) -> List[Row]:
-    return conn.execute(
-        "SELECT decision, reviewer, reason, ts FROM decisions "
-        "WHERE asset_id=? ORDER BY id DESC", (asset_id,)).fetchall()
-
-
-def asset_previews(conn: _Conn, asset_id: str) -> List[Row]:
-    return conn.execute(
-        "SELECT probe_image, before_path, after_path, after_iqa, paired_metrics, "
-        "render_engine, region_local, created_at "
-        "FROM preset_previews WHERE asset_id=? ORDER BY id", (asset_id,)).fetchall()
+__all__ = [
+    "Row", "SCHEMA", "connect", "finish_run", "init_db", "log_event",
+    "new_run_id", "start_run", "upsert_asset",
+]

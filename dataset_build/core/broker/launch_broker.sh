@@ -1,20 +1,15 @@
 #!/bin/bash
 # =============================================================================
-# launch_broker.sh — start the vGate vLLM broker (Phase 0).
+# launch_broker.sh - start the canonical local Responses broker.
 #
 # A thin, out-of-process OpenAI-compatible reverse proxy in front of the 1-2
-# stock `vllm serve` replicas (reason_g0:8001 / reason_g1:8002). Business code
-# points its base_url at this broker (:8003) and gets replica discovery,
-# least-outstanding routing, a global admission budget, and class fairness for
-# free — no business code changes (see UNIFIED_CONCURRENCY_DESIGN_v2). Pure
-# Python (fastapi/uvicorn/httpx); no torch, no GPU.
+# stock `vllm serve` replicas (reason_g0:8001 / reason_g1:8002). Canonical
+# databuild points [annotation.local].base_url at this broker and uses only
+# POST /v1/responses. Pure Python (fastapi/uvicorn/httpx); no torch, no GPU.
 #
 # Modes:
 #   start (default) -> run in the foreground (use systemd / nohup to daemonize).
 #   stop            -> kill any running broker on $VGATE_PORT.
-#
-# Rollback: stop the broker and point base_url back at a replica
-#   (config.yaml vllm.base_url -> :8001/:8002 ; SOURCE_QA_VLLM -> :8002).
 #
 # Usage: bash dataset_build/core/broker/launch_broker.sh [start|stop]
 # Env (all optional): VGATE_PORT(8003) VGATE_REPLICA_PORTS("8001,8002")

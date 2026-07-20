@@ -2,8 +2,8 @@
 
 Polls a fixed list of candidate host ports for an OpenAI-compatible
 ``GET /v1/models`` endpoint. A replica counts as *live* iff it is reachable
-**and** serves the expected model name (``config.yaml`` ``vllm.served_model_name``
-== ``launch_reasoning.sh`` ``--served-model-name`` == ``qwen3_5-35b-a3b``).
+**and** serves the configured model name (canonical default:
+``qwen3_5-35b-a3b``).
 
 Heterogeneous replicas (a port that serves a *different* model name) are
 isolated — kept out of the live set and logged loudly — because least-outstanding

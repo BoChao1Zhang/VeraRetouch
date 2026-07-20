@@ -6,7 +6,7 @@
 union）→ 退化守卫（mask 面积 >0.85 / 多成员包络 >0.67 舍弃）→ 清理（≥最大组件
 0.5% 连通域保留 + 填孔）。
 
-产物（与 mask_cache.CachedMasker 同 key，旧 concept-union cache 不动）：
+产物（source path 使用稳定 ``path_key``）：
     <cache>/<path_key>/subject.png    # 清理后的主体 mask（L 8bit；实例或群体 union）
     <cache>/<path_key>/subject.json   # status/scope/prompt/守卫指标/版本，见 _write_meta
 
@@ -41,7 +41,7 @@ if _REPO not in sys.path:
 
 from dataset_build.mask_cache import path_key  # noqa: E402
 
-# 新一代主体 cache 独立根（旧 sam3_cache 的子目录归 root，且 subject 是新产物）
+# Instance-level subject cache root.
 CACHE = os.environ.get(
     "CONSTRUCT_SUBJECT_CACHE", "/home/bc/data/datasets/vera_directionA_1M/subject_cache")
 PIPELINE_VERSION = "subject_v1 (eval v6 2026-07-11)"
@@ -120,6 +120,13 @@ def _post_pool() -> ThreadPoolExecutor:
     return _POST_POOL
 
 
+def _shutdown_post_pool() -> None:
+    global _POST_POOL
+    if _POST_POOL is not None:
+        _POST_POOL.shutdown(wait=True, cancel_futures=True)
+        _POST_POOL = None
+
+
 def _capped(native: tuple) -> tuple:
     h, w = native
     s = MASK_LONG_EDGE / max(h, w)
@@ -175,7 +182,7 @@ def _sam_forward_batch(masker, sam_rows: list, img_works: list, min_score: float
 # --------------------------------------------------------------------------- #
 # run（monetgpt_sam3 env）
 # --------------------------------------------------------------------------- #
-def run(args: argparse.Namespace) -> None:
+def run(args: argparse.Namespace, rows_override: list[dict] | None = None) -> dict[str, str]:
     # v6 已验证逻辑直接复用 eval 工具（prompts/解析/proposals/过滤/dense 回退/overlay）
     from dataset_build.masking import Sam3Masker
     from dataset_build.tools.eval_subject_instance_selector import (
@@ -184,39 +191,44 @@ def run(args: argparse.Namespace) -> None:
 
     # 续跑集合用一次 listdir 构建：对 56.8k 源逐个 os.path.exists 是冷 inode 随机读，
     # 在共享数据盘上曾把扫描拖到 ~40min；源图可读性由标注阶段兜底（source_unreadable）。
-    os.makedirs(CACHE, exist_ok=True)
+    cache_root = os.fspath(getattr(args, "cache_root", CACHE))
+    os.makedirs(cache_root, exist_ok=True)
     done_keys = set()
-    for d in os.listdir(CACHE):
-        if os.path.exists(os.path.join(CACHE, d, "subject.json")):
-            done_keys.add(d)
+    if rows_override is None:
+        for d in os.listdir(cache_root):
+            if os.path.exists(os.path.join(cache_root, d, "subject.json")):
+                done_keys.add(d)
     todo = []
-    with open(args.pool, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            row = json.loads(line)
-            key = path_key(row["source_path"])
-            if args.shard_n > 1 and int(key, 16) % args.shard_n != args.shard_i:
-                continue
-            if key in done_keys:
-                continue  # 续跑：已处理
-            row["cache_dir"] = os.path.join(CACHE, key)
-            todo.append(row)
-            if args.limit and len(todo) >= args.limit:
-                break
+    if rows_override is None:
+        with open(args.pool, encoding="utf-8") as f:
+            input_rows = [json.loads(line) for line in f if line.strip()]
+    else:
+        input_rows = [dict(row) for row in rows_override]
+    for row in input_rows:
+        key = path_key(row["source_path"])
+        if args.shard_n > 1 and int(key, 16) % args.shard_n != args.shard_i:
+            continue
+        if key in done_keys:
+            continue  # 续跑：已处理
+        row["cache_dir"] = os.path.join(cache_root, key)
+        todo.append(row)
+        if args.limit and len(todo) >= args.limit:
+            break
     print(f"pending: {len(todo)} (shard {args.shard_i}/{args.shard_n})", flush=True)
     if not todo:
-        return
+        return {}
 
     work = Path(args.work_dir)
     work.mkdir(parents=True, exist_ok=True)
     masker = None
     stats: dict[str, int] = {}
+    statuses: dict[str, str] = {}
     pool = ThreadPoolExecutor(max_workers=args.vlm_workers)
 
-    def bump(status: str) -> None:
+    def bump(status: str, asset_id: str | None = None) -> None:
         stats[status] = stats.get(status, 0) + 1
+        if asset_id is not None:
+            statuses[asset_id] = status
 
     def finalize(record: dict, row: dict) -> str:
         """选择结果 → 守卫 → 清理 → 落盘。返回最终 status。"""
@@ -312,8 +324,10 @@ def run(args: argparse.Namespace) -> None:
                                         "reason": record.get("error")})
                 return record.get("status", "unknown")
             _prepare_overlays(record, img_work, args.seed)
-            _, _, sel = _call_selector(record, "a", args.vlm_base_url,
-                                       args.vlm_model, args.vlm_timeout)
+            _, _, sel = _call_selector(
+                record, "a", args.vlm_base_url, args.vlm_model, args.vlm_timeout,
+                api_key=getattr(args, "vlm_api_key", "EMPTY"),
+            )
             record["selection"] = {"a": sel}
             return finalize(record, row)
         finally:
@@ -321,71 +335,120 @@ def run(args: argparse.Namespace) -> None:
 
     def _label_one(r: dict) -> dict:
         try:
-            return _call_subject_label(r, "a", args.vlm_base_url, args.vlm_model,
-                                       args.vlm_timeout)[2]
+            return _call_subject_label(
+                r, "a", args.vlm_base_url, args.vlm_model, args.vlm_timeout,
+                api_key=getattr(args, "vlm_api_key", "EMPTY"),
+            )[2]
         except Exception as e:  # noqa: BLE001 - 源图缺失/损坏等，单图记账不拖垮批
-            import requests
-            if isinstance(e, (requests.RequestException, ConnectionError, TimeoutError)):
-                return {"status": "transport_error", "error": str(e)[:200]}
-            return {"status": "source_unreadable", "error": str(e)[:200]}
+            return {"status": "source_unreadable", "error": type(e).__name__}
 
     def label_chunk(chunk: list) -> list:
         return list(pool.map(_label_one, chunk))
 
     chunks = [todo[i:i + args.chunk] for i in range(0, len(todo), args.chunk)]
     prefetch = ThreadPoolExecutor(max_workers=1)
-    next_labels = prefetch.submit(label_chunk, chunks[0])
-    t0 = time.perf_counter()
-    n_done = 0
-    for ci, chunk in enumerate(chunks):
-        labels = next_labels.result()
-        if ci + 1 < len(chunks):   # SAM 忙时预取下一块标注，vLLM(卡1)保持高占用
-            next_labels = prefetch.submit(label_chunk, chunks[ci + 1])
-        sam_rows, img_works, sam_meta = [], [], []
-        sel_futures = []
-        for row, label in zip(chunk, labels):
-            cache_dir = row["cache_dir"]
-            if label.get("status") == "transport_error":
-                bump("transport_skipped")   # 瞬时故障不落盘，resume 重跑
-                continue
-            if label.get("status") != "ok":
-                os.makedirs(cache_dir, exist_ok=True)
-                _write_meta(cache_dir, {"asset_id": row["asset_id"],
-                                        "source_path": row["source_path"],
-                                        "status": "subject_label_error",
-                                        "reason": label.get("status")})
-                bump("subject_label_error")
-                continue
-            if not label.get("has_localizable_subject"):
-                os.makedirs(cache_dir, exist_ok=True)
-                _write_meta(cache_dir, {"asset_id": row["asset_id"],
-                                        "source_path": row["source_path"],
-                                        "status": "no_subject",
-                                        "reason": label.get("reason_code")})
-                bump("no_subject")
-                continue
-            sam_rows.append(dict(row, main_subject=str(label.get("sam_prompt") or "")))
-            img_works.append(work / row["asset_id"])
-            sam_meta.append((row, label))
-        if sam_rows and masker is None:
-            masker = Sam3Masker(device=args.device, score_threshold=args.min_score)
-            masker._ensure_loaded()
-        for b0 in range(0, len(sam_rows), args.sam_batch):
-            b1 = b0 + args.sam_batch
-            records = _sam_forward_batch(masker, sam_rows[b0:b1], img_works[b0:b1],
-                                         args.min_score, args.dedupe_iou)
-            for record, (row, label), img_work in zip(records, sam_meta[b0:b1],
-                                                      img_works[b0:b1]):
-                sel_futures.append(pool.submit(
-                    _post_and_select, record, row, label, img_work))
-        for fut in sel_futures:
-            bump(fut.result())
-        n_done += len(chunk)
-        rate = n_done / max(time.perf_counter() - t0, 1e-6)
-        eta_h = (len(todo) - n_done) / max(rate, 1e-6) / 3600
-        print(f"[{n_done}/{len(todo)}] {rate:.2f} img/s eta={eta_h:.1f}h "
-              f"{json.dumps(stats, ensure_ascii=False)}", flush=True)
-    print("done:", json.dumps(stats, ensure_ascii=False))
+    try:
+        next_labels = prefetch.submit(label_chunk, chunks[0])
+        t0 = time.perf_counter()
+        n_done = 0
+        for ci, chunk in enumerate(chunks):
+            labels = next_labels.result()
+            if ci + 1 < len(chunks):   # SAM 忙时预取下一块标注，vLLM(卡1)保持高占用
+                next_labels = prefetch.submit(label_chunk, chunks[ci + 1])
+            sam_rows, img_works, sam_meta = [], [], []
+            sel_futures = []
+            for row, label in zip(chunk, labels):
+                cache_dir = row["cache_dir"]
+                if label.get("status") == "transport_error":
+                    bump("transport_skipped", row["asset_id"])
+                    continue
+                if label.get("status") != "ok":
+                    os.makedirs(cache_dir, exist_ok=True)
+                    _write_meta(cache_dir, {"asset_id": row["asset_id"],
+                                            "source_path": row["source_path"],
+                                            "status": "subject_label_error",
+                                            "reason": label.get("status")})
+                    bump("subject_label_error", row["asset_id"])
+                    continue
+                if not label.get("has_localizable_subject"):
+                    os.makedirs(cache_dir, exist_ok=True)
+                    _write_meta(cache_dir, {"asset_id": row["asset_id"],
+                                            "source_path": row["source_path"],
+                                            "status": "no_subject",
+                                            "reason": label.get("reason_code")})
+                    bump("no_subject", row["asset_id"])
+                    continue
+                sam_rows.append(dict(row, main_subject=str(label.get("sam_prompt") or "")))
+                img_works.append(work / row["asset_id"])
+                sam_meta.append((row, label))
+            if sam_rows and masker is None:
+                masker = Sam3Masker(device=args.device, score_threshold=args.min_score)
+                masker._ensure_loaded()
+            for b0 in range(0, len(sam_rows), args.sam_batch):
+                b1 = b0 + args.sam_batch
+                records = _sam_forward_batch(masker, sam_rows[b0:b1], img_works[b0:b1],
+                                             args.min_score, args.dedupe_iou)
+                for record, (row, label), img_work in zip(records, sam_meta[b0:b1],
+                                                          img_works[b0:b1]):
+                    sel_futures.append((row["asset_id"], pool.submit(
+                        _post_and_select, record, row, label, img_work)))
+            for asset_id, fut in sel_futures:
+                bump(fut.result(), asset_id)
+            n_done += len(chunk)
+            rate = n_done / max(time.perf_counter() - t0, 1e-6)
+            eta_h = (len(todo) - n_done) / max(rate, 1e-6) / 3600
+            print(f"[{n_done}/{len(todo)}] {rate:.2f} img/s eta={eta_h:.1f}h "
+                  f"{json.dumps(stats, ensure_ascii=False)}", flush=True)
+        print("done:", json.dumps(stats, ensure_ascii=False))
+        return statuses
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+        prefetch.shutdown(wait=True, cancel_futures=True)
+        _shutdown_post_pool()
+        if masker is not None:
+            del masker
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+
+def relabel_sources(
+    rows: list[dict],
+    *,
+    cache_root: str,
+    device: str,
+    seed: int,
+    vlm_base_url: str,
+    vlm_api_key: str,
+    vlm_model: str,
+) -> dict[str, str]:
+    """Force a bounded batch of source rows through the retained instance protocol."""
+    args = argparse.Namespace(
+        pool=None,
+        cache_root=cache_root,
+        device=device,
+        shard_i=0,
+        shard_n=1,
+        limit=0,
+        chunk=max(1, min(256, len(rows))),
+        sam_batch=8,
+        work_dir=os.path.join(cache_root, "_instance_work"),
+        min_score=0.30,
+        dedupe_iou=0.92,
+        max_proposals=16,
+        focus_radius=0.025,
+        max_mask_area=0.85,
+        max_group_envelope=0.67,
+        seed=seed,
+        vlm_base_url=vlm_base_url,
+        vlm_api_key=vlm_api_key,
+        vlm_model=vlm_model,
+        vlm_workers=32,
+        vlm_timeout=120.0,
+    )
+    return run(args, rows_override=rows)
 
 
 def main() -> None:
@@ -395,6 +458,7 @@ def main() -> None:
     d.add_argument("--out", required=True)
     r = sub.add_parser("run")
     r.add_argument("--pool", required=True)
+    r.add_argument("--cache-root", default=CACHE)
     r.add_argument("--device", default="cuda:0")
     r.add_argument("--shard", default="0/1")
     r.add_argument("--limit", type=int, default=0)

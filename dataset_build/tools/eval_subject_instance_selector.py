@@ -25,16 +25,16 @@ import io
 import json
 import os
 import random
-import threading
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-import json_repair
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
+
+from dataset_build.core.responses_vlm import ResponsesVlmError, request_text
 
 
 PALETTE = (
@@ -55,6 +55,58 @@ PALETTE = (
     (192, 132, 252),
     (251, 146, 60),
 )
+
+SUBJECT_LABEL_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "has_localizable_subject", "subject_scope", "sam_prompt", "expected_count",
+        "description", "visual_center", "confidence", "reason_code",
+    ],
+    "properties": {
+        "has_localizable_subject": {"type": "boolean"},
+        "subject_scope": {"type": "string", "enum": ["single", "group"]},
+        "sam_prompt": {"type": "string"},
+        "expected_count": {"type": "integer", "minimum": 1, "maximum": 16},
+        "description": {"type": "string"},
+        "visual_center": {
+            "anyOf": [
+                {
+                    "type": "array", "minItems": 2, "maxItems": 2,
+                    "items": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+                },
+                {"type": "null"},
+            ]
+        },
+        "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "reason_code": {
+            "type": "string",
+            "enum": ["clear_primary", "clear_group", "no_discrete_subject"],
+        },
+    },
+}
+
+SUBJECT_SELECTION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["decision", "instance_ids", "confidence", "subject", "reason_code"],
+    "properties": {
+        "decision": {
+            "type": "string",
+            "enum": ["select", "no_subject", "no_valid_mask", "ambiguous"],
+        },
+        "instance_ids": {
+            "type": "array", "maxItems": 16, "uniqueItems": True,
+            "items": {"type": "integer", "minimum": 1},
+        },
+        "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+        "subject": {"type": "string"},
+        "reason_code": {
+            "type": "string",
+            "enum": ["clear_primary", "clear_group", "pure_landscape", "proposal_miss", "tie"],
+        },
+    },
+}
 
 
 def _font(size: int) -> ImageFont.ImageFont:
@@ -473,45 +525,65 @@ def _subject_prompt() -> str:
 
 def _parse_subject_label(raw: str) -> dict[str, Any]:
     try:
-        parsed = json_repair.loads(raw)
-    except Exception:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
         parsed = None
-    if not isinstance(parsed, dict):
+    required = {
+        "has_localizable_subject", "subject_scope", "sam_prompt", "expected_count",
+        "description", "visual_center", "confidence", "reason_code",
+    }
+    if not isinstance(parsed, dict) or set(parsed) != required:
         return {"status": "parse_error", "raw_response": raw}
     has_subject = parsed.get("has_localizable_subject")
     if not isinstance(has_subject, bool):
         return {"status": "parse_error", "raw_response": raw}
-    try:
-        confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0.0))))
-    except (TypeError, ValueError):
-        confidence = 0.0
+    confidence = parsed["confidence"]
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) \
+            or not 0.0 <= float(confidence) <= 1.0:
+        return {"status": "parse_error", "raw_response": raw}
+    scope = parsed["subject_scope"]
+    expected = parsed["expected_count"]
+    reason_code = parsed["reason_code"]
+    if scope not in {"single", "group"} or type(expected) is not int \
+            or not 1 <= expected <= 16:
+        return {"status": "parse_error", "raw_response": raw}
+    if reason_code not in {"clear_primary", "clear_group", "no_discrete_subject"}:
+        return {"status": "parse_error", "raw_response": raw}
     result: dict[str, Any] = {
         "status": "ok",
         "has_localizable_subject": has_subject,
-        "confidence": confidence,
-        "reason_code": str(parsed.get("reason_code") or "")[:80],
+        "confidence": float(confidence),
+        "reason_code": reason_code,
         "raw_response": raw,
     }
     if not has_subject:
-        result.update({"sam_prompt": "", "description": "", "visual_center": None})
+        if parsed["visual_center"] is not None:
+            return {"status": "parse_error", "raw_response": raw}
+        if not isinstance(parsed["sam_prompt"], str) or not isinstance(parsed["description"], str):
+            return {"status": "parse_error", "raw_response": raw}
+        result.update({
+            "sam_prompt": parsed["sam_prompt"],
+            "description": parsed["description"],
+            "visual_center": None,
+            "subject_scope": scope,
+            "expected_count": expected,
+        })
         return result
-    prompt = str(parsed.get("sam_prompt") or "").strip().lower()
-    description = str(parsed.get("description") or "").strip()[:200]
-    center = parsed.get("visual_center")
-    if not prompt or len(prompt.split()) > 10 or not isinstance(center, list) or len(center) != 2:
+    prompt = parsed["sam_prompt"]
+    description = parsed["description"]
+    center = parsed["visual_center"]
+    if not isinstance(prompt, str) or not prompt or prompt != prompt.strip().lower() \
+            or len(prompt.split()) > 10:
         return {"status": "parse_error", "raw_response": raw}
-    try:
-        center = [max(0.0, min(1.0, float(center[0]))), max(0.0, min(1.0, float(center[1])))]
-    except (TypeError, ValueError):
+    if not isinstance(description, str) or not description or description != description.strip():
         return {"status": "parse_error", "raw_response": raw}
-    scope = str(parsed.get("subject_scope") or "single").strip().lower()
-    if scope not in {"single", "group"}:
-        scope = "single"
-    try:
-        expected = max(1, min(16, int(parsed.get("expected_count", 1))))
-    except (TypeError, ValueError):
-        expected = 1
-    result.update({"sam_prompt": prompt, "description": description, "visual_center": center,
+    if not isinstance(center, list) or len(center) != 2 or any(
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        or not 0.0 <= float(value) <= 1.0 for value in center
+    ):
+        return {"status": "parse_error", "raw_response": raw}
+    result.update({"sam_prompt": prompt, "description": description,
+                   "visual_center": [float(center[0]), float(center[1])],
                    "subject_scope": scope, "expected_count": expected})
     return result
 
@@ -522,45 +594,34 @@ def _call_subject_label(
     base_url: str,
     model: str,
     timeout: float,
+    *,
+    api_key: str = "EMPTY",
 ) -> tuple[str, str, dict[str, Any]]:
-    payload = {
-        "model": model,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": _data_uri(row["source_path"])}},
-                {"type": "text", "text": _subject_prompt()},
-            ],
-        }],
-        "max_tokens": 320,
-        "temperature": 0.1,
-        "chat_template_kwargs": {"enable_thinking": False},
-        "response_format": {"type": "json_object"},
-    }
-    headers = {"Authorization": "Bearer EMPTY", "X-vgate-class": "qa-judge"}
     started = time.perf_counter()
-    last_error = ""
-    for attempt in range(3):
-        try:
-            response = _session().post(
-                base_url.rstrip("/") + "/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=timeout,
-            )
-            response.raise_for_status()
-            raw = response.json()["choices"][0]["message"]["content"]
-            result = _parse_subject_label(raw)
-            result["attempt"] = attempt + 1
-            result["seconds"] = time.perf_counter() - started
-            return row["asset_id"], variant_name, result
-        except Exception as error:  # noqa: BLE001
-            last_error = str(error)
-    return row["asset_id"], variant_name, {
-        "status": "transport_error",
-        "error": last_error,
-        "seconds": time.perf_counter() - started,
-    }
+    try:
+        response = request_text(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            content=[
+                {"type": "input_image", "image_url": _data_uri(row["source_path"])},
+                {"type": "input_text", "text": _subject_prompt()},
+            ],
+            schema_name="sam3_subject_label",
+            schema=SUBJECT_LABEL_SCHEMA,
+            timeout=timeout,
+        )
+    except ResponsesVlmError as error:
+        return row["asset_id"], variant_name, {
+            "status": "transport_error",
+            "error": error.error_type,
+            "attempt": error.attempts,
+            "seconds": time.perf_counter() - started,
+        }
+    result = _parse_subject_label(response.text)
+    result["attempt"] = response.attempt
+    result["seconds"] = time.perf_counter() - started
+    return row["asset_id"], variant_name, result
 
 
 def _subject_label_agrees(left: dict[str, Any], right: dict[str, Any]) -> bool:
@@ -620,52 +681,46 @@ def _selector_prompt(record: dict[str, Any], display_ids: list[int]) -> str:
     )
 
 
-_LOCAL = threading.local()
-
-
-def _session():
-    if not hasattr(_LOCAL, "session"):
-        import requests
-
-        _LOCAL.session = requests.Session()
-    return _LOCAL.session
-
-
 def _parse_selection(raw: str, valid_ids: set[int]) -> dict[str, Any]:
     try:
-        parsed = json_repair.loads(raw)
-    except Exception:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
         parsed = None
-    if not isinstance(parsed, dict):
+    required = {"decision", "instance_ids", "confidence", "subject", "reason_code"}
+    if not isinstance(parsed, dict) or set(parsed) != required:
         return {"status": "parse_error", "raw_response": raw}
-    decision = str(parsed.get("decision") or "").strip().lower()
+    decision = parsed["decision"]
     if decision not in {"select", "no_subject", "no_valid_mask", "ambiguous"}:
         return {"status": "parse_error", "raw_response": raw}
-    ids: list[int] = []
-    if decision == "select":
-        raw_ids = parsed.get("instance_ids")
-        if raw_ids is None and parsed.get("instance_id") is not None:
-            raw_ids = [parsed.get("instance_id")]   # 兼容旧单选字段
-        if not isinstance(raw_ids, list) or not raw_ids:
-            return {"status": "parse_error", "raw_response": raw}
-        try:
-            ids = sorted({int(value) for value in raw_ids})
-        except (TypeError, ValueError):
-            return {"status": "parse_error", "raw_response": raw}
-        if not set(ids) <= valid_ids:
-            return {"status": "invalid_id", "raw_response": raw}
-    try:
-        confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0.0))))
-    except (TypeError, ValueError):
-        confidence = 0.0
+    raw_ids = parsed["instance_ids"]
+    if not isinstance(raw_ids, list) or len(raw_ids) > 16 \
+            or any(type(value) is not int or value < 1 for value in raw_ids) \
+            or len(raw_ids) != len(set(raw_ids)):
+        return {"status": "parse_error", "raw_response": raw}
+    if (decision == "select") != bool(raw_ids):
+        return {"status": "parse_error", "raw_response": raw}
+    ids = sorted(raw_ids)
+    if not set(ids) <= valid_ids:
+        return {"status": "invalid_id", "raw_response": raw}
+    confidence = parsed["confidence"]
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)) \
+            or not 0.0 <= float(confidence) <= 1.0:
+        return {"status": "parse_error", "raw_response": raw}
+    if not isinstance(parsed["subject"], str) or parsed["subject"] != parsed["subject"].strip():
+        return {"status": "parse_error", "raw_response": raw}
+    reason_code = parsed["reason_code"]
+    if reason_code not in {
+        "clear_primary", "clear_group", "pure_landscape", "proposal_miss", "tie",
+    }:
+        return {"status": "parse_error", "raw_response": raw}
     return {
         "status": "ok",
         "decision": decision,
         "display_instance_ids": ids or None,
         "display_instance_id": ids[0] if ids else None,
-        "confidence": confidence,
-        "subject": str(parsed.get("subject") or "")[:120],
-        "reason_code": str(parsed.get("reason_code") or "")[:80],
+        "confidence": float(confidence),
+        "subject": parsed["subject"],
+        "reason_code": reason_code,
         "raw_response": raw,
     }
 
@@ -676,62 +731,47 @@ def _call_selector(
     base_url: str,
     model: str,
     timeout: float,
+    *,
+    api_key: str = "EMPTY",
 ) -> tuple[str, str, dict[str, Any]]:
     variant = record["variants"][variant_name]
     mapping = {int(k): int(v) for k, v in variant["display_to_stable"].items()}
-    payload = {
-        "model": model,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": _data_uri(record["source_path"])}},
-                {"type": "image_url", "image_url": {"url": _data_uri(variant["overlay_path"])}},
-                {"type": "text", "text": _selector_prompt(record, sorted(mapping))},
-            ],
-        }],
-        "max_tokens": 320,
-        "temperature": 0.1,
-        "chat_template_kwargs": {"enable_thinking": False},
-        "response_format": {"type": "json_object"},
-    }
-    headers = {"Authorization": "Bearer EMPTY", "X-vgate-class": "qa-judge"}
     started = time.perf_counter()
-    last_error = ""
-    for attempt in range(3):
-        try:
-            response = _session().post(
-                base_url.rstrip("/") + "/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=timeout,
-            )
-            response.raise_for_status()
-            raw = response.json()["choices"][0]["message"]["content"]
-            result = _parse_selection(raw, set(mapping))
-            result["attempt"] = attempt + 1
-            result["seconds"] = time.perf_counter() - started
-            if result.get("decision") == "select":
-                stable_ids = sorted(
-                    mapping[did] for did in result["display_instance_ids"])
-                result["stable_instance_ids"] = stable_ids
-                result["stable_instance_id"] = stable_ids[0]
-                shas = []
-                for sid in stable_ids:
-                    proposal = next(
-                        item for item in record["proposals"]
-                        if item["stable_id"] == sid
-                    )
-                    shas.append(proposal["mask_sha256"])
-                result["mask_sha256_list"] = sorted(shas)
-                result["mask_sha256"] = result["mask_sha256_list"][0]
-            return record["asset_id"], variant_name, result
-        except Exception as error:  # noqa: BLE001
-            last_error = str(error)
-    return record["asset_id"], variant_name, {
-        "status": "transport_error",
-        "error": last_error,
-        "seconds": time.perf_counter() - started,
-    }
+    try:
+        response = request_text(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            content=[
+                {"type": "input_image", "image_url": _data_uri(record["source_path"])},
+                {"type": "input_image", "image_url": _data_uri(variant["overlay_path"])},
+                {"type": "input_text", "text": _selector_prompt(record, sorted(mapping))},
+            ],
+            schema_name="sam3_subject_selection",
+            schema=SUBJECT_SELECTION_SCHEMA,
+            timeout=timeout,
+        )
+    except ResponsesVlmError as error:
+        return record["asset_id"], variant_name, {
+            "status": "transport_error",
+            "error": error.error_type,
+            "attempt": error.attempts,
+            "seconds": time.perf_counter() - started,
+        }
+    result = _parse_selection(response.text, set(mapping))
+    result["attempt"] = response.attempt
+    result["seconds"] = time.perf_counter() - started
+    if result.get("decision") == "select":
+        stable_ids = sorted(mapping[did] for did in result["display_instance_ids"])
+        result["stable_instance_ids"] = stable_ids
+        result["stable_instance_id"] = stable_ids[0]
+        shas = []
+        for sid in stable_ids:
+            proposal = next(item for item in record["proposals"] if item["stable_id"] == sid)
+            shas.append(proposal["mask_sha256"])
+        result["mask_sha256_list"] = sorted(shas)
+        result["mask_sha256"] = result["mask_sha256_list"][0]
+    return record["asset_id"], variant_name, result
 
 
 def _selection_agrees(left: dict[str, Any], right: dict[str, Any]) -> bool:
