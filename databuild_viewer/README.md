@@ -1,48 +1,73 @@
-# databuild viewer
+# Canonical Databuild Viewer
 
-datagen-v2 数据集的浏览 / 构建过程可视化 / 人工 review 网页。React + TailwindCSS 前端，
-FastAPI 后端，只读浏览 Postgres `vera_source_qa` + 磁盘渲染图，唯一写操作是人工 review 落库。
+Read-only inspection of canonical databuild artifacts. The backend prefers the
+`canonical_*` PostgreSQL projection and falls back to `groups.jsonl`, `sft.jsonl`,
+`failures.jsonl`, and `manifest.json` when PostgreSQL is unavailable.
 
-```
-databuild_viewer/
-  backend/app.py      FastAPI：/api/* 数据接口 + /img 缩略图服务，复用 dataset_build.source_qa.db
-  frontend/           Vite + React + Tailwind v4 单页应用（浏览 / 构建过程 / review 三个 Tab）
-```
+The inspector exposes every complete eight-candidate group, source and rendered
+images, local `C_GT` and mask overlay views, visibility and OneAlign metrics,
+subject/region metadata, top-2 SFT annotations, and structured failure events.
+Filters cover build, render mode, preset format and taxonomy, annotation queue,
+failure state, and winner rank.
 
-## 三个 Tab
+## Backend
 
-- **浏览** — 左侧切 source 图 / preset，按 corpus 过滤、按 aes 分排序、分页（≤200/页）。详情：
-  source 图看 2 轮 QA（验真 A/B、审美 AES merit）+ caption + aes 分；preset 看 6 探针 before/after
-  + axes + VLM caption + embedding 状态。
-- **构建过程** — construct 流水线的中间结果已**全部入库**。每个 `group` = 一张源图的 databuild 单元，
-  按链路展开：源图 → 候选胶片条（preset 渲染 + QA + 排名 + role，after 图持久化在 render_stage）
-  → SFT 产出 → DPO 偏好对。读 `construct_groups/candidates/sft/dpo` 库表。
-- **人工 review** — 读预计算候选 manifest（`preset_bank_v2/review/{pairwise,scalar}_tasks.jsonl`）。
-  top-2 选更好看的一张；before/after 给 after 打标量分。结果 upsert 到 `human_review` 表。
-
-## 运行
-
-后端（先起，默认 127.0.0.1:8077，端口可 `DBV_PORT` 覆盖）：
+Use the same owner-only canonical TOML as the build. Its `output_root` supplies the
+JSONL fallback and `[viewer].postgres_dsn` supplies the projection connection.
 
 ```bash
 cd /home/bc/VeraRetouch
-python -m databuild_viewer.backend.app
-python -m databuild_viewer.backend.app --selfcheck   # 不起服务，跑一遍数据自检
+python -m pip install -e '.[viewer]'
+python -m databuild_viewer.backend.app \
+  --config /absolute/path/to/databuild.toml
 ```
 
-前端开发（Vite 在 5173，自动把 /api、/img 代理到后端）：
+The server listens on `127.0.0.1:8077` by default. `--host` and `--port` are
+explicit overrides. The selfcheck is read-only:
+
+```bash
+python -m databuild_viewer.backend.app \
+  --config /absolute/path/to/databuild.toml --selfcheck
+```
+
+For a local JSONL-only build, omit `--config` and pass `--build-root`. Add image
+roots outside the dataset/output roots explicitly:
+
+```bash
+python -m databuild_viewer.backend.app \
+  --build-root /absolute/path/to/builds \
+  --allow-root /absolute/path/to/source/images
+```
+
+`DBV_CONFIG`, `DBV_BUILD_ROOTS`, and `DBV_ALLOWED_ROOTS` provide equivalent
+process-start configuration. `DBV_CONFIG` contains only a path; credentials remain
+inside the ignored `0600` TOML.
+
+## Frontend
 
 ```bash
 cd databuild_viewer/frontend
 npm install
-npm run dev          # 打开 http://localhost:5173
+npm run dev
 ```
 
-前端生产构建（构建后后端直接从 `frontend/dist` 提供 SPA，单端口 8077 访问）：
+Vite listens on `127.0.0.1:5173` and proxies `/api` and `/img` to
+`http://127.0.0.1:8077`. For a single-port production-style run, build first and
+then start the backend:
 
 ```bash
-cd databuild_viewer/frontend && npm run build
+npm run build
 ```
 
-> 单人本地工具：每请求新开 DB 连接，无连接池 / 无鉴权。`/img` 只放行
-> `/home/bc/data/datasets/` 下的路径。
+The compiled SPA is included in the Python wheel; rebuild it only after frontend
+source changes.
+
+## Verification
+
+```bash
+uv run --no-progress --with fastapi==0.136.1 --with Pillow==12.2.0 \
+  python -m unittest databuild_viewer.backend.test_app -v
+cd databuild_viewer/frontend && npm run build
+uv build --wheel --out-dir /tmp/veraretouch-wheel
+unzip -l /tmp/veraretouch-wheel/*.whl | rg 'databuild_viewer/frontend/dist/'
+```

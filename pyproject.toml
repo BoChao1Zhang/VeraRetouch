@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "veraretouch-databuild"
+version = "0.1.0"
+description = "Canonical GPU-only SFT databuild for VeraRetouch"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "kornia==0.8.2; python_version < '3.11'",
+  "kornia==0.8.3; python_version >= '3.11'",
+  "numpy==2.2.6; python_version < '3.11'",
+  "numpy==2.4.4; python_version >= '3.11'",
+  "opencv-python-headless==4.13.0.92",
+  "openai==2.46.0",
+  "Pillow==12.2.0",
+  "psycopg[binary]==3.2.13",
+  "PyYAML==6.0.3",
+  "scikit-image==0.25.2; python_version < '3.11'",
+  "scikit-image==0.26.0; python_version >= '3.11'",
+  "scikit-learn==1.7.2",
+  "scipy==1.15.3; python_version < '3.11'",
+  "scipy==1.17.1; python_version >= '3.11'",
+  "tifffile==2025.5.10; python_version < '3.11'",
+  "tifffile==2026.3.3; python_version >= '3.11'",
+  "tomli==2.2.1; python_version < '3.11'",
+  # The public-version pin also accepts indexed CUDA builds such as 2.6.0+cu118.
+  "torch==2.6.0",
+  "transformers==4.57.1",
+]
+
+[project.optional-dependencies]
+viewer = [
+  "fastapi==0.136.1",
+  "uvicorn==0.46.0",
+]
+
+[tool.setuptools]
+include-package-data = false
+packages = [
+  "construct",
+  "dataset_build",
+  "dataset_build.core",
+  "dataset_build.core.broker",
+  "dataset_build.source_qa",
+  "dataset_build.tools",
+  "gpu_render",
+  "gpu_render.gpu",
+  "gpu_render.image_ops",
+  "gpu_render.image_ops.image_dehazer",
+  "gpu_render.ops_v2",
+  "databuild_viewer",
+  "databuild_viewer.backend",
+]
+
+[tool.setuptools.package-dir]
+construct = "dataset_build/src/construct"
+dataset_build = "dataset_build"
+gpu_render = "gpu_render"
+databuild_viewer = "databuild_viewer"
+
+[tool.setuptools.package-data]
+# Runtime renderer fits only; the regenerable multi-gigabyte baked LUT archive is excluded.
+gpu_render = [
+  "configs/*.yaml",
+  "fits/*.json",
+  "fits/residual/*.npz",
+]
+databuild_viewer = [
+  "frontend/dist/index.html",
+  "frontend/dist/assets/*",
+]

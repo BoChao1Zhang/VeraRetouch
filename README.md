@@ -78,6 +78,13 @@ cd VeraRetouch
 conda create -n vera-retouch python=3.10
 conda activate vera-retouch
 pip install -r requirements.txt
+pip install -e .
+```
+
+The editable install exposes the repository's single production databuild command:
+
+```bash
+python -m construct.agent run --config /absolute/path/to/databuild.toml
 ```
 
 ### ☕ Pretrained Model
