@@ -17,6 +17,10 @@ docs/paper_list.md
 # Secrets / local tool caches
 .env
 .serena/
+# Canonical databuild secrets. The committed example is explicitly retained.
+databuild.toml
+databuild.*.toml
+!databuild.example.toml
 
 # LR render service caches (regeneratable)
 lrc_scripts/servers/lr_caches/

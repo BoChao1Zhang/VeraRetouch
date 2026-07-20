@@ -1,0 +1,81 @@
+# Canonical databuild configuration. Copy this to an ignored local databuild.toml,
+# replace every placeholder, and set its permissions to 0600 before running.
+schema_version = 1
+build_id = "example-build"
+seed = 0
+target_groups = 10000
+output_root = "/home/bc/data/datasets/vera_directionA_1M/builds/example-build"
+# One of: xmp, lrtemplate, lut, all. "all" follows eligible inventory naturally.
+preset_filter = "all"
+
+[mix]
+# Exact group quotas are computed with deterministic largest-remainder allocation.
+local = 0.70
+global = 0.30
+
+[sources]
+# Instance-level SAM3 cache containing <path_key>/subject.json and subject.png.
+subject_cache = "/home/bc/data/datasets/vera_directionA_1M/subject_cache"
+# Used only for source scene metadata. Credentials remain in the 0600 real TOML.
+postgres_dsn = "postgresql://USER:PASSWORD@127.0.0.1:5432/vera_source_qa"
+
+[presets]
+bank_dir = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full"
+taxonomy = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full/taxonomy.jsonl"
+# Mean CIEDE2000 ceiling for calibrated XMP/LRTemplate GPU replay.
+fidelity_de_max = 6.0
+# Operator kill switch for a faulty renderer class. Values: xmp, lrtemplate, lut.
+disabled_formats = []
+
+[render]
+# EXIF-oriented inputs are resized to this short edge for every renderer format.
+short_edge = 1024
+jpeg_quality = 95
+gpu_concurrency = 2
+# Deterministic working resolution used by the visibility metric.
+diff_short_edge = 512
+visible_de_min = 2.5
+visible_fraction_de = 2.3
+visible_fraction_min = 0.50
+
+[masks]
+# Fixed linear effective-alpha mean target from the approved mask protocol.
+linear_target_alpha_mass = 0.50
+# At most two instance-level SAM3 relabel attempts are allowed.
+sam3_relabel_attempts = 2
+
+[annotation]
+# Both external relays use this single operator-selected model name.
+external_model = "configured-by-operator"
+image_long_edge = 768
+image_jpeg_quality = 90
+external_reasoning_effort = "medium"
+external_max_output_tokens = 6000
+# Across the entire relay pool, not per endpoint.
+transport_attempts_per_round = 4
+queue_rounds = 3
+
+[[annotation.external_endpoints]]
+id = "relay-a"
+base_url = "https://relay-a.example/v1"
+api_key = "REPLACE_WITH_RELAY_A_KEY"
+concurrency = 16
+
+[[annotation.external_endpoints]]
+id = "relay-b"
+base_url = "https://relay-b.example/v1"
+api_key = "REPLACE_WITH_RELAY_B_KEY"
+concurrency = 16
+
+[annotation.local]
+# One vGate broker URL; databuild never addresses individual replicas.
+base_url = "http://127.0.0.1:8003/v1"
+api_key = "EMPTY"
+model = "qwen3_5-35b-a3b"
+temperature = 0.2
+enable_thinking = false
+max_output_tokens = 2048
+
+[viewer]
+# Projection only. A viewer PostgreSQL outage cannot change build completion.
+postgres_dsn = "postgresql://USER:PASSWORD@127.0.0.1:5432/vera_source_qa"
