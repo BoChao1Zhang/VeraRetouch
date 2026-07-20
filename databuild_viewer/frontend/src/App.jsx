@@ -1,43 +1,43 @@
-import { useState } from 'react'
-import { cx } from './lib/ui.jsx'
-import Browse from './tabs/Browse.jsx'
-import Build from './tabs/Build.jsx'
-import Review from './tabs/Review.jsx'
-
-const TABS = [
-  { id: 'browse', label: '浏览', sub: 'source · preset' },
-  { id: 'build', label: '构建过程', sub: 'construct' },
-  { id: 'review', label: '人工 review', sub: 'top-2 · 打分' },
-]
+import { AlertTriangle, Database } from 'lucide-react'
+import { api } from './api.js'
+import Inspector from './Inspector.jsx'
+import { Badge, useAsync } from './lib/ui.jsx'
 
 export default function App() {
-  const [tab, setTab] = useState('browse')
+  const health = useAsync(() => api.health(), [])
+  const status = health.data
+
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-stretch border-b border-line bg-panel/60">
-        <div className="flex items-center gap-2.5 px-5">
-          <span className="h-2.5 w-2.5 rounded-full bg-safelight shadow-[0_0_10px_2px] shadow-safelight/50" />
-          <span className="font-display text-sm font-bold tracking-[0.2em] text-fg">DATABUILD</span>
-          <span className="font-mono text-[11px] text-muted">console</span>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="brand-block">
+          <span className="brand-mark" aria-hidden="true" />
+          <div>
+            <h1>Canonical Databuild</h1>
+            <span>inspection console</span>
+          </div>
         </div>
-        <nav className="flex">
-          {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={cx('group relative px-5 text-left',
-                tab === t.id ? 'text-fg' : 'text-muted hover:text-fg')}>
-              <div className="font-display text-sm font-medium">{t.label}</div>
-              <div className="font-mono text-[10px] opacity-70">{t.sub}</div>
-              <span className={cx('absolute inset-x-3 bottom-0 h-0.5 rounded-full transition',
-                tab === t.id ? 'bg-safelight' : 'bg-transparent group-hover:bg-line')} />
-            </button>
-          ))}
-        </nav>
+        <div className="header-status" aria-live="polite">
+          {health.err ? (
+            <Badge tone="danger" title={health.err}>
+              <AlertTriangle size={12} aria-hidden="true" /> backend unavailable
+            </Badge>
+          ) : status ? (
+            <>
+              <Badge tone={status.source === 'postgres' ? 'success' : 'accent'}>
+                <Database size={12} aria-hidden="true" /> {status.source}
+              </Badge>
+              <span>{status.builds ?? 0} builds</span>
+              {status.malformed_records > 0 && (
+                <Badge tone="warning">{status.malformed_records} malformed</Badge>
+              )}
+            </>
+          ) : (
+            <span>connecting</span>
+          )}
+        </div>
       </header>
-      <div className="min-h-0 flex-1">
-        {tab === 'browse' && <Browse />}
-        {tab === 'build' && <Build />}
-        {tab === 'review' && <Review />}
-      </div>
+      <Inspector />
     </div>
   )
 }

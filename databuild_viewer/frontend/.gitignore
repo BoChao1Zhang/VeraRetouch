@@ -1,2 +1,2 @@
 node_modules/
-dist/
+# The production SPA in dist/ is packaged with the Python viewer.
