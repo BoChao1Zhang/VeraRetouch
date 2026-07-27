@@ -45,7 +45,7 @@ track, farm fallback, CPU operator fallback, or Chat Completions annotation path
 - Deterministic, resumable, balanced traversal of taxonomy major/minor categories.
 - One instance-level SAM3 subject protocol and one fixed eight-slot mask protocol.
 - A measurable before/after visibility gate before aesthetic ranking.
-- One OpenAI Responses client abstraction for two external relays and local vLLM.
+- One OpenAI Responses client abstraction for one or more external key lanes and local vLLM.
 - SFT-only output with durable queues, idempotent resume, and auditable failures.
 - A first-class viewer for inspecting sources, all eight candidates, masks, QA,
   and final annotations.
@@ -76,8 +76,8 @@ track, farm fallback, CPU operator fallback, or Chat Completions annotation path
   rather than matching only the `api_key` field name.
 - Commit a complete `databuild.example.toml` containing placeholders.
 - The top-level `schema_version` is required and initially equals `1`.
-- Missing required fields, unknown fields, invalid enum values, an external endpoint
-  count other than exactly two, duplicate endpoint IDs, invalid paths, and ratios
+- Missing required fields, unknown fields, invalid enum values, an empty external endpoint
+  lane list, duplicate lane IDs, invalid paths, and ratios
   that do not sum to one are startup errors.
 
 ### 3.2 Recommended Schema
@@ -124,10 +124,12 @@ sam3_relabel_attempts = 2
 external_model = "configured-by-operator"
 image_long_edge = 768
 image_jpeg_quality = 90
-external_reasoning_effort = "medium"
+external_reasoning_effort = "low"
 external_max_output_tokens = 6000
 transport_attempts_per_round = 4
 queue_rounds = 3
+# true = exhaust both external quotas before local vGate; false = external-only.
+local_fallback = true
 
 [[annotation.external_endpoints]]
 id = "relay-a"
@@ -409,6 +411,10 @@ relays and local vLLM. Remove raw `requests` SSE parsing and all Chat Completion
 fallbacks. Accept a response only after a completed stream and successful strict
 schema parse.
 
+Relay-specific non-content telemetry may be ignored only by an explicit discriminator
+allowlist. The current allowlist contains `codex.rate_limits`; all other unknown or
+mistyped stream events remain retryable transport failures.
+
 Declare `openai` as a direct production dependency and lock one exact SDK version in
 the repository's dependency/lock files. Preflight must fail clearly if that version
 lacks the required Responses streaming or Structured Outputs surface; tests must
@@ -447,8 +453,9 @@ not a rectangular crop. Global uses unit weights.
 
 ### 10.3 External Relay Pool
 
-- Configure exactly two endpoints with one shared `external_model`; any other count
-  is rejected before the build mutates state.
+- Configure one or more key lanes with one shared `external_model`; an empty lane list
+  is rejected before the build mutates state. Multiple keys for one provider are
+  represented as separate, uniquely identified lanes that reuse the provider base URL.
 - Select the least-inflight endpoint; break ties round-robin.
 - Retry network errors, 429, and 5xx across the pool. Respect `Retry-After`; otherwise
   use jittered exponential backoff.
@@ -468,7 +475,7 @@ not a rectangular crop. Global uses unit weights.
 - Record endpoint ID, returned model, token usage, attempts, and status; never record
   API keys.
 
-External request settings: `reasoning.effort=medium`, `max_output_tokens=6000`.
+External request settings: `reasoning.effort=low`, `max_output_tokens=6000`.
 
 ### 10.4 Local vLLM
 
@@ -689,7 +696,7 @@ Do not perform deletion first. Maintain a runnable canonical path at each major 
 - Example TOML parses; real config is ignored; permission and all-credential
   redaction tests (including credential-bearing DSNs) pass.
 - Missing/unknown/invalid fields and invalid ratios fail before any mutation.
-- Exactly two distinct external endpoints are required; disabled/effective preset
+- At least one external key lane is required and every lane ID is distinct; disabled/effective preset
   format validation follows section 5.1.
 - No production behavior still depends on old YAML or environment overrides.
 
@@ -732,7 +739,7 @@ Do not perform deletion first. Maintain a runnable canonical path at each major 
 - The official `openai` dependency is directly declared, exactly locked, and its
   mocked event types cover the pinned SDK surface. Dual exhaustion reroutes the task
   that discovered it as well as subsequent and resumed tasks.
-- External requests use medium effort/6000 tokens; local requests use Qwen3.5,
+- External requests use low effort/6000 tokens; local requests use Qwen3.5,
   thinking off, temperature 0.2/2048 tokens.
 - vGate streams `/v1/responses` without buffering the whole response and releases
   inflight accounting only after stream termination.
