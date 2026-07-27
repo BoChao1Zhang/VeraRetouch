@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import dataclasses
 import io
 import json
 import tempfile
@@ -145,7 +146,7 @@ class ResponseFixture(unittest.TestCase):
             external_model="external-model",
             image_long_edge=768,
             image_jpeg_quality=90,
-            external_reasoning_effort="medium",
+            external_reasoning_effort="low",
             external_max_output_tokens=6000,
             transport_attempts_per_round=4,
             queue_rounds=3,
@@ -216,7 +217,7 @@ class RequestShapeTests(ResponseFixture):
         prepared = prepare_task(self.task(), self.config)
         external = request_payload(prepared, self.config, route="external")
         self.assertEqual(external["model"], "external-model")
-        self.assertEqual(external["reasoning"], {"effort": "medium"})
+        self.assertEqual(external["reasoning"], {"effort": "low"})
         self.assertEqual(external["max_output_tokens"], 6000)
         fmt = external["text"]["format"]
         self.assertTrue(fmt["strict"])
@@ -255,6 +256,11 @@ class RequestShapeTests(ResponseFixture):
 
 
 class StreamTests(unittest.TestCase):
+    def test_known_relay_rate_limit_control_event_is_ignored(self):
+        control = SimpleNamespace(type="codex.rate_limits", rate_limits={}, credits=None)
+        result = _consume_stream(FakeStream([control, *completed_events()]))
+        self.assertEqual(result.fields, valid_fields())
+
     def test_official_typed_completed_event_is_required(self):
         result = _consume_stream(FakeStream(completed_events()))
         self.assertEqual(result.fields, valid_fields())
@@ -325,6 +331,36 @@ class PoolTests(ResponseFixture):
                     )
         with pool.lease() as fourth:
             self.assertEqual(fourth.id, "relay-b")
+
+    def test_five_key_lanes_round_robin_and_remove_independently(self):
+        lanes = tuple(
+            ExternalEndpointConfig(
+                f"provider-{provider}-lane-{lane}",
+                f"https://{provider}.example/v1",
+                f"key-{provider}-{lane}",
+                1,
+            )
+            for provider, lane in (("a", 1), ("b", 1), ("b", 2), ("c", 1), ("c", 2))
+        )
+        pool = ExternalRelayPool(lanes)
+        leases = []
+        try:
+            for _ in lanes:
+                lease = pool.lease()
+                leases.append(lease)
+                endpoint = lease.__enter__()
+                self.assertEqual(endpoint.id, lanes[len(leases) - 1].id)
+        finally:
+            for lease in reversed(leases):
+                lease.__exit__(None, None, None)
+
+        self.assertFalse(pool.remove("provider-b-lane-1"))
+        seen = set()
+        for _ in range(8):
+            with pool.lease() as endpoint:
+                seen.add(endpoint.id)
+        self.assertNotIn("provider-b-lane-1", seen)
+        self.assertTrue({lane.id for lane in lanes[2:]}.issubset(seen))
 
 
 class DurableDrainTests(ResponseFixture):
@@ -430,6 +466,28 @@ class DurableDrainTests(ResponseFixture):
                     for row in store.failures
                 ))
 
+    def test_external_only_quota_exhaustion_never_calls_local(self):
+        self.config = dataclasses.replace(self.config, local_fallback=False)
+        with ArtifactStore(self.root / "external-only", "build", fsync_every=1) as store:
+            task = self.task()
+            store.append_group(task["group"])
+            local = FakeResponses([])
+            clients = {
+                "relay-a": FakeClient(FakeResponses([
+                    FakeHttpError(429, "insufficient_quota")
+                ])),
+                "relay-b": FakeClient(FakeResponses([
+                    FakeHttpError(429, "billing_hard_limit_reached")
+                ])),
+                "local": FakeClient(local),
+            }
+            result = ResponsesAnnotator(
+                self.config, store, client_factory=self.factory(clients), sleep=lambda _: None
+            ).drain(max_workers=1)
+            self.assertEqual(result["transport_failed"], 1)
+            self.assertEqual(len(local.calls), 0)
+            self.assertTrue(store.external_pool_exhausted())
+
     def test_dual_quota_exhaustion_latches_before_same_round_local_reroute(self):
         out = self.root / "quota"
         with ArtifactStore(out, "build", fsync_every=1) as store:
@@ -474,6 +532,60 @@ class DurableDrainTests(ResponseFixture):
             self.assertEqual(len(local.calls), 1)
             self.assertEqual(len(clients["relay-a"].responses.calls), 0)
             self.assertEqual(len(clients["relay-b"].responses.calls), 0)
+
+    def test_final_quota_latch_survives_crash_before_endpoint_marker(self):
+        out = self.root / "quota-crash"
+        with ArtifactStore(out, "build", fsync_every=1) as store:
+            task = self.task()
+            store.append_group(task["group"])
+            clients = {
+                "relay-a": FakeClient(FakeResponses([
+                    FakeHttpError(429, "insufficient_quota")
+                ])),
+                "relay-b": FakeClient(FakeResponses([
+                    FakeHttpError(429, "billing_hard_limit_reached")
+                ])),
+                "local": FakeClient(FakeResponses([])),
+            }
+            annotator = ResponsesAnnotator(
+                self.config, store, client_factory=self.factory(clients), sleep=lambda _: None
+            )
+            original_append = store.append_failure
+
+            def crash_after_pool_latch(record, *, durable=False):
+                appended = original_append(record, durable=durable)
+                if record.get("error_code") == "external_pool_exhausted":
+                    raise KeyboardInterrupt("crash after durable pool latch")
+                return appended
+
+            store.append_failure = crash_after_pool_latch
+            with self.assertRaisesRegex(KeyboardInterrupt, "durable pool latch"):
+                annotator.run_round(task, 1)
+            self.assertTrue(store.external_pool_exhausted())
+            self.assertFalse(any(
+                row.get("error_code") == "external_endpoint_exhausted"
+                and row.get("endpoint_id") == "relay-b"
+                for row in store.failures
+            ))
+
+        with ArtifactStore(out, "build", fsync_every=1) as resumed:
+            local = FakeResponses([completed_events(model="qwen3_5-35b-a3b")])
+            relay_a = FakeResponses([])
+            relay_b = FakeResponses([])
+            result = ResponsesAnnotator(
+                self.config,
+                resumed,
+                client_factory=self.factory({
+                    "relay-a": FakeClient(relay_a),
+                    "relay-b": FakeClient(relay_b),
+                    "local": FakeClient(local),
+                }),
+                sleep=lambda _: None,
+            ).drain(max_workers=1)
+            self.assertEqual(result["completed"], 1)
+            self.assertTrue(resumed.external_pool_exhausted())
+            self.assertEqual(len(local.calls), 1)
+            self.assertEqual(len(relay_a.calls) + len(relay_b.calls), 0)
 
     def test_three_round_transport_budget_is_durable_on_resume(self):
         out = self.root / "transport"

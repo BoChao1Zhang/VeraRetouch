@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import importlib
 import json
 import os
 import re
@@ -18,9 +19,18 @@ from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
+import torch
 from PIL import Image
 
 from dataset_build.lut_io import load_lut
+from dataset_build.source_qa.iaa import (
+    OneAlignRunner,
+    _install_qalign_rope_compat,
+    _prepare_qalign_config_compat,
+    _prepare_qalign_model_compat,
+    _prepare_qalign_transformers_compat,
+    _redirect_qalign_assets,
+)
 
 from construct.canonical_masks import (
     MODE_COUNTS,
@@ -28,11 +38,12 @@ from construct.canonical_masks import (
     linear_strength,
     pair_mask_slots,
 )
-from construct.canonical_qa import deterministic_veto, rank_candidates
+from construct.canonical_qa import OneAlignScorer, QaError, deterministic_veto, rank_candidates
 from construct.config import ConfigError, load_config, redact_text, redact_uri
 from construct.presets import (
     CoverageSelector,
     PresetCatalog,
+    PresetError,
     PresetRecord,
     TaxonomyLink,
     default_capability,
@@ -42,6 +53,7 @@ from construct.state import ArtifactStore, StateError, scan_jsonl, stable_id
 from construct.rendering import (
     GpuRenderError,
     LocalGpuOnlyRenderer,
+    PreparedSource,
     apply_lut_cpu_oracle,
     composite_srgb,
     preprocess_source,
@@ -80,9 +92,14 @@ class ConfigTests(unittest.TestCase):
     def test_example_parses_and_records_effective_formats(self) -> None:
         config = self.load()
         self.assertEqual(config.schema_version, 1)
+        self.assertTrue(config.annotation.local_fallback)
         self.assertEqual(config.effective_formats, {"xmp", "lrtemplate", "lut"})
+        self.assertEqual(len(config.annotation.external_endpoints), 5)
         safe = config.sanitized_dict()
-        self.assertEqual(safe["annotation"]["external_endpoints"][0]["api_key"], "<redacted>")
+        self.assertTrue(all(
+            endpoint["api_key"] == "<redacted>"
+            for endpoint in safe["annotation"]["external_endpoints"]
+        ))
         self.assertNotIn("PASSWORD", json.dumps(safe))
 
     def test_private_permission_is_required(self) -> None:
@@ -104,11 +121,17 @@ class ConfigTests(unittest.TestCase):
 
         shutil.copyfile(EXAMPLE, self.path)
         self.path.chmod(0o600)
-        marker = "\n[[annotation.external_endpoints]]\nid = \"relay-b\""
         text = self.path.read_text(encoding="utf-8")
-        self.path.write_text(text[: text.index(marker)], encoding="utf-8")
+        start = text.index("\n[[annotation.external_endpoints]]")
+        end = text.index("\n[annotation.local]")
+        self.path.write_text(text[:start] + text[end:], encoding="utf-8")
         self.path.chmod(0o600)
         with self.assertRaises(ConfigError):
+            self.load()
+
+    def test_external_endpoint_lane_ids_are_distinct(self) -> None:
+        self.replace('id = "provider-b-lane-2"', 'id = "provider-b-lane-1"')
+        with self.assertRaisesRegex(ConfigError, "IDs must be distinct"):
             self.load()
 
     def test_disabled_format_control_is_strict(self) -> None:
@@ -122,6 +145,31 @@ class ConfigTests(unittest.TestCase):
         self.replace("disabled_formats = []", 'disabled_formats = ["lut", "lut"]')
         with self.assertRaisesRegex(ConfigError, "duplicates"):
             self.load()
+
+    def test_canonical_render_geometry_and_encoding_are_fixed(self) -> None:
+        self.replace("short_edge = 1024", "short_edge = 512")
+        with self.assertRaisesRegex(ConfigError, "short edge 1024"):
+            self.load()
+
+        shutil.copyfile(EXAMPLE, self.path)
+        self.path.chmod(0o600)
+        self.replace("jpeg_quality = 95", "jpeg_quality = 94")
+        with self.assertRaisesRegex(ConfigError, "JPEG quality 95"):
+            self.load()
+
+    def test_invalid_cli_config_fails_before_output_mutation(self) -> None:
+        from construct.agent import main
+
+        output_root = Path(self.tmp.name) / "must-not-exist"
+        self.replace(
+            'output_root = "/home/bc/data/datasets/vera_directionA_1M/builds/example-build"',
+            f'output_root = "{output_root}"',
+        )
+        self.replace("seed = 0", "seed = 0\nlegacy_mode = true")
+        with mock.patch("sys.stderr"):
+            result = main(["run", "--config", str(self.path)])
+        self.assertEqual(result, 1)
+        self.assertFalse(output_root.exists())
 
     def test_redaction_covers_uri_userinfo_query_and_assignments(self) -> None:
         dsn = "postgresql://alice:s3cr3t@db.example:5432/vera?sslmode=require&token=abc"
@@ -137,8 +185,8 @@ class ConfigTests(unittest.TestCase):
 
     def test_endpoint_url_credentials_are_redacted_from_effective_config(self) -> None:
         self.replace(
-            "https://relay-a.example/v1",
-            "https://relay-user:relay-pass@relay-a.example/v1?token=relay-query",
+            "https://provider-a.example/v1",
+            "https://relay-user:relay-pass@provider-a.example/v1?token=relay-query",
         )
         self.replace(
             "http://127.0.0.1:8003/v1",
@@ -152,6 +200,36 @@ class ConfigTests(unittest.TestCase):
         ):
             self.assertNotIn(secret, serialized)
             self.assertIn(secret, config.secrets)
+
+    def test_explicit_legacy_import_config_is_strict_and_sanitized(self) -> None:
+        self.replace("target_groups = 10000", "target_groups = 1")
+        self.replace('preset_filter = "all"', 'preset_filter = "xmp"')
+        self.replace("local = 0.70", "local = 1.0")
+        self.replace("global = 0.30", "global = 0.0")
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n[legacy_import]\n"
+                'input_root = "/data/r5_local_50k"\n'
+                'groups_jsonl = "/data/r5_local_50k/groups.jsonl"\n'
+                'sft_jsonl = "/data/r5_local_50k/sft.jsonl"\n'
+                "expected_source_groups = 22307\n"
+                "expected_sft_rows = 33024\n"
+                'protocol = "r5_local_50k_v4"\n'
+                'axis_fix_status = "param_only_no_native_lut"\n'
+                "project_to_viewer = false\n"
+            )
+        config = self.load()
+        self.assertEqual(config.legacy_import.expected_sft_rows, 33024)
+        self.assertFalse(config.legacy_import.project_to_viewer)
+        safe = config.sanitized_dict()["legacy_import"]
+        self.assertEqual(safe["groups_jsonl"], "/data/r5_local_50k/groups.jsonl")
+
+        self.replace(
+            'protocol = "r5_local_50k_v4"',
+            'protocol = "unreviewed_legacy"',
+        )
+        with self.assertRaisesRegex(ConfigError, "protocol"):
+            self.load()
 
 
 class StateTests(unittest.TestCase):
@@ -537,6 +615,90 @@ class CoverageTests(unittest.TestCase):
             render_mode="global", preset_filter="all",
         )
 
+    @staticmethod
+    def mixed_catalog() -> PresetCatalog:
+        links = []
+        engines = {
+            "xmp": "gpu_local_preset",
+            "lrtemplate": "gpu_local_preset",
+            "lut": "gpu_lut",
+        }
+        suffixes = {"xmp": ".xmp", "lrtemplate": ".lrtemplate", "lut": ".cube"}
+        for preset_format in ("xmp", "lrtemplate", "lut"):
+            for index in range(8):
+                preset_id = f"{preset_format}-{index}"
+                preset = PresetRecord(
+                    preset_id=preset_id,
+                    path=Path(f"/{preset_id}{suffixes[preset_format]}"),
+                    format=preset_format,
+                    kind=preset_format,
+                    style_name="Style",
+                    fidelity_de=None,
+                    render_engine=engines[preset_format],
+                )
+                links.append(TaxonomyLink(
+                    preset, "mixed-major", f"minor-{index % 2}"
+                ))
+        return PresetCatalog.from_links(links)
+
+    def test_fresh_selector_candidate_sequence_is_deterministic(self) -> None:
+        def sequence():
+            selector = self.selector()
+            reservation = selector.begin_group("source", 0)
+            accepted, _first_minor, _replacement_minor = self.fill(reservation)
+            return (
+                reservation.reservation_id,
+                reservation.coverage_cycle,
+                reservation.coverage_position,
+                tuple(
+                    (row.link.major, row.link.minor, row.link.preset.preset_id, row.attempt)
+                    for row in accepted
+                ),
+            )
+
+        self.assertEqual(sequence(), sequence())
+
+    def test_explicit_format_filters_never_leak_and_all_keeps_full_inventory(self) -> None:
+        catalog = self.mixed_catalog()
+        for preset_filter in ("xmp", "lrtemplate", "lut"):
+            with self.subTest(preset_filter=preset_filter):
+                selector = CoverageSelector(
+                    catalog,
+                    build_id="build",
+                    seed=5,
+                    render_mode="global",
+                    preset_filter=preset_filter,
+                )
+                self.assertEqual(
+                    {link.preset.format for link in selector.catalog.links},
+                    {preset_filter},
+                )
+                reservation = selector.begin_group("source", 0)
+                accepted, _first_minor, _replacement_minor = self.fill(reservation)
+                self.assertEqual(
+                    {row.link.preset.format for row in accepted}, {preset_filter}
+                )
+
+        all_selector = CoverageSelector(
+            catalog,
+            build_id="build",
+            seed=5,
+            render_mode="global",
+            preset_filter="all",
+        )
+        self.assertEqual(
+            {link.preset.preset_id for link in all_selector.catalog.links},
+            {link.preset.preset_id for link in catalog.links},
+        )
+        with self.assertRaisesRegex(PresetError, "invalid preset filter"):
+            CoverageSelector(
+                catalog,
+                build_id="build",
+                seed=5,
+                render_mode="global",
+                preset_filter="auto",
+            )
+
     def test_group_is_one_major_and_eight_distinct_even_with_overlap(self) -> None:
         selector = self.selector()
         reservation = selector.begin_group("source", 0)
@@ -586,6 +748,99 @@ class CoverageTests(unittest.TestCase):
         snapshot = selector.snapshot()
         self.assertEqual(sum(snapshot["major"].values()), 0)
         self.assertEqual(sum(snapshot["preset"].values()), 0)
+
+
+class OneAlignCompatibilityTests(unittest.TestCase):
+    def test_runner_does_not_silence_forward_failures(self) -> None:
+        runner = object.__new__(OneAlignRunner)
+        runner._score_pils = mock.Mock(side_effect=RuntimeError("forward failed"))
+        with mock.patch(
+            "dataset_build.source_qa.iaa._decode_rgb", return_value=object()
+        ), self.assertRaisesRegex(RuntimeError, "forward failed"):
+            runner.score_path("sample.jpg")
+
+    def test_canonical_scorer_rejects_missing_and_invalid_scores(self) -> None:
+        scorer = object.__new__(OneAlignScorer)
+        for value in (None, float("nan"), -1.0, 101.0):
+            scorer.runner = SimpleNamespace(
+                score_path=lambda _path, value=value: {"onealign": value}
+            )
+            with self.assertRaises(QaError):
+                scorer.score("sample.jpg")
+
+    def test_recent_transformers_exports_qalign_legacy_symbols(self) -> None:
+        llama = importlib.import_module("transformers.models.llama.modeling_llama")
+        original = getattr(llama, "__all__", None)
+        try:
+            setattr(llama, "__all__", ["LlamaModel"])
+            _prepare_qalign_transformers_compat(llama)
+            self.assertIn("Cache", llama.__all__)
+            self.assertIn("BaseModelOutputWithPast", llama.__all__)
+        finally:
+            if original is None:
+                delattr(llama, "__all__")
+            else:
+                setattr(llama, "__all__", original)
+
+    def test_qalign_rope_compat_preserves_legacy_shapes_and_positions(self) -> None:
+        module = SimpleNamespace(
+            rotate_half=lambda value: torch.cat(
+                (-value[..., value.shape[-1] // 2:], value[..., :value.shape[-1] // 2]),
+                dim=-1,
+            )
+        )
+        _install_qalign_rope_compat(module, torch)
+        rope = module.LlamaRotaryEmbedding(8, max_position_embeddings=16)
+        value = torch.zeros((1, 2, 4, 8), dtype=torch.float32)
+        cos, sin = rope(value, seq_len=4)
+        self.assertEqual(tuple(cos.shape), (4, 8))
+        positions = torch.arange(4).unsqueeze(0)
+        query, key = module.apply_rotary_pos_emb(
+            value, value, cos, sin, positions
+        )
+        self.assertEqual(tuple(query.shape), tuple(value.shape))
+        self.assertEqual(tuple(key.shape), tuple(value.shape))
+
+    def test_qalign_config_compat_adds_recent_llama_defaults(self) -> None:
+        class LegacyConfig:
+            pass
+
+        _prepare_qalign_config_compat(LegacyConfig)
+        self.assertFalse(LegacyConfig.mlp_bias)
+
+    def test_qalign_model_compat_restores_attention_runtime_flags(self) -> None:
+        for implementation, flash, sdpa in (
+            ("eager", False, False),
+            ("flash_attention_2", True, False),
+            ("sdpa", False, True),
+        ):
+            model = SimpleNamespace(
+                config=SimpleNamespace(_attn_implementation=implementation)
+            )
+            _prepare_qalign_model_compat(model)
+            self.assertEqual(model._use_flash_attention_2, flash)
+            self.assertEqual(model._use_sdpa, sdpa)
+
+    def test_qalign_hub_assets_are_redirected_to_local_model(self) -> None:
+        calls = []
+
+        class Loader:
+            @staticmethod
+            def from_pretrained(path, *args, **kwargs):
+                calls.append(path)
+                return path
+
+        module = SimpleNamespace(AutoTokenizer=Loader, CLIPImageProcessor=Loader)
+        _redirect_qalign_assets(module, "/models/one-align")
+        self.assertEqual(
+            module.AutoTokenizer.from_pretrained("q-future/one-align"),
+            "/models/one-align",
+        )
+        self.assertEqual(
+            module.CLIPImageProcessor.from_pretrained("other-model"),
+            "other-model",
+        )
+        self.assertEqual(calls, ["/models/one-align", "other-model"])
 
 
 class MaskRenderingVisibilityTests(unittest.TestCase):
@@ -674,6 +929,37 @@ class MaskRenderingVisibilityTests(unittest.TestCase):
         swapped = apply_lut_cpu_oracle(np.array([[[1.0, 0.0, 0.0]]], np.float32), axis)
         self.assertTrue(np.allclose(swapped, [[[0.0, 0.0, 1.0]]]))
 
+    def test_production_lut_interpolation_matches_cpu_oracle(self) -> None:
+        import torch
+
+        axis = np.linspace(0.0, 1.0, 3, dtype=np.float32)
+        grid = np.empty((3, 3, 3, 3), dtype=np.float32)
+        for blue_index, blue in enumerate(axis):
+            for green_index, green in enumerate(axis):
+                for red_index, red in enumerate(axis):
+                    grid[blue_index, green_index, red_index] = (
+                        red * red,
+                        np.sqrt(green),
+                        0.15 + 0.7 * blue,
+                    )
+        domain_min = np.array([0.1, 0.2, 0.0], dtype=np.float32)
+        domain_max = np.array([0.9, 0.8, 1.0], dtype=np.float32)
+        image = np.random.default_rng(7).uniform(-0.1, 1.1, (5, 7, 3)).astype(np.float32)
+        renderer = object.__new__(LocalGpuOnlyRenderer)
+        renderer._torch = torch
+        renderer.device = "cpu"
+        renderer._lut_loader = SimpleNamespace(
+            load=lambda _path: (grid, domain_min, domain_max)
+        )
+        before = torch.from_numpy(image.transpose(2, 0, 1)[None])
+        actual, diagnostics = renderer._apply_lut(
+            before, SimpleNamespace(path=Path("/unused.cube"))
+        )
+        actual_array = actual[0].permute(1, 2, 0).numpy()
+        expected = apply_lut_cpu_oracle(image, grid, domain_min, domain_max)
+        np.testing.assert_allclose(actual_array, expected, rtol=0.0, atol=2e-6)
+        self.assertEqual(diagnostics["axis_order"], "bgr")
+
     def test_cube_parser_preserves_red_fastest_bgr_grid(self) -> None:
         path = Path(self.tmp.name) / "axis.cube"
         rows = []
@@ -724,6 +1010,21 @@ class MaskRenderingVisibilityTests(unittest.TestCase):
             visible_de_min=2.5, visible_fraction_de=2.3, visible_fraction_min=0.5,
         )
         self.assertFalse(weak.accepted)
+
+        broad_before = np.full((64, 96, 3), 0.5, dtype=np.float32)
+        broad_gradient = np.clip(
+            broad_before
+            + np.linspace(-0.05, 0.05, 96, dtype=np.float32)[None, :, None],
+            0,
+            1,
+        )
+        broad = visibility_metrics(
+            broad_before, broad_gradient, weight=None, short_edge=20,
+            visible_de_min=2.5, visible_fraction_de=2.3, visible_fraction_min=0.5,
+        )
+        self.assertGreater(broad.visible_fraction, 0.5)
+        self.assertLess(broad.visible_de, 2.5)
+        self.assertFalse(broad.accepted)
 
         outlier = before.copy()
         outlier[:4] = 1.0
@@ -783,6 +1084,44 @@ class MaskRenderingVisibilityTests(unittest.TestCase):
 
 
 class RendererBindingTests(unittest.TestCase):
+    @staticmethod
+    def config(root: Path):
+        return SimpleNamespace(
+            render=SimpleNamespace(gpu_concurrency=1),
+            presets=SimpleNamespace(bank_dir=root),
+        )
+
+    def test_startup_rejects_missing_cuda_and_environment_redirection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self.config(Path(tmp))
+            with mock.patch("torch.cuda.is_available", return_value=False):
+                with self.assertRaises(GpuRenderError) as missing:
+                    LocalGpuOnlyRenderer(config)
+            self.assertEqual(missing.exception.code, "cuda_unavailable")
+
+            with mock.patch("torch.cuda.is_available", return_value=True), \
+                    mock.patch("torch.cuda.device_count", return_value=1), \
+                    mock.patch.dict(os.environ, {"MONETGPT_TORCH_DEVICE": "cuda:9"}):
+                with self.assertRaises(GpuRenderError) as redirected:
+                    LocalGpuOnlyRenderer(config)
+            self.assertEqual(redirected.exception.code, "gpu_redirection_rejected")
+
+    def test_every_render_rechecks_backend_and_bound_capability(self) -> None:
+        renderer = object.__new__(LocalGpuOnlyRenderer)
+        renderer._semaphore = threading.BoundedSemaphore(1)
+        renderer.assert_ready = mock.Mock()
+        renderer._assert_bound_preset = mock.Mock()
+        renderer._upload = mock.Mock(
+            side_effect=GpuRenderError("sentinel", "stop after immutable checks")
+        )
+        source = PreparedSource(np.zeros((2, 3, 3), np.float32), 3, 2)
+        preset = SimpleNamespace(preset_id="preset")
+        for _ in range(2):
+            with self.assertRaisesRegex(GpuRenderError, "immutable checks"):
+                renderer.render(source, preset)
+        self.assertEqual(renderer.assert_ready.call_count, 2)
+        self.assertEqual(renderer._assert_bound_preset.call_count, 2)
+
     def test_catalog_binding_rejects_missing_or_changed_capability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
