@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Score Photographer-IAA with OneAlign.")
     parser.add_argument("--input", type=Path, required=True, help="generic_image_score.jsonl")
     parser.add_argument("--output", type=Path, required=True, help="Prediction JSONL.")
-    parser.add_argument("--model-path", type=Path, default=Path("/home/bc/data/models/OneAlign"))
+    parser.add_argument("--model-path", type=Path, default=Path(os.environ.get("VERA_ONEALIGN_MODEL", "/var/cache/veradata/models/OneAlign")))
     parser.add_argument("--repo-dir", type=Path, default=Path("/home/bc/code/iaa_models/Q-Align"))
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--batch-size", type=int, default=8)

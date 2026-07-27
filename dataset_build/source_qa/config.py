@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 
 
-OUT_ROOT = "/home/bc/data/datasets/vera_directionA_1M"
+OUT_ROOT = os.environ.get("VERA_OUT_ROOT", "/mnt/nfs/bc/data/builds")
 SOURCE_INDEX = os.path.join(OUT_ROOT, "source_index.jsonl")
 TAG_CACHE_DIR = os.path.join(OUT_ROOT, "tag_cache")
 
