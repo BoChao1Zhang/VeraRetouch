@@ -14,8 +14,15 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
 
 from .canonical_masks import MaskPlanError, build_mask_plan, pair_mask_slots
-from .canonical_qa import OneAlignScorer, rank_candidates
+from .canonical_qa import OneAlignScorer, QaError, rank_candidates
 from .config import DatabuildConfig, load_config, redact_text
+from .legacy_import import (
+    LegacyGroupInput,
+    LegacySnapshot,
+    convert_legacy_group,
+    legacy_group_id,
+    load_legacy_snapshot,
+)
 from .presets import CoverageSelector, PresetCatalog, PresetError
 from .projection import ProjectionResult, project_artifacts
 from .rendering import (
@@ -149,6 +156,22 @@ def _load_existing_manifest(path: Path) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         raise StateError("manifest must be a JSON object")
     return value
+
+
+def _preflight_scorer(scorer: Scorer, inventory: SourceInventoryResult) -> None:
+    """Exercise one real OneAlign forward before any authoritative artifact exists."""
+    if not inventory.eligible:
+        raise PipelineError("source inventory contains no eligible image for OneAlign preflight")
+    sample_path = str(inventory.eligible[0].source_path)
+    try:
+        score = scorer.score(sample_path)
+    except Exception as exc:  # noqa: BLE001 - startup boundary needs one classified error
+        raise QaError(
+            f"OneAlign live preflight failed: {type(exc).__name__}: {exc}"
+        ) from exc
+    if score is None or not isinstance(score, (int, float)) \
+            or not 0.0 <= float(score) <= 100.0:
+        raise QaError("OneAlign live preflight returned an invalid score")
 
 
 class CanonicalPipeline:
@@ -690,6 +713,8 @@ class CanonicalPipeline:
                 if committed != coverage:
                     raise StateError("coverage commit metadata changed after durable group append")
                 return "completed"
+            except QaError:
+                raise
             except Exception as exc:  # noqa: BLE001 - restart group in another major
                 if group_persisted:
                     raise PipelineError(
@@ -751,6 +776,7 @@ class CanonicalPipeline:
         renderer.assert_ready()
         self.renderer = renderer
         self.scorer = self.dependencies.scorer_factory()
+        _preflight_scorer(self.scorer, self.inventory)
 
     def _record_sam3_attempt(
         self,
@@ -939,6 +965,250 @@ class CanonicalPipeline:
         return final_manifest
 
 
+class LegacyImportPipeline:
+    """Import an authorized legacy snapshot, then reuse the canonical Responses queue."""
+
+    def __init__(
+        self,
+        config: DatabuildConfig,
+        dependencies: PipelineDependencies,
+        snapshot: LegacySnapshot,
+        store: ArtifactStore,
+        existing_manifest: Mapping[str, Any] | None,
+    ) -> None:
+        self.config = config
+        self.dependencies = dependencies
+        self.snapshot = snapshot
+        self.store = store
+        self.started_at = str(
+            (existing_manifest or {}).get("started_at")
+            or _timestamp(self.dependencies.now())
+        )
+
+    def _failure(
+        self,
+        group: LegacyGroupInput | None,
+        *,
+        code: str,
+        message: object,
+    ) -> None:
+        source_asset_id = group.source_asset_id if group is not None else ""
+        group_id = legacy_group_id(self.config, group) if group is not None else None
+        source_id = (
+            stable_id(
+                "source", self.config.legacy_import.protocol, source_asset_id
+            )
+            if group is not None else None
+        )
+        task_id = stable_id("legacy-import", self.config.build_id, source_asset_id or code)
+        if self.store.has_terminal_failure(task_id):
+            return
+        self.store.append_failure({
+            "build_id": self.config.build_id,
+            "event_id": stable_id("failure", self.config.build_id, task_id, code),
+            "event_type": "terminal",
+            "stage": "import",
+            "task_id": task_id,
+            "source_id": source_id,
+            "source_path": (
+                str(group.record.get("source")) if group is not None else None
+            ),
+            "group_id": group_id,
+            "candidate_id": None,
+            "round": None,
+            "attempt": 1,
+            "retryable": False,
+            "error_code": code,
+            "message": redact_text(message, self.config.secrets),
+            "endpoint_id": None,
+            "terminal": True,
+            "timestamp": _timestamp(self.dependencies.now()),
+        }, durable=True)
+
+    def _annotation_counts(self) -> dict[str, Any]:
+        sources: dict[str, int] = {}
+        models: dict[str, int] = {}
+        usage: dict[str, int] = {}
+        for row in self.store.sft.values():
+            source = str(row.get("annot_src") or "unknown")
+            sources[source] = sources.get(source, 0) + 1
+            meta = (row.get("qa") or {}).get("annotation") or {}
+            model = str(meta.get("returned_model") or "unknown")
+            models[model] = models.get(model, 0) + 1
+            for key, value in (meta.get("usage") or {}).items():
+                if isinstance(value, int):
+                    usage[key] = usage.get(key, 0) + value
+        return {
+            "sources": dict(sorted(sources.items())),
+            "models": dict(sorted(models.items())),
+            "usage": dict(sorted(usage.items())),
+        }
+
+    def _manifest(self, phase: str, status: str = "running") -> dict[str, Any]:
+        groups = list(self.store.groups.values())
+        candidates = [candidate for group in groups for candidate in group["candidates"]]
+        terminal = [row for row in self.store.failures if row.get("terminal")]
+        by_code: dict[str, int] = {}
+        for row in self.store.failures:
+            code = str(row.get("error_code") or "unknown")
+            by_code[code] = by_code.get(code, 0) + 1
+        formats: dict[str, int] = {}
+        modes: dict[str, int] = {}
+        for candidate in candidates:
+            fmt = str(candidate.get("format") or "unknown")
+            mode = str(candidate.get("slot_mode") or "unknown")
+            formats[fmt] = formats.get(fmt, 0) + 1
+            modes[mode] = modes.get(mode, 0) + 1
+        return {
+            "schema_version": self.config.schema_version,
+            "build_id": self.config.build_id,
+            "phase": phase,
+            "status": status,
+            "started_at": self.started_at,
+            "updated_at": _timestamp(self.dependencies.now()),
+            "effective_config": self.config.sanitized_dict(),
+            "targets": {
+                "groups": self.config.target_groups,
+                "local": self.config.target_groups,
+                "global": 0,
+                "sft": self.snapshot.sft_row_count,
+            },
+            "completed": {
+                "groups": len(groups),
+                "local": len(groups),
+                "global": 0,
+                "actual_ratio": {"local": 1.0 if groups else 0.0, "global": 0.0},
+                "candidates": len(candidates),
+                "winner_top1": sum(bool(group.get("winner_ids")) for group in groups),
+                "winner_top2": sum(len(group.get("winner_ids") or []) >= 2 for group in groups),
+                "sft": len(self.store.sft),
+            },
+            "sources": {
+                "inventory": {
+                    "legacy_source_groups": self.snapshot.source_group_count,
+                    "groups_with_winners": len(self.snapshot.groups),
+                    "groups_without_winners": self.snapshot.skipped_groups_without_winners,
+                },
+                "scene_metadata_status": "legacy_not_available",
+                "eligible": len(self.snapshot.groups),
+                "replacement_capacity": {"local": 0, "global": 0},
+                "replacement_used": {"local": 0, "global": 0},
+                "exhaustion": {
+                    "local_shortfall": max(0, self.config.target_groups - len(groups)),
+                    "global_shortfall": 0,
+                },
+                "terminal": sum(row.get("stage") == "import" for row in terminal),
+            },
+            "presets": {
+                "inventory": {"local": {"xmp": len(candidates)}, "global": {}},
+                "usage": {
+                    "format": dict(sorted(formats.items())),
+                    "major": {},
+                    "minor": dict(sorted(modes.items())),
+                    "selector": {"local": None, "global": None},
+                    "candidate_failure_reasons": {},
+                },
+            },
+            "sam3_relabel": {
+                "expected": 0, "completed": 0, "pending": 0,
+                "attempt_events": 0, "terminal": 0,
+            },
+            "annotation": {
+                "pending": len(self.store.pending_annotation_tasks()),
+                "terminal_failures": sum(
+                    row.get("stage") == "annotation" for row in terminal
+                ),
+                "backends": self._annotation_counts(),
+            },
+            "failures": {
+                "events": len(self.store.failures),
+                "terminal": len(terminal),
+                "by_code": dict(sorted(by_code.items())),
+            },
+            "legacy_import": {
+                "protocol": self.config.legacy_import.protocol,
+                "axis_fix_status": self.config.legacy_import.axis_fix_status,
+                "input_root": str(self.config.legacy_import.input_root),
+                "input_artifacts": self.snapshot.input_artifacts,
+                "selection": "legacy winner set from unannotated sft.jsonl",
+                "old_text_imported": False,
+                "assets": "hardlink-or-copy into output assets; source paths remain external",
+                "canonical_mask_contract": False,
+                "viewer_projection_enabled": self.config.legacy_import.project_to_viewer,
+            },
+        }
+
+    def _write_phase(self, phase: str) -> None:
+        self.store.write_manifest(self._manifest(phase))
+        self.store.checkpoint()
+
+    def _import_groups(self) -> None:
+        for index, group in enumerate(self.snapshot.groups, start=1):
+            group_id = legacy_group_id(self.config, group)
+            if group_id in self.store.groups:
+                continue
+            try:
+                record = convert_legacy_group(
+                    self.config,
+                    group,
+                    self.store,
+                    timestamp=_timestamp(self.dependencies.now()),
+                )
+                self.store.append_group(record)
+            except Exception as exc:  # noqa: BLE001 - preserve one structured import failure
+                self._failure(
+                    group,
+                    code="legacy_group_import_failed",
+                    message=f"{type(exc).__name__}: {exc}",
+                )
+            if index % 32 == 0:
+                self.store.checkpoint()
+        self.store.checkpoint()
+
+    def execute(self) -> dict[str, Any]:
+        self._write_phase("preflight")
+        self._write_phase("import")
+        self._import_groups()
+
+        self._write_phase("annotation")
+        annotation = self.dependencies.annotator_factory(self.config, self.store).drain()
+        if annotation.get("pending") or self.store.pending_annotation_tasks():
+            self._write_phase("annotation")
+            raise PipelineError("legacy annotation queue remains unresolved")
+
+        if len(self.store.groups) != self.config.target_groups \
+                or len(self.store.sft) != self.snapshot.sft_row_count:
+            self._failure(
+                None,
+                code="legacy_migration_target_shortfall",
+                message=(
+                    f"expected groups={self.config.target_groups}, sft={self.snapshot.sft_row_count}; "
+                    f"completed groups={len(self.store.groups)}, sft={len(self.store.sft)}"
+                ),
+            )
+
+        self._write_phase("projection")
+        terminal = any(row.get("terminal") for row in self.store.failures)
+        final_status = "complete_with_failures" if terminal else "complete"
+        final_manifest = self._manifest(final_status, final_status)
+        final_manifest["ended_at"] = _timestamp(self.dependencies.now())
+        if self.config.legacy_import.project_to_viewer:
+            projection = self.dependencies.projector(self.store, final_manifest, self.config)
+        else:
+            projection = ProjectionResult(True, {})
+        final_manifest["projection"] = dataclasses.asdict(projection)
+        self.store.checkpoint()
+        final_manifest["artifacts"] = {
+            path.name: file_digest(path)
+            for path in (self.store.groups_path, self.store.sft_path, self.store.failures_path)
+            if path.exists()
+        }
+        _add_manifest_self_artifact(final_manifest)
+        self.store.write_manifest(final_manifest)
+        self.store.checkpoint()
+        return final_manifest
+
+
 def run(
     config: DatabuildConfig,
     *,
@@ -956,12 +1226,21 @@ def run(
 
     # No authoritative artifact is opened until every startup dependency passes.
     dependencies.sdk_preflight()
+    if config.legacy_import is not None:
+        snapshot = load_legacy_snapshot(config)
+        with ArtifactStore(config.output_root, config.build_id) as store:
+            pipeline = LegacyImportPipeline(
+                config, dependencies, snapshot, store, existing
+            )
+            return pipeline.execute()
+
     catalog = dependencies.catalog_loader(config)
     inventory = dependencies.inventory_loader(config)
     renderer = dependencies.renderer_factory(config)
     renderer.bind_catalog(catalog)
     renderer.assert_ready()
     scorer = dependencies.scorer_factory()
+    _preflight_scorer(scorer, inventory)
 
     with ArtifactStore(config.output_root, config.build_id) as store:
         pipeline = CanonicalPipeline(

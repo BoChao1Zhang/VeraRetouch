@@ -39,9 +39,19 @@ class OneAlignScorer:
         return scorer
 
     def score(self, path: str) -> float | None:
-        result = self.runner.score_path(path)
+        try:
+            result = self.runner.score_path(path)
+        except Exception as exc:  # noqa: BLE001 - convert model/runtime errors at the QA boundary
+            raise QaError(
+                f"OneAlign inference failed: {type(exc).__name__}: {exc}"
+            ) from exc
         value = result.get("onealign", result.get("iaa_mixed"))
-        return None if value is None else float(value)
+        if value is None:
+            raise QaError("OneAlign inference returned no score")
+        score = float(value)
+        if not math.isfinite(score) or not 0.0 <= score <= 100.0:
+            raise QaError(f"OneAlign inference returned invalid score: {score!r}")
+        return score
 
 
 @dataclass(frozen=True, slots=True)

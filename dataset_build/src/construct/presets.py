@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from .config import DatabuildConfig
+from .config import PRESET_FILTERS, DatabuildConfig
 from .state import stable_id
 
 
@@ -280,7 +280,15 @@ class CoverageSelector:
         preset_filter: str,
         historical_groups: Iterable[Mapping[str, Any]] = (),
     ):
-        self.catalog = catalog.eligible_for_mode(render_mode)
+        if preset_filter not in PRESET_FILTERS:
+            raise PresetError(f"invalid preset filter: {preset_filter!r}")
+        selected = catalog.eligible_for_mode(render_mode)
+        if preset_filter != "all":
+            selected = PresetCatalog(
+                (link for link in selected.links if link.preset.format == preset_filter),
+                selected.rejected,
+            )
+        self.catalog = selected
         self.build_id = build_id
         self.seed = seed
         self.render_mode = render_mode

@@ -424,6 +424,10 @@ def _consume_stream(stream: Any) -> StreamResult:
     context = stream if hasattr(stream, "__enter__") else _null_context(stream)
     with context as events:
         for event in events:
+            # Some compatible relays prepend quota telemetry outside the Responses
+            # event union. It carries no response content and is safe to ignore.
+            if getattr(event, "type", None) == "codex.rate_limits":
+                continue
             if not is_official_response_event(event):
                 raise AnnotationError(
                     "untyped_stream_event", "Responses stream returned an untyped event",
@@ -736,6 +740,19 @@ class ResponsesAnnotator:
                 and row.get("endpoint_id") == endpoint_id
                 for row in self.store.failures
             )
+            if exhausted and not self.store.external_pool_exhausted():
+                self._failure(
+                    task,
+                    event_type="pool_state",
+                    error_code="external_pool_exhausted",
+                    message="all external annotation endpoints exhausted permanent quota",
+                    round_number=round_number,
+                    attempt=attempt,
+                    retryable=True,
+                    terminal=False,
+                    endpoint_id=endpoint_id,
+                    durable=True,
+                )
             if not endpoint_recorded:
                 self._failure(
                     task,
@@ -748,19 +765,6 @@ class ResponsesAnnotator:
                     terminal=False,
                     endpoint_id=endpoint_id,
                     durable=True,
-                )
-            if exhausted and not self.store.external_pool_exhausted():
-                self._failure(
-                task,
-                event_type="pool_state",
-                error_code="external_pool_exhausted",
-                message="all external annotation endpoints exhausted permanent quota",
-                round_number=round_number,
-                attempt=attempt,
-                retryable=True,
-                terminal=False,
-                endpoint_id=endpoint_id,
-                durable=True,
                 )
 
     def _append_sft(self, task: Mapping[str, Any], result: AttemptResult) -> None:
@@ -854,6 +858,8 @@ class ResponsesAnnotator:
             return "terminal"
 
         while attempt < self.config.transport_attempts_per_round:
+            if self.pool.exhausted and not self.config.local_fallback:
+                return "retryable_exhausted"
             route = "local" if self.pool.exhausted else "external"
             endpoint: ExternalEndpointConfig | LocalAnnotationConfig | None
             lease = self.pool.lease() if route == "external" else _null_context(self.config.local)

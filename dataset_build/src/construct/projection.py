@@ -117,6 +117,12 @@ def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def _optional_identifier(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    return str(value)
+
+
 def _execute_many(cursor: Any, sql: str, rows: list[tuple[Any, ...]]) -> None:
     if rows:
         cursor.executemany(sql, rows)
@@ -247,8 +253,9 @@ def project_artifacts(
             sft_rows)
         failure_rows = [(
             row["event_id"], row["build_id"], row.get("event_type"), row.get("stage"),
-            row.get("task_id"), row.get("source_id"), row.get("group_id"),
-            row.get("candidate_id"), row.get("round"), row.get("attempt"),
+            row.get("task_id"), _optional_identifier(row.get("source_id")),
+            _optional_identifier(row.get("group_id")),
+            _optional_identifier(row.get("candidate_id")), row.get("round"), row.get("attempt"),
             bool(row.get("retryable")), str(row.get("error_code") or "unknown"),
             str(row.get("message") or ""), row.get("endpoint_id"), bool(row.get("terminal")),
             _json(row), projected_at,

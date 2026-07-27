@@ -90,11 +90,24 @@ class AnnotationConfig:
     queue_rounds: int
     external_endpoints: tuple[ExternalEndpointConfig, ...]
     local: LocalAnnotationConfig
+    local_fallback: bool = True
 
 
 @dataclass(frozen=True, slots=True)
 class ViewerConfig:
     postgres_dsn: str
+
+
+@dataclass(frozen=True, slots=True)
+class LegacyImportConfig:
+    input_root: Path
+    groups_jsonl: Path
+    sft_jsonl: Path
+    expected_source_groups: int
+    expected_sft_rows: int
+    protocol: str
+    axis_fix_status: str
+    project_to_viewer: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +125,7 @@ class DatabuildConfig:
     masks: MasksConfig
     annotation: AnnotationConfig
     viewer: ViewerConfig
+    legacy_import: LegacyImportConfig | None = None
 
     @property
     def requested_formats(self) -> frozenset[str]:
@@ -160,6 +174,10 @@ class DatabuildConfig:
         )
         raw["annotation"]["local"]["api_key"] = "<redacted>"
         raw["viewer"]["postgres_dsn"] = redact_uri(self.viewer.postgres_dsn)
+        if self.legacy_import is not None:
+            raw["legacy_import"]["input_root"] = str(self.legacy_import.input_root)
+            raw["legacy_import"]["groups_jsonl"] = str(self.legacy_import.groups_jsonl)
+            raw["legacy_import"]["sft_jsonl"] = str(self.legacy_import.sft_jsonl)
         raw["disabled_formats"] = list(self.presets.disabled_formats)
         raw["effective_formats"] = sorted(self.effective_formats)
         return raw
@@ -305,6 +323,28 @@ def _validate_runtime_paths(config: DatabuildConfig) -> None:
     for name, path in required_files.items():
         if not path.is_file():
             raise ConfigError(f"{name} is not an existing file: {path}")
+    if config.legacy_import is not None:
+        legacy = config.legacy_import
+        if not legacy.input_root.is_dir():
+            raise ConfigError(
+                f"legacy_import.input_root is not an existing directory: {legacy.input_root}"
+            )
+        for name, path in (
+            ("legacy_import.groups_jsonl", legacy.groups_jsonl),
+            ("legacy_import.sft_jsonl", legacy.sft_jsonl),
+        ):
+            if not path.is_file():
+                raise ConfigError(f"{name} is not an existing file: {path}")
+            try:
+                path.resolve().relative_to(legacy.input_root.resolve())
+            except ValueError as exc:
+                raise ConfigError(f"{name} must be inside legacy_import.input_root") from exc
+        try:
+            config.output_root.resolve().relative_to(legacy.input_root.resolve())
+        except ValueError:
+            pass
+        else:
+            raise ConfigError("output_root must not be inside legacy_import.input_root")
     parent = config.output_root
     while not parent.exists() and parent != parent.parent:
         parent = parent.parent
@@ -316,9 +356,9 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
     root_allowed = {
         "schema_version", "build_id", "seed", "target_groups", "output_root",
         "preset_filter", "mix", "sources", "presets", "render", "masks",
-        "annotation", "viewer",
+        "annotation", "viewer", "legacy_import",
     }
-    _keys(data, root_allowed, root_allowed, "root")
+    _keys(data, root_allowed, root_allowed.difference({"legacy_import"}), "root")
     schema_version = _typed(data, "schema_version", int, "root")
     if schema_version != 1:
         raise ConfigError("schema_version must equal 1")
@@ -420,11 +460,12 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
         "external_model", "image_long_edge", "image_jpeg_quality",
         "external_reasoning_effort", "external_max_output_tokens",
         "transport_attempts_per_round", "queue_rounds", "external_endpoints", "local",
+        "local_fallback",
     }
     _keys(annotation_t, annotation_keys, annotation_keys, "annotation")
     endpoint_rows = _typed(annotation_t, "external_endpoints", list, "annotation")
-    if len(endpoint_rows) != 2:
-        raise ConfigError("annotation.external_endpoints must contain exactly two endpoints")
+    if not endpoint_rows:
+        raise ConfigError("annotation.external_endpoints must contain at least one endpoint lane")
     endpoints = []
     endpoint_keys = {"id", "base_url", "api_key", "concurrency"}
     for index, row in enumerate(endpoint_rows):
@@ -441,7 +482,7 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
         )
         _positive(endpoint.concurrency, f"{where}.concurrency")
         endpoints.append(endpoint)
-    if len({endpoint.id for endpoint in endpoints}) != 2:
+    if len({endpoint.id for endpoint in endpoints}) != len(endpoints):
         raise ConfigError("annotation external endpoint IDs must be distinct")
 
     local_t = _table(annotation_t, "local")
@@ -485,11 +526,12 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
         queue_rounds=_typed(annotation_t, "queue_rounds", int, "annotation"),
         external_endpoints=tuple(endpoints),
         local=local_annotation,
+        local_fallback=_typed(annotation_t, "local_fallback", bool, "annotation"),
     )
     if annotation.image_long_edge != 768 or annotation.image_jpeg_quality != 90:
         raise ConfigError("annotation images are fixed at longest edge 768 and JPEG quality 90")
-    if annotation.external_reasoning_effort != "medium":
-        raise ConfigError("annotation.external_reasoning_effort must be medium")
+    if annotation.external_reasoning_effort != "low":
+        raise ConfigError("annotation.external_reasoning_effort must be low")
     if annotation.external_max_output_tokens != 6000:
         raise ConfigError("annotation.external_max_output_tokens must equal 6000")
     if not 1 <= annotation.transport_attempts_per_round <= 4:
@@ -502,6 +544,58 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
     viewer = ViewerConfig(
         postgres_dsn=_url(_typed(viewer_t, "postgres_dsn", str, "viewer"),
                           "viewer.postgres_dsn", frozenset({"postgres", "postgresql"})))
+
+    legacy_import: LegacyImportConfig | None = None
+    if "legacy_import" in data:
+        legacy_t = _table(data, "legacy_import")
+        legacy_keys = {
+            "input_root", "groups_jsonl", "sft_jsonl", "expected_source_groups",
+            "expected_sft_rows", "protocol", "axis_fix_status", "project_to_viewer",
+        }
+        _keys(legacy_t, legacy_keys, legacy_keys, "legacy_import")
+        legacy_import = LegacyImportConfig(
+            input_root=_absolute(
+                _typed(legacy_t, "input_root", str, "legacy_import"),
+                "legacy_import.input_root",
+            ),
+            groups_jsonl=_absolute(
+                _typed(legacy_t, "groups_jsonl", str, "legacy_import"),
+                "legacy_import.groups_jsonl",
+            ),
+            sft_jsonl=_absolute(
+                _typed(legacy_t, "sft_jsonl", str, "legacy_import"),
+                "legacy_import.sft_jsonl",
+            ),
+            expected_source_groups=_typed(
+                legacy_t, "expected_source_groups", int, "legacy_import"
+            ),
+            expected_sft_rows=_typed(
+                legacy_t, "expected_sft_rows", int, "legacy_import"
+            ),
+            protocol=_nonempty(
+                _typed(legacy_t, "protocol", str, "legacy_import"),
+                "legacy_import.protocol",
+            ),
+            axis_fix_status=_nonempty(
+                _typed(legacy_t, "axis_fix_status", str, "legacy_import"),
+                "legacy_import.axis_fix_status",
+            ),
+            project_to_viewer=_typed(
+                legacy_t, "project_to_viewer", bool, "legacy_import"
+            ),
+        )
+        _positive(legacy_import.expected_source_groups, "legacy_import.expected_source_groups")
+        _positive(legacy_import.expected_sft_rows, "legacy_import.expected_sft_rows")
+        if mix != MixConfig(local=1.0, global_=0.0):
+            raise ConfigError("legacy_import requires mix.local=1 and mix.global=0")
+        if preset_filter != "xmp":
+            raise ConfigError("legacy_import currently requires preset_filter=xmp")
+        if legacy_import.protocol != "r5_local_50k_v4":
+            raise ConfigError("legacy_import.protocol must equal r5_local_50k_v4")
+        if legacy_import.axis_fix_status != "param_only_no_native_lut":
+            raise ConfigError(
+                "legacy_import.axis_fix_status must equal param_only_no_native_lut"
+            )
 
     return DatabuildConfig(
         schema_version=schema_version,
@@ -517,6 +611,7 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
         masks=masks,
         annotation=annotation,
         viewer=viewer,
+        legacy_import=legacy_import,
     )
 
 

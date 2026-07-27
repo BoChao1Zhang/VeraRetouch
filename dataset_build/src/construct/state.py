@@ -15,6 +15,7 @@ from typing import Any, Iterable
 
 PHASES = (
     "preflight",
+    "import",
     "rendering",
     "sam3_relabel",
     "annotation",
