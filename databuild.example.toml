@@ -4,7 +4,7 @@ schema_version = 1
 build_id = "example-build"
 seed = 0
 target_groups = 10000
-output_root = "/home/bc/data/datasets/vera_directionA_1M/builds/example-build"
+output_root = "/dev/shm/veradata/staging/example-build"
 # One of: xmp, lrtemplate, lut, all. "all" follows eligible inventory naturally.
 preset_filter = "all"
 
@@ -14,14 +14,16 @@ local = 0.70
 global = 0.30
 
 [sources]
-# Instance-level SAM3 cache containing <path_key>/subject.json and subject.png.
+# 注意：这个路径在本机已不存在，数据在 NFS 归档里。它现在是归档反查表的
+# 前缀键（逻辑标识），construct 通过 archive_reader.iter_source_paths() 用它
+# 枚举 cache 条目、用 read_bytes() 取字节。不要"修正"成 NFS 路径，否则源池为空。
 subject_cache = "/home/bc/data/datasets/vera_directionA_1M/subject_cache"
 # Used only for source scene metadata. Credentials remain in the 0600 real TOML.
 postgres_dsn = "postgresql://USER:PASSWORD@127.0.0.1:5432/vera_source_qa"
 
 [presets]
-bank_dir = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full"
-taxonomy = "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full/taxonomy.jsonl"
+bank_dir = "/var/cache/veradata/preset_bank_full"
+taxonomy = "/var/cache/veradata/preset_bank_full/taxonomy.jsonl"
 # Mean CIEDE2000 ceiling for calibrated XMP/LRTemplate GPU replay.
 fidelity_de_max = 6.0
 # Operator kill switch for a faulty renderer class. Values: xmp, lrtemplate, lut.
@@ -45,27 +47,47 @@ linear_target_alpha_mass = 0.50
 sam3_relabel_attempts = 2
 
 [annotation]
-# Both external relays use this single operator-selected model name.
+# Every external provider/key lane uses this single operator-selected model name.
 external_model = "configured-by-operator"
 image_long_edge = 768
 image_jpeg_quality = 90
-external_reasoning_effort = "medium"
+external_reasoning_effort = "low"
 external_max_output_tokens = 6000
 # Across the entire relay pool, not per endpoint.
 transport_attempts_per_round = 4
 queue_rounds = 3
+# Set false for an external-only run that must never route annotation to local vGate.
+local_fallback = true
 
 [[annotation.external_endpoints]]
-id = "relay-a"
-base_url = "https://relay-a.example/v1"
-api_key = "REPLACE_WITH_RELAY_A_KEY"
+id = "provider-a-lane-1"
+base_url = "https://provider-a.example/v1"
+api_key = "REPLACE_WITH_PROVIDER_A_KEY_1"
 concurrency = 16
 
 [[annotation.external_endpoints]]
-id = "relay-b"
-base_url = "https://relay-b.example/v1"
-api_key = "REPLACE_WITH_RELAY_B_KEY"
-concurrency = 16
+id = "provider-b-lane-1"
+base_url = "https://provider-b.example/v1"
+api_key = "REPLACE_WITH_PROVIDER_B_KEY_1"
+concurrency = 8
+
+[[annotation.external_endpoints]]
+id = "provider-b-lane-2"
+base_url = "https://provider-b.example/v1"
+api_key = "REPLACE_WITH_PROVIDER_B_KEY_2"
+concurrency = 8
+
+[[annotation.external_endpoints]]
+id = "provider-c-lane-1"
+base_url = "https://provider-c.example/v1"
+api_key = "REPLACE_WITH_PROVIDER_C_KEY_1"
+concurrency = 8
+
+[[annotation.external_endpoints]]
+id = "provider-c-lane-2"
+base_url = "https://provider-c.example/v1"
+api_key = "REPLACE_WITH_PROVIDER_C_KEY_2"
+concurrency = 8
 
 [annotation.local]
 # One vGate broker URL; databuild never addresses individual replicas.

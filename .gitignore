@@ -40,3 +40,6 @@ lens_exp_results*/
 docs/ppt_assets_*/
 gpu_render/fits/baked/
 dataset_build/taxonomy_review/
+build
+# LUT 渲染器 pilot 的产出（7 GB，可再生）
+experiments/**/outputs/
