@@ -23,9 +23,13 @@ _SAFE_CANDIDATES_SQL = (
     "THEN g.payload->'candidates' ELSE '[]'::jsonb END)"
 )
 _CANONICAL_GROUP_SQL = (
-    "(SELECT count(*) FROM canonical_candidates cg WHERE cg.group_id=g.group_id)=8 "
+    "(SELECT count(*) FROM canonical_candidates cg WHERE cg.group_id=g.group_id "
+    "AND cg.build_id=g.build_id)=8 "
+    "AND (SELECT count(DISTINCT cg.candidate_id) FROM canonical_candidates cg "
+    "WHERE cg.group_id=g.group_id AND cg.build_id=g.build_id)=8 "
     "AND NOT EXISTS (SELECT 1 FROM canonical_candidates cg "
-    "WHERE cg.group_id=g.group_id AND (cg.candidate_id='' "
+    "WHERE cg.group_id=g.group_id AND cg.build_id=g.build_id "
+    "AND (cg.candidate_id='' "
     "OR jsonb_typeof(cg.payload)<>'object' "
     "OR cg.payload->>'candidate_id' IS DISTINCT FROM cg.candidate_id)) "
     "AND jsonb_typeof(g.payload)='object' "
@@ -41,7 +45,7 @@ _CANONICAL_GROUP_SQL = (
     f"jsonb_array_elements({_SAFE_CANDIDATES_SQL}) AS candidate(value))=8 "
     f"AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements({_SAFE_CANDIDATES_SQL}) "
     "AS candidate(value) WHERE NOT EXISTS (SELECT 1 FROM canonical_candidates pc "
-    "WHERE pc.group_id=g.group_id "
+    "WHERE pc.group_id=g.group_id AND pc.build_id=g.build_id "
     "AND pc.candidate_id=candidate.value->>'candidate_id' "
     "AND pc.payload=candidate.value)) "
     "AND jsonb_typeof(g.winner_ids)='array' "
@@ -55,7 +59,8 @@ _CANONICAL_GROUP_SQL = (
     f"jsonb_array_elements_text({_SAFE_WINNER_IDS_SQL}) AS winner(value)) "
     f"AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text({_SAFE_WINNER_IDS_SQL}) "
     "AS winner(candidate_id) WHERE NOT EXISTS (SELECT 1 FROM canonical_candidates wc "
-    "WHERE wc.group_id=g.group_id AND wc.candidate_id=winner.candidate_id))"
+    "WHERE wc.group_id=g.group_id AND wc.build_id=g.build_id "
+    "AND wc.candidate_id=winner.candidate_id))"
 )
 _GROUP_ORDER_SQL = (
     "COALESCE(g.payload #>> '{stage_timestamps,qa_completed_at}',"
@@ -145,15 +150,58 @@ def canonical_group_error(
     return None
 
 
+def canonical_sft_error(
+    group: Mapping[str, Any], rows: Sequence[Mapping[str, Any]]
+) -> str | None:
+    winner_ids = group.get("winner_ids")
+    if not isinstance(winner_ids, list):
+        return "winner_ids must be a list"
+    if len(rows) > 2:
+        return "group contains more than two SFT rows"
+    build_id = group.get("build_id")
+    group_id = group.get("group_id")
+    candidate_ids: set[str] = set()
+    winner_ranks: set[int] = set()
+    for row in rows:
+        if build_id is not None and row.get("build_id") != build_id:
+            return "SFT build_id does not match its group"
+        if group_id is not None and row.get("group_id") != group_id:
+            return "SFT group_id does not match its group"
+        candidate_id = row.get("candidate_id")
+        if not isinstance(candidate_id, str) or not candidate_id:
+            return "SFT candidate_id must be a non-empty string"
+        if candidate_id in candidate_ids:
+            return "SFT candidate_ids must be distinct"
+        winner_rank = row.get("winner_rank")
+        if (
+            isinstance(winner_rank, bool)
+            or not isinstance(winner_rank, int)
+            or winner_rank < 1
+            or winner_rank > len(winner_ids)
+        ):
+            return "SFT winner_rank must be a valid one-based winner rank"
+        if winner_rank in winner_ranks:
+            return "SFT winner_ranks must be distinct"
+        if winner_ids[winner_rank - 1] != candidate_id:
+            return "SFT winner_rank does not match winner_ids order"
+        candidate_ids.add(candidate_id)
+        winner_ranks.add(winner_rank)
+    return None
+
+
 def _related_failures(
     group: Mapping[str, Any], failures: Iterable[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
+    build_id = group.get("build_id")
     group_id = group.get("group_id")
     source_id = group.get("source_id")
     candidate_ids = {row.get("candidate_id") for row in _candidate_rows(group)}
     related: list[dict[str, Any]] = []
     for value in failures:
         row = dict(value)
+        row_build_id = row.get("build_id")
+        if row_build_id not in (None, "", build_id):
+            continue
         if (
             (row.get("group_id") and row.get("group_id") == group_id)
             or (row.get("candidate_id") and row.get("candidate_id") in candidate_ids)
@@ -186,8 +234,11 @@ def _queue_state(
     winners = {str(value) for value in _sequence(group.get("winner_ids")) if value}
     if not winners:
         return "none"
-    completed = {str(row.get("candidate_id")) for row in sft_rows if row.get("candidate_id")}
-    if winners.issubset(completed):
+    sft_error = canonical_sft_error(group, sft_rows)
+    completed = {
+        str(row.get("candidate_id")) for row in sft_rows if row.get("candidate_id")
+    }
+    if sft_error is None and len(sft_rows) == len(winners) and winners == completed:
         return "complete"
     failed = {
         str(row.get("candidate_id"))
@@ -594,37 +645,61 @@ class PostgresStore:
             candidate_clauses.extend(("fc.winner=TRUE", "fc.rank=2"))
         if candidate_clauses:
             clauses.append(
-                "EXISTS (SELECT 1 FROM canonical_candidates fc WHERE fc.group_id=g.group_id AND "
+                "EXISTS (SELECT 1 FROM canonical_candidates fc WHERE "
+                "fc.group_id=g.group_id AND fc.build_id=g.build_id AND "
                 + " AND ".join(candidate_clauses) + ")"
             )
         related_failure = (
-            "(ff.group_id=g.group_id OR (ff.candidate_id IS NOT NULL AND EXISTS "
+            "(ff.build_id=g.build_id AND (ff.group_id=g.group_id OR "
+            "(ff.candidate_id IS NOT NULL AND EXISTS "
             "(SELECT 1 FROM canonical_candidates rc WHERE rc.group_id=g.group_id "
-            "AND rc.candidate_id=ff.candidate_id)) OR (ff.group_id IS NULL AND "
-            "ff.candidate_id IS NULL AND ff.source_id=g.source_id))"
+            "AND rc.build_id=g.build_id AND rc.candidate_id=ff.candidate_id)) OR "
+            "(ff.group_id IS NULL AND "
+            "ff.candidate_id IS NULL AND ff.source_id=g.source_id)))"
         )
         missing_winner = (
             f"EXISTS (SELECT 1 FROM jsonb_array_elements_text({_SAFE_WINNER_IDS_SQL}) "
-            "AS winner(candidate_id) WHERE NOT EXISTS (SELECT 1 FROM canonical_sft qs "
-            "WHERE qs.group_id=g.group_id AND qs.candidate_id=winner.candidate_id))"
+            "WITH ORDINALITY AS winner(candidate_id,winner_rank) "
+            "WHERE NOT EXISTS (SELECT 1 FROM canonical_sft qs WHERE "
+            "qs.build_id=g.build_id AND qs.group_id=g.group_id "
+            "AND qs.candidate_id=winner.candidate_id "
+            "AND qs.winner_rank=winner.winner_rank))"
+        )
+        invalid_sft = (
+            "EXISTS (SELECT 1 FROM canonical_sft qs WHERE qs.build_id=g.build_id "
+            "AND qs.group_id=g.group_id AND NOT EXISTS (SELECT 1 FROM "
+            f"jsonb_array_elements_text({_SAFE_WINNER_IDS_SQL}) WITH ORDINALITY "
+            "AS winner(candidate_id,winner_rank) WHERE "
+            "winner.candidate_id=qs.candidate_id "
+            "AND winner.winner_rank=qs.winner_rank))"
+        )
+        sft_count_matches = (
+            "(SELECT count(*) FROM canonical_sft qs WHERE qs.build_id=g.build_id "
+            "AND qs.group_id=g.group_id)="
+            f"jsonb_array_length({_SAFE_WINNER_IDS_SQL})"
+        )
+        valid_sft = (
+            "(" + sft_count_matches + " AND NOT " + missing_winner
+            + " AND NOT " + invalid_sft + ")"
         )
         failed_winner = (
-            "EXISTS (SELECT 1 FROM canonical_failures ff WHERE ff.stage='annotation' "
+            "EXISTS (SELECT 1 FROM canonical_failures ff WHERE ff.build_id=g.build_id "
+            "AND ff.stage='annotation' "
             "AND ff.terminal=TRUE AND ff.candidate_id IN "
             f"(SELECT jsonb_array_elements_text({_SAFE_WINNER_IDS_SQL})))"
         )
         if filters.queue_state == "complete":
             clauses.append(
-                f"jsonb_array_length({_SAFE_WINNER_IDS_SQL})>0 AND NOT " + missing_winner
+                f"jsonb_array_length({_SAFE_WINNER_IDS_SQL})>0 AND " + valid_sft
             )
         elif filters.queue_state == "pending":
             clauses.append(
-                f"jsonb_array_length({_SAFE_WINNER_IDS_SQL})>0 AND " + missing_winner
+                f"jsonb_array_length({_SAFE_WINNER_IDS_SQL})>0 AND NOT " + valid_sft
                 + " AND NOT " + failed_winner
             )
         elif filters.queue_state == "failed":
             clauses.append(
-                f"jsonb_array_length({_SAFE_WINNER_IDS_SQL})>0 AND " + missing_winner
+                f"jsonb_array_length({_SAFE_WINNER_IDS_SQL})>0 AND NOT " + valid_sft
                 + " AND " + failed_winner
             )
         elif filters.queue_state == "none":
@@ -662,6 +737,7 @@ class PostgresStore:
                 [*args, page_size, (page - 1) * page_size],
             ))
             groups = [_mapping(row.get("payload")) for row in rows]
+            build_ids = sorted({str(group.get("build_id")) for group in groups})
             group_ids = [str(group.get("group_id")) for group in groups]
             source_ids = [str(group.get("source_id")) for group in groups]
             candidate_ids = [
@@ -675,16 +751,18 @@ class PostgresStore:
             if group_ids:
                 for row in self._rows(connection.execute(
                     "SELECT group_id,payload FROM canonical_sft "
-                    "WHERE group_id=ANY(%s) ORDER BY group_id,winner_rank", [group_ids]
+                    "WHERE build_id=ANY(%s) AND group_id=ANY(%s) "
+                    "ORDER BY group_id,winner_rank", [build_ids, group_ids]
                 )):
                     sft_by_group.setdefault(str(row.get("group_id")), []).append(
                         _mapping(row.get("payload"))
                     )
                 for row in self._rows(connection.execute(
-                    "SELECT payload FROM canonical_failures WHERE group_id=ANY(%s) "
-                    "OR candidate_id=ANY(%s) OR (group_id IS NULL AND candidate_id IS NULL "
-                    "AND source_id=ANY(%s)) ORDER BY projected_at,event_id",
-                    [group_ids, candidate_ids, source_ids],
+                    "SELECT payload FROM canonical_failures WHERE build_id=ANY(%s) AND "
+                    "(group_id=ANY(%s) OR candidate_id=ANY(%s) OR "
+                    "(group_id IS NULL AND candidate_id IS NULL AND source_id=ANY(%s))) "
+                    "ORDER BY projected_at,event_id",
+                    [build_ids, group_ids, candidate_ids, source_ids],
                 )):
                     related_failures.append(_mapping(row.get("payload")))
             items: list[dict[str, Any]] = []
@@ -705,14 +783,17 @@ class PostgresStore:
     ) -> dict[str, Any]:
         if group is None:
             row = connection.execute(
-                "SELECT payload FROM canonical_groups WHERE group_id=%s", [group_id]
+                f"SELECT g.payload FROM canonical_groups g WHERE g.group_id=%s "
+                f"AND {_CANONICAL_GROUP_SQL}",
+                [group_id],
             ).fetchone()
             if not row:
                 return {}
             group = _mapping(row["payload"])
         candidate_rows = self._rows(connection.execute(
             "SELECT payload,winner,slot_index,rank FROM canonical_candidates "
-            "WHERE group_id=%s ORDER BY slot_index", [group_id]
+            "WHERE group_id=%s AND build_id=%s ORDER BY slot_index",
+            [group_id, group.get("build_id")],
         ))
         candidates: list[dict[str, Any]] = []
         for row in candidate_rows:
@@ -726,16 +807,19 @@ class PostgresStore:
         sft = [
             _mapping(row.get("payload"))
             for row in self._rows(connection.execute(
-                "SELECT payload FROM canonical_sft WHERE group_id=%s ORDER BY winner_rank", [group_id]
+                "SELECT payload FROM canonical_sft WHERE group_id=%s AND build_id=%s "
+                "ORDER BY winner_rank", [group_id, group.get("build_id")]
             ))
         ]
         source_id = group.get("source_id")
+        build_id = group.get("build_id")
         candidate_ids = [candidate["candidate_id"] for candidate in candidates]
         failure_rows = self._rows(connection.execute(
-            "SELECT payload FROM canonical_failures WHERE group_id=%s OR candidate_id=ANY(%s) "
-            "OR (group_id IS NULL AND candidate_id IS NULL AND source_id=%s) "
+            "SELECT payload FROM canonical_failures WHERE build_id=%s AND "
+            "(group_id=%s OR candidate_id=ANY(%s) OR "
+            "(group_id IS NULL AND candidate_id IS NULL AND source_id=%s)) "
             "ORDER BY projected_at,event_id",
-            [group_id, candidate_ids, source_id],
+            [build_id, group_id, candidate_ids, source_id],
         ))
         group_with_candidates = {**group, "candidates": candidates}
         failures = _related_failures(
@@ -773,7 +857,8 @@ class PostgresStore:
             values = self._rows(connection.execute(
                 "SELECT DISTINCT fc.preset_format,fc.major,fc.minor "
                 "FROM canonical_candidates fc JOIN canonical_groups g "
-                "ON g.group_id=fc.group_id" + group_where, build_args
+                "ON g.group_id=fc.group_id AND g.build_id=fc.build_id"
+                + group_where, build_args
             ))
         except Exception as exc:
             raise StoreUnavailable("postgres_query_failed") from exc
@@ -885,4 +970,5 @@ __all__ = [
     "ViewerRepository",
     "WINNER_FILTERS",
     "canonical_group_error",
+    "canonical_sft_error",
 ]

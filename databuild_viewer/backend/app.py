@@ -6,7 +6,7 @@ import io
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -19,6 +19,7 @@ from .repository import (
     GroupFilters,
     ViewerRepository,
     canonical_group_error,
+    canonical_sft_error,
 )
 
 
@@ -217,26 +218,45 @@ def selfcheck() -> dict:
     builds = repository.builds()
     for build in builds:
         page_number = 1
+        expected_total: int | None = None
+        seen_group_ids: set[str] = set()
         while True:
             page = repository.groups(
                 GroupFilters(build_id=build["build_id"]),
                 page_number,
                 MAX_PAGE_SIZE,
             )
-            for item in page["items"]:
-                detail = repository.group(item["group_id"])
+            total = page.get("total")
+            items = page.get("items")
+            if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+                raise RuntimeError("viewer group pagination returned an invalid total")
+            if not isinstance(items, list):
+                raise RuntimeError("viewer group pagination returned invalid items")
+            if expected_total is None:
+                expected_total = total
+            elif total != expected_total:
+                raise RuntimeError("viewer group pagination changed during selfcheck")
+            if not items and len(seen_group_ids) < expected_total:
+                raise RuntimeError("viewer group pagination ended before its reported total")
+            for item in items:
+                group_id = item.get("group_id") if isinstance(item, Mapping) else None
+                if not isinstance(group_id, str) or not group_id:
+                    raise RuntimeError("viewer group pagination returned an invalid group ID")
+                if group_id in seen_group_ids:
+                    raise RuntimeError("viewer group pagination returned a duplicate group")
+                seen_group_ids.add(group_id)
+                detail = repository.group(group_id)
                 if detail is None:
                     raise RuntimeError("canonical group detail unavailable")
                 error = canonical_group_error(detail["group"], detail["candidates"])
                 if error is not None:
                     raise RuntimeError(f"canonical group invariant failed: {error}")
-                sft = detail["sft"]
-                winner_ids = set(detail["group"]["winner_ids"])
-                if len(sft) > 2 or any(
-                    row.get("candidate_id") not in winner_ids for row in sft
-                ):
-                    raise RuntimeError("canonical SFT invariant failed")
-            if page_number * MAX_PAGE_SIZE >= page["total"]:
+                sft_error = canonical_sft_error(detail["group"], detail["sft"])
+                if sft_error is not None:
+                    raise RuntimeError(f"canonical SFT invariant failed: {sft_error}")
+            if len(seen_group_ids) >= expected_total:
+                if len(seen_group_ids) != expected_total:
+                    raise RuntimeError("viewer group pagination exceeded its reported total")
                 break
             page_number += 1
     return {

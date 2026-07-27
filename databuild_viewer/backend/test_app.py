@@ -86,14 +86,22 @@ class CanonicalViewerBackendTests(unittest.TestCase):
             self.assertNotIn("jsonb_array_elements_text(g.winner_ids)", clause)
             self.assertNotIn("jsonb_array_length(g.winner_ids)", clause)
             self.assertIn("canonical_candidates cg", clause)
+            self.assertIn("count(*) FROM canonical_candidates", clause)
+            self.assertIn("count(DISTINCT cg.candidate_id)", clause)
+            self.assertIn("cg.build_id=g.build_id", clause)
             self.assertIn("pc.payload=candidate.value", clause)
             self.assertIn("g.payload->'winner_ids'=g.winner_ids", clause)
-        for clause in (complete, pending):
+            self.assertIn("WITH ORDINALITY", clause)
+            self.assertIn("qs.build_id=g.build_id", clause)
+            self.assertIn("qs.winner_rank=winner.winner_rank", clause)
+        for clause in (complete, pending, failed):
             self.assertIn("qs.candidate_id=winner.candidate_id", clause)
         for clause in (pending, failed):
             self.assertIn("ff.candidate_id IN", clause)
+            self.assertIn("ff.build_id=g.build_id", clause)
 
         terminal, _ = PostgresStore._where(GroupFilters(failure_state="terminal"))
+        self.assertIn("ff.build_id=g.build_id", terminal)
         self.assertIn("rc.candidate_id=ff.candidate_id", terminal)
         self.assertIn("ff.candidate_id IS NULL AND ff.source_id=g.source_id", terminal)
 
@@ -138,6 +146,67 @@ class CanonicalViewerBackendTests(unittest.TestCase):
             self.assertIn("jsonb_typeof(g.winner_ids)='array'", sql)
             self.assertIn("g.build_id=%s", sql)
         self.assertIn("JOIN canonical_groups g", candidate_query)
+
+    def test_postgres_detail_scopes_candidates_and_sft_to_group_build(self) -> None:
+        group = self._group(
+            "global",
+            "global",
+            [self._candidate("global", index, "lut") for index in range(8)],
+            ["global-c0"],
+        )
+        candidates = group["candidates"]
+        sft = self._sft("global", 1)
+        queries: list[tuple[str, list | None]] = []
+
+        class Cursor:
+            def __init__(self, *, one=None, rows=()):
+                self.one = one
+                self.rows = list(rows)
+
+            def fetchone(self):
+                return self.one
+
+            def fetchall(self):
+                return self.rows
+
+        class Connection:
+            def execute(self, sql, args=None):
+                queries.append((sql, args))
+                if sql.startswith("SELECT g.payload FROM canonical_groups"):
+                    return Cursor(one={"payload": group})
+                if sql.startswith("SELECT payload,winner,slot_index,rank"):
+                    return Cursor(rows=[{
+                        "payload": candidate,
+                        "winner": candidate["candidate_id"] in group["winner_ids"],
+                        "slot_index": index,
+                        "rank": candidate["rank"],
+                    } for index, candidate in enumerate(candidates)])
+                if sql.startswith("SELECT payload FROM canonical_sft"):
+                    return Cursor(rows=[{"payload": sft}])
+                if sql.startswith("SELECT payload FROM canonical_failures"):
+                    return Cursor()
+                raise AssertionError(sql)
+
+            def close(self):
+                pass
+
+        detail = PostgresStore(
+            "postgresql://ignored", lambda _dsn: Connection()
+        ).group("global-group")
+        self.assertIsNotNone(detail)
+        assert detail is not None
+        self.assertEqual("complete", detail["group"]["queue_state"])
+        candidate_sql, candidate_args = next(
+            (sql, args) for sql, args in queries
+            if sql.startswith("SELECT payload,winner,slot_index,rank")
+        )
+        sft_sql, sft_args = next(
+            (sql, args) for sql, args in queries
+            if sql.startswith("SELECT payload FROM canonical_sft")
+        )
+        for sql, args in ((candidate_sql, candidate_args), (sft_sql, sft_args)):
+            self.assertIn("build_id=%s", sql)
+            self.assertEqual(["global-group", "build-a"], args)
 
     def test_postgres_health_reports_canonical_group_count(self) -> None:
         class Cursor:
@@ -312,6 +381,36 @@ class CanonicalViewerBackendTests(unittest.TestCase):
         self.assertEqual("pending", detail["group"]["queue_state"])
         self.assertEqual("terminal", detail["group"]["failure_state"])
 
+    def test_invalid_extra_sft_cannot_mark_queue_complete(self) -> None:
+        group_rows = [
+            json.loads(line)
+            for line in (self.build / "groups.jsonl").read_text("utf-8").splitlines()
+        ]
+        sft_rows = [
+            json.loads(line)
+            for line in (self.build / "sft.jsonl").read_text("utf-8").splitlines()
+        ]
+        group = self._group(
+            "badqueue",
+            "global",
+            [self._candidate("badqueue", index, "lut") for index in range(8)],
+            ["badqueue-c0"],
+        )
+        valid = self._sft("badqueue", 1)
+        extra = {
+            **valid,
+            "sft_id": "badqueue-sft-extra",
+            "annotation_task_id": "badqueue-task-extra",
+            "candidate_id": "badqueue-c7",
+        }
+        _jsonl(self.build / "groups.jsonl", [*group_rows, group])
+        _jsonl(self.build / "sft.jsonl", [*sft_rows, valid, extra])
+
+        detail = JsonlStore((self.root,)).group("badqueue-group")
+        self.assertIsNotNone(detail)
+        assert detail is not None
+        self.assertEqual("pending", detail["group"]["queue_state"])
+
     def test_postgres_failure_falls_back_without_exposing_dsn(self) -> None:
         secret_dsn = "postgresql://viewer:secret@127.0.0.1/viewer"
 
@@ -401,6 +500,78 @@ class CanonicalViewerBackendTests(unittest.TestCase):
         with mock.patch.object(backend, "repository", StubRepository()):
             with self.assertRaisesRegex(RuntimeError, "winner_ids must reference"):
                 backend.selfcheck()
+
+    def test_sft_invariant_requires_distinct_one_based_winner_mapping(self) -> None:
+        group = {"build_id": "build", "group_id": "group", "winner_ids": ["c0", "c1"]}
+        valid = [
+            {"build_id": "build", "group_id": "group", "candidate_id": "c0", "winner_rank": 1},
+            {"build_id": "build", "group_id": "group", "candidate_id": "c1", "winner_rank": 2},
+        ]
+        self.assertIsNone(backend.canonical_sft_error(group, valid))
+        invalid = (
+            ([*valid, {"candidate_id": "c2", "winner_rank": 3}], "more than two"),
+            ([{**valid[0], "winner_rank": True}], "one-based"),
+            ([{**valid[0], "winner_rank": 2}], "winner_ids order"),
+            ([{**valid[0], "build_id": "other"}], "build_id does not match"),
+            ([{**valid[0], "group_id": "other"}], "group_id does not match"),
+            ([
+                valid[0],
+                {**valid[1], "candidate_id": "c0"},
+            ], "candidate_ids must be distinct"),
+            ([
+                valid[0],
+                {**valid[1], "winner_rank": 1},
+            ], "winner_ranks must be distinct"),
+        )
+        for rows, message in invalid:
+            with self.subTest(message=message):
+                self.assertIn(message, backend.canonical_sft_error(group, rows) or "")
+
+    def test_selfcheck_reaches_later_pages_and_validates_sft(self) -> None:
+        candidates = [self._candidate("page", index, "lut") for index in range(8)]
+        group = self._group("page", "global", candidates, ["page-c0"])
+        calls: list[int] = []
+
+        class StubRepository:
+            @staticmethod
+            def health():
+                return {"ok": True, "source": "stub", "groups": 201}
+
+            @staticmethod
+            def builds():
+                return [{"build_id": "build-a"}]
+
+            @staticmethod
+            def groups(_filters, page, _page_size):
+                calls.append(page)
+                if page == 1:
+                    return {
+                        "total": 201,
+                        "items": [{"group_id": f"page-{index}"} for index in range(200)],
+                    }
+                return {"total": 201, "items": [{"group_id": "page-late"}]}
+
+            @staticmethod
+            def group(group_id):
+                sft = [] if group_id != "page-late" else [
+                    {
+                        "build_id": "build-a",
+                        "group_id": group_id,
+                        "candidate_id": "page-c0",
+                        "winner_rank": 2,
+                    }
+                ]
+                return {
+                    "group": {**group, "group_id": group_id},
+                    "candidates": candidates,
+                    "sft": sft,
+                    "failures": [],
+                }
+
+        with mock.patch.object(backend, "repository", StubRepository()):
+            with self.assertRaisesRegex(RuntimeError, "valid one-based winner rank"):
+                backend.selfcheck()
+        self.assertEqual([1, 2], calls)
 
 
 if __name__ == "__main__":
