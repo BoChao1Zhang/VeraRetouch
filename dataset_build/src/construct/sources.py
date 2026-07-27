@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 import os
@@ -10,6 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
+
+from dataset_build.tools.archive_reader import iter_source_paths, path_exists, read_bytes
 
 from .config import MixConfig
 from .state import stable_id
@@ -151,29 +154,30 @@ def _inspect_cache_dir(
     by_path: Mapping[str, str],
 ) -> tuple[SourceRecord | None, str]:
     meta_path = cache_dir / "subject.json"
-    if not meta_path.is_file():
+    try:
+        meta_bytes = read_bytes(meta_path)
+    except (KeyError, OSError):
         return None, "missing_subject_json"
     try:
-        with meta_path.open("r", encoding="utf-8") as handle:
-            meta = json.load(handle)
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        meta = json.loads(meta_bytes.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return None, "invalid_subject_json"
     if not isinstance(meta, dict) or meta.get("status") != "ready":
         return None, "subject_not_ready"
     mask_path = cache_dir / "subject.png"
-    if not mask_path.is_file() or mask_path.stat().st_size <= 0:
+    if not path_exists(mask_path):
         return None, "missing_subject_png"
     source_value = meta.get("source_path")
     if not isinstance(source_value, str) or not source_value:
         return None, "missing_source_path"
     source_path = Path(source_value)
-    if not source_path.is_file() or source_path.stat().st_size <= 0:
+    if not path_exists(source_path):
         return None, "missing_source_image"
     try:
         import numpy as np
         from PIL import Image, ImageOps
 
-        with Image.open(mask_path) as mask_image:
+        with Image.open(io.BytesIO(read_bytes(mask_path))) as mask_image:
             mask_image.load()
             mask = np.asarray(mask_image.convert("L"), dtype=np.float32) / 255.0
         if mask.ndim != 2 or not mask.size or not np.isfinite(mask).all():
@@ -181,7 +185,7 @@ def _inspect_cache_dir(
         area = float((mask > 0.5).mean())
         if area < 0.005 or area > 0.85:
             return None, "subject_mask_area_guard"
-        with Image.open(source_path) as source_image:
+        with Image.open(io.BytesIO(read_bytes(source_path))) as source_image:
             source_image.load()
             oriented = ImageOps.exif_transpose(source_image)
             if oriented.width <= 0 or oriented.height <= 0:
@@ -242,15 +246,31 @@ def build_inventory(
     connection_factory: Callable[[str], Any] | None = None,
 ) -> SourceInventoryResult:
     root = Path(subject_cache)
-    if not root.is_dir():
-        raise FileNotFoundError(root)
     by_id, by_path, metadata_status = load_scene_metadata(
         postgres_dsn, connection_factory=connection_factory
     )
-    cache_dirs = sorted(
-        (entry for entry in root.iterdir() if entry.is_dir() and not entry.name.startswith("_")),
-        key=lambda path: path.name,
-    )
+    if root.is_dir():
+        cache_dirs = sorted(
+            (
+                entry
+                for entry in root.iterdir()
+                if entry.is_dir() and not entry.name.startswith("_")
+            ),
+            key=lambda path: path.name,
+        )
+    else:
+        # The local cache tree is archived: enumerate the same entries from the
+        # archive instead of failing, so a migrated pool still builds.
+        cache_dirs = sorted(
+            {
+                Path(path).parent
+                for path in iter_source_paths(f"{root}/", endswith="/subject.json")
+                if not Path(path).parent.name.startswith("_")
+            },
+            key=lambda path: path.name,
+        )
+        if not cache_dirs:
+            raise FileNotFoundError(root)
     counts: dict[str, int] = {"cache_entries": len(cache_dirs)}
     inspect = lambda path: _inspect_cache_dir(path, by_id, by_path)
     if workers <= 1:
