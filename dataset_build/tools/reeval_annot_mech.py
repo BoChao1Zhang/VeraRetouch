@@ -17,10 +17,28 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 import unicodedata
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
+
+for _root in ("/home/bc/VeraRetouch", "/home/bc/VeraRetouch/dataset_build/src"):
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+# The v5.1 text-layer patterns are imported, never restated.  Production turns a
+# hit into a bounded redraw (``responses.PROSE_VIOLATION``) and this tool reports
+# the same hit on already-written rows; two copies of the regexes would let the
+# gate and the audit disagree about what was ever shipped.
+from construct.responses import (  # noqa: E402
+    AFTER_REFERENCE_RE,
+    MACHINE_VOCAB_RE,
+    after_reference_hits,
+    hint_contradictions,
+    machine_vocab_hits,
+    split_reasoning,
+)
 
 BUILD_ROOT = Path("/mnt/nfs/bc/data/builds/eval100-annotqa-20260727")
 REVIEW_ROOT = Path("/var/cache/veradata/annot_review/eval100-annotqa-20260727")
@@ -432,6 +450,7 @@ def check_unit(
     style_name: str | None,
     styles: list[str],
     contract: str = "auto",
+    hints: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     sections = check_sections(reasoning, contract)
     contract = sections["contract"]
@@ -467,6 +486,19 @@ def check_unit(
             prose + " \n" + scope_text
         )
     })[:8]
+    # --- v5.1 text layer (WP16) --------------------------------------------
+    # Read back through the canonical splitter so the field names are the ones
+    # the annotator's own gate uses; a legacy six-section row simply has no
+    # region_scope and every check below tolerates the gap.
+    fields = dict(split_reasoning(reasoning or ""))
+    fields["instruction_long"] = instruction or ""
+    fields["instruction_short"] = instruction_short or ""
+    after_reference = after_reference_hits(" \n".join(
+        fields.get(name, "") for name in
+        ("problem_lighting", "problem_global_color", "problem_specific_color")
+    ))[:8]
+    machine_vocab = machine_vocab_hits(" \n".join(fields.values()))[:8]
+    hint_contradiction = hint_contradictions(fields, hints)
     # The v4-only rules below are gated on the contract: the legacy rows were
     # written under a prompt that *asked* for the coarse region by name and set no
     # word budget, so flagging them would corrupt the WP5-comparable summary.  The
@@ -495,6 +527,13 @@ def check_unit(
         "instruction_short_over_cap": (
             is_v4 and short_words > INSTRUCTION_SHORT_WORD_CAP
         ),
+        # v5.1 bans.  Ungated by contract: the legacy prompt never invited any of
+        # these three either, so a legacy hit is a real hit rather than a rule
+        # applied after the fact.  ``hint_contradiction`` only fires where the
+        # journal was found, so a corpus checked without hints simply scores 0.
+        "after_reference_in_problem": bool(after_reference),
+        "machine_vocab_leak": bool(machine_vocab),
+        "hint_contradiction": bool(hint_contradiction),
     }
     short = short_is_truncation(instruction, instruction_short)
     flags["short_is_truncation"] = short["is_prefix_truncation"]
@@ -521,17 +560,34 @@ def check_unit(
             "instruction": geometry_in_instruction, "reasoning": geometry_in_reasoning,
         },
         "numeric_geometry": numeric_geometry,
+        "after_reference": after_reference,
+        "machine_vocab": machine_vocab,
+        "hint_contradiction": hint_contradiction,
         "style_named": style_named,
         "short": short,
     }
 
 
-def iter_units(include_reannot: bool) -> Iterator[dict[str, Any]]:
-    sft = rows(BUILD_ROOT / "sft.jsonl")
-    groups = rows(BUILD_ROOT / "groups.jsonl")
+def iter_units(
+    include_reannot: bool,
+    build_root: Path | None = None,
+    review_root: Path | None = None,
+) -> Iterator[dict[str, Any]]:
+    build_root = build_root or BUILD_ROOT
+    review_root = review_root or REVIEW_ROOT
+    sft = rows(build_root / "sft.jsonl")
+    groups = rows(build_root / "groups.jsonl")
     styles = style_universe(groups)
     style_by_candidate = {
         candidate["candidate_id"]: candidate.get("style_name")
+        for group in groups
+        for candidate in group.get("candidates", []) or []
+    }
+    # The measured direction table the annotator was actually shown, so the
+    # contradiction check compares the text against its own hints and not
+    # against a recomputation that could have drifted.
+    hints_by_candidate = {
+        candidate["candidate_id"]: candidate.get("objective_hints")
         for group in groups
         for candidate in group.get("candidates", []) or []
     }
@@ -546,15 +602,19 @@ def iter_units(include_reannot: bool) -> Iterator[dict[str, Any]]:
             "reasoning": row["reasoning"],
             "style_name": style_by_candidate.get(row.get("candidate_id")),
             "styles": styles,
+            "hints": hints_by_candidate.get(row.get("candidate_id")),
         }
     if not include_reannot:
         return
     comparison = json.loads(
-        (REVIEW_ROOT / "reannot_ab" / "final_comparison.json").read_text()
+        (review_root / "reannot_ab" / "final_comparison.json").read_text()
     )
     task_types = {row["sft_id"]: row["task_type"] for row in sft}
     style_names = {
         row["sft_id"]: style_by_candidate.get(row.get("candidate_id")) for row in sft
+    }
+    hint_names = {
+        row["sft_id"]: hints_by_candidate.get(row.get("candidate_id")) for row in sft
     }
     for pair in comparison:
         for variant in ("before", "after"):
@@ -569,6 +629,7 @@ def iter_units(include_reannot: bool) -> Iterator[dict[str, Any]]:
                 "reasoning": text["reasoning"],
                 "style_name": style_names.get(pair["sft_id"]),
                 "styles": styles,
+                "hints": hint_names.get(pair["sft_id"]),
             }
 
 
@@ -584,14 +645,21 @@ def main(argv: list[str] | None = None) -> None:
         "--contract", choices=["auto", "v4", "legacy"], default="auto",
         help="section contract to check against; auto detects it per unit",
     )
+    # Both default to the WP5 eval100 pair so every recorded invocation keeps
+    # meaning what it meant; naming a different build is how a later batch --
+    # mini40, fresh200 -- gets the same audit without a second copy of the tool.
+    parser.add_argument("--build-root", type=Path, default=BUILD_ROOT)
+    parser.add_argument("--review-root", type=Path, default=REVIEW_ROOT)
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
 
     results = [check_unit(
         unit["unit_id"], unit["sft_id"], unit["variant"], unit["task_type"],
         unit["instruction"], unit["instruction_short"], unit["reasoning"],
-        unit["style_name"], unit["styles"], args.contract,
-    ) for unit in iter_units(args.include_reannot)]
+        unit["style_name"], unit["styles"], args.contract, unit.get("hints"),
+    ) for unit in iter_units(
+        args.include_reannot, args.build_root, args.review_root
+    )]
 
     out_path = args.out / "mech_flags.jsonl"
     with out_path.open("w", encoding="utf-8") as handle:

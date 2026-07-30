@@ -23,6 +23,8 @@ from construct.responses import (
     ANNOTATION_FIELDS,
     ANNOTATION_JSON_SCHEMA,
     MODEL_ATTEMPT_LIMIT,
+    PROSE_ATTEMPT_LIMIT,
+    PROSE_VIOLATION,
     SCHEMA_ATTEMPT_LIMIT,
     UPSTREAM_ATTEMPT_LIMIT,
     AnnotationError,
@@ -341,9 +343,9 @@ class ObjectiveHintWordingTests(ResponseFixture):
         # per-surface licence that narrows it, and the reading rule last.
         prompt = self.prompt_for(self.hints(brightness=6.0))
         headings = [
-            "MEASURED EDIT DIRECTIONS (computed from the pixels, not estimated).",
+            "MEASURED EDIT DIRECTIONS (read off the image pair, not estimated).",
             "OVERALL, across the whole edit region:",
-            "BY COLOUR SURFACE, using the colours of the BEFORE image",
+            "WHICH COLOURS MOVED, named by the colour they had in the BEFORE image",
             "HOW TO USE:",
         ]
         positions = []
@@ -357,7 +359,7 @@ class ObjectiveHintWordingTests(ResponseFixture):
         # gets a line, and a silent one says so in words.
         prompt = self.prompt_for(self.hints(brightness=6.0))
         overall = prompt.split("OVERALL, across the whole edit region:\n")[1]
-        overall = overall.split("\n\nBY COLOUR SURFACE")[0]
+        overall = overall.split("\n\nWHICH COLOURS MOVED")[0]
         self.assertEqual(
             [line.strip().split(":")[0] for line in overall.splitlines()],
             ["brightness", "contrast", "saturation", "warmth", "green/magenta"],
@@ -410,7 +412,7 @@ class ObjectiveHintWordingTests(ResponseFixture):
     def test_the_surface_block_carries_the_gated_rows_and_says_so_when_empty(self):
         empty = self.prompt_for(self.hints(brightness=6.0))
         self.assertIn(
-            "none -- no single colour surface carries a visible chroma change", empty)
+            "none -- no single colour moved enough on its own to be named", empty)
 
         listed = self.prompt_for(self.hints(
             chroma=-3.0,
@@ -418,11 +420,11 @@ class ObjectiveHintWordingTests(ResponseFixture):
                       self.surface("blue", 0.09, 7.1)],
         ))
         self.assertIn(
-            "red surfaces (18% of the region, chroma -9.2, lightness +1.4): clearly "
-            "more muted -- do not describe it as richer", listed)
-        self.assertIn("blue surfaces (9% of the region", listed)
+            "the red areas (18% of the region, saturation -9.2, lightness +1.4): "
+            "clearly more muted -- do not describe it as richer", listed)
+        self.assertIn("the blue areas (9% of the region", listed)
         self.assertNotIn(
-            "none -- no single colour surface carries a visible chroma change", listed)
+            "none -- no single colour moved enough on its own to be named", listed)
 
     def test_a_surface_that_contradicts_the_region_is_demoted_not_dropped(self):
         # The whole-region figure is the one the ROC operating point was fitted
@@ -432,17 +434,17 @@ class ObjectiveHintWordingTests(ResponseFixture):
             chroma=3.0,
             surfaces=[self.surface("red", 0.12, -10.7, low_confidence=True)],
         ))
-        self.assertIn("red surfaces (12% of the region", prompt)
+        self.assertIn("the red areas (12% of the region", prompt)
         self.assertIn(
-            "[low confidence: the whole-region saturation figure moves the other "
-            "way, and it is the one that wins]", prompt)
+            "[uncertain: the whole-region saturation moves the other way, and it is "
+            "the one that wins]", prompt)
 
     def test_hints_are_framed_as_a_veto_and_the_chroma_override_is_gone(self):
         prompt = self.prompt_for(self.hints(brightness=6.0, chroma=-6.0))
         self.assertIn("HOW TO USE:", prompt)
         self.assertIn("Treat the OVERALL lines as a veto, not a script", prompt)
         self.assertIn("never assert a direction they rule out", prompt)
-        self.assertIn("A listed colour surface is where you are allowed to be specific",
+        self.assertIn("A colour listed above is where you are allowed to be specific",
                       prompt)
         self.assertIn("call the effect mixed rather than claiming every object "
                       "changes uniformly", prompt)
@@ -472,7 +474,7 @@ class ObjectiveHintWordingTests(ResponseFixture):
         self.assertIn("contrast: strongly lower -- do not describe it as higher", prompt)
         self.assertNotIn("green/magenta", prompt)
         self.assertIn(
-            "none -- no single colour surface carries a visible chroma change", prompt)
+            "none -- no single colour moved enough on its own to be named", prompt)
 
     def test_legacy_string_hints_still_pass_straight_through(self):
         # Imported rows carry the direction word with no delta to threshold.
@@ -792,6 +794,80 @@ class DurableDrainTests(ResponseFixture):
             self.assertEqual(row["annot_src"], "responses:external:relay-b")
             # A bad draw is not congestion, so it is redrawn without backoff.
             self.assertEqual(sleeps, [])
+
+    @staticmethod
+    def _after_reference_events():
+        """A parseable answer whose problem section points at the after image."""
+        return completed_events({
+            **valid_fields(),
+            "problem_lighting": "The light is softer than the finished image.",
+        })
+
+    def test_prose_violation_is_an_immediate_bad_draw(self):
+        # The relay answered, the JSON parsed and the model was the one asked
+        # for; only the prose broke a v5.1 ban, so the draw is discarded and
+        # taken again without backoff, exactly like a schema violation.  It is
+        # deliberately not a lane rotation -- both lanes serve the same model, so
+        # the text says nothing about where it came from -- which
+        # ``ProseViolationTests`` pins on ``_LANE_ROTATING_CODES`` directly.
+        sleeps: list[float] = []
+        with ArtifactStore(self.root / "prose-retry", "build", fsync_every=1) as store:
+            task = self.task(source="prose-retry")
+            store.append_group(task["group"])
+            clients = {
+                "relay-a": FakeClient(FakeResponses([self._after_reference_events()])),
+                "relay-b": FakeClient(FakeResponses([completed_events()])),
+                "local": FakeClient(FakeResponses([])),
+            }
+            result = ResponsesAnnotator(
+                self.config, store, client_factory=self.factory(clients),
+                sleep=sleeps.append,
+            ).drain(max_workers=1)
+            self.assertEqual((result["completed"], result["terminal"]), (1, 0))
+            attempts = [
+                row for row in store.failures
+                if row.get("event_type") == "attempt"
+                and row.get("task_id") == task["task_id"]
+            ]
+            self.assertEqual(
+                [(row["error_code"], row["endpoint_id"], row["retryable"])
+                 for row in attempts],
+                [(PROSE_VIOLATION, "relay-a", True)],
+            )
+            self.assertIn("finished image", attempts[0]["message"])
+            self.assertFalse(any(row.get("terminal") for row in store.failures))
+            row = next(iter(store.sft.values()))
+            self.assertEqual(row["qa"]["annotation"]["attempt"], 2)
+            self.assertEqual(sleeps, [])
+
+    def test_prose_violation_terminates_once_its_draws_are_spent(self):
+        with ArtifactStore(self.root / "prose-bound", "build", fsync_every=1) as store:
+            task = self.task(source="prose-bound")
+            store.append_group(task["group"])
+            actions = [
+                self._after_reference_events() for _ in range(PROSE_ATTEMPT_LIMIT)
+            ]
+            clients = {
+                "relay-a": FakeClient(FakeResponses(actions[0::2])),
+                "relay-b": FakeClient(FakeResponses(actions[1::2])),
+                "local": FakeClient(FakeResponses([])),
+            }
+            result = ResponsesAnnotator(
+                self.config, store, client_factory=self.factory(clients),
+                sleep=lambda _: None,
+            ).drain(max_workers=1)
+            self.assertEqual((result["completed"], result["terminal"]), (0, 1))
+            self.assertEqual(len(store.sft), 0)
+            self.assertEqual(
+                sum(1 for row in store.failures
+                    if row.get("event_type") == "attempt"
+                    and row.get("error_code") == PROSE_VIOLATION),
+                PROSE_ATTEMPT_LIMIT,
+            )
+            self.assertTrue(any(
+                row.get("terminal") and row.get("error_code") == PROSE_VIOLATION
+                for row in store.failures
+            ))
 
     def test_substituted_model_is_redrawn_on_another_lane(self):
         sleeps: list[float] = []

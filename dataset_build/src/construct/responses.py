@@ -114,12 +114,24 @@ MODEL_ATTEMPT_LIMIT = 3
 UPSTREAM_ERROR = "upstream_error"
 UPSTREAM_ATTEMPT_LIMIT = 3
 
+# The answer parsed and came from the right model, but its prose breaks one of
+# the v5.1 text-layer bans (after-image reference in a problem section, pipeline
+# vocabulary anywhere, or a plan that reverses a measured direction).  Bounded
+# like the other bad draws.  Deliberately *not* a lane rotation: unlike a schema
+# violation, which the fresh100 audit traced to one lane answering with a
+# different model, a prose violation is the sampled text of the requested model
+# and both lanes serve the same one, so rotating would only shrink the pool the
+# redraw can use.  The patterns and the check live beside the hint table below.
+PROSE_VIOLATION = "prose_violation"
+PROSE_ATTEMPT_LIMIT = 3
+
 # Bad draws: the relay answered, but the answer is unusable.  These are redrawn
 # immediately (no backoff) and bounded per task per code over durable attempts.
 _BAD_DRAW_LIMITS = {
     SCHEMA_FAILED: SCHEMA_ATTEMPT_LIMIT,
     MODEL_SUBSTITUTED: MODEL_ATTEMPT_LIMIT,
     UPSTREAM_ERROR: UPSTREAM_ATTEMPT_LIMIT,
+    PROSE_VIOLATION: PROSE_ATTEMPT_LIMIT,
 }
 
 # Codes that mean "this lane produced it, ask a different one".  A schema
@@ -196,12 +208,29 @@ _SYSTEM_PROMPT = (
     "describe the picture itself -- the vertical lines of a building, a bank of "
     "cloud, light that falls off toward the corners -- because that is "
     "describing what is depicted, not pointing at the edited region.\n"
+    "The three problem fields describe the first image and nothing else. Write "
+    "them as if the second image had not been shown to you: never mention or point "
+    "at the after, finished, revised, edited, processed or final picture, never "
+    "say a quality is 'seen afterward' or 'visible in the finished image', and "
+    "never state a problem as a comparison against the result. Say what is wrong "
+    "with the picture in front of you, in its own terms.\n"
+    "Only promise to preserve, retain or maintain something you have been told did "
+    "not change. Everything the measured table gives a direction to did change, and "
+    "a plan that promises to keep it as it was is a promise the pixels break. Keep "
+    "a plan narrow by saying what to change and stopping there.\n"
+    "Report the strength you were given. An edit marked strongly is a bold move and "
+    "must not be written as gentle, slight, subtle or natural, and a conversion to a "
+    "monochrome or single-hue palette must be named as a conversion rather than "
+    "dressed up as enriched or richer colour.\n"
     f"instruction_long is the user's own request: aim for about "
     f"{INSTRUCTION_WORD_AIM} words and never exceed {INSTRUCTION_WORD_CAP}. "
     f"instruction_short condenses it: aim for about {INSTRUCTION_SHORT_WORD_AIM} "
     f"words and never exceed {INSTRUCTION_SHORT_WORD_CAP}. Neither instruction may "
     "use shape or direction vocabulary, name a preset, or state a measurement; both "
-    "identify the area purely by what is depicted there."
+    "identify the area purely by what is depicted there. instruction_long must sound "
+    "like one person asking another for the edit, in the same plain voice as "
+    "instruction_short: one continuous request, not a clause per field above. If it "
+    "reads like an annotation rubric rather than a request, rewrite it."
 )
 
 
@@ -502,14 +531,64 @@ _OVERALL_AXES: tuple[tuple[str, str], ...] = (
 _HOW_TO_USE = (
     "Treat the OVERALL lines as a veto, not a script: never assert a direction "
     "they rule out, and never assert one they decline to call.",
-    "A listed colour surface is where you are allowed to be specific: name the "
+    "A colour listed above is where you are allowed to be specific: name the "
     "scene content carrying that colour and describe what happened to it there, "
-    "rather than restating the overall figure. A surface marked low confidence "
-    "may be mentioned only as a possibility, and the OVERALL line wins.",
-    "With no surface listed, stay at the level the OVERALL lines support: call "
+    "rather than restating the overall line. A colour marked uncertain may be "
+    "mentioned only as a possibility, and the OVERALL line wins.",
+    "With no colour listed, stay at the level the OVERALL lines support: call "
     "the effect mixed rather than claiming every object changes uniformly, and "
-    "do not invent a localised colour claim to fill the gap.",
+    "do not invent a narrower colour claim to fill the gap.",
+    # No enumerated blacklist here on purpose.  WP14 measured how strongly this
+    # model anchors on whatever the hint block says, so printing the banned
+    # words would be the surest way to put them back in the output; the words
+    # were removed from the table itself instead, and the gate catches the rest.
+    "Never reuse the wording of this table in your answer. It is working data, "
+    "not vocabulary: write the way a photographer speaks -- saturation, the red "
+    "coat, the light on the water, the area around the cyclist.",
+    "Only promise to preserve, retain or maintain what this table says did not "
+    "move. An axis given a direction did change, and a colour listed above did "
+    "change; writing 'preserve the greens' about either is a false promise that "
+    "the pixels contradict. To keep a plan narrow, say what to change and stop "
+    "there rather than promising something stays put.",
 )
+
+# The strength cut in ``_hint_phrase``: at or past it an axis is called
+# "strongly", and a strongly negative saturation with nothing pulling the other
+# way is not a softening at all -- it is a conversion to a single-hue or neutral
+# palette.  s040 of the 88-sample panel wrote a full sepia conversion as "enrich
+# the restrained colors", which is both an under-report and a veto violation, so
+# the case is named outright in the table rather than left to be inferred.
+_STRONG_AXIS = 4.0
+_MONOCHROME_RULE = (
+    "  NOTE: saturation is strongly negative and no listed colour pulls the "
+    "other way. "
+    "This is a conversion to a monochrome or near-monochrome palette (black and "
+    "white, sepia, a single-hue tone), not a softening. Describe it as a "
+    "conversion and say the original colours are gone; never write enrich, "
+    "richer or more colourful about it, and do not downgrade it to 'slightly "
+    "more muted'."
+)
+
+
+def _monochrome_note(hints: Mapping[str, Any]) -> str | None:
+    """The near-monochrome warning line, when the table earns it."""
+    chroma = hints.get("chroma")
+    if not isinstance(chroma, Mapping):
+        return None
+    try:
+        delta = float(chroma["delta"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if delta > -_STRONG_AXIS:
+        return None
+    surfaces = hints.get("surfaces")
+    rows = surfaces if isinstance(surfaces, (list, tuple)) else ()
+    if any(
+        isinstance(row, Mapping) and str(row.get("direction") or "") == "richer"
+        for row in rows
+    ):
+        return None
+    return _MONOCHROME_RULE
 
 
 def _hint_phrase(name: str, delta: float, direction: str) -> str:
@@ -517,7 +596,7 @@ def _hint_phrase(name: str, delta: float, direction: str) -> str:
     magnitude = abs(delta)
     if magnitude < _DEAD_BANDS.get(name, _TONAL_DEAD_BAND):
         return _HINT_UNCERTAIN
-    strength = "moderately" if magnitude < 4.0 else "strongly"
+    strength = "moderately" if magnitude < _STRONG_AXIS else "strongly"
     opposite = _HINT_OPPOSITE.get(direction)
     if opposite is None:
         return f"{strength} {direction}"
@@ -567,11 +646,16 @@ def _surface_line(row: Any) -> str | None:
     opposite = _HINT_OPPOSITE.get(direction)
     phrase = f"clearly {direction}" if opposite is None else \
         f"clearly {direction} -- do not describe it as {opposite}"
-    line = (f"  {name} surfaces ({round(area * 100)}% of the region, "
-            f"chroma {d_c:+.1f}, lightness {d_l:+.1f}): {phrase}")
+    # "colour surface", "chroma" and "low confidence" used to be printed here
+    # verbatim and came straight back out in the prose: all five
+    # ``prose_violation`` redraws the WP16 smoke triggered were this row's own
+    # wording being echoed, and one draw evaded the ban by writing "colored
+    # surface".  The words the model is meant to use are the only ones it now sees.
+    line = (f"  the {name} areas ({round(area * 100)}% of the region, "
+            f"saturation {d_c:+.1f}, lightness {d_l:+.1f}): {phrase}")
     if row.get("low_confidence"):
-        line += (" [low confidence: the whole-region saturation figure moves the "
-                 "other way, and it is the one that wins]")
+        line += (" [uncertain: the whole-region saturation moves the other way, "
+                 "and it is the one that wins]")
     return line
 
 
@@ -592,7 +676,7 @@ def _objective_hints(candidate: Mapping[str, Any]) -> str:
             "candidate objective_hints must contain brightness, warmth, chroma, and contrast",
             retryable=False,
         )
-    lines = ["MEASURED EDIT DIRECTIONS (computed from the pixels, not estimated).", ""]
+    lines = ["MEASURED EDIT DIRECTIONS (read off the image pair, not estimated).", ""]
     lines.append("OVERALL, across the whole edit region:")
     for label, name in _OVERALL_AXES:
         # ``hue_gm`` and ``surfaces`` postdate WP15c; a journal written before it
@@ -607,20 +691,326 @@ def _objective_hints(candidate: Mapping[str, Any]) -> str:
                      if line] if isinstance(surfaces, (list, tuple)) else []
     lines.append("")
     lines.append(
-        "BY COLOUR SURFACE, using the colours of the BEFORE image (a surface is "
-        "listed only when it covers enough of the region and its chroma moved far "
-        "enough to be seen):"
+        "WHICH COLOURS MOVED, named by the colour they had in the BEFORE image (a "
+        "colour is listed only when it covers enough of the region and its "
+        "saturation moved far enough to be seen):"
     )
     if surface_lines:
         lines.extend(surface_lines)
     else:
-        lines.append("  none -- no single colour surface carries a visible chroma change")
+        lines.append("  none -- no single colour moved enough on its own to be named")
+
+    note = _monochrome_note(hints)
+    if note:
+        lines.append("")
+        lines.append(note)
 
     lines.append("")
     lines.append("HOW TO USE:")
     for index, rule in enumerate(_HOW_TO_USE, start=1):
         lines.append(f"  {index}. {rule}")
     return "\n".join(lines)
+
+
+# --- v5.1 prose bans and the hint-contradiction gate (WP16) ----------------
+#
+# The 88-sample blind panel (2026-07-30, six judges) found the v5 direction layer
+# sound -- reversals are rare in both arms -- and the remaining failures sitting
+# in the *text*.  Three of them are decidable from the text plus the journal's
+# own hint table, so they are checked here rather than left to a judge, and the
+# same functions serve two callers: the annotator turns a hit into a bounded
+# redraw, and ``tools/reeval_annot_mech.py`` imports them so the production gate
+# and the offline audit can never drift apart.
+#
+# Precision beats recall throughout.  A false hit spends one of three redraws on
+# a good answer, so every pattern below is anchored on wording actually observed
+# in the panel corpus, and the ambiguous neighbours were deliberately left out:
+# "scene content" (21 hits) is what the task clause itself asks the model to
+# name, and bare "surface"/"figure"/"lightness" are ordinary photographic English.
+_PROBLEM_FIELDS = ("problem_lighting", "problem_global_color", "problem_specific_color")
+# Where a direction word is a claim about the *edit* rather than about the before
+# image.  A problem section saying "the palette is too warm" implies cooling and
+# must not be read as asserting "warmer", so the contradiction gate never looks
+# there; the problem sections are policed by the after-reference rule instead.
+_DIRECTIVE_FIELDS = (
+    "plan_lighting", "plan_global_color", "plan_specific_color",
+    "instruction_long", "instruction_short",
+)
+
+# 1. Pointing at the after image from a problem section.  37% of the v5 arm and
+# 20% of the control did this.  The nouns are the ones the corpus used; the
+# adjectives "desired" and "target" are excluded on purpose because they name an
+# intention rather than the second picture ("the desired mood" is legitimate).
+_AFTER_NOUN = (
+    r"(?:images?|versions?|photos?|photographs?|pictures?|frames?|renders?|"
+    r"rendering|rendition|results?|looks?|states?|shots?|treatments?|outputs?|"
+    r"files?|copies|copy)"
+)
+AFTER_REFERENCE_RE = re.compile(
+    rf"\b(?:after|finished|final|revised|edited|retouched|processed|corrected|"
+    rf"adjusted|graded|delivered|updated|resulting|second)\s+{_AFTER_NOUN}\b"
+    # "seen afterward", "present afterward", "visible afterward" -- the word is
+    # inherently a comparison against the result, so it is banned on its own.
+    rf"|\bafterwards?\b"
+    rf"|\bcompared\s+(?:with|to)\s+the\s+(?:after|finished|final|revised|edited|"
+    rf"retouched|processed|new|second)\b"
+    rf"|\bthan\s+in\s+the\s+(?:after|finished|final|revised|edited|retouched|"
+    rf"processed|second)\b"
+    rf"|\bin\s+the\s+after\b|\bthe\s+end\s+result\b",
+    re.IGNORECASE,
+)
+
+# 2. The annotation pipeline's own vocabulary, leaking out of the hint table and
+# the HOW TO USE block into prose a user is supposed to have written.
+MACHINE_VOCAB_RE = re.compile(
+    r"\bchroma\b"
+    r"|\bcolou?r[- ]surfaces?\b"
+    r"|\bconnected scene areas?\b"
+    r"|\bfull extent of the (?:edit|adjustment|change|treatment|effect)\b"
+    r"|\bas the full extent\b"
+    r"|\baffected (?:areas?|regions?)\b"
+    r"|\bedit(?:ed|ing)?[- ]regions?\b"
+    r"|\bregion of the edit\b"
+    r"|\b(?:measurement|measured|detection|visibility|confidence)[- ]thresholds?\b"
+    r"|\b(?:low|high)[- ]confidence\b"
+    r"|\bmeasured (?:edit )?directions?\b"
+    r"|\bcomputed from the pixels\b|\bper[- ]pixel\b"
+    r"|\blocali[sz]ed colou?r (?:claim|change|shift|problem)s?\b"
+    r"|\bdead ?band\b|\boperating point\b|\bveto\b|\bannotator\b",
+    re.IGNORECASE,
+)
+
+# 3. Direction vocabulary, per journal axis, in the two directions the metric can
+# report.  Every alternative is a *comparative or a verb* -- "cooler", "cooling",
+# "cool the" -- because the bare adjective ("cool blue water") describes a colour
+# rather than claiming the edit moved anything.  The negative lookaheads carve
+# out the tonal senses that share a word with a colour sense: "richer shadows"
+# and "lighten the mood" are not saturation and brightness claims.
+_TONAL_NOUNS = (
+    r"shadows?|blacks?|darks?|midtones?|tones?|tonality|depth|contrast|mood|"
+    r"texture|detail|atmosphere|drama"
+)
+DIRECTION_PATTERNS: dict[str, dict[str, re.Pattern[str]]] = {
+    "brightness": {
+        "brighter": re.compile(
+            r"\b(?:brighter|brighten(?:s|ed|ing)?)\b"
+            r"|\blighten(?:s|ed|ing)?\b(?!\s+(?:the\s+)?mood\b)", re.IGNORECASE),
+        "darker": re.compile(r"\b(?:darker|darken(?:s|ed|ing)?)\b", re.IGNORECASE),
+    },
+    "warmth": {
+        "warmer": re.compile(r"\b(?:warmer|warming)\b|\bwarm (?:the|up)\b", re.IGNORECASE),
+        "cooler": re.compile(r"\b(?:cooler|cooling)\b|\bcool (?:the|down)\b", re.IGNORECASE),
+    },
+    "chroma": {
+        "richer": re.compile(
+            rf"\b(?:richer|enrich(?:es|ed|ing)?)\b(?!\s+(?:the\s+)?(?:{_TONAL_NOUNS}))"
+            r"|\bmore (?:saturated|vivid|vibrant|colou?rful)\b"
+            r"|\bintensif(?:y|ies|ying)\b|\bresaturat\w+\b", re.IGNORECASE),
+        "more muted": re.compile(
+            r"\bmore muted\b|\bmut(?:e|es|ed|ing)\b|\bdesaturat\w+\b|\bduller\b"
+            r"|\bless (?:saturated|vivid|vibrant|colou?rful)\b", re.IGNORECASE),
+    },
+    "contrast": {
+        "higher contrast": re.compile(
+            r"\b(?:higher|stronger|more|increased|greater|added|punchier)\s+contrast\b"
+            r"|\bcontrast\s+(?:is\s+)?(?:raised|increased|strengthened)\b", re.IGNORECASE),
+        "lower contrast": re.compile(
+            r"\b(?:lower|less|reduced?|softer|weaker|flatter|gentler|decreased|softened)"
+            r"\s+contrast\b|\b(?:soften|flatten|reduce|lower)(?:s|ed|ing)?\s+the\s+contrast\b",
+            re.IGNORECASE),
+    },
+    "hue_gm": {
+        "shifted toward magenta/red": re.compile(
+            r"\bmore magenta\b|\btowards? magenta\b|\bmagenta shift\b", re.IGNORECASE),
+        "shifted toward green": re.compile(
+            r"\bgreener\b|\bmore green\b|\btowards? green\b", re.IGNORECASE),
+    },
+}
+
+# A direction word inside a promise not to move ("keep the greens as they are",
+# "without muting the reds") or inside a verb that reverses it ("reduce the muted
+# quality") asserts nothing about the edit's direction, so it is skipped rather
+# than counted against the table.  Skipping can only lose a catch, never
+# manufacture one, which is the right way for this list to be wrong.
+#
+# ``restore``/``recover``/``revive`` are pointedly absent: they read like
+# reversals but in this corpus they introduce the claim rather than negate it
+# ("Restore the bird ... to a brighter, more natural appearance" is the one true
+# reversal the 88-sample panel contained), and hedging on them would have thrown
+# away the only catch.
+_DIRECTION_HEDGE_RE = re.compile(
+    r"\b(?:keep|keeps|keeping|kept|retain|retains|retaining|retained|preserve|"
+    r"preserves|preserving|preserved|maintain|maintains|maintaining|maintained|"
+    r"leave|leaves|leaving|hold|holds|holding|without|avoid|avoids|avoiding|"
+    r"not|never|no|nor|rather|instead|already|remain|remains|remaining|stay|"
+    r"stays|staying|unchanged|refrain|untouched|intact|"
+    r"reduce|reduces|reducing|reduced|lessen|lessens|lessening|remove|removes|"
+    r"removing|removed|eliminate|eliminates|eliminating|counteract|counteracts|"
+    r"counteracting|neutrali[sz]e|neutrali[sz]es|neutrali[sz]ing|undo|combat)\b",
+    re.IGNORECASE,
+)
+# A comparative straight after a definite determiner names existing content
+# rather than asking for a change: "balance the warm sky with the cooler coastal
+# shadows" and "warm and enrich the muted monochrome appearance" are both
+# descriptions of what is already there, and both were false alarms on the panel
+# before this guard.  An indefinite or bare comparative is left alone, so "to a
+# brighter, more natural appearance" and "into richer cool greens" still count.
+_DESCRIPTIVE_DETERMINER_RE = re.compile(
+    r"\b(?:the|this|that|these|those|its|their|his|her|our|your|such)\s+$",
+    re.IGNORECASE,
+)
+_CLAUSE_SPLIT_RE = re.compile(r"[.;:!?]")
+# How far back a hedge still governs the word it hedges.  Long enough to reach
+# across "keep the couple, the rocks and the water unchanged and ...", short
+# enough that a hedge in the previous clause of a run-on cannot silence the whole
+# sentence.  Clause boundaries cut it short anyway.
+_HEDGE_WINDOW = 80
+
+
+def after_reference_hits(text: str) -> list[str]:
+    """Phrases in ``text`` that point at the after image, lowercased and unique."""
+    return sorted({
+        match.group(0).lower().strip()
+        for match in AFTER_REFERENCE_RE.finditer(text or "")
+    })
+
+
+def machine_vocab_hits(text: str) -> list[str]:
+    """Annotation-pipeline vocabulary found in ``text``, lowercased and unique."""
+    return sorted({
+        match.group(0).lower().strip()
+        for match in MACHINE_VOCAB_RE.finditer(text or "")
+    })
+
+
+def _hedged(text: str, start: int) -> bool:
+    """True when the match at ``start`` is not a claim that the edit moved.
+
+    Two ways that happens: the clause promises the thing does *not* change (or
+    reverses the word outright), or the word is attributive after a definite
+    determiner and so describes content that already looks that way.
+    """
+    before = text[:start]
+    if _DESCRIPTIVE_DETERMINER_RE.search(before):
+        return True
+    clause = _CLAUSE_SPLIT_RE.split(before)[-1]
+    return bool(_DIRECTION_HEDGE_RE.search(clause[-_HEDGE_WINDOW:]))
+
+
+def asserted_directions(text: str) -> dict[str, set[str]]:
+    """Unhedged direction claims in ``text``, as ``{axis: {direction, ...}}``."""
+    found: dict[str, set[str]] = {}
+    for axis, directions in DIRECTION_PATTERNS.items():
+        for direction, pattern in directions.items():
+            for match in pattern.finditer(text or ""):
+                if _hedged(text, match.start()):
+                    continue
+                found.setdefault(axis, set()).add(direction)
+                break
+    return found
+
+
+def _hint_direction(hint: Any, axis: str) -> str | None:
+    """The direction one journal axis actually asserts, or ``None`` if silent.
+
+    Silence is the dead band from ``_DEAD_BANDS``: below it the table tells the
+    model not to call a direction at all, so there is nothing to contradict.  A
+    string hint (imported rows carry the word with no delta) is taken at face
+    value, exactly as ``_axis_line`` renders it.
+    """
+    if isinstance(hint, str):
+        return hint.strip() or None
+    if not isinstance(hint, Mapping):
+        return None
+    direction = str(hint.get("direction") or "").strip()
+    if not direction or direction == "unchanged":
+        return None
+    try:
+        delta = float(hint["delta"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if abs(delta) < _DEAD_BANDS.get(axis, _TONAL_DEAD_BAND):
+        return None
+    return direction
+
+
+def _surface_supports(hints: Mapping[str, Any], axis: str, direction: str) -> bool:
+    """True when a listed colour surface licenses a claim the OVERALL line vetoes.
+
+    This is the low-confidence rule read the other way round: the table already
+    admits that a surface can move against the whole-region figure and prints it
+    anyway, so a sentence about that surface is legitimate even though the
+    overall line disagrees.  Surfaces carry a saturation direction outright; for
+    brightness the sign of the surface's own ``d_L`` is the same statement.
+    """
+    surfaces = hints.get("surfaces")
+    if not isinstance(surfaces, (list, tuple)):
+        return False
+    for row in surfaces:
+        if not isinstance(row, Mapping):
+            continue
+        if axis == "chroma" and str(row.get("direction") or "") == direction:
+            return True
+        if axis == "brightness":
+            try:
+                d_l = float(row.get("d_L"))
+            except (TypeError, ValueError):
+                continue
+            if (d_l > 0.0) == (direction == "brighter") and abs(d_l) > 0.0:
+                return True
+    return False
+
+
+def hint_contradictions(
+    fields: Mapping[str, str], hints: Mapping[str, Any] | None
+) -> list[dict[str, str]]:
+    """Veto violations: a plan or instruction that reverses an asserted axis.
+
+    Each entry is ``{"axis", "asserted", "measured"}``.  Only axes the table
+    speaks about are checked -- a silent axis has no direction to reverse -- and
+    a claim a listed colour surface supports is exempt.
+    """
+    if not isinstance(hints, Mapping):
+        return []
+    text = " \n".join(str(fields.get(name) or "") for name in _DIRECTIVE_FIELDS)
+    claims = asserted_directions(text)
+    found: list[dict[str, str]] = []
+    for axis, directions in claims.items():
+        measured = _hint_direction(hints.get(axis), axis)
+        if measured is None:
+            continue
+        for direction in sorted(directions):
+            if direction == measured or _HINT_OPPOSITE.get(measured) != direction:
+                continue
+            if _surface_supports(hints, axis, direction):
+                continue
+            found.append({"axis": axis, "asserted": direction, "measured": measured})
+    return found
+
+
+def prose_violations(
+    fields: Mapping[str, str], hints: Mapping[str, Any] | None = None
+) -> list[str]:
+    """Every v5.1 text-layer violation in one parsed annotation, as messages."""
+    reasons: list[str] = []
+    problem = " \n".join(str(fields.get(name) or "") for name in _PROBLEM_FIELDS)
+    after_hits = after_reference_hits(problem)
+    if after_hits:
+        reasons.append(
+            "a problem section points at the after image: " + ", ".join(after_hits)
+        )
+    prose = " \n".join(str(fields.get(name) or "") for name in ANNOTATION_FIELDS)
+    vocab_hits = machine_vocab_hits(prose)
+    if vocab_hits:
+        reasons.append(
+            "annotation vocabulary leaked into the prose: " + ", ".join(vocab_hits)
+        )
+    for row in hint_contradictions(fields, hints):
+        reasons.append(
+            f"{row['axis']} was written as {row['asserted']} but measured "
+            f"{row['measured']}"
+        )
+    return reasons
 
 
 # --- v4 edit-region geometry hints -----------------------------------------
@@ -1625,6 +2015,19 @@ class ResponsesAnnotator:
                 endpoint_id = endpoint.id if isinstance(endpoint, ExternalEndpointConfig) else "local"
                 try:
                     stream_result = self._request(prepared, endpoint, route)
+                    # The v5.1 text-layer gate.  It runs here rather than inside
+                    # ``_request`` because it needs the candidate's own hint
+                    # table, which only the task carries; raising inside the same
+                    # ``try`` puts it on the identical bad-draw path as a schema
+                    # violation, so a redraw and its bound come for free.
+                    violations = prose_violations(
+                        stream_result.fields,
+                        (task.get("candidate") or {}).get("objective_hints"),
+                    )
+                    if violations:
+                        raise AnnotationError(
+                            PROSE_VIOLATION, "; ".join(violations), retryable=True
+                        )
                 except AnnotationError as failure:
                     if failure.quota and route == "external":
                         exhausted = self.pool.remove(endpoint_id)

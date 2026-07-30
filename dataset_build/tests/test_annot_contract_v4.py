@@ -14,6 +14,7 @@ import io
 import unittest
 import unittest.mock
 
+from construct import responses
 from construct.responses import (
     ANNOTATION_FIELDS,
     ANNOTATION_JSON_SCHEMA,
@@ -725,6 +726,429 @@ class BlindRubricTests(unittest.TestCase):
             "preference": {**{k: "A" for k in blind.ALL_DIMENSIONS}, "overall": "A"},
             "reason": "the first one is better overall",
         })
+
+
+def v5_hints(**overrides: object) -> dict[str, object]:
+    """A measured table whose every axis clears its dead band."""
+    base: dict[str, object] = {
+        "brightness": {"delta": -6.0, "direction": "darker"},
+        "warmth": {"delta": 3.0, "direction": "warmer"},
+        "chroma": {"delta": -8.0, "direction": "more muted"},
+        "contrast": {"delta": 2.0, "direction": "higher contrast"},
+        "hue_gm": {"delta": 7.0, "direction": "shifted toward magenta/red"},
+        "surfaces": [],
+    }
+    base.update(overrides)
+    return base
+
+
+def plans(**overrides: str) -> dict[str, str]:
+    """The five directive fields, empty unless a test fills one in."""
+    base = {name: "" for name in (
+        "plan_lighting", "plan_global_color", "plan_specific_color",
+        "instruction_long", "instruction_short",
+    )}
+    base.update(overrides)
+    return base
+
+
+class AfterReferenceBanTests(unittest.TestCase):
+    """A problem section describes the before image and may not point forward.
+
+    37% of the v5 arm of the 88-sample panel did point forward, against 20% of
+    the control, and the patterns below reproduce both rates on the archived
+    text -- which is the evidence that they match the failure and not merely the
+    word "after".
+    """
+
+    def test_every_family_the_panel_produced_is_caught(self):
+        for text in (
+            "The scene is flatter than in the finished image.",
+            "The palette is warmer compared with the after version.",
+            "The hair lacks the depth present afterward.",
+            "It reads cooler than in the revised image.",
+            "The edited result uses much deeper shadows.",
+            "Colors feel less unified than the after image.",
+            "The light is softer than the finished look.",
+            "It is brighter than the second image.",
+            "The tones fall short of the end result.",
+            "There is less contrast than in the after.",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(responses.after_reference_hits(text), text)
+
+    def test_before_only_prose_and_intent_language_survive(self):
+        for text in (
+            "The scene is overly bright and airy, with restrained definition.",
+            "The original palette is too warm and clean for the intended mood.",
+            "The light lacks the atmosphere the 冷青橙暗哑 style calls for.",
+            "The composition needs a more subdued, cinematic feeling.",
+            "Detail in the couple and the rocky shore is already good.",
+            "The desired mood is quieter than what the picture offers.",
+            "Sunlight after the rain has left the pavement glaring.",
+            "The subject is a sought-after landmark shot at midday.",
+            "Shadow detail is thin and the highlights are close to clipping.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(responses.after_reference_hits(text), [], text)
+
+
+class MachineVocabularyBanTests(unittest.TestCase):
+    """The hint table is working data; none of its wording may reach the prose."""
+
+    def test_pipeline_vocabulary_is_caught(self):
+        for text in (
+            "No individual color surface shows a clearly visible chroma change.",
+            "Avoid any distinct color-surface shift across the frame.",
+            "Give this connected scene area a subtly warmer appearance.",
+            "Do not treat the woman as the full extent of the adjustment.",
+            "Keep the atmosphere outside the affected area intact.",
+            "Preserve the trees beyond the affected region.",
+            "Warm the edited region without spilling into the sky.",
+            "The change sits below the measurement threshold.",
+            "This is a low-confidence reading of the greens.",
+            "Follow the measured direction for the sky.",
+            "The localized color change is modest here.",
+            "The annotator should not invent a claim.",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(responses.machine_vocab_hits(text), text)
+
+    def test_ordinary_photographic_english_is_spared(self):
+        # Each of these was checked against the 88-sample corpus: a blacklist
+        # that eats them would burn redraws on answers that are already right.
+        for text in (
+            "Maintain the composition and the natural feel of the scene.",
+            "Reproduce the 冷青橙暗哑 style across the entire photograph.",
+            "Keep the water surface calm and the reflections readable.",
+            "Warm the region around the cyclist and the flowering branches.",
+            "Name the scene content that changes: the coat, the road, the sky.",
+            "Keep saturation changes subtle across the seaside palette.",
+            "The rock surfaces and the dark architectural surfaces stay legible.",
+            "Lift the light on the standing figure without flattening it.",
+            "Preserve the greens of the foliage and the blue of the water.",
+            "The overall figure of the woman should stay recognisable.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(responses.machine_vocab_hits(text), [], text)
+
+
+class DirectionClaimTests(unittest.TestCase):
+    def test_each_axis_reports_the_direction_the_text_asks_for(self):
+        for text, axis, direction in (
+            ("Brighten the bird and the branch.", "brightness", "brighter"),
+            ("Darken the sky over the ruin.", "brightness", "darker"),
+            ("Give the scene a warmer feel.", "warmth", "warmer"),
+            ("Cool the woman and the white clothing.", "warmth", "cooler"),
+            ("Push the foliage into richer greens.", "chroma", "richer"),
+            ("Make the rocks more muted and neutral.", "chroma", "more muted"),
+            ("Add stronger contrast to the shoreline.", "contrast", "higher contrast"),
+            ("Soften the contrast on the subject.", "contrast", "lower contrast"),
+            ("Nudge the foliage toward green.", "hue_gm", "shifted toward green"),
+            ("Push the cast more magenta.", "hue_gm", "shifted toward magenta/red"),
+        ):
+            with self.subTest(text=text):
+                self.assertIn(direction, responses.asserted_directions(text).get(axis, ()))
+
+    def test_a_promise_not_to_move_is_not_a_direction_claim(self):
+        for text in (
+            "Keep the foliage greens as rich as they are.",
+            "Preserve the warmer skin tones already present.",
+            "Retain the muted character of the background.",
+            "Leave the sky unchanged rather than making it cooler.",
+            "Avoid brightening the far corners.",
+            "Do not darken the water beyond the railing.",
+            "Reduce the heavy muted quality of the vegetation.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(responses.asserted_directions(text), {}, text)
+
+    def test_a_comparative_naming_existing_content_is_not_a_claim(self):
+        # Both false alarms the panel produced, and their directive twins.
+        for text in (
+            "Balance the warm sky with the cooler coastal shadows.",
+            "Warm and enrich the muted monochrome appearance of the wall.",
+            "Work with the darker foreground already in the frame.",
+        ):
+            with self.subTest(descriptive=text):
+                claims = responses.asserted_directions(text)
+                self.assertNotIn("cooler", claims.get("warmth", ()))
+                self.assertNotIn("more muted", claims.get("chroma", ()))
+                self.assertNotIn("darker", claims.get("brightness", ()))
+        for text, axis, direction in (
+            ("Take the shadows to a cooler cast.", "warmth", "cooler"),
+            ("Bring the wall to a more muted beige.", "chroma", "more muted"),
+        ):
+            with self.subTest(directive=text):
+                self.assertIn(direction, responses.asserted_directions(text)[axis])
+
+    def test_tonal_senses_of_shared_words_are_not_colour_claims(self):
+        for text in (
+            "Give the scene richer shadows and more restrained highlights.",
+            "Enrich the mood with deeper darks under the trees.",
+            "Lighten the mood of the portrait without changing the palette.",
+        ):
+            with self.subTest(text=text):
+                claims = responses.asserted_directions(text)
+                self.assertNotIn("richer", claims.get("chroma", ()))
+                self.assertNotIn("brighter", claims.get("brightness", ()))
+
+
+class HintContradictionTests(unittest.TestCase):
+    """The OVERALL lines are a veto; a plan that reverses one is a bad draw."""
+
+    def test_each_axis_is_checked_against_its_measured_direction(self):
+        for axis, text, asserted, measured in (
+            ("brightness", "Brighten the bird and the surrounding woodland.",
+             "brighter", "darker"),
+            ("warmth", "Cool the woman and the stream around her.",
+             "cooler", "warmer"),
+            ("chroma", "Enrich the restrained colors of the wrestler's mask.",
+             "richer", "more muted"),
+            ("contrast", "Soften the contrast across the shoreline.",
+             "lower contrast", "higher contrast"),
+            ("hue_gm", "Nudge the whole frame toward green.",
+             "shifted toward green", "shifted toward magenta/red"),
+        ):
+            with self.subTest(axis=axis):
+                found = responses.hint_contradictions(
+                    plans(plan_global_color=text), v5_hints()
+                )
+                self.assertEqual(
+                    found,
+                    [{"axis": axis, "asserted": asserted, "measured": measured}],
+                )
+
+    def test_agreeing_with_the_measured_direction_is_clean(self):
+        for axis, text in (
+            ("brightness", "Darken the bird and the surrounding woodland."),
+            ("warmth", "Give the woman and the stream a warmer cast."),
+            ("chroma", "Make the wrestler's mask more muted."),
+            ("contrast", "Add stronger contrast across the shoreline."),
+            ("hue_gm", "Push the whole frame more magenta."),
+        ):
+            with self.subTest(axis=axis):
+                self.assertEqual(
+                    responses.hint_contradictions(
+                        plans(plan_global_color=text), v5_hints()
+                    ),
+                    [],
+                )
+
+    def test_an_axis_inside_its_dead_band_has_no_direction_to_reverse(self):
+        # 0.4 chroma is below the 2.0 ROC operating point, so the table declines
+        # to call it and "richer" is merely unlicensed, not contradicted.
+        quiet = v5_hints(chroma={"delta": 0.4, "direction": "more muted"})
+        self.assertEqual(
+            responses.hint_contradictions(
+                plans(plan_specific_color="Push the foliage into richer greens."),
+                quiet,
+            ),
+            [],
+        )
+
+    def test_a_surface_that_moved_the_other_way_licenses_the_claim(self):
+        # The low-confidence rule, read forwards: the table itself prints a
+        # surface that disagrees with the whole-region figure, so a sentence
+        # about that surface is legitimate.
+        text = plans(plan_specific_color="Push the red coat into richer colour.")
+        self.assertTrue(responses.hint_contradictions(text, v5_hints()))
+        licensed = v5_hints(surfaces=[{
+            "name": "red", "area": 0.12, "d_L": 1.0, "d_a": 4.0, "d_b": 1.0,
+            "d_C": 7.5, "direction": "richer", "low_confidence": True,
+        }])
+        self.assertEqual(responses.hint_contradictions(text, licensed), [])
+
+    def test_problem_sections_are_never_read_as_direction_claims(self):
+        # "The palette is too warm" implies cooling; reading it as a claim that
+        # the edit warmed anything would invert the whole check.
+        fields = {
+            "problem_global_color": "The palette is far too warm and much brighter "
+                                    "than the mood needs, and the colours are richer "
+                                    "than they should be.",
+            **plans(),
+        }
+        self.assertEqual(responses.hint_contradictions(fields, v5_hints()), [])
+
+    def test_a_missing_or_malformed_table_disables_the_check(self):
+        text = plans(plan_global_color="Brighten the whole frame.")
+        self.assertEqual(responses.hint_contradictions(text, None), [])
+        self.assertEqual(responses.hint_contradictions(text, {}), [])
+        self.assertEqual(
+            responses.hint_contradictions(text, {"brightness": {"direction": "darker"}}),
+            [],
+        )
+
+
+class ProseViolationTests(unittest.TestCase):
+    def test_a_clean_annotation_reports_nothing(self):
+        clean = {
+            "problem_lighting": "The scene is overly bright and airy.",
+            "problem_global_color": "The palette is clean and a little cold.",
+            "problem_specific_color": "The foliage reads greyer than the mood wants.",
+            "region_scope": GLOBAL_REGION_SCOPE,
+            "plan_lighting": "Darken the seaside scene and hold the shadow detail.",
+            "plan_global_color": "Give the whole frame a warmer, more muted cast.",
+            "plan_specific_color": "Let the rocks and water settle into quieter colour.",
+            "instruction_long": "Please darken this seaside photograph, warm it a "
+                                "little and take the colour back so it feels calm.",
+            "instruction_short": "Darken and warm the seaside scene with quieter colour.",
+        }
+        self.assertEqual(responses.prose_violations(clean, v5_hints()), [])
+
+    def test_all_three_bans_are_reported_together(self):
+        dirty = {
+            "problem_lighting": "The scene is flatter than in the finished image.",
+            "problem_global_color": "The palette is clean and cold.",
+            "problem_specific_color": "No color surface shows a visible chroma change.",
+            "region_scope": GLOBAL_REGION_SCOPE,
+            "plan_lighting": "Brighten the seaside scene throughout.",
+            "plan_global_color": "Warm the frame overall.",
+            "plan_specific_color": "Keep the rocks as they are.",
+            "instruction_long": "Please brighten and warm this seaside photograph.",
+            "instruction_short": "Brighten and warm the seaside scene.",
+        }
+        reasons = responses.prose_violations(dirty, v5_hints())
+        self.assertEqual(len(reasons), 3)
+        self.assertIn("than in the finished", reasons[0])
+        self.assertIn("chroma", reasons[1])
+        self.assertIn("brightness", reasons[2])
+        self.assertIn("darker", reasons[2])
+
+    def test_the_code_is_a_bounded_redraw_that_does_not_rotate_lanes(self):
+        self.assertEqual(
+            responses._BAD_DRAW_LIMITS[responses.PROSE_VIOLATION],
+            responses.PROSE_ATTEMPT_LIMIT,
+        )
+        self.assertEqual(responses.PROSE_ATTEMPT_LIMIT, 3)
+        # Both production lanes serve the same model, so the text of a bad draw
+        # says nothing about which lane produced it.
+        self.assertNotIn(responses.PROSE_VIOLATION, responses._LANE_ROTATING_CODES)
+
+
+class MonochromeNoteTests(unittest.TestCase):
+    def hint_block(self, hints):
+        return responses._objective_hints({"objective_hints": hints})
+
+    def test_a_strong_desaturation_is_named_as_a_conversion(self):
+        block = self.hint_block(v5_hints(
+            chroma={"delta": -9.4, "direction": "more muted"}
+        ))
+        self.assertIn("monochrome or near-monochrome palette", block)
+        self.assertIn("never write enrich", block)
+
+    def test_a_moderate_or_contested_desaturation_gets_no_note(self):
+        for name, hints in (
+            ("moderate", v5_hints(chroma={"delta": -3.0, "direction": "more muted"})),
+            ("richer", v5_hints(chroma={"delta": 9.0, "direction": "richer"})),
+            ("surface disagrees", v5_hints(
+                chroma={"delta": -9.4, "direction": "more muted"},
+                surfaces=[{"name": "red", "area": 0.2, "d_L": 0.0, "d_a": 1.0,
+                           "d_b": 1.0, "d_C": 8.0, "direction": "richer",
+                           "low_confidence": True}],
+            )),
+        ):
+            with self.subTest(name=name):
+                self.assertNotIn("near-monochrome", self.hint_block(hints))
+
+
+class SystemPromptClauseTests(unittest.TestCase):
+    def test_the_v5_1_clauses_are_in_the_instructions(self):
+        prompt = responses._SYSTEM_PROMPT
+        for fragment in (
+            "The three problem fields describe the first image and nothing else",
+            "seen afterward",
+            "Only promise to preserve, retain or maintain something you have been "
+            "told did not change",
+            "Report the strength you were given",
+            "must not be written as gentle, slight, subtle or natural",
+            "instruction_long must sound like one person asking another",
+        ):
+            with self.subTest(fragment=fragment[:40]):
+                self.assertIn(fragment, prompt)
+
+    def test_the_hint_block_forbids_reusing_its_own_wording(self):
+        block = responses._objective_hints({"objective_hints": v5_hints()})
+        self.assertIn("Never reuse the wording of this table", block)
+        self.assertIn("Only promise to preserve, retain or maintain what this table "
+                      "says did not move", block)
+
+    def test_the_hint_block_no_longer_prints_the_words_the_gate_bans(self):
+        # Every one of the five ``prose_violation`` redraws the WP16 smoke
+        # triggered was this block's own lowercase running text coming straight
+        # back out, and one draw evaded the ban by writing "colored surface".
+        # A ban on wording the prompt keeps printing is a retry tax, so the
+        # words were removed at source and this pins them out.
+        for name, hints in (
+            ("silent", v5_hints()),
+            ("listed", v5_hints(surfaces=[{
+                "name": "red", "area": 0.18, "d_L": 1.4, "d_a": -6.0,
+                "d_b": -7.0, "d_C": -9.2, "direction": "more muted",
+                "low_confidence": False}])),
+            ("uncertain", v5_hints(chroma={"delta": 6.0, "direction": "richer"},
+                                   surfaces=[{
+                "name": "red", "area": 0.12, "d_L": 0.0, "d_a": -6.0,
+                "d_b": -7.0, "d_C": -10.7, "direction": "more muted",
+                "low_confidence": True}])),
+        ):
+            block = responses._objective_hints({"objective_hints": hints}).lower()
+            for word in ("chroma", "colour surface", "color surface",
+                         "colour-surface", "low confidence",
+                         "computed from the pixels", "affected area"):
+                with self.subTest(case=name, word=word):
+                    self.assertNotIn(word, block)
+
+
+class MechanicalProseFlagTests(unittest.TestCase):
+    """The audit imports the gate's own patterns, so the two cannot drift."""
+
+    def test_the_regexes_are_the_annotators_own_objects(self):
+        self.assertIs(mech.AFTER_REFERENCE_RE, responses.AFTER_REFERENCE_RE)
+        self.assertIs(mech.MACHINE_VOCAB_RE, responses.MACHINE_VOCAB_RE)
+
+    def unit(self, hints=None, **overrides):
+        parts = fields(**overrides)
+        return check_unit(
+            "u", "sft", "current", "style", parts["instruction_long"],
+            parts["instruction_short"], assemble_reasoning(parts),
+            "Style Name", [], "auto", hints,
+        )
+
+    def test_each_ban_becomes_its_own_flag(self):
+        clean = self.unit(v5_hints(
+            warmth={"delta": 3.0, "direction": "warmer"},
+            brightness={"delta": 4.0, "direction": "brighter"},
+        ))
+        for flag in ("after_reference_in_problem", "machine_vocab_leak",
+                     "hint_contradiction"):
+            with self.subTest(flag=flag, case="clean"):
+                self.assertNotIn(flag, clean["flags"])
+
+        after = self.unit(
+            problem_lighting="The finished image is far more severe."
+        )
+        self.assertIn("after_reference_in_problem", after["flags"])
+        self.assertEqual(after["after_reference"], ["finished image"])
+
+        vocab = self.unit(
+            plan_specific_color="No color surface carries a chroma change."
+        )
+        self.assertIn("machine_vocab_leak", vocab["flags"])
+        self.assertEqual(vocab["machine_vocab"], ["chroma", "color surface"])
+
+        contra = self.unit(
+            v5_hints(warmth={"delta": -3.0, "direction": "cooler"}),
+        )
+        self.assertIn("hint_contradiction", contra["flags"])
+        self.assertEqual(
+            contra["hint_contradiction"],
+            [{"axis": "warmth", "asserted": "warmer", "measured": "cooler"}],
+        )
+
+    def test_a_corpus_checked_without_a_journal_scores_no_contradiction(self):
+        without = self.unit(None)
+        self.assertNotIn("hint_contradiction", without["flags"])
+        self.assertEqual(without["hint_contradiction"], [])
 
 
 if __name__ == "__main__":
