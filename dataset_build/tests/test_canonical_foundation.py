@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import importlib
 import json
+import math
 import os
 import re
 import shutil
@@ -61,9 +62,19 @@ from construct.rendering import (
 )
 from dataset_build.source_qa import db as source_db
 from construct.visibility import (
+    COLOUR_SURFACES,
+    WARM_ANGLE_DEG,
     ciede2000,
+    clip_masks,
+    colour_surface_labels,
+    hint_support,
     objective_edit_hints,
+    objective_edit_hints_from_lab,
+    prepare_torch_lab_reference,
+    prepare_working_after,
+    prepare_working_reference,
     srgb_to_lab,
+    visibility_and_hints_torch,
     visibility_metrics,
 )
 
@@ -1339,6 +1350,379 @@ class RetainedDatabaseContractTests(unittest.TestCase):
         ):
             self.assertNotIn(legacy, source_db.SCHEMA)
 
+
+
+class ObjectiveHintMetricTests(unittest.TestCase):
+    """v5 hint metrics (WP15c): the axis definitions and the surface table.
+
+    The winning specification lives in
+    ``/var/cache/veradata/annot_review/wp15_metric_roc/winning_spec.json`` and
+    the numbers it was scored against are in that directory's
+    ``metrics/bank.jsonl``.  ``dataset_build/tools/metric_bank.py`` is the
+    measurement-bank implementation those numbers came out of; production is
+    held to it below.
+    """
+
+    BANK = Path("/var/cache/veradata/annot_review/wp15_metric_roc/metrics/bank.jsonl")
+
+    # -- colour-name surfaces ------------------------------------------------
+
+    @staticmethod
+    def lab_of(lightness: float, chroma: float, hue_deg: float) -> np.ndarray:
+        radians = math.radians(hue_deg)
+        return np.array(
+            [[[lightness, chroma * math.cos(radians), chroma * math.sin(radians)]]],
+            dtype=np.float64,
+        )
+
+    def surface_of(self, lightness: float, chroma: float, hue_deg: float) -> str:
+        labels = colour_surface_labels(self.lab_of(lightness, chroma, hue_deg))
+        return COLOUR_SURFACES[int(labels[0, 0])]
+
+    def test_low_chroma_pixels_are_named_by_lightness_not_hue(self):
+        # Below C* 12 a pixel has no nameable hue, so it is one of the three
+        # achromatic terms whatever its hue angle happens to be.
+        for hue in (0.0, 90.0, 200.0, 330.0):
+            self.assertEqual(self.surface_of(10.0, 11.9, hue), "black")
+            self.assertEqual(self.surface_of(50.0, 11.9, hue), "grey")
+            self.assertEqual(self.surface_of(90.0, 11.9, hue), "white")
+        # The lightness edges are inclusive at the top end only.
+        self.assertEqual(self.surface_of(25.0, 5.0, 0.0), "grey")
+        self.assertEqual(self.surface_of(24.9, 5.0, 0.0), "black")
+        self.assertEqual(self.surface_of(75.0, 5.0, 0.0), "white")
+        self.assertEqual(self.surface_of(74.9, 5.0, 0.0), "grey")
+        # And exactly at the chroma threshold the pixel is chromatic again.
+        self.assertEqual(self.surface_of(50.0, 12.0, 200.0), "blue")
+
+    def test_hue_bin_edges_land_in_the_documented_bucket(self):
+        # Each bin is [lo, hi) and red wraps through 0.  Checked at a mid
+        # lightness and a chroma high enough that the brown and pink lightness
+        # corrections stay out of it.  The probes sit 0.05 deg either side of an
+        # edge rather than on it, because the hue angle is reconstructed through
+        # atan2 and an exactly-on-the-edge value is a coin toss in the last bit.
+        for edge, below, above in (
+            (25.0, "red", "orange"),
+            (60.0, "orange", "yellow"),
+            (100.0, "yellow", "green"),
+            (180.0, "green", "blue"),
+            (285.0, "blue", "purple"),
+            (325.0, "purple", "pink"),
+            (345.0, "pink", "red"),
+        ):
+            self.assertEqual(self.surface_of(55.0, 60.0, edge - 0.05), below, edge)
+            self.assertEqual(self.surface_of(55.0, 60.0, edge + 0.05), above, edge)
+        # The red bin is the one that wraps, so it owns both sides of 0.
+        self.assertEqual(self.surface_of(55.0, 60.0, 359.95), "red")
+        self.assertEqual(self.surface_of(55.0, 60.0, 0.05), "red")
+
+    def test_brown_and_pink_are_lightness_corrections_on_the_hue_bins(self):
+        # brown = dark warm (hue 20-100, L* < 45).  The correction starts five
+        # degrees below where "orange" does, so 20-25 deg is brown when dark and
+        # red -- or pink -- when light.
+        self.assertEqual(self.surface_of(44.9, 40.0, 45.0), "brown")
+        self.assertEqual(self.surface_of(45.0, 40.0, 45.0), "orange")
+        self.assertEqual(self.surface_of(30.0, 40.0, 22.0), "brown")
+        self.assertEqual(self.surface_of(70.0, 40.0, 22.0), "pink")
+        # pink = light, moderate-chroma reddish (hue >= 325 or < 25, L* >= 60,
+        # C* < 50).  A saturated red stays red however light it is.
+        self.assertEqual(self.surface_of(60.0, 49.9, 10.0), "pink")
+        self.assertEqual(self.surface_of(60.0, 50.0, 10.0), "red")
+        self.assertEqual(self.surface_of(59.9, 40.0, 10.0), "red")
+
+    # -- the axes ------------------------------------------------------------
+
+    def test_warmth_reads_the_high_alpha_core_as_a_joint_ab_projection(self):
+        # The shape of WP15a's 721780ad: b* rises, so the old b*-only rule calls
+        # the frame warmer, while a* falls several times harder and the blind
+        # reviewer reads it as cooler.  The 70 deg projection sees the a* move.
+        before = np.full((8, 8, 3), 0.45, dtype=np.float32)
+        after = before.copy()
+        after[..., 0] -= 0.16          # drop red: a* falls hard
+        after[..., 2] -= 0.05          # drop blue: b* rises
+        weight = np.full((8, 8), 0.2, dtype=np.float64)
+        weight[2:6, 2:6] = 1.0
+        hints = objective_edit_hints(before, after, weight=weight)
+        self.assertGreater(hints["warmth"]["components"]["d_b"], 0.0)
+        self.assertLess(hints["warmth"]["components"]["d_a"], 0.0)
+        self.assertEqual(hints["warmth"]["direction"], "cooler")
+        # The core is the alpha >= 0.75 * peak region, so a change confined to
+        # it is reported at full strength rather than diluted by the skirt.
+        core = objective_edit_hints(before, after, weight=(weight >= 0.75).astype(float))
+        self.assertAlmostEqual(hints["warmth"]["delta"], core["warmth"]["delta"], places=6)
+
+    def test_the_core_threshold_is_relative_to_the_maps_own_peak(self):
+        # A ramp scaled by amount < 1 never reaches an absolute 0.75, so an
+        # absolute cut would leave this support empty.
+        before = np.full((4, 16, 3), 0.5, dtype=np.float32)
+        after = before.copy()
+        after[:, 12:, 2] += 0.15
+        weight = np.linspace(0.0, 0.4, 16, dtype=np.float64)[None, :].repeat(4, axis=0)
+        hints = objective_edit_hints(before, after, weight=weight)
+        self.assertNotEqual(hints["warmth"]["delta"], 0.0)
+        self.assertTrue(math.isfinite(hints["warmth"]["components"]["d_b"]))
+
+    def test_contrast_drops_the_clipped_pixels_and_reports_the_fractions(self):
+        # Half the frame is blown out in both images.  Those pixels cannot move,
+        # so leaving them in shrinks the measured spread; the noclip form reads
+        # the tonal change on the pixels that were free to move.
+        before = np.full((8, 8, 3), 0.6, dtype=np.float32)
+        before[:4] = 0.99
+        after = before.copy()
+        after[4:] = 0.3
+        after[:4] = 1.0
+        hints = objective_edit_hints(before, after, weight=None)
+        self.assertAlmostEqual(hints["contrast"]["clip_frac_before"], 0.5, places=6)
+        self.assertAlmostEqual(hints["contrast"]["clip_frac_after"], 0.5, places=6)
+        # Only the unclipped half survives, and it moved uniformly, so its own
+        # spread is unchanged -- the whole-frame form would have shown a swing.
+        self.assertAlmostEqual(hints["contrast"]["delta"], 0.0, places=6)
+        self.assertEqual(hints["contrast"]["direction"], "unchanged")
+
+    def test_the_clip_masks_match_the_literal_definition_of_the_rails(self):
+        # clip_masks is written channel-wise for speed: the literal
+        # ``(rgb * 255).max(axis=-1)`` reduces over a length-3 innermost axis,
+        # which NumPy walks with its generic loop at 49 ms a candidate.  The two
+        # forms have to stay bit-equal, because the mask decides which pixels
+        # the contrast axis is measured on.
+        rng = np.random.default_rng(20260730)
+        for image in (
+            rng.random((23, 31, 3), dtype=np.float32),
+            np.zeros((4, 4, 3), dtype=np.float32),
+            np.ones((4, 4, 3), dtype=np.float32),
+            # the rails themselves, and the values either side of them
+            np.array([[[249.0, 0.0, 6.0], [250.0, 6.0, 6.0], [251.0, 6.0, 6.0],
+                       [100.0, 100.0, 5.0], [100.0, 100.0, 4.0],
+                       [100.0, 100.0, 6.0]]], dtype=np.float32) / 255.0,
+        ):
+            scaled = np.asarray(image, dtype=np.float32) * 255.0
+            expected_highlight = scaled.max(axis=-1) >= 250.0
+            expected_either = expected_highlight | (scaled.min(axis=-1) <= 5.0)
+            either, highlight = clip_masks(image)
+            self.assertTrue(np.array_equal(highlight, expected_highlight))
+            self.assertTrue(np.array_equal(either, expected_either))
+
+    def test_a_fully_clipped_support_falls_back_instead_of_dividing_by_zero(self):
+        before = np.full((6, 6, 3), 1.0, dtype=np.float32)
+        after = np.full_like(before, 0.0)
+        hints = objective_edit_hints(before, after, weight=None)
+        self.assertTrue(math.isfinite(hints["contrast"]["delta"]))
+        self.assertEqual(hints["contrast"]["clip_frac_before"], 1.0)
+
+    def test_green_magenta_is_its_own_axis_on_the_whole_support(self):
+        before = np.full((6, 6, 3), 0.5, dtype=np.float32)
+        after = before.copy()
+        after[..., 1] -= 0.12                     # less green -> a* rises
+        hints = objective_edit_hints(before, after, weight=None)
+        self.assertGreater(hints["hue_gm"]["delta"], 0.0)
+        self.assertEqual(hints["hue_gm"]["direction"], "shifted toward magenta/red")
+        mirrored = objective_edit_hints(after, before, weight=None)
+        self.assertEqual(mirrored["hue_gm"]["direction"], "shifted toward green")
+
+    # -- the surface table ---------------------------------------------------
+
+    def test_a_surface_is_silent_below_the_area_or_the_chroma_floor(self):
+        before = np.full((10, 20, 3), 0.5, dtype=np.float32)
+        before[:, :1] = (0.95, 0.25, 0.25)        # one orange column, 5%
+        after = before.copy()
+        after[:, :1] = (0.62, 0.50, 0.50)         # a large desaturation on it
+        wide = objective_edit_hints(before, after, weight=None)
+        self.assertEqual([row["name"] for row in wide["surfaces"]], ["orange"])
+
+        narrow_before = np.full((10, 40, 3), 0.5, dtype=np.float32)
+        narrow_before[:, :1] = (0.95, 0.25, 0.25)  # the same surface at 2.5%
+        narrow_after = narrow_before.copy()
+        narrow_after[:, :1] = (0.62, 0.50, 0.50)
+        narrow = objective_edit_hints(narrow_before, narrow_after, weight=None)
+        self.assertEqual(narrow["surfaces"], [])
+
+        # Area is fine, chroma barely moves: still silent.
+        quiet_after = before.copy()
+        quiet_after[:, :1] = (0.93, 0.28, 0.28)
+        quiet = objective_edit_hints(before, quiet_after, weight=None)
+        self.assertEqual(quiet["surfaces"], [])
+
+    def test_at_most_two_surfaces_are_named_and_they_are_the_salient_ones(self):
+        before = np.full((10, 30, 3), 0.5, dtype=np.float32)
+        before[:, 0:10] = (0.95, 0.25, 0.25)      # orange, a third of the frame
+        before[:, 10:20] = (0.30, 0.30, 0.95)     # purple, a third
+        before[:, 20:26] = (0.30, 0.75, 0.30)     # green, a fifth
+        after = before.copy()
+        after[:, 0:10] = (0.62, 0.50, 0.50)
+        after[:, 10:20] = (0.45, 0.45, 0.62)
+        after[:, 20:26] = (0.45, 0.60, 0.45)
+        hints = objective_edit_hints(before, after, weight=None)
+        self.assertEqual(len(hints["surfaces"]), 2)
+        self.assertEqual({row["name"] for row in hints["surfaces"]},
+                         {"orange", "purple"})
+        for row in hints["surfaces"]:
+            self.assertLess(row["d_C"], 0.0)
+            self.assertEqual(row["direction"], "more muted")
+
+    def test_membership_is_read_off_the_before_image(self):
+        # The edit drains the orange half toward a dull blue-grey.  The table
+        # must still call it an orange surface: that is the colour the reader is
+        # looking at in the before frame, and the name has to point at it.
+        before = np.zeros((10, 20, 3), dtype=np.float32)
+        before[:, :10] = (0.95, 0.25, 0.25)
+        before[:, 10:] = (0.30, 0.30, 0.95)
+        after = before.copy()
+        after[:, :10] = (0.40, 0.42, 0.52)
+        hints = objective_edit_hints(before, after, weight=None)
+        self.assertEqual([row["name"] for row in hints["surfaces"]], ["orange"])
+
+    def test_a_surface_opposing_the_region_is_flagged_low_confidence(self):
+        before = np.full((10, 20, 3), 0.5, dtype=np.float32)
+        before[:, :3] = (0.95, 0.25, 0.25)        # a small, strongly orange patch
+        after = before.copy()
+        after[:, :3] = (0.62, 0.50, 0.50)         # desaturate it hard
+        after[:, 3:] = (0.62, 0.42, 0.30)         # and warm up everything else
+        hints = objective_edit_hints(before, after, weight=None)
+        row = next(row for row in hints["surfaces"] if row["name"] == "orange")
+        self.assertLess(row["d_C"], 0.0)
+        self.assertGreater(hints["chroma"]["delta"], 0.0)
+        self.assertTrue(row["low_confidence"])
+        # The surfaces that agree with the region are not flagged.
+        self.assertFalse(any(other["low_confidence"] for other in hints["surfaces"]
+                             if other["name"] != "orange"))
+
+    # -- parity and replay ---------------------------------------------------
+
+    def torch_and_numpy(self, before: np.ndarray, after: np.ndarray,
+                        weight: np.ndarray) -> tuple[dict, dict]:
+        reference = prepare_working_reference(before, 512)
+        working_after, working_weight = prepare_working_after(reference, after, weight)
+        oracle = objective_edit_hints_from_lab(
+            reference.lab, srgb_to_lab(working_after),
+            weight=working_weight.astype(np.float64),
+            support=hint_support(reference, working_after),
+        )
+        _, production = visibility_and_hints_torch(
+            prepare_torch_lab_reference(reference, "cpu"), working_after,
+            weight=working_weight, visible_de_min=0.0, visible_fraction_de=2.3,
+            visible_fraction_min=0.0,
+        )
+        return oracle, production
+
+    def assert_hints_equal(self, oracle: dict, production: dict) -> None:
+        self.assertEqual(sorted(oracle), sorted(production))
+        for axis in ("brightness", "warmth", "hue_gm", "chroma", "contrast"):
+            self.assertAlmostEqual(oracle[axis]["delta"], production[axis]["delta"],
+                                   places=6, msg=axis)
+            self.assertEqual(oracle[axis]["direction"], production[axis]["direction"])
+        for component in ("d_a", "d_b"):
+            self.assertAlmostEqual(oracle["warmth"]["components"][component],
+                                   production["warmth"]["components"][component],
+                                   places=6)
+        for field in ("clip_frac_before", "clip_frac_after"):
+            self.assertAlmostEqual(oracle["contrast"][field],
+                                   production["contrast"][field], places=6)
+        self.assertEqual([row["name"] for row in oracle["surfaces"]],
+                         [row["name"] for row in production["surfaces"]])
+        for expected, actual in zip(oracle["surfaces"], production["surfaces"]):
+            for field in ("area", "d_L", "d_a", "d_b", "d_C"):
+                self.assertAlmostEqual(expected[field], actual[field], places=6)
+            self.assertEqual(expected["low_confidence"], actual["low_confidence"])
+            self.assertEqual(expected["direction"], actual["direction"])
+
+    def test_the_torch_path_production_runs_matches_the_numpy_oracle(self):
+        # visibility.py has two implementations of this metric and the GPU one
+        # is what production calls, so they are pinned to each other here.
+        rng = np.random.default_rng(20260730)
+        before = rng.random((40, 64, 3), dtype=np.float32)
+        before[:, :20] = (0.82, 0.10, 0.12)       # a red surface worth naming
+        before[8:16, 30:50] = 1.0                 # and a blown-out patch
+        after = np.clip(before * 0.85 + 0.10, 0.0, 1.0).astype(np.float32)
+        after[:, :20] = (0.55, 0.34, 0.34)
+        for weight in (
+            np.ones(before.shape[:2], dtype=np.float32),
+            np.linspace(0.0, 0.4, before.shape[1], dtype=np.float32)[None, :]
+            .repeat(before.shape[0], axis=0),
+        ):
+            with self.subTest(peak=float(weight.max())):
+                self.assert_hints_equal(*self.torch_and_numpy(before, after, weight))
+
+    def test_the_two_implementations_agree_on_the_archived_evidence_pixels(self):
+        if not self.BANK.is_file():
+            self.skipTest("WP15b metric bank is not on this machine")
+        for row in _bank_rows(self.BANK, 5):
+            with self.subTest(row=row["row_id"]):
+                before, after, weight = _load_bank_pair(row)
+                self.assert_hints_equal(*self.torch_and_numpy(before, after, weight))
+
+    def test_production_reproduces_the_wp15b_bank_numbers(self):
+        """Replay: the five winning statistics against the ROC's own figures.
+
+        This is the acceptance check for the swap.  ``metric_bank.py`` computed
+        the numbers the ROC selected on, so if production disagrees with it on
+        the archived pixels then the operating points in responses.py are
+        anchored to a statistic nothing is actually computing.
+        """
+        if not self.BANK.is_file():
+            self.skipTest("WP15b metric bank is not on this machine")
+        rows = _bank_rows(self.BANK, 5)
+        self.assertEqual(len(rows), 5)
+        radians = math.radians(WARM_ANGLE_DEG)
+        for row in rows:
+            with self.subTest(row=row["row_id"]):
+                before, after, weight = _load_bank_pair(row)
+                hints = objective_edit_hints(before, after, weight=weight)
+                support = row["metrics"]["support"]
+                expected = {
+                    "brightness": support["full"]["d_L"],
+                    "chroma": support["full"]["d_C"],
+                    "hue_gm": support["full"]["d_a"],
+                    "warmth": (math.cos(radians) * support["hi"]["d_a"]
+                               + math.sin(radians) * support["hi"]["d_b"]),
+                    "contrast": support["noclip"]["d_contrast"],
+                }
+                for axis, value in expected.items():
+                    # Production rounds to 6 decimals; nothing else may differ.
+                    self.assertAlmostEqual(hints[axis]["delta"], value, places=5,
+                                           msg=axis)
+                self.assertAlmostEqual(hints["contrast"]["clip_frac_before"],
+                                       row["metrics"]["clip"]["frac_before"], places=5)
+                self.assertAlmostEqual(hints["contrast"]["clip_frac_after"],
+                                       row["metrics"]["clip"]["frac_after"], places=5)
+                for surface in hints["surfaces"]:
+                    bank = row["metrics"]["buckets"][surface["name"]]
+                    self.assertAlmostEqual(surface["area"], bank["area_before"], places=5)
+                    for field in ("d_L", "d_a", "d_b", "d_C"):
+                        self.assertAlmostEqual(surface[field], bank[field], places=5)
+
+
+def _bank_rows(path: Path, limit: int) -> list[dict]:
+    rows = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if Path(row["before"]).is_file() and Path(row["after"]).is_file():
+            rows.append(row)
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _load_bank_pair(row: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Rebuild one WP15b bank row's before/after/alpha triple from disk."""
+    after_image = Image.open(row["after"]).convert("RGB")
+    size = after_image.size
+    after = np.asarray(after_image, np.float32) / 255.0
+    before_image = Image.open(row["before"]).convert("RGB")
+    if before_image.size != size:
+        before_image = before_image.resize(size, Image.Resampling.BILINEAR)
+    before = np.asarray(before_image, np.float32) / 255.0
+    if row.get("cgt") and Path(row["cgt"]).is_file():
+        alpha_image = Image.open(row["cgt"]).convert("L")
+        if alpha_image.size != size:
+            alpha_image = alpha_image.resize(size, Image.Resampling.BILINEAR)
+        # float64 before the divide, exactly as metric_bank.py does it: the
+        # high-alpha core is a threshold comparison, and a float32 rounding of
+        # alpha/255 moves pixels across it.
+        weight = np.asarray(alpha_image, np.float32).astype(np.float64) / 255.0
+    else:
+        weight = np.ones(before.shape[:2], np.float64)
+    return before, after, weight
 
 if __name__ == "__main__":
     unittest.main()

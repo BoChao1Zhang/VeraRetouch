@@ -7,15 +7,45 @@ import gc
 import hashlib
 import json
 import os
+import shutil
 import sys
+import threading
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
 
+from dataset_build.tools.archive_reader import (
+    default_db,
+    invalidate_shared,
+    path_exists,
+    prefetch_name,
+    read_bytes,
+    set_prefetch_dir,
+)
+from dataset_build.tools.global_catalog import upsert as upsert_catalog
+from dataset_build.tools.land import land
+from dataset_build.tools.prefetch import prefetch
+
 from .canonical_masks import MaskPlanError, build_mask_plan, pair_mask_slots
-from .canonical_qa import OneAlignScorer, QaError, rank_candidates
-from .config import DatabuildConfig, load_config, redact_text
+from .canonical_qa import (
+    OneAlignScorer,
+    OneAlignScorerPool,
+    QaError,
+    _stats,
+    rank_candidates,
+)
+from .config import (
+    DEFAULT_QA_SCORER_INSTANCES,
+    DEFAULT_QA_WINNER_MARGIN_ABSTAIN,
+    DEFAULT_QA_WINNER_MARGIN_LOW,
+    DEFAULT_SOURCE_WINDOW,
+    DatabuildConfig,
+    load_config,
+    redact_text,
+)
 from .legacy_import import (
     LegacyGroupInput,
     LegacySnapshot,
@@ -39,12 +69,165 @@ from .sources import (
     build_inventory,
     refresh_source_record,
 )
-from .state import ArtifactStore, StateError, file_digest, stable_id
-from .visibility import objective_edit_hints, visibility_metrics
+from .state import ASSETS_LOST_CODE, ArtifactStore, StateError, file_digest, stable_id
+from .visibility import (
+    VisibilityError,
+    hint_support,
+    objective_edit_hints_from_lab,
+    prepare_torch_lab_reference,
+    prepare_working_after,
+    prepare_working_reference,
+    srgb_to_lab,
+    visibility_and_hints_torch,
+    visibility_metrics_from_lab,
+)
+
+
+# Land whenever the staged assets reach this much of the ramstage tmpfs, and once
+# more when rendering ends.  ponytail: a module constant, not a config key — the
+# mount is 24 GiB and landing is idempotent, so every value in the 8-20 GiB band
+# behaves the same and nothing downstream reads it.
+LAND_WATERMARK_BYTES = 16 * 1024**3
+# Sources per prefetch buffer.  ponytail: a module constant for the same reason
+# as the water mark — one chunk is ~1 GiB of a 24 GiB tmpfs, the buffer is
+# rebuildable, and the only requirement is that a chunk take long enough to
+# render that the next one finishes reading behind it.
+PREFETCH_CHUNK = 256
+# NFS roots.  Only ``default_dependencies`` wires them in, so any caller that
+# builds ``PipelineDependencies`` by hand (every test) lands nothing, mirrors
+# nothing and never touches NFS.
+ARCHIVE_ROOT = Path("/mnt/nfs/bc/data/datasets")
+MIRROR_ROOT = Path("/mnt/nfs/bc/data/builds")
 
 
 class PipelineError(RuntimeError):
     """The canonical lifecycle cannot make safe progress."""
+
+
+@dataclass(frozen=True, slots=True)
+class _PostprocessResult:
+    metrics: Any
+    hints: dict[str, dict[str, float | str]]
+    qa_stats: dict[str, float]
+
+
+@dataclass(frozen=True, slots=True)
+class _PostprocessReference:
+    working: Any
+    torch: Any | None
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingCandidate:
+    slot_index: int
+    slot: Any
+    slot_id: str
+    preset_reservation: Any
+    attempt_task_id: str
+    candidate_id: str
+    after_path: Path
+    rendered: Any
+    future: Future[_PostprocessResult]
+
+
+@dataclass(frozen=True, slots=True)
+class _CandidateAttempt:
+    slot_index: int
+    slot: Any
+    slot_id: str
+    preset_reservation: Any
+    attempt_task_id: str
+    candidate_id: str
+    after_path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class _BufferedFailure:
+    row: dict[str, Any]
+    durable: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _DeferredGroupCommit:
+    group: dict[str, Any]
+    reservation: Any
+    coverage: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class _DeferredSourceResult:
+    status: str
+    failures: tuple[_BufferedFailure, ...]
+    group_commit: _DeferredGroupCommit | None = None
+    error: Exception | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectorTurn:
+    ready: threading.Event
+    following: threading.Event
+
+
+def _write_cgt_once(mask: Any, path: Path) -> Path:
+    """Encode one physical C_GT, or adopt the copy an earlier attempt fsynced.
+
+    The reuse is keyed by ``mask_id``, which names a plan slot rather than the
+    pixels behind it, so an existing file is only the right answer while nothing
+    can re-plan a mask whose C_GT is already on disk.  Today that holds because
+    SAM3 relabel only ever runs after ``build_mask_plan`` raised — that is,
+    before ``_start_cgt_writes`` submitted anything for that source.  Any change
+    that lets an already rendered source be re-planned has to invalidate (delete)
+    the affected C_GT files first, or this returns a stale mask.
+    """
+    if path.is_file():
+        return path
+    return save_cgt_png(mask, path)
+
+
+def _postprocess_candidate(
+    reference: Any,
+    after: Any,
+    weight: Any,
+    after_path: Path,
+    render_config: Any,
+) -> _PostprocessResult:
+    """Run the CPU-heavy work for one already rendered candidate."""
+    working_after, working_weight = prepare_working_after(
+        reference.working, after, weight
+    )
+    metric_args = {
+        "weight": working_weight,
+        "visible_de_min": render_config.visible_de_min,
+        "visible_fraction_de": render_config.visible_fraction_de,
+        "visible_fraction_min": render_config.visible_fraction_min,
+    }
+    if render_config.visibility_backend == "torch":
+        if reference.torch is None:
+            raise VisibilityError("torch visibility reference is missing")
+        metrics, hints = visibility_and_hints_torch(
+            reference.torch, working_after, **metric_args
+        )
+    else:
+        after_lab = srgb_to_lab(working_after)
+        metrics = visibility_metrics_from_lab(
+            reference.working.lab, after_lab, **metric_args
+        )
+        hints = objective_edit_hints_from_lab(
+            reference.working.lab, after_lab, weight=working_weight,
+            support=hint_support(reference.working, working_after),
+        )
+    if not metrics.accepted:
+        raise PipelineError(
+            "visibility gate rejected candidate "
+            f"(de={metrics.visible_de:.6f}, "
+            f"fraction={metrics.visible_fraction:.6f})"
+        )
+    save_candidate_jpeg(after, after_path, quality=render_config.jpeg_quality)
+    return _PostprocessResult(
+        metrics=metrics,
+        hints=hints,
+        qa_stats=_stats(str(after_path)),
+    )
 
 
 class Renderer(Protocol):
@@ -53,6 +236,7 @@ class Renderer(Protocol):
     def bind_catalog(self, catalog: PresetCatalog) -> None: ...
     def assert_ready(self) -> None: ...
     def render(self, source: Any, preset: Any, mask: Any = None) -> Any: ...
+    def render_many(self, source: Any, requests: Any) -> list[Any]: ...
 
 
 class Scorer(Protocol):
@@ -74,6 +258,11 @@ class PipelineDependencies:
     relabeler: Callable[[list[SourceRecord], DatabuildConfig, int], Mapping[str, str]]
     projector: Callable[[ArtifactStore, Mapping[str, Any], DatabuildConfig], ProjectionResult]
     now: Callable[[], datetime]
+    # Landing, mirroring and catalog refresh are off unless a root is supplied.
+    archive_root: Path | None = None
+    mirror_root: Path | None = None
+    catalog_db: Path | None = None
+    scorer_pool_factory: Callable[[int], Scorer] | None = None
 
 
 def _default_relabeler(
@@ -111,7 +300,64 @@ def default_dependencies() -> PipelineDependencies:
             store, manifest, config.viewer.postgres_dsn
         ),
         now=lambda: datetime.now(timezone.utc),
+        archive_root=ARCHIVE_ROOT,
+        mirror_root=MIRROR_ROOT,
+        scorer_pool_factory=lambda instances: OneAlignScorerPool.create(
+            "cuda:0", instances=instances
+        ),
     )
+
+
+def _atomic_copy(source: Path, target: Path) -> None:
+    """Replace one small file in place: same-directory temp, fsync, rename."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(target.name + ".tmp")
+    shutil.copyfile(source, tmp)
+    with tmp.open("rb") as handle:
+        os.fsync(handle.fileno())
+    os.replace(tmp, target)
+
+
+def _write_jsonl_atomic(path: Path, rows: list[Mapping[str, Any]]) -> None:
+    """Replace a JSONL sidecar in place; a reader sees the old file or the new one."""
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, path)
+
+
+def _artifact_names(root: Path) -> list[str]:
+    names = [path.name for path in sorted(root.glob("*.jsonl"))]
+    if (root / "manifest.json").is_file():
+        names.append("manifest.json")
+    return names
+
+
+def mirror_artifacts(output_root: Path, mirror_dir: Path) -> list[str]:
+    """Copy the authoritative ledgers off the tmpfs so a reboot cannot take them."""
+    names = _artifact_names(Path(output_root))
+    for name in names:
+        _atomic_copy(Path(output_root) / name, Path(mirror_dir) / name)
+    return names
+
+
+def restore_mirror(mirror_dir: Path, output_root: Path) -> list[str]:
+    """Rebuild a wiped output root from its mirror so the normal resume applies.
+
+    Only a mirror carrying a manifest counts: without one there is nothing to
+    resume from, and creating the output root here would defeat the preflight
+    contract that a failed startup leaves no artifacts behind.
+    """
+    mirror_dir = Path(mirror_dir)
+    if not (mirror_dir / "manifest.json").is_file():
+        return []
+    names = _artifact_names(mirror_dir)
+    for name in names:
+        _atomic_copy(mirror_dir / name, Path(output_root) / name)
+    return names
 
 
 def _timestamp(value: datetime) -> str:
@@ -146,6 +392,30 @@ def _add_manifest_self_artifact(manifest: dict[str, Any]) -> None:
         entry["bytes"] = size
 
 
+def _empty_cuda_cache() -> None:
+    """Hand the allocator's spare blocks back so a co-resident model can have them."""
+    try:
+        import torch
+
+        torch.cuda.empty_cache()
+    except Exception:  # noqa: BLE001 - a CPU-only run has nothing to give back
+        pass
+
+
+def _summary_count(text: str, key: str) -> int:
+    """Read one integer back out of a journalled land-checkpoint summary.
+
+    The summaries are the durable record of what each checkpoint published, so
+    resuming a build inherits its predecessors' counts.  A summary written by an
+    older revision simply has no such key and contributes nothing.
+    """
+    try:
+        value = json.loads(text).get(key)
+    except (json.JSONDecodeError, AttributeError):
+        return 0
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def _load_existing_manifest(path: Path) -> dict[str, Any] | None:
     if not path.is_file():
         return None
@@ -156,6 +426,65 @@ def _load_existing_manifest(path: Path) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         raise StateError("manifest must be a JSON object")
     return value
+
+
+# Keys introduced into the config after builds were already durable.  A manifest
+# written before the key existed cannot carry it, so an exact comparison would
+# reject every such resume.  Only a key whose value provably leaves the journals
+# alone may be listed here — ``render.source_window`` is scheduling width, and
+# the ``source_window = 1`` oracle parity test shows it changes no journal line.
+# The list is deliberately closed: any other missing key is still a difference.
+_RESUME_NEUTRAL_DEFAULTS: dict[tuple[str, str], Any] = {
+    ("render", "source_window"): DEFAULT_SOURCE_WINDOW,
+    # ``render.qa_scorer_instances`` only says how many identical OneAlign copies
+    # share the QA device.  Each group's images are ranked by one copy in one
+    # batched forward, so the copy that serves a group cannot change its scores,
+    # its ranks, or any journal line the ranking produces.
+    ("render", "qa_scorer_instances"): DEFAULT_QA_SCORER_INSTANCES,
+    # The winner-margin policy applies at the moment a winner is *chosen*, and a
+    # chosen winner is already in ``groups.jsonl``.  A build that finished its
+    # rendering phase — eval100 is the case in hand — therefore resumes into
+    # annotation and landing with exactly the winner set it journalled, whatever
+    # these two keys now say: they are neutral for it.  The limit of that claim
+    # is a build resumed *mid-rendering*, whose remaining groups would be ranked
+    # under the new policy while its earlier groups were not.  That is accepted
+    # rather than prevented (no such build is active), and it is why these two
+    # entries only complete a manifest that never had the keys, instead of
+    # excusing a manifest whose values differ.
+    ("render", "qa_winner_margin_abstain"): DEFAULT_QA_WINNER_MARGIN_ABSTAIN,
+    ("render", "qa_winner_margin_low"): DEFAULT_QA_WINNER_MARGIN_LOW,
+}
+
+
+def _config_diff_paths(old: Any, new: Any, prefix: str = "") -> list[str]:
+    """Dotted key paths where two effective configs disagree."""
+    if isinstance(old, dict) and isinstance(new, dict):
+        paths: list[str] = []
+        for key in sorted(set(old) | set(new), key=str):
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if key not in old or key not in new:
+                paths.append(path)
+            else:
+                paths.extend(_config_diff_paths(old[key], new[key], path))
+        return paths
+    return [] if old == new else [prefix or "<config>"]
+
+
+def _resume_config_differences(old_config: Any, new_config: Any) -> list[str]:
+    """Compare a durable effective config with the one being resumed.
+
+    Every key path is compared exactly, except that a neutral key the old
+    manifest is simply missing is first completed with its current default, so a
+    build created before that key was added stays resumable.
+    """
+    if isinstance(old_config, dict):
+        completed = dict(old_config)
+        for (table, key), default in _RESUME_NEUTRAL_DEFAULTS.items():
+            section = completed.get(table)
+            if isinstance(section, dict) and key not in section:
+                completed[table] = {**section, key: default}
+        old_config = completed
+    return _config_diff_paths(old_config, new_config)
 
 
 def _preflight_scorer(scorer: Scorer, inventory: SourceInventoryResult) -> None:
@@ -172,6 +501,119 @@ def _preflight_scorer(scorer: Scorer, inventory: SourceInventoryResult) -> None:
     if score is None or not isinstance(score, (int, float)) \
             or not 0.0 <= float(score) <= 100.0:
         raise QaError("OneAlign live preflight returned an invalid score")
+
+
+class _DeferredScorer:
+    """A scorer whose model arrives with the first ranking call.
+
+    ``[render] qa_preflight_forward = false`` waives the startup forward, and
+    with it the weight load that only exists to serve that forward: QA is the
+    first place the model is genuinely needed, so a small iteration build stops
+    paying half a minute before it renders anything.  The cost of the waiver is
+    that a broken scorer now surfaces during rendering rather than before the
+    output root exists, which is why the key defaults to true.
+    """
+
+    def __init__(self, factory: Callable[[], Scorer]) -> None:
+        self._factory = factory
+        self._scorer: Scorer | None = None
+        self._lock = threading.Lock()
+
+    def _resolve(self) -> Scorer:
+        if self._scorer is None:
+            with self._lock:
+                if self._scorer is None:
+                    self._scorer = self._factory()
+        return self._scorer
+
+    def score(self, path: str) -> float | None:
+        return self._resolve().score(path)
+
+    def __getattr__(self, name: str) -> Any:
+        # Everything else the QA layer reaches for, including the optional
+        # ``score_batch`` it probes with ``hasattr``.  Private names are refused
+        # unresolved so copy/pickle protocol probes cannot load a model.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return getattr(self._resolve(), name)
+
+
+def _load_scorer(
+    config: DatabuildConfig,
+    dependencies: PipelineDependencies,
+    inventory: SourceInventoryResult,
+) -> Scorer:
+    """Build the QA scorer, exercising one real forward unless the config waives it."""
+    factory = dependencies.scorer_factory
+    if dependencies.scorer_pool_factory is not None:
+        # Copies are how QA throughput scales, so the count is its own key rather
+        # than a function of ``gpu_concurrency``: that one sizes the render
+        # semaphore on the other card and the two no longer move together.
+        # ``qa_scorer_instances = 1`` is the explicit single-copy rollback.
+        instances = config.render.qa_scorer_instances
+        factory = lambda: dependencies.scorer_pool_factory(instances)
+    if not config.render.qa_preflight_forward:
+        return _DeferredScorer(factory)
+    scorer = factory()
+    _preflight_scorer(scorer, inventory)
+    return scorer
+
+
+class _SourcePrefetch:
+    """Keep one chunk of source images ahead of the renderer, on the tmpfs.
+
+    ``tools.prefetch`` reads a chunk in ``(shard, offset)`` order, which turns a
+    round's scattered 51 ms preads into one sequential pass per shard; running it
+    on a single background thread means chunk k+1 is read while chunk k renders.
+    It is a cache and never an authority: every failure here degrades to exactly
+    the archive read the buffer existed to avoid, so a prefetch problem can cost
+    throughput but can never fail a render.
+    """
+
+    def __init__(self, directory: Path, db_path: Path | None) -> None:
+        self.directory = Path(directory)
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self._db_path = db_path
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="prefetch")
+        self._pending: Future | None = None
+        self.buffered = 0
+        self.errors = 0
+
+    def activate(self) -> None:
+        """Point every ``read_bytes`` at this buffer for the rest of the run."""
+        set_prefetch_dir(self.directory)
+
+    def submit(self, source_paths: list[str]) -> None:
+        if self._pending is not None:
+            self.take()
+        if source_paths:
+            self._pending = self._executor.submit(
+                prefetch, source_paths, self.directory, db_path=self._db_path
+            )
+
+    def take(self) -> list[Path]:
+        """Wait for the outstanding chunk and report the copies it buffered."""
+        pending, self._pending = self._pending, None
+        if pending is None:
+            return []
+        try:
+            fetched = list(pending.result().values())
+        except Exception:  # noqa: BLE001 - a cold buffer is slower, never wrong
+            self.errors += 1
+            return []
+        self.buffered += len(fetched)
+        return fetched
+
+    def path_for(self, source_path: object) -> Path:
+        return self.directory / prefetch_name(str(source_path))
+
+    def close(self) -> None:
+        self._pending = None
+        self._executor.shutdown(wait=True, cancel_futures=True)
+        set_prefetch_dir(None)
+        # The buffer is rebuildable by definition and a finished build must not
+        # sit on the tmpfs it borrowed; a resume re-reads at sequential speed.
+        shutil.rmtree(self.directory, ignore_errors=True)
 
 
 class CanonicalPipeline:
@@ -193,10 +635,44 @@ class CanonicalPipeline:
         self.renderer: Renderer | None = renderer
         self.scorer: Scorer | None = scorer
         self.store = store
+        self._source_context = threading.local()
+        self._staged_lock = threading.Lock()
+        # Both scorer copies can be inside a ranking call at once, so the window
+        # has to fund a turn holder plus the sources decoding ahead of it.  It is
+        # its own key: ``gpu_concurrency`` also sizes the render semaphore, and
+        # the two no longer move together.  Injected dependencies (every test that
+        # does not opt in) keep the pre-pool window.
+        self._source_window = (
+            config.render.source_window
+            if dependencies.scorer_pool_factory is not None
+            else min(2, config.render.gpu_concurrency)
+        )
+        self._source_executor = ThreadPoolExecutor(
+            max_workers=self._source_window,
+            thread_name_prefix="databuild-source",
+        )
+        self._render_executor = ThreadPoolExecutor(
+            max_workers=config.render.gpu_concurrency,
+            thread_name_prefix="databuild-render",
+        )
+        self._postprocess_executor = ThreadPoolExecutor(
+            max_workers=config.render.postprocess_workers,
+            thread_name_prefix="databuild-postprocess",
+        )
         self.started_at = str(
             (existing_manifest or {}).get("started_at")
             or _timestamp(self.dependencies.now())
         )
+        self._phase = "preflight"
+        self._annotation_sync: dict[str, int] = {}
+        # No archive root means nothing was ever landed there and nothing can be
+        # prefetched from it, which is also what every hand-built dependency set
+        # (that is, every test) gets.
+        self._prefetch = (
+            _SourcePrefetch(store.root / "prefetch", dependencies.catalog_db)
+            if dependencies.archive_root is not None else None
+        )
+        self._recalibrate_staged()
         self.allocation = allocate_sources(
             inventory.eligible,
             build_id=config.build_id,
@@ -247,7 +723,7 @@ class CanonicalPipeline:
             "failure", self.config.build_id, event_type, stage, task_id, error_code,
             round_number, attempt, group_id, candidate_id, endpoint_id,
         )
-        return self.store.append_failure({
+        row = {
             "build_id": self.config.build_id,
             "event_id": event_id,
             "event_type": event_type,
@@ -265,13 +741,23 @@ class CanonicalPipeline:
             "endpoint_id": endpoint_id,
             "terminal": terminal,
             "timestamp": _timestamp(self.dependencies.now()),
-        }, durable=durable)
+        }
+        buffered = getattr(self._source_context, "failures", None)
+        if buffered is not None:
+            buffered.append(_BufferedFailure(row=row, durable=durable))
+            return True
+        return self.store.append_failure(row, durable=durable)
 
-    def _mode_groups(self, mode: str) -> list[dict[str, Any]]:
+    def _live_groups(self) -> list[dict[str, Any]]:
+        """Durable groups whose assets still exist; the rest are accounted, not used."""
+        lost = self.store.lost_group_ids()
         return [
             row for row in self.store.groups.values()
-            if row.get("render_mode") == mode
+            if str(row.get("group_id")) not in lost
         ]
+
+    def _mode_groups(self, mode: str) -> list[dict[str, Any]]:
+        return [row for row in self._live_groups() if row.get("render_mode") == mode]
 
     def _terminal_source_ids(self) -> set[str]:
         return {
@@ -314,9 +800,11 @@ class CanonicalPipeline:
     def _manifest(self, phase: str, status: str = "running") -> dict[str, Any]:
         local_groups = self._mode_groups("local")
         global_groups = self._mode_groups("global")
+        lost_groups = self.store.lost_group_ids()
+        live_groups = local_groups + global_groups
         candidates = [
             candidate
-            for group in self.store.groups.values()
+            for group in live_groups
             for candidate in group.get("candidates") or []
         ]
         terminal_failures = [row for row in self.store.failures if row.get("terminal")]
@@ -379,11 +867,22 @@ class CanonicalPipeline:
                 "global": len(global_groups),
                 "actual_ratio": ratio,
                 "candidates": len(candidates),
-                "winner_top1": sum(bool(row.get("winner_ids")) for row in self.store.groups.values()),
+                "winner_top1": sum(bool(row.get("winner_ids")) for row in live_groups),
                 "winner_top2": sum(len(row.get("winner_ids") or []) >= 2
-                                   for row in self.store.groups.values()),
-                "sft": len(self.store.sft),
+                                   for row in live_groups),
+                # Groups whose winner the margin policy refused.  Distinct from
+                # the always-existing "no candidate cleared SFT_THRESHOLD" groups,
+                # which carry no verdict at all.
+                "winner_abstained": sum(row.get("winner_confidence") == "abstain"
+                                        for row in live_groups),
+                "sft": sum(
+                    str(row.get("group_id")) not in lost_groups
+                    for row in self.store.sft.values()
+                ),
+                "groups_assets_lost": len(lost_groups),
             },
+            "landing": self._landing_counts(),
+            "prefetch": self._prefetch_counts(),
             "sources": {
                 "inventory": self.inventory.counts,
                 "scene_metadata_status": self.inventory.scene_metadata_status,
@@ -439,6 +938,33 @@ class CanonicalPipeline:
             },
         }
 
+    def _landing_counts(self) -> dict[str, Any]:
+        landed = [row for row in self.store.failures if row.get("stage") == "landing"]
+        summaries = [str(row.get("message")) for row in landed]
+        return {
+            "checkpoints": len(landed),
+            # One JSON summary per checkpoint, as it was journalled.
+            "checkpoint_summaries": summaries,
+            # Winners whose input image reached the SFT dataset as a member.  It
+            # is the durable count rather than the winner count because a source
+            # the archive cannot serve lands without I_in instead of failing the
+            # checkpoint; a healthy build has the two agreeing.
+            "i_in_members": sum(_summary_count(text, "i_in") for text in summaries),
+            "sft_winners": sum(_summary_count(text, "winners") for text in summaries),
+            "annotation_status": dict(self._annotation_sync),
+        }
+
+    def _prefetch_counts(self) -> dict[str, Any]:
+        if self._prefetch is None:
+            return {"enabled": False, "buffered": 0, "errors": 0}
+        return {
+            "enabled": True,
+            "buffered": self._prefetch.buffered,
+            # Non-zero means the round fell back to random archive reads, which
+            # costs throughput and nothing else — worth seeing, never fatal.
+            "errors": self._prefetch.errors,
+        }
+
     def _failure_counts(self) -> dict[str, int]:
         result: dict[str, int] = {}
         for row in self.store.failures:
@@ -466,8 +992,420 @@ class CanonicalPipeline:
         }
 
     def _write_phase(self, phase: str) -> None:
+        self._phase = phase
         self.store.write_manifest(self._manifest(phase))
         self.store.checkpoint()
+
+    @staticmethod
+    def _group_assets(group: Mapping[str, Any]) -> list[str]:
+        """Every physical file a group owns, in a stable order, without duplicates."""
+        paths: dict[str, None] = {}
+        for candidate in group.get("candidates") or []:
+            for key in ("after_path", "cgt_path"):
+                value = candidate.get(key)
+                if value:
+                    paths[str(value)] = None
+        return list(paths)
+
+    def _asset_directories(self) -> tuple[Path, ...]:
+        directories = [
+            self.store.assets_root / "candidates",
+            self.store.assets_root / "masks",
+        ]
+        if self._prefetch is not None:
+            # The buffer competes for the same tmpfs, so the water mark has to
+            # count it; it is not an asset, so the orphan sweep must not reap it.
+            directories.append(self._prefetch.directory)
+        return tuple(directories)
+
+    def _recalibrate_staged(self) -> None:
+        """Re-measure the staging tree; the water mark's only full scan.
+
+        Scanning per source cost minutes over a build (tens of thousands of files
+        × 22k sources), so the counter is maintained incrementally instead and
+        this runs only where a scan is already being paid for: once at startup,
+        so a resume inherits the assets a previous run left behind, and inside
+        the orphan sweep, which walks the same directories anyway.
+        """
+        sizes: dict[str, int] = {}
+        for directory in self._asset_directories():
+            if not directory.is_dir():
+                continue
+            with os.scandir(directory) as scan:
+                for entry in scan:
+                    if entry.is_file():
+                        sizes[entry.path] = entry.stat().st_size
+        with self._staged_lock:
+            self._staged = sizes
+            self._staged_bytes = sum(sizes.values())
+
+    def _account_asset(self, path: Path) -> None:
+        """Fold one freshly written asset in, replacing any size it overwrote.
+
+        A refilled slot rewrites the same candidate JPEG and every group attempt
+        rewrites the same C_GT, so a plain addition would drift upward forever.
+        """
+        size = path.stat().st_size
+        with self._staged_lock:
+            self._staged_bytes += size - self._staged.get(str(path), 0)
+            self._staged[str(path)] = size
+
+    def _staged_size(self) -> int:
+        with self._staged_lock:
+            return self._staged_bytes
+
+    def _landed_datasets(self, root: Path) -> list[str]:
+        """Every batch this build has published, read off the archive itself.
+
+        ``_land_groups`` publishes into ``groups/<build_id>/<batch>`` and
+        ``sft/<build_id>/<batch>``, so the layout is the record — and a more
+        complete one than the journalled checkpoint summaries, which are written
+        after the publish and therefore miss a batch that landed just before the
+        crash.  Re-registering a batch that is already indexed is idempotent, so
+        the list needs no bookkeeping.
+        """
+        names: list[str] = []
+        for kind in ("groups", "sft"):
+            base = root / kind / self.config.build_id
+            if not base.is_dir():
+                continue
+            for manifest in sorted(base.glob("*/manifest.json")):
+                names.append(manifest.parent.relative_to(root).as_posix())
+        return names
+
+    def _refresh_catalog(self) -> None:
+        """Re-index this build's landed batches so their assets answer to staging paths."""
+        root = self.dependencies.archive_root
+        if root is None or not Path(root).is_dir():
+            return
+        # A checkpoint re-registers this build's own batches — a handful of
+        # groups in an archive of hundreds; the full rebuild re-read all 5.5 M
+        # members for them (~390 s of silence before annotation).  Anything else
+        # in the archive was indexed by whoever published it.
+        upsert_catalog(
+            Path(root),
+            self.dependencies.catalog_db or default_db(),
+            self._landed_datasets(Path(root)),
+        )
+        # immutable=1 pins the pre-refresh snapshot; cached readers must reopen
+        # or every landed path stays invisible to this process (eval100 全灭根因).
+        invalidate_shared()
+
+    def _verify_group_assets(self) -> None:
+        """Account for groups whose assets died with the tmpfs before landing."""
+        lost = self.store.lost_group_ids()
+        suspects: list[tuple[dict[str, Any], list[str]]] = []
+        for group in self.store.groups.values():
+            if str(group.get("group_id")) in lost:
+                continue
+            missing = [
+                path for path in self._group_assets(group) if not Path(path).is_file()
+            ]
+            if missing:
+                suspects.append((group, missing))
+        if not suspects:
+            return
+        # A landed asset only resolves through the archive, so the reverse map has
+        # to be current before absence is called loss.  Without an archive root
+        # nothing was ever landed and absence needs no second opinion.
+        archived = self.dependencies.archive_root is not None
+        if archived:
+            self._refresh_catalog()
+        for group, missing in suspects:
+            if archived and all(
+                path_exists(path, db_path=self.dependencies.catalog_db)
+                for path in missing
+            ):
+                continue
+            self._failure(
+                event_type="terminal",
+                stage="rendering",
+                task_id=stable_id("group-assets", str(group["group_id"])),
+                error_code=ASSETS_LOST_CODE,
+                message="rendered assets are neither staged nor archived",
+                retryable=False,
+                terminal=True,
+                group_id=str(group["group_id"]),
+                durable=True,
+            )
+
+    def _stage_asset(
+        self,
+        directory: Path,
+        candidate: Mapping[str, Any],
+        sequence: int,
+        aliases: dict[str, str],
+    ) -> str:
+        """Hardlink one candidate's files as one sample, keyed in production order.
+
+        The packer emits members in member-name order, so the ordinal prefix is
+        what makes the archived order the order the groups were built in — one
+        group's eight candidates land contiguous and slot-ordered, which is how
+        both the viewer and training read them back.
+        """
+        directory.mkdir(parents=True, exist_ok=True)
+        key = f"{sequence:06d}_{candidate['candidate_id']}"
+        for field, extension in (("after_path", ".jpg"), ("cgt_path", ".cgt.png")):
+            original = candidate.get(field)
+            if not original:
+                continue
+            link = directory / f"{key}{extension}"
+            if not link.exists():
+                # Two slots may share one C_GT; the second link is the same inode.
+                os.link(str(original), link)
+            aliases[str(link)] = str(original)
+        return key
+
+    def _stage_i_in(
+        self, directory: Path, key: str, group: Mapping[str, Any], aliases: dict[str, str]
+    ) -> int:
+        """Materialise the winner's input image as one more member of its sample.
+
+        ``read_bytes`` is local-first and then prefetch-first, so at this point in
+        a round the bytes are normally already on the tmpfs and the SFT dataset
+        gains its ``I_in`` member without a second archive read.  It is aliased to
+        the original source path, exactly as ``tools/sft_pack.py`` does, so both
+        the rebuild tool and this checkpoint teach the catalog the same key.
+
+        A source that cannot be read is not worth failing a whole checkpoint for:
+        that sample lands without ``I_in`` (sft.jsonl still carries the path) and
+        the manifest's ``i_in_members`` count reports the shortfall.
+        """
+        source_path = str(group.get("source_path") or "")
+        if not source_path:
+            return 0
+        try:
+            payload = read_bytes(source_path, db_path=self.dependencies.catalog_db)
+        except Exception:  # noqa: BLE001 - the SFT view degrades, the checkpoint does not
+            return 0
+        target = directory / f"{key}.in{Path(source_path).suffix.lower() or '.bin'}"
+        target.write_bytes(payload)
+        aliases[str(target)] = source_path
+        return 1
+
+    def _land_metadata(
+        self, group: Mapping[str, Any], candidate: Mapping[str, Any], winner_rank: int | None
+    ) -> dict[str, Any]:
+        return {
+            "build_id": self.config.build_id,
+            "group_id": group.get("group_id"),
+            "source_id": group.get("source_id"),
+            # Not "source_path": that key names the archived member's own origin.
+            "i_in_path": group.get("source_path"),
+            "scene": group.get("scene"),
+            "render_mode": group.get("render_mode"),
+            "candidate_id": candidate.get("candidate_id"),
+            "preset_id": candidate.get("preset_id"),
+            "format": candidate.get("format"),
+            "major": candidate.get("major"),
+            "minor": candidate.get("minor"),
+            "slot_id": candidate.get("slot_id"),
+            "mask_id": candidate.get("mask_id"),
+            "region": candidate.get("region"),
+            "qa": candidate.get("qa"),
+            "rank": candidate.get("rank"),
+            "winner_rank": winner_rank,
+            # Mirrors ``tools/sft_pack.py``'s sample metadata so a landed sample
+            # and a repacked one describe the winner the same way.  ``.get``
+            # keeps groups journalled before the policy existed landable.
+            "winner_confidence": group.get("winner_confidence"),
+        }
+
+    def _land_groups(self) -> dict[str, Any] | None:
+        """Publish every fully staged group into both datasets, then drop staging."""
+        archive_root = Path(self.dependencies.archive_root)  # type: ignore[arg-type]
+        # Landing is the only writer here and a half-built batch is always garbage,
+        # so the staging tree is dropped first rather than reconciled — leftover
+        # hardlinks would otherwise pin the bytes of already landed assets.
+        staging_root = self.store.root / ".land"
+        shutil.rmtree(staging_root, ignore_errors=True)
+        pending = [
+            group for group in self._live_groups()
+            if all(Path(path).is_file() for path in self._group_assets(group))
+        ]
+        if not pending:
+            return None
+        groups_dir, sft_dir = staging_root / "groups", staging_root / "sft"
+        aliases: dict[str, str] = {}
+        by_key: dict[str, dict[str, Any]] = {}
+        staged = winners_staged = i_in_members = 0
+        for group in pending:
+            winners = list(group.get("winner_ids") or [])
+            for candidate in group["candidates"]:
+                candidate_id = str(candidate["candidate_id"])
+                rank = (
+                    winners.index(candidate_id) + 1 if candidate_id in winners else None
+                )
+                meta = self._land_metadata(group, candidate, rank)
+                by_key[self._stage_asset(groups_dir, candidate, staged, aliases)] = meta
+                staged += 1
+                if rank is not None:
+                    winner_key = self._stage_asset(
+                        sft_dir, candidate, winners_staged, aliases
+                    )
+                    by_key[winner_key] = meta
+                    i_in_members += self._stage_i_in(sft_dir, winner_key, group, aliases)
+                    winners_staged += 1
+
+        def enrich(_key: str, members: Mapping[str, Path]) -> Mapping[str, object] | None:
+            first = next(iter(members.values()))
+            return by_key.get(Path(first).name.partition(".")[0])
+
+        targets = [(groups_dir, f"groups/{self.config.build_id}")]
+        if sft_dir.is_dir():
+            # Only staged when this batch actually holds a winner; a batch without
+            # one publishes the groups dataset alone rather than an empty tar.
+            targets.append((sft_dir, f"sft/{self.config.build_id}"))
+        published = []
+        for directory, group_name in targets:
+            published.append(land(
+                directory,
+                group_name,
+                archive_root,
+                plan_root=staging_root / "plans",
+                meta_staging=staging_root / "meta",
+                source_paths=aliases,
+                enrich=enrich,
+                keep_staging=True,
+            ))
+        # Both datasets verified, so the staging bytes are now redundant.
+        for group in pending:
+            for path in self._group_assets(group):
+                Path(path).unlink(missing_ok=True)
+        shutil.rmtree(staging_root, ignore_errors=True)
+        result = {
+            "groups": len(pending),
+            "datasets": [str(item["group"]) for item in published],
+            "members": sum(int(item["members"]) for item in published),
+            "i_in": i_in_members,
+            "winners": winners_staged,
+        }
+        self._failure(
+            event_type="landed",
+            stage="landing",
+            task_id=stable_id("land", str(published[0]["group"])),
+            error_code="land_checkpoint",
+            message=json.dumps(result, sort_keys=True),
+            retryable=False,
+            terminal=False,
+            durable=True,
+        )
+        return result
+
+    def _winner_annotation_status(self) -> dict[str, dict[str, Any]]:
+        """Each landed winner's final annotation outcome, keyed by candidate."""
+        status: dict[str, dict[str, Any]] = {}
+        for row in self.store.failures:
+            candidate_id = row.get("candidate_id")
+            if row.get("stage") == "annotation" and row.get("terminal") and candidate_id:
+                status[str(candidate_id)] = {
+                    "annotated": False,
+                    "sft_id": None,
+                    "annotation_failure_code": str(row.get("error_code") or "annotation_failed"),
+                }
+        # An SFT row is the definitive outcome: a task that produced one was not
+        # abandoned, whatever earlier attempts recorded.
+        for row in self.store.sft.values():
+            candidate_id = row.get("candidate_id")
+            if candidate_id:
+                status[str(candidate_id)] = {
+                    "annotated": True,
+                    "sft_id": str(row.get("sft_id") or ""),
+                    "annotation_failure_code": None,
+                }
+        return status
+
+    def _sync_annotation_status(self) -> dict[str, int]:
+        """Write each winner's annotation outcome into the published SFT metadata.
+
+        The tar members were packed at QA time, when the winner was known but its
+        text did not exist yet; ``metadata.jsonl`` is the one archived file the
+        landing contract allows a producer to rewrite afterwards, so it is where
+        "did this sample end up with an instruction" belongs.  Every member row of
+        a winner's sample carries the flag, which is also what puts it in the
+        catalog's sample payload on the next rebuild.
+
+        A failed winner keeps its bytes: the tar is append-only and the sample is
+        still a legitimate render, it simply has no training text.
+        """
+        root = self.dependencies.archive_root
+        if root is None:
+            return {}
+        status = self._winner_annotation_status()
+        batches = sorted(Path(root).glob(f"sft/{self.config.build_id}/batch-*"))
+        rewritten = samples = 0
+        for dataset in batches:
+            metadata = dataset / "metadata.jsonl"
+            if not metadata.is_file():
+                continue
+            rows = [
+                json.loads(line)
+                for line in metadata.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            # Only the sample-level ``.vrmeta.json`` row names the candidate, so
+            # it is what maps the archive's sample key onto this build's winner.
+            by_sample = {
+                str(row["sample_id"]): str(row["candidate_id"])
+                for row in rows
+                if row.get("sample_id") and row.get("candidate_id")
+            }
+            samples += sum(1 for value in by_sample.values() if value in status)
+            changed = False
+            for row in rows:
+                fields = status.get(by_sample.get(str(row.get("sample_id") or ""), ""))
+                if fields is None or all(row.get(k) == v for k, v in fields.items()):
+                    continue
+                row.update(fields)
+                changed = True
+            # Rewriting an unchanged file would only churn the archive: a resume
+            # re-derives the same outcome and has nothing to say.
+            if changed:
+                _write_jsonl_atomic(metadata, rows)
+                rewritten += 1
+        return {"datasets": rewritten, "samples": samples, "winners": len(status)}
+
+    def _clean_orphan_assets(self) -> int:
+        """Reclaim assets of abandoned group attempts: nothing durable names them.
+
+        The rescan also re-bases the water mark, which is what accounts for the
+        assets ``_land_groups`` just unlinked.
+        """
+        referenced = {
+            path
+            for group in self.store.groups.values()
+            for path in self._group_assets(group)
+        }
+        self._recalibrate_staged()
+        buffer = (
+            str(self._prefetch.directory) + os.sep if self._prefetch is not None else None
+        )
+        orphans = [
+            path for path in self._staged
+            if path not in referenced and not (buffer and path.startswith(buffer))
+        ]
+        for path in orphans:
+            os.unlink(path)
+            self._staged_bytes -= self._staged.pop(path)
+        return len(orphans)
+
+    def _land_checkpoint(self, *, force: bool = False) -> dict[str, Any] | None:
+        """Publish, mirror and reclaim — the whole durability step, in one place."""
+        if self.dependencies.archive_root is None and self.dependencies.mirror_root is None:
+            return None
+        if not force and self._staged_bytes < LAND_WATERMARK_BYTES:
+            return None
+        result = None
+        if self.dependencies.archive_root is not None:
+            result = self._land_groups()
+            self._clean_orphan_assets()
+        if self.dependencies.mirror_root is not None:
+            self.store.checkpoint()
+            self.store.write_manifest(self._manifest(self._phase))
+            mirror_artifacts(
+                self.store.root, Path(self.dependencies.mirror_root) / self.config.build_id
+            )
+        return result
 
     def _queue_sam3(self, source: SourceRecord, error: MaskPlanError) -> None:
         task_id = stable_id("sam3", self.config.build_id, source.source_id)
@@ -498,13 +1436,354 @@ class CanonicalPipeline:
             durable=True,
         )
 
+    def _record_candidate_failure(
+        self,
+        *,
+        source: SourceRecord,
+        group_id: str,
+        group_attempt: int,
+        pending: _PendingCandidate,
+        error: Exception,
+    ) -> None:
+        code = getattr(error, "code", None) or (
+            "visibility_rejected" if isinstance(error, PipelineError)
+            else "visibility_invalid_weights" if isinstance(error, VisibilityError)
+            else "candidate_render_failed"
+        )
+        self._failure(
+            event_type="attempt",
+            stage="rendering",
+            task_id=pending.attempt_task_id,
+            error_code=str(code),
+            message=error,
+            retryable=True,
+            terminal=False,
+            source=source,
+            group_id=group_id,
+            round_number=group_attempt,
+            attempt=pending.preset_reservation.attempt,
+        )
+
+    def _cgt_path(self, mask: Any) -> Path:
+        return self.store.assets_root / "masks" / f"{mask.mask_id}.png"
+
+    def _start_cgt_writes(self, slots: list[Any]) -> dict[str, Future[Path]]:
+        """Encode this source's C_GT set once, ahead of and outside its turn.
+
+        A local plan has seven physical masks behind eight slots (the two
+        semantic slots share one), and every group attempt of the source reuses
+        them, so the fan-out is keyed by ``mask_id`` and submitted once.  Doing it
+        here — before the turn is even claimed — keeps 243 ms of PNG encoding per
+        group off the critical section every other source is waiting on, while
+        ``_render_source`` still joins the writes before anything durable can
+        name them.
+        """
+        futures: dict[str, Future[Path]] = {}
+        for slot in slots:
+            mask = slot.mask
+            if mask.mask_id in futures:
+                continue
+            futures[mask.mask_id] = self._postprocess_executor.submit(
+                _write_cgt_once, mask, self._cgt_path(mask)
+            )
+        return futures
+
+    def _start_candidate(
+        self,
+        *,
+        source: SourceRecord,
+        prepared: Any,
+        postprocess_reference: Any,
+        group_id: str,
+        group_attempt: int,
+        mode: str,
+        reservation: Any,
+        slot_index: int,
+        slot: Any,
+    ) -> _PendingCandidate | None:
+        """Reserve and render one attempt for deferred serial resolution."""
+        pending, _ = self._start_candidate_batch(
+            source=source,
+            prepared=prepared,
+            postprocess_reference=postprocess_reference,
+            group_id=group_id,
+            group_attempt=group_attempt,
+            mode=mode,
+            reservation=reservation,
+            indexed_slots=[(slot_index, slot)],
+        )
+        return pending[0] if pending else None
+
+    def _start_candidate_batch(
+        self,
+        *,
+        source: SourceRecord,
+        prepared: Any,
+        postprocess_reference: Any,
+        group_id: str,
+        group_attempt: int,
+        mode: str,
+        reservation: Any,
+        indexed_slots: list[tuple[int, Any]],
+    ) -> tuple[list[_PendingCandidate], bool]:
+        """Reserve a slot wave, batch production renders, then defer ordered resolution."""
+        if self.renderer is None:
+            raise PipelineError("render resource is not loaded")
+        attempts: list[_CandidateAttempt] = []
+        exhausted = False
+        for slot_index, slot in indexed_slots:
+            slot_id = slot.slot_id if mode == "local" else str(slot)
+            preset_reservation = reservation.reserve_candidate(slot_id)
+            if preset_reservation is None:
+                exhausted = True
+                break
+            preset = preset_reservation.link.preset
+            candidate_id = stable_id("candidate", group_id, slot_id)
+            attempts.append(_CandidateAttempt(
+                slot_index=slot_index,
+                slot=slot,
+                slot_id=slot_id,
+                preset_reservation=preset_reservation,
+                attempt_task_id=stable_id(
+                    "render-attempt", group_id, slot_id,
+                    preset_reservation.attempt, preset.preset_id,
+                ),
+                candidate_id=candidate_id,
+                after_path=self.store.assets_root / "candidates" / f"{candidate_id}.jpg",
+            ))
+
+        requests = [
+            (
+                attempt.preset_reservation.link.preset,
+                attempt.slot.mask if mode == "local" else None,
+            )
+            for attempt in attempts
+        ]
+        try:
+            render_many = getattr(self.renderer, "render_many")
+        except AttributeError:
+            render_many = None
+        rendered_results: list[Any] = [None] * len(attempts)
+        postprocess_futures: dict[int, Future[_PostprocessResult]] = {}
+
+        def accept_rendered(index: int, rendered: Any) -> None:
+            rendered_results[index] = rendered
+            if isinstance(rendered, Exception):
+                return
+            mask = attempts[index].slot.mask if mode == "local" else None
+            postprocess_futures[index] = self._postprocess_executor.submit(
+                _postprocess_candidate,
+                postprocess_reference,
+                rendered.pixels,
+                mask.effective_alpha if mask is not None else None,
+                attempts[index].after_path,
+                self.config.render,
+            )
+
+        # Unmasked LUT batches are faster as one render_many call: the two-wave
+        # path uses the same physical GPU and otherwise uploads the source twice.
+        # Mask validation and parameter replay retain the concurrent wave path.
+        unmasked_lut_batch = all(
+            preset.format == "lut" and mask is None
+            for preset, mask in requests
+        )
+        if callable(render_many) and len(requests) > 1 \
+                and self.config.render.gpu_concurrency > 1 \
+                and not unmasked_lut_batch:
+            worker_count = min(self.config.render.gpu_concurrency, len(requests))
+            chunks = [list(range(worker, len(requests), worker_count))
+                      for worker in range(worker_count)]
+            render_futures = {
+                self._render_executor.submit(
+                    render_many, prepared, [requests[index] for index in indices]
+                ): indices
+                for indices in chunks
+            }
+            for future in as_completed(render_futures):
+                indices = render_futures[future]
+                try:
+                    chunk_results = list(future.result())
+                    if len(chunk_results) != len(indices):
+                        raise PipelineError("batched renderer returned the wrong slot count")
+                except Exception as exc:  # resolved and journaled in stable slot order
+                    chunk_results = [exc] * len(indices)
+                for index, rendered in zip(indices, chunk_results):
+                    accept_rendered(index, rendered)
+        elif callable(render_many):
+            try:
+                chunk_results = list(render_many(prepared, requests))
+                if len(chunk_results) != len(attempts):
+                    raise PipelineError("batched renderer returned the wrong slot count")
+            except Exception as exc:  # resolved and journaled in stable slot order
+                chunk_results = [exc] * len(attempts)
+            for index, rendered in enumerate(chunk_results):
+                accept_rendered(index, rendered)
+        else:
+            for index, (preset, mask) in enumerate(requests):
+                try:
+                    rendered = self.renderer.render(prepared, preset, mask)
+                except Exception as exc:  # resolved and journaled in stable slot order
+                    rendered = exc
+                accept_rendered(index, rendered)
+
+        pending: list[_PendingCandidate] = []
+        for index, (attempt, rendered) in enumerate(zip(attempts, rendered_results)):
+            if isinstance(rendered, Exception):
+                future: Future = Future()
+                future.set_exception(rendered)
+                render_value = None
+            else:
+                future = postprocess_futures[index]
+                render_value = rendered
+            pending.append(_PendingCandidate(
+                slot_index=attempt.slot_index,
+                slot=attempt.slot,
+                slot_id=attempt.slot_id,
+                preset_reservation=attempt.preset_reservation,
+                attempt_task_id=attempt.attempt_task_id,
+                candidate_id=attempt.candidate_id,
+                after_path=attempt.after_path,
+                rendered=render_value,
+                future=future,
+            ))
+        return pending, exhausted
+
+    def _resolve_candidate(
+        self,
+        *,
+        source: SourceRecord,
+        prepared: Any,
+        postprocess_reference: Any,
+        group_id: str,
+        group_attempt: int,
+        mode: str,
+        reservation: Any,
+        pending: _PendingCandidate,
+        before_retry: Callable[[], None] | None = None,
+    ) -> dict[str, Any] | None:
+        """Resolve one slot in serial order, retrying it without reordering events."""
+        while True:
+            try:
+                result = pending.future.result()
+            except Exception as exc:  # noqa: BLE001 - refill this exact slot
+                self._record_candidate_failure(
+                    source=source,
+                    group_id=group_id,
+                    group_attempt=group_attempt,
+                    pending=pending,
+                    error=exc,
+                )
+                if before_retry is not None:
+                    before_retry()
+                reservation.reject(pending.preset_reservation)
+                replacement = self._start_candidate(
+                    source=source,
+                    prepared=prepared,
+                    postprocess_reference=postprocess_reference,
+                    group_id=group_id,
+                    group_attempt=group_attempt,
+                    mode=mode,
+                    reservation=reservation,
+                    slot_index=pending.slot_index,
+                    slot=pending.slot,
+                )
+                if replacement is None:
+                    return None
+                pending = replacement
+                continue
+
+            preset_reservation = pending.preset_reservation
+            preset = preset_reservation.link.preset
+            if pending.rendered is None:
+                raise PipelineError("successful candidate is missing its render result")
+            mask = pending.slot.mask if mode == "local" else None
+            self._account_asset(pending.after_path)
+            # The PNG itself is encoded off the selector turn by ``_start_cgt_writes``
+            # and joined before the group can be journaled; only its name is needed
+            # to describe the candidate.
+            cgt_path: Path | None = None
+            if mask is not None:
+                cgt_path = self._cgt_path(mask)
+            recipe = {
+                "preset_id": preset.preset_id,
+                "preset_path": str(preset.path),
+                "format": preset.format,
+                "render_engine": pending.rendered.engine,
+                "render_mode": mode,
+            }
+            candidate: dict[str, Any] = {
+                "candidate_id": pending.candidate_id,
+                "slot_id": pending.slot_id,
+                "slot_index": pending.slot_index,
+                "preset_id": preset.preset_id,
+                "preset_path": str(preset.path),
+                "format": preset.format,
+                "kind": preset.kind,
+                "style_name": preset.style_name,
+                "major": preset_reservation.link.major,
+                "minor": preset_reservation.link.minor,
+                "after_path": str(pending.after_path),
+                "render_engine": pending.rendered.engine,
+                "render_diagnostics": pending.rendered.diagnostics,
+                "visibility": {
+                    "visible_de": round(result.metrics.visible_de, 6),
+                    "visible_fraction": round(result.metrics.visible_fraction, 6),
+                    "accepted": True,
+                },
+                "objective_hints": result.hints,
+                "_qa_stats": result.qa_stats,
+                "attempt_lineage": {
+                    "group_attempt": group_attempt,
+                    "preset_attempt": preset_reservation.attempt,
+                    "preset_reservation_id": preset_reservation.reservation_id,
+                },
+                "recipe": recipe,
+            }
+            if mask is not None:
+                recipe.update({"mask_id": mask.mask_id, "amount": mask.amount})
+                candidate.update({
+                    "slot_mode": pending.slot.mode,
+                    "mode_index": pending.slot.mode_index,
+                    "pairing_index": pending.slot.pairing_index,
+                    "mask_id": mask.mask_id,
+                    "cgt_path": str(cgt_path),
+                    "subject": source.subject,
+                    "region": mask.region,
+                    "geometry": mask.geometry,
+                    "raw_alpha_mean": round(mask.raw_alpha_mean, 8),
+                    "amount": round(mask.amount, 8),
+                    "effective_alpha_mean": round(mask.effective_alpha_mean, 8),
+                })
+            reservation.accept(preset_reservation)
+            return candidate
+
+    @staticmethod
+    def _cancel_pending_candidates(
+        pending: list[_PendingCandidate],
+        *,
+        reservation: Any | None = None,
+    ) -> None:
+        """Quiesce speculative CPU work before abandoning its reservation."""
+        for candidate in pending:
+            candidate.future.cancel()
+        for candidate in pending:
+            try:
+                candidate.future.result()
+            except Exception:
+                pass
+        if reservation is not None:
+            for candidate in reversed(pending):
+                reservation.cancel_speculative(candidate.preset_reservation)
+
     def _render_source(
         self,
         source: SourceRecord,
         mode: str,
         *,
         queue_mask_failure: bool = True,
-    ) -> str:
+        defer_commit: bool = False,
+        selector_turn: _SelectorTurn | None = None,
+    ) -> str | _DeferredGroupCommit:
         if self.renderer is None or self.scorer is None:
             raise PipelineError("render/QA resources are not loaded")
         selector = self.selectors[mode]
@@ -515,6 +1794,16 @@ class CanonicalPipeline:
         except Exception as exc:  # noqa: BLE001 - a corrupt source is replaced in its mode
             self._terminal_source(source, "rendering", "source_preprocess_failed", exc)
             return "terminal"
+        working_reference = prepare_working_reference(
+            prepared.pixels, self.config.render.diff_short_edge
+        )
+        torch_reference = (
+            prepare_torch_lab_reference(working_reference, self.renderer.device)
+            if self.config.render.visibility_backend == "torch" else None
+        )
+        postprocess_reference = _PostprocessReference(
+            working=working_reference, torch=torch_reference
+        )
 
         slots: list[Any]
         if mode == "local":
@@ -541,7 +1830,12 @@ class CanonicalPipeline:
         else:
             slots = [f"global-{index}" for index in range(8)]
 
+        cgt_writes = self._start_cgt_writes(slots) if mode == "local" else {}
+        if selector_turn is not None:
+            selector_turn.ready.wait()
+        selector_handed_off = False
         excluded_majors: list[str] = []
+        cgt_error: Exception | None = None
         for group_attempt in range(len(selector.majors)):
             group_id = stable_id(
                 "group", self.config.build_id, source.source_id, mode, group_attempt
@@ -552,129 +1846,104 @@ class CanonicalPipeline:
                 reservation = selector.begin_group(
                     source.source_id, group_attempt, exclude_majors=excluded_majors
                 )
+                if cgt_error is not None:
+                    # The C_GT futures are submitted once for the whole source, so
+                    # a write that already failed cannot succeed on a later major.
+                    # Fail this attempt where the barrier below would have failed
+                    # it anyway, instead of rendering eight candidates first.
+                    raise cgt_error
                 candidates: list[dict[str, Any]] = []
                 exhausted = False
-                for slot_index, slot in enumerate(slots):
-                    slot_id = slot.slot_id if mode == "local" else str(slot)
-                    while True:
-                        preset_reservation = reservation.reserve_candidate(slot_id)
-                        if preset_reservation is None:
-                            exhausted = True
-                            break
-                        preset = preset_reservation.link.preset
-                        attempt_task_id = stable_id(
-                            "render-attempt", group_id, slot_id,
-                            preset_reservation.attempt, preset.preset_id,
+                pending_candidates, exhausted = self._start_candidate_batch(
+                    source=source,
+                    prepared=prepared,
+                    postprocess_reference=postprocess_reference,
+                    group_id=group_id,
+                    group_attempt=group_attempt,
+                    mode=mode,
+                    reservation=reservation,
+                    indexed_slots=list(enumerate(slots)),
+                )
+                if not exhausted:
+                    pending_index = 0
+                    while pending_index < len(slots):
+                        pending = pending_candidates[pending_index]
+
+                        def rollback_later() -> None:
+                            later = pending_candidates[pending_index + 1:]
+                            self._cancel_pending_candidates(
+                                later, reservation=reservation
+                            )
+                            del pending_candidates[pending_index + 1:]
+
+                        candidate = self._resolve_candidate(
+                            source=source,
+                            prepared=prepared,
+                            postprocess_reference=postprocess_reference,
+                            group_id=group_id,
+                            group_attempt=group_attempt,
+                            mode=mode,
+                            reservation=reservation,
+                            pending=pending,
+                            before_retry=rollback_later,
                         )
-                        mask = slot.mask if mode == "local" else None
-                        try:
-                            rendered = self.renderer.render(prepared, preset, mask)
-                            metrics = visibility_metrics(
-                                prepared.pixels,
-                                rendered.pixels,
-                                weight=mask.effective_alpha if mask is not None else None,
-                                short_edge=self.config.render.diff_short_edge,
-                                visible_de_min=self.config.render.visible_de_min,
-                                visible_fraction_de=self.config.render.visible_fraction_de,
-                                visible_fraction_min=self.config.render.visible_fraction_min,
+                        if candidate is None:
+                            exhausted = True
+                            self._cancel_pending_candidates(
+                                pending_candidates[pending_index + 1:]
                             )
-                            if not metrics.accepted:
-                                raise PipelineError(
-                                    "visibility gate rejected candidate "
-                                    f"(de={metrics.visible_de:.6f}, "
-                                    f"fraction={metrics.visible_fraction:.6f})"
-                                )
-                            candidate_id = stable_id("candidate", group_id, slot_id)
-                            after_path = self.store.assets_root / "candidates" / f"{candidate_id}.jpg"
-                            save_candidate_jpeg(
-                                rendered.pixels, after_path,
-                                quality=self.config.render.jpeg_quality,
-                            )
-                            cgt_path: Path | None = None
-                            if mask is not None:
-                                cgt_path = self.store.assets_root / "masks" / f"{mask.mask_id}.png"
-                                save_cgt_png(mask, cgt_path)
-                            hints = objective_edit_hints(
-                                prepared.pixels,
-                                rendered.pixels,
-                                weight=mask.effective_alpha if mask is not None else None,
-                            )
-                            recipe = {
-                                "preset_id": preset.preset_id,
-                                "preset_path": str(preset.path),
-                                "format": preset.format,
-                                "render_engine": rendered.engine,
-                                "render_mode": mode,
-                            }
-                            candidate: dict[str, Any] = {
-                                "candidate_id": candidate_id,
-                                "slot_id": slot_id,
-                                "slot_index": slot_index,
-                                "preset_id": preset.preset_id,
-                                "preset_path": str(preset.path),
-                                "format": preset.format,
-                                "kind": preset.kind,
-                                "style_name": preset.style_name,
-                                "major": preset_reservation.link.major,
-                                "minor": preset_reservation.link.minor,
-                                "after_path": str(after_path),
-                                "render_engine": rendered.engine,
-                                "render_diagnostics": rendered.diagnostics,
-                                "visibility": {
-                                    "visible_de": round(metrics.visible_de, 6),
-                                    "visible_fraction": round(metrics.visible_fraction, 6),
-                                    "accepted": True,
-                                },
-                                "objective_hints": hints,
-                                "attempt_lineage": {
-                                    "group_attempt": group_attempt,
-                                    "preset_attempt": preset_reservation.attempt,
-                                    "preset_reservation_id": preset_reservation.reservation_id,
-                                },
-                                "recipe": recipe,
-                            }
-                            if mask is not None:
-                                recipe.update({"mask_id": mask.mask_id, "amount": mask.amount})
-                                candidate.update({
-                                    "slot_mode": slot.mode,
-                                    "mode_index": slot.mode_index,
-                                    "pairing_index": slot.pairing_index,
-                                    "mask_id": mask.mask_id,
-                                    "cgt_path": str(cgt_path),
-                                    "subject": source.subject,
-                                    "region": mask.region,
-                                    "geometry": mask.geometry,
-                                    "raw_alpha_mean": round(mask.raw_alpha_mean, 8),
-                                    "amount": round(mask.amount, 8),
-                                    "effective_alpha_mean": round(mask.effective_alpha_mean, 8),
-                                })
-                            reservation.accept(preset_reservation)
-                            candidates.append(candidate)
                             break
-                        except Exception as exc:  # noqa: BLE001 - refill this exact slot
-                            code = getattr(exc, "code", None) or (
-                                "visibility_rejected"
-                                if isinstance(exc, PipelineError) else "candidate_render_failed"
-                            )
-                            self._failure(
-                                event_type="attempt",
-                                stage="rendering",
-                                task_id=attempt_task_id,
-                                error_code=str(code),
-                                message=exc,
-                                retryable=True,
-                                terminal=False,
+                        candidates.append(candidate)
+                        if len(pending_candidates) < len(slots):
+                            replacements, exhausted = self._start_candidate_batch(
                                 source=source,
+                                prepared=prepared,
+                                postprocess_reference=postprocess_reference,
                                 group_id=group_id,
-                                round_number=group_attempt,
-                                attempt=preset_reservation.attempt,
+                                group_attempt=group_attempt,
+                                mode=mode,
+                                reservation=reservation,
+                                indexed_slots=[
+                                    (slot_index, slots[slot_index])
+                                    for slot_index in range(len(pending_candidates), len(slots))
+                                ],
                             )
-                            reservation.reject(preset_reservation)
-                    if exhausted:
-                        break
+                            pending_candidates.extend(replacements)
+                        if exhausted:
+                            self._cancel_pending_candidates(
+                                pending_candidates[pending_index + 1:]
+                            )
+                            break
+                        pending_index += 1
+                elif pending_candidates:
+                    self._cancel_pending_candidates(pending_candidates)
                 if exhausted or len(candidates) != 8:
                     raise PresetError("major could not yield eight visible candidates")
-                ranked = rank_candidates(str(source.source_path), candidates, self.scorer)
+                # Join the off-turn C_GT encodes before the turn is released: no
+                # journal line may name a mask that is not already fsynced, and a
+                # write that failed has to surface where the group attempt can
+                # still be retried in another major.  By now they have had the
+                # whole render and postprocess wave to finish, so this is a
+                # formality rather than a wait.  The failure is remembered so the
+                # next major short-circuits above rather than re-rendering.
+                try:
+                    for cgt_write in cgt_writes.values():
+                        self._account_asset(cgt_write.result())
+                except Exception as exc:
+                    cgt_error = exc
+                    raise
+                if selector_turn is not None:
+                    # Accepted reservations contribute the same active counts that a
+                    # serial commit would. The next source may select while this one
+                    # runs IAA, without changing coverage order.
+                    selector_turn.following.set()
+                    selector_handed_off = True
+                ranked = rank_candidates(
+                    str(source.source_path), candidates, self.scorer,
+                    batch_size=self.config.render.iaa_batch,
+                    abstain_margin=self.config.render.qa_winner_margin_abstain,
+                    low_margin=self.config.render.qa_winner_margin_low,
+                )
                 coverage = {
                     "major": reservation.major,
                     "coverage_cycle": reservation.coverage_cycle,
@@ -699,12 +1968,25 @@ class CanonicalPipeline:
                     "winner_ids": list(ranked.winner_ids),
                     "winner_ranks": [by_id[candidate_id]["rank"]
                                      for candidate_id in ranked.winner_ids],
+                    # The rank1-rank2 OneAlign gap and the margin policy's verdict
+                    # on it.  An abstaining group keeps ``winner_ids: []`` — the
+                    # same shape a group with no candidate above SFT_THRESHOLD has
+                    # always had — so nothing downstream needs a new state, and the
+                    # verdict is what tells the two apart afterwards.
+                    "winner_margin": ranked.winner_margin,
+                    "winner_confidence": ranked.winner_confidence,
                     "source_onealign": ranked.source_score,
                     "stage_timestamps": {
                         "render_completed_at": completed_at,
                         "qa_completed_at": completed_at,
                     },
                 }
+                if defer_commit:
+                    return _DeferredGroupCommit(
+                        group=group,
+                        reservation=reservation,
+                        coverage=coverage,
+                    )
                 if not self.store.append_group(group):
                     raise StateError(f"unexpected existing group during render: {group_id}")
                 self.store.checkpoint()
@@ -714,8 +1996,14 @@ class CanonicalPipeline:
                     raise StateError("coverage commit metadata changed after durable group append")
                 return "completed"
             except QaError:
+                if reservation is not None and not group_persisted:
+                    reservation.abandon()
                 raise
             except Exception as exc:  # noqa: BLE001 - restart group in another major
+                if selector_handed_off:
+                    if reservation is not None and not group_persisted:
+                        reservation.abandon()
+                    raise
                 if group_persisted:
                     raise PipelineError(
                         f"durable group {group_id} could not commit in-memory coverage"
@@ -743,40 +2031,218 @@ class CanonicalPipeline:
         )
         return "terminal"
 
+    def _render_source_buffered(
+        self,
+        source: SourceRecord,
+        mode: str,
+        *,
+        selector_turn: _SelectorTurn | None = None,
+    ) -> _DeferredSourceResult:
+        """Render one source off-thread without mutating the durable journals."""
+        failures: list[_BufferedFailure] = []
+        self._source_context.failures = failures
+        try:
+            try:
+                result = self._render_source(
+                    source, mode, defer_commit=True, selector_turn=selector_turn
+                )
+            except Exception as exc:  # flushed in source order before the error escapes
+                self._failure(
+                    event_type="source_worker",
+                    stage="rendering",
+                    task_id=stable_id(
+                        "render-source", self.config.build_id, source.source_id, mode
+                    ),
+                    error_code="source_worker_failed",
+                    message=f"{type(exc).__name__}: {exc}",
+                    retryable=True,
+                    terminal=False,
+                    source=source,
+                    durable=True,
+                )
+                return _DeferredSourceResult(
+                    status="error", failures=tuple(failures), error=exc
+                )
+            if isinstance(result, _DeferredGroupCommit):
+                return _DeferredSourceResult(
+                    status="completed",
+                    failures=tuple(failures),
+                    group_commit=result,
+                )
+            return _DeferredSourceResult(status=result, failures=tuple(failures))
+        finally:
+            if selector_turn is not None and not selector_turn.following.is_set():
+                selector_turn.ready.wait()
+                selector_turn.following.set()
+            del self._source_context.failures
+
+    def _commit_source_result(self, result: _DeferredSourceResult) -> str:
+        """Flush one buffered source outcome at its allocation-order boundary."""
+        for failure in result.failures:
+            self.store.append_failure(failure.row, durable=failure.durable)
+        if result.error is not None:
+            raise result.error
+        commit = result.group_commit
+        if commit is None:
+            return result.status
+        if not self.store.append_group(commit.group):
+            commit.reservation.abandon()
+            raise StateError(
+                f"unexpected existing group during render: {commit.group['group_id']}"
+            )
+        self.store.checkpoint()
+        committed = commit.reservation.commit()
+        if committed != commit.coverage:
+            raise PipelineError("coverage commit metadata changed after durable group append")
+        return result.status
+
+    def _discard_source_result(self, result: _DeferredSourceResult) -> None:
+        """Keep diagnostics but abandon work beyond an allocation-order error."""
+        for failure in result.failures:
+            self.store.append_failure(failure.row, durable=failure.durable)
+        if result.group_commit is not None:
+            result.group_commit.reservation.abandon()
+
+    def _chunk_paths(
+        self,
+        sources: tuple[SourceRecord, ...],
+        start: int,
+        skip: set[str],
+        limit: int = PREFETCH_CHUNK,
+    ) -> list[str]:
+        """The source images one chunk of the allocation still has to read."""
+        if limit <= 0:
+            return []
+        done = self.store.completed_sources() | skip
+        return [
+            str(source.source_path)
+            for source in sources[start:start + PREFETCH_CHUNK]
+            if source.source_id not in done
+        ][:limit]
+
+    def _account_prefetched(self) -> None:
+        """Wait for the outstanding chunk and fold its bytes into the water mark."""
+        assert self._prefetch is not None
+        for path in self._prefetch.take():
+            self._account_asset(path)
+
+    def _rotate_prefetch(
+        self,
+        sources: tuple[SourceRecord, ...],
+        start: int,
+        skip: set[str],
+        remaining: int | None = None,
+    ) -> None:
+        """Take delivery of the chunk about to render and queue the one behind it.
+
+        The allocation order is known before the round starts, which is the whole
+        premise: chunk k is already on the tmpfs when its first source is opened,
+        and chunk k+1 is read sequentially while chunk k renders.  The very first
+        chunk of a mode has nothing to hide behind, so it is fetched inline — the
+        same bytes the renderer would otherwise take one random pread at a time.
+        """
+        if self._prefetch is None:
+            return
+        budget = PREFETCH_CHUNK * 2 if remaining is None else max(0, remaining)
+        current = self._chunk_paths(
+            sources, start, skip, limit=min(PREFETCH_CHUNK, budget)
+        )
+        # Outstanding here is chunk k, or — at the start of a mode — whatever the
+        # previous mode's last look-ahead read.
+        self._account_prefetched()
+        if start == 0:
+            self._prefetch.submit(current)
+            self._account_prefetched()
+        # Keep one replacement source warm even when the current chunk can fill
+        # the target. A terminal source then preserves the double-buffer contract
+        # without restoring the old 256-source overfetch on small builds.
+        lookahead = (
+            max(1, budget - len(current))
+            if budget > 0 and current else budget
+        )
+        self._prefetch.submit(self._chunk_paths(
+            sources,
+            start + PREFETCH_CHUNK,
+            skip,
+            limit=min(PREFETCH_CHUNK, lookahead),
+        ))
+
+    def _discard_prefetched(self, source: SourceRecord) -> None:
+        """Drop one source's buffered copy once it can no longer be read again."""
+        if self._prefetch is None:
+            return
+        path = self._prefetch.path_for(source.source_path)
+        path.unlink(missing_ok=True)
+        with self._staged_lock:
+            self._staged_bytes -= self._staged.pop(str(path), 0)
+
     def _fill_initial_mode(self, mode: str, sources: tuple[SourceRecord, ...], target: int) -> None:
         terminal = self._terminal_source_ids()
         pending = self._pending_sam3_ids() if mode == "local" else set()
-        for source in sources:
+        inflight: deque[tuple[SourceRecord, Future[_DeferredSourceResult]]] = deque()
+        selector_tail = threading.Event()
+        selector_tail.set()
+
+        def finish_oldest() -> None:
+            source, future = inflight.popleft()
+            try:
+                result = self._commit_source_result(future.result())
+            except Exception:
+                while inflight:
+                    _, later = inflight.popleft()
+                    self._discard_source_result(later.result())
+                raise
+            if result == "sam3_queued":
+                pending.add(source.source_id)
+            else:
+                if result == "terminal":
+                    terminal.add(source.source_id)
+                self._discard_prefetched(source)
+            if not inflight:
+                self._land_checkpoint()
+
+        for index, source in enumerate(sources):
+            while inflight and (
+                len(inflight) >= self._source_window
+                or len(self._mode_groups(mode)) + len(pending) + len(inflight) >= target
+                or self._staged_size() >= LAND_WATERMARK_BYTES
+            ):
+                finish_oldest()
             completed = len(self._mode_groups(mode))
-            reserved = len(pending) if mode == "local" else 0
+            reserved = (len(pending) if mode == "local" else 0) + len(inflight)
             if completed + reserved >= target:
                 break
+            # After the target check so a finished mode reads nothing more, and
+            # before the skip below so a chunk starting on a done source still
+            # rotates.
+            if index % PREFETCH_CHUNK == 0:
+                self._rotate_prefetch(
+                    sources,
+                    index,
+                    terminal | pending,
+                    remaining=target - completed - reserved,
+                )
             if source.source_id in self.store.completed_sources() \
                     or source.source_id in terminal or source.source_id in pending:
                 continue
-            result = self._render_source(source, mode)
-            if result == "sam3_queued":
-                pending.add(source.source_id)
-            elif result == "terminal":
-                terminal.add(source.source_id)
+            following = threading.Event()
+            turn = _SelectorTurn(ready=selector_tail, following=following)
+            selector_tail = following
+            inflight.append((
+                source,
+                self._source_executor.submit(
+                    self._render_source_buffered, source, mode, selector_turn=turn
+                ),
+            ))
+        while inflight:
+            finish_oldest()
 
     def _release_heavy_resources(self) -> None:
+        """Give the render GPUs back, for a phase that needs the cards elsewhere."""
         self.renderer = None
         self.scorer = None
         gc.collect()
-        try:
-            import torch
-            torch.cuda.empty_cache()
-        except Exception:
-            pass
-
-    def _restore_heavy_resources(self) -> None:
-        renderer = self.dependencies.renderer_factory(self.config)
-        renderer.bind_catalog(self.catalog)
-        renderer.assert_ready()
-        self.renderer = renderer
-        self.scorer = self.dependencies.scorer_factory()
-        _preflight_scorer(self.scorer, self.inventory)
+        _empty_cuda_cache()
 
     def _record_sam3_attempt(
         self,
@@ -865,15 +2331,20 @@ class CanonicalPipeline:
                     row for row in candidates
                     if self._sam3_attempts(row.source_id) + 1 == next_attempt
                 ]
-                self._release_heavy_resources()
+                # SAM3 loads next to the two OneAlign copies on cuda:0 (33.0 GB of
+                # 95.6 GB) while the renderer keeps cuda:1, so a batch fits without
+                # evicting anything: the 860 M-parameter detector is ~1.7 GB in
+                # bf16 and its batch forward already falls back per image on OOM.
+                # Dropping and reloading both models per batch instead cost
+                # 11.5-11.8 s a round (six checkpoint-shard loads in a 30-group
+                # run) and left cuda:0 briefly empty enough for the vGate
+                # supervisor to place an 83 GB replica on it mid-run.
+                _empty_cuda_cache()
                 try:
-                    try:
-                        statuses = self.dependencies.relabeler(batch, self.config, next_attempt)
-                    except Exception as exc:  # noqa: BLE001 - each source consumes one bounded attempt
-                        statuses = {source.source_id: f"relabel_exception:{type(exc).__name__}:{exc}"
-                                    for source in batch}
-                finally:
-                    self._restore_heavy_resources()
+                    statuses = self.dependencies.relabeler(batch, self.config, next_attempt)
+                except Exception as exc:  # noqa: BLE001 - each source consumes one bounded attempt
+                    statuses = {source.source_id: f"relabel_exception:{type(exc).__name__}:{exc}"
+                                for source in batch}
                 for source in batch:
                     status = str(statuses.get(source.source_id) or "missing_relabel_status")
                     self._record_sam3_attempt(
@@ -926,7 +2397,22 @@ class CanonicalPipeline:
             )
 
     def execute(self) -> dict[str, Any]:
+        """Run the lifecycle with the prefetch buffer live for its whole duration."""
+        if self._prefetch is not None:
+            self._prefetch.activate()
+        try:
+            return self._run_phases()
+        finally:
+            self._source_executor.shutdown(wait=True, cancel_futures=True)
+            self._render_executor.shutdown(wait=True, cancel_futures=True)
+            self._postprocess_executor.shutdown(wait=True, cancel_futures=True)
+            if self._prefetch is not None:
+                self._prefetch.close()
+
+    def _run_phases(self) -> dict[str, Any]:
         self._write_phase("preflight")
+        # Resume boundary: a restarted build may have lost unlanded assets.
+        self._verify_group_assets()
         self._write_phase("rendering")
         self._fill_initial_mode(
             "global", self.allocation.global_, self.allocation.global_target
@@ -938,13 +2424,20 @@ class CanonicalPipeline:
         self._write_phase("sam3_relabel")
         self._drain_sam3_and_replacements()
         self._record_shortfalls()
+        self._land_checkpoint(force=True)
 
         self._release_heavy_resources()
         self._write_phase("annotation")
+        # Annotation reads winner bytes by their staging path, which now lives in
+        # the archive; the reverse map must know about this build's batches first.
+        self._refresh_catalog()
         annotation = self.dependencies.annotator_factory(self.config, self.store).drain()
         if annotation.get("pending") or self.store.pending_annotation_tasks():
             self._write_phase("annotation")
             raise PipelineError("annotation queue remains unresolved")
+        # Every winner's outcome is now final, which is the earliest the published
+        # SFT datasets can be told which of their samples carry training text.
+        self._annotation_sync = self._sync_annotation_status()
 
         self._write_phase("projection")
         terminal = any(row.get("terminal") for row in self.store.failures)
@@ -962,6 +2455,10 @@ class CanonicalPipeline:
         _add_manifest_self_artifact(final_manifest)
         self.store.write_manifest(final_manifest)
         self.store.checkpoint()
+        if self.dependencies.mirror_root is not None:
+            mirror_artifacts(
+                self.store.root, Path(self.dependencies.mirror_root) / self.config.build_id
+            )
         return final_manifest
 
 
@@ -1216,13 +2713,27 @@ def run(
 ) -> dict[str, Any]:
     """Preflight fully, then run or resume one canonical build."""
     dependencies = dependencies or default_dependencies()
+    # A reboot empties the tmpfs root: restore the mirrored ledgers first and the
+    # ordinary resume path then applies unchanged.  A live root is never touched.
+    if dependencies.mirror_root is not None \
+            and not (config.output_root / "manifest.json").is_file():
+        restore_mirror(
+            Path(dependencies.mirror_root) / config.build_id, config.output_root
+        )
     existing = _load_existing_manifest(config.output_root / "manifest.json")
     if existing is not None:
         if existing.get("build_id") != config.build_id:
             raise StateError("output_root belongs to a different build_id")
         old_config = existing.get("effective_config")
-        if old_config is not None and old_config != config.sanitized_dict():
-            raise StateError("resume config differs from the durable manifest")
+        if old_config is not None:
+            differences = _resume_config_differences(
+                old_config, config.sanitized_dict()
+            )
+            if differences:
+                raise StateError(
+                    "resume config differs from the durable manifest: "
+                    + ", ".join(differences)
+                )
 
     # No authoritative artifact is opened until every startup dependency passes.
     dependencies.sdk_preflight()
@@ -1239,13 +2750,15 @@ def run(
     renderer = dependencies.renderer_factory(config)
     renderer.bind_catalog(catalog)
     renderer.assert_ready()
-    scorer = dependencies.scorer_factory()
-    _preflight_scorer(scorer, inventory)
+    scorer = _load_scorer(config, dependencies, inventory)
 
     with ArtifactStore(config.output_root, config.build_id) as store:
         pipeline = CanonicalPipeline(
             config, dependencies, inventory, catalog, renderer, scorer, store, existing
         )
+        # CanonicalPipeline owns the heavy resources from here. Keeping these
+        # aliases alive would defeat its release before the annotation phase.
+        del renderer, scorer
         return pipeline.execute()
 
 
