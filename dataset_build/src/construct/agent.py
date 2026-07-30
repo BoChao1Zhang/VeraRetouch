@@ -88,12 +88,16 @@ from .visibility import (
 # mount is 24 GiB and landing is idempotent, so every value in the 8-20 GiB band
 # behaves the same and nothing downstream reads it.
 #
-# 8, not 16, since the production layout runs two builds at once (one card each)
-# on the same 24 GiB mount: the counter below is per-process, so two 16 GiB
-# watermarks would ask for 32 GiB and fill the tmpfs instead of landing.  Two
-# 8 GiB watermarks plus the two prefetch buffers (~1 GiB each) and the journals
-# leave the mount with room to spare; the only cost is more frequent landing.
-LAND_WATERMARK_BYTES = 8 * 1024**3
+# 4, not 16, since the production layout runs two builds at once (one card each)
+# on the same 24 GiB mount and this counter is per-process.  The watermark is not
+# the peak: ``_land_groups`` stages winners under ``.land`` and, while the group
+# candidates are hardlinks, each winner's ``I_in`` is a fresh copy of the source
+# image, so a checkpoint adds roughly 0.6x the watermark again in real bytes.
+# Measured on the first production checkpoint at 8 GiB: 7.8 GiB of assets became
+# ~13 GiB at the peak, and two builds in lockstep took a 24 GiB mount to 716 MiB
+# free.  4 GiB keeps each build's peak near 7.7 GiB, both near 16 GiB, and the
+# only cost is more (idempotent, now lock-serialized) landing checkpoints.
+LAND_WATERMARK_BYTES = 4 * 1024**3
 # Sources per prefetch buffer.  ponytail: a module constant for the same reason
 # as the water mark — one chunk is ~1 GiB of a 24 GiB tmpfs, the buffer is
 # rebuildable, and the only requirement is that a chunk take long enough to
