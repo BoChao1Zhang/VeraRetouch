@@ -10,6 +10,8 @@ the archive at any time.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import shutil
 import sqlite3
@@ -175,8 +177,44 @@ def _index_group(
     return members, samples, reverse
 
 
+@contextlib.contextmanager
+def _catalog_write_lock(db_path: Path) -> Iterator[None]:
+    """Serialize catalog writers across processes for the whole copy-modify-rename.
+
+    Two concurrent builds land on their own schedules and both call ``upsert``
+    against the one global catalog.  Without this, each copies the same source
+    file to the same ``.upserting`` staging name, indexes only its own batches,
+    and whichever renames last silently discards the other build's groups — and
+    the two copies would be writing over each other's staging bytes besides.
+    The lock is held from before the copy until after the rename, so a writer
+    always copies a file that already contains everything committed before it.
+
+    Readers are untouched: they open the catalog ``immutable=1`` and never take
+    the lock, which stays sound because publication is still an atomic rename.
+    """
+    lock_path = db_path.with_name(db_path.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    # Never unlinked: removing a lock file another process already opened would
+    # hand the two of them different inodes and no mutual exclusion at all.
+    handle = open(lock_path, "a")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        # close() releases the lock; do it in one place so an exception inside
+        # the body cannot leave the catalog locked for the process's lifetime.
+        handle.close()
+
+
 def rebuild(dataset_root: Path, db_path: Path) -> dict[str, object]:
     """Rebuild the global index from every published group under dataset_root."""
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with _catalog_write_lock(db_path):
+        return _rebuild_locked(dataset_root, db_path)
+
+
+def _rebuild_locked(dataset_root: Path, db_path: Path) -> dict[str, object]:
     dataset_root = Path(dataset_root).resolve(strict=True)
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -239,13 +277,26 @@ def upsert(dataset_root: Path, db_path: Path, groups: Sequence[str]) -> dict[str
     file it has open never changes underneath it.  ``PRAGMA integrity_check`` is
     dropped (28 s of reading pages this call did not write); the full ``rebuild``
     remains the repair tool that checks.
+
+    Concurrent builds are serialized by ``_catalog_write_lock``; see there for
+    why the whole copy-modify-rename has to be inside it.
     """
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with _catalog_write_lock(db_path):
+        return _upsert_locked(dataset_root, db_path, groups)
+
+
+def _upsert_locked(
+    dataset_root: Path, db_path: Path, groups: Sequence[str]
+) -> dict[str, object]:
     dataset_root = Path(dataset_root).resolve(strict=True)
     db_path = Path(db_path)
     if not db_path.is_file():
         # Nothing to be incremental about, and a catalog with only this build's
         # groups in it would hide every other archive from the reverse map.
-        return rebuild(dataset_root, db_path)
+        # The lock is already held, so take the unlocked entry point.
+        return _rebuild_locked(dataset_root, db_path)
     # sorted(), because ``rebuild`` walks sorted manifest paths: the reverse map
     # is last-writer-wins, so indexing in the caller's argument order would make
     # the attribution depend on how the CLI happened to list the groups.

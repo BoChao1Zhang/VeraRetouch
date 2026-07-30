@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import fcntl
 import json
+import multiprocessing
 import shutil
 import sqlite3
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from dataset_build.tools.dataset_plan import PlanError
-from dataset_build.tools.global_catalog import main as catalog_main, rebuild, upsert
+from dataset_build.tools.global_catalog import (
+    _catalog_write_lock,
+    main as catalog_main,
+    rebuild,
+    upsert,
+)
 from dataset_build.tools.indexed_tar import IndexedTarDataset, IndexedTarError, verify_dataset
 from dataset_build.tools.land import land, next_batch
 
@@ -307,6 +315,97 @@ class GlobalCatalogUpsertTests(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertEqual(self._dump(), self._rebuilt_dump())
+
+    def test_a_second_process_cannot_hold_the_write_lock_at_the_same_time(self) -> None:
+        rebuild(self.out, self.db)
+        with _catalog_write_lock(self.db):
+            context = multiprocessing.get_context("fork")
+            queue = context.Queue()
+            child = context.Process(target=_try_lock_child, args=(self.db, queue))
+            child.start()
+            child.join(30)
+            self.assertEqual(child.exitcode, 0)
+            self.assertEqual(queue.get(timeout=5), "blocked")
+        # 释放后同一把锁必须能被拿到，否则长跑进程会把自己锁死。
+        queue = multiprocessing.get_context("fork").Queue()
+        child = multiprocessing.get_context("fork").Process(
+            target=_try_lock_child, args=(self.db, queue)
+        )
+        child.start()
+        child.join(30)
+        self.assertEqual(queue.get(timeout=5), "acquired")
+
+    def test_two_processes_upserting_at_once_keep_both_builds(self) -> None:
+        """双 build 并行 land：没有锁时后写的 rename 会吞掉先写的组。
+
+        两个子进程在 barrier 处对齐，各自在 copy 之后停 1 秒——无锁时它们都复制
+        到同一份旧库、写同一个 staging 名，谁后 rename 谁赢；有锁时第二个复制的
+        是第一个已经提交过的库，两批组都留下来。
+        """
+        rebuild(self.out, self.db)
+        first = self._land_batch("b1", 1)
+        second = self._land_batch("b2", 1)
+
+        context = multiprocessing.get_context("fork")
+        barrier = context.Barrier(2)
+        errors = context.Queue()
+        children = [
+            context.Process(
+                target=_slow_upsert_child, args=(self.out, self.db, groups, barrier, errors)
+            )
+            for groups in (first, second)
+        ]
+        for child in children:
+            child.start()
+        for child in children:
+            child.join(180)
+            self.assertEqual(child.exitcode, 0)
+        self.assertTrue(errors.empty(), errors.get() if not errors.empty() else "")
+
+        registered = {row[0] for row in self._dump()["groups"]}
+        self.assertTrue(set(first) <= registered, f"first build dropped: {sorted(registered)}")
+        self.assertTrue(set(second) <= registered, f"second build dropped: {sorted(registered)}")
+        # groups/members/samples 是各组目录的纯函数，必须与全量重建逐行相同；
+        # source_paths 按 path 键 last-writer-wins，两个进程的先后本就允许与
+        # rebuild 的排序归属不同（见 upsert 文档），故不参与比对。
+        dumped, reference = self._dump(), self._rebuilt_dump()
+        for table in ("groups", "members", "samples"):
+            self.assertEqual(dumped[table], reference[table], table)
+        # 临时文件不能留下来（两个进程用的是同一个 staging 名）。
+        self.assertFalse((self.root / "global.sqlite3.upserting").exists())
+
+
+def _try_lock_child(db_path: Path, queue) -> None:
+    """非阻塞地试一次写锁，把结果回报给父进程。"""
+    lock_path = Path(str(db_path) + ".lock")
+    with open(lock_path, "a") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            queue.put("blocked")
+        else:
+            queue.put("acquired")
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _slow_upsert_child(dataset_root, db_path, groups, barrier, errors) -> None:
+    """在临界区里停 1 秒，把无锁实现的竞态窗口拉到必然命中。"""
+    real_copyfile = shutil.copyfile
+
+    def slow_copyfile(src, dst, **kwargs):
+        result = real_copyfile(src, dst, **kwargs)
+        time.sleep(1.0)
+        return result
+
+    shutil.copyfile = slow_copyfile
+    try:
+        barrier.wait(timeout=60)
+        upsert(dataset_root, db_path, groups)
+    except BaseException as exc:  # noqa: BLE001 - 回报给父进程断言
+        errors.put(f"{type(exc).__name__}: {exc}")
+        raise
+    finally:
+        shutil.copyfile = real_copyfile
 
 
 if __name__ == "__main__":
