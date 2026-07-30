@@ -87,7 +87,13 @@ from .visibility import (
 # more when rendering ends.  ponytail: a module constant, not a config key — the
 # mount is 24 GiB and landing is idempotent, so every value in the 8-20 GiB band
 # behaves the same and nothing downstream reads it.
-LAND_WATERMARK_BYTES = 16 * 1024**3
+#
+# 8, not 16, since the production layout runs two builds at once (one card each)
+# on the same 24 GiB mount: the counter below is per-process, so two 16 GiB
+# watermarks would ask for 32 GiB and fill the tmpfs instead of landing.  Two
+# 8 GiB watermarks plus the two prefetch buffers (~1 GiB each) and the journals
+# leave the mount with room to spare; the only cost is more frequent landing.
+LAND_WATERMARK_BYTES = 8 * 1024**3
 # Sources per prefetch buffer.  ponytail: a module constant for the same reason
 # as the water mark — one chunk is ~1 GiB of a 24 GiB tmpfs, the buffer is
 # rebuildable, and the only requirement is that a chunk take long enough to
