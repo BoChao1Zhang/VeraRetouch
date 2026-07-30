@@ -68,6 +68,7 @@ source changes.
 uv run --no-progress --with fastapi==0.136.1 --with Pillow==12.2.0 \
   python -m unittest databuild_viewer.backend.test_app -v
 cd databuild_viewer/frontend && npm run build
+cd databuild_viewer/frontend && npm run test:e2e   # Playwright desktop/mobile screenshots
 uv build --wheel --out-dir /tmp/veraretouch-wheel
 unzip -l /tmp/veraretouch-wheel/*.whl | rg 'databuild_viewer/frontend/dist/'
 ```
