@@ -8,17 +8,26 @@ reverse map and preads the member out of its uncompressed shard.
 unchanged while both copies exist and switches to the archive the moment the
 local one is deleted.  Reads use ``os.pread`` so several dataloader threads can
 share one shard descriptor without seek races.
+
+Between those two there is an optional prefetch buffer: ``set_prefetch_dir``
+points reads at a directory ``tools.prefetch`` filled in archive-physical order,
+so a producer that knows its sampling order ahead of time turns the random NFS
+reads of a round into one sequential pass.  It is a cache, never an authority —
+a miss falls through to the archive.
 """
 
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 import sqlite3
 import tarfile
 from pathlib import Path
 from threading import Lock
 from typing import Mapping
+
+from PIL import Image, ImageOps
 
 from dataset_build.tools.indexed_tar import BLOCK_SIZE, IndexedTarError, _load_manifest
 
@@ -39,6 +48,71 @@ def default_db() -> Path:
     catalog.  ``VERADATA_CATALOG`` wins when set.
     """
     return Path(os.environ.get(CATALOG_ENV) or DEFAULT_DB)
+
+
+_PREFETCH_DIR: Path | None = None
+# Same style as the shared-reader lock below: a plain mutex around the one piece
+# of module state, so worker threads see a whole directory swap or none of it.
+_PREFETCH_LOCK = Lock()
+
+
+def prefetch_name(source_path: str | os.PathLike[str]) -> str:
+    """Name a prefetched copy: the SHA-256 of the original absolute path.
+
+    A digest keeps the buffer one flat directory with no escaping, no length
+    limit and no collision between two trees that share a basename.
+    """
+    return hashlib.sha256(str(source_path).encode("utf-8")).hexdigest()
+
+
+def set_prefetch_dir(path: str | os.PathLike[str] | None) -> None:
+    """Serve reads from this prefetch buffer, or pass ``None`` to stop.
+
+    Deliberately an explicit call rather than an environment variable: the buffer
+    is per-run state owned by whoever fills it, and a stale exported variable
+    would silently point a later process at a directory nobody is maintaining.
+    """
+    global _PREFETCH_DIR
+    with _PREFETCH_LOCK:
+        _PREFETCH_DIR = Path(path) if path is not None else None
+
+
+def prefetch_dir() -> Path | None:
+    """The prefetch buffer currently in effect, if any."""
+    with _PREFETCH_LOCK:
+        return _PREFETCH_DIR
+
+
+def _local_or_prefetch(source_path: str | os.PathLike[str]) -> bytes | None:
+    """The two cheap tiers of the read ladder; ``None`` means only the archive is left.
+
+    Any OS error on the buffer is a miss, not a failure: it lives on tmpfs and may
+    be recycled under a reader at any moment, and the archive is still there.
+    """
+    try:
+        return Path(source_path).read_bytes()
+    except FileNotFoundError:
+        pass
+    directory = prefetch_dir()
+    if directory is None:
+        return None
+    try:
+        return (directory / prefetch_name(source_path)).read_bytes()
+    except OSError:
+        return None
+
+
+def prefix_range(prefix: str) -> tuple[str, str]:
+    """Half-open key range covering every string starting with ``prefix``.
+
+    Range comparison rather than LIKE everywhere: LIKE is case-insensitive by
+    default and SQLite cannot use an index for it (measured 116x slower on the
+    4.45M-row table).  The upper bound is the prefix with its last character
+    incremented.
+    """
+    if not prefix:
+        return "", ""
+    return prefix, prefix[:-1] + chr(ord(prefix[-1]) + 1)
 
 
 class ArchiveReader:
@@ -99,15 +173,11 @@ class ArchiveReader:
         that used to walk a cache tree can enumerate the same paths after the
         local tree is gone.
         """
-        # 范围比较而不是 LIKE：LIKE 默认大小写不敏感，SQLite 无法用索引，实测在
-        # 445 万行上是全表扫 963 ms；范围比较走主键索引 8.3 ms（快 116 倍）。
-        # 上界取前缀最后一个字符 +1，覆盖所有以该前缀开头的键。
-        upper = prefix[:-1] + chr(ord(prefix[-1]) + 1) if prefix else ""
         with self._lock:
             rows = self._connection.execute(
                 "SELECT source_path FROM source_paths "
                 "WHERE source_path >= ? AND source_path < ? ORDER BY source_path",
-                (prefix, upper),
+                prefix_range(prefix),
             ).fetchall()
         return [
             str(row["source_path"])
@@ -162,12 +232,9 @@ class ArchiveReader:
         return payload
 
     def read_bytes(self, source_path: str | os.PathLike[str]) -> bytes:
-        """Read the local file while it exists, otherwise read the archive."""
-        path = Path(source_path)
-        try:
-            return path.read_bytes()
-        except FileNotFoundError:
-            return self.read(source_path)
+        """Local file, then the prefetch buffer, then the archive."""
+        payload = _local_or_prefetch(source_path)
+        return self.read(source_path) if payload is None else payload
 
     def exists(self, source_path: str | os.PathLike[str]) -> bool:
         """Report whether a path is readable locally or from the archive.
@@ -191,16 +258,35 @@ _SHARED_LOCK = Lock()
 def read_bytes(source_path: str | os.PathLike[str], *, db_path: Path | None = None) -> bytes:
     """Module-level local-first read for call sites that hold no reader.
 
-    ponytail: one process-wide reader, created on first archive miss.  If the
-    local file is still there this never touches SQLite at all, so wiring this
-    into a hot path costs nothing until the migration actually removes the file.
+    Lookup order is local file, prefetch buffer, archive.  ponytail: one
+    process-wide reader, created on first archive miss.  If the local file is
+    still there — or the round was prefetched — this never touches SQLite at all,
+    so wiring it into a hot path costs nothing until the bytes actually move.
     """
-    path = Path(source_path)
+    payload = _local_or_prefetch(source_path)
+    return _shared(db_path).read(source_path) if payload is None else payload
+
+
+def open_image(source_path: str | os.PathLike[str], *, db_path: Path | None = None) -> Image.Image:
+    """Decode an image the same way a call site would have opened the file.
+
+    ``Image.open`` is lazy, so the decode is forced here while the buffer is
+    still referenced; afterwards the pixels live in the image and the bytes can
+    be collected.  A path that is neither on disk nor in the catalog raises
+    ``FileNotFoundError`` so existing call sites keep handling it as before.
+    """
     try:
-        return path.read_bytes()
-    except FileNotFoundError:
-        pass
-    return _shared(db_path).read(source_path)
+        payload = read_bytes(source_path, db_path=db_path)
+    except KeyError as exc:
+        raise FileNotFoundError(str(source_path)) from exc
+    image = Image.open(io.BytesIO(payload))
+    image.load()
+    return image
+
+
+def open_rgb(source_path: str | os.PathLike[str], *, db_path: Path | None = None) -> Image.Image:
+    """Orientation-corrected RGB decode, the form most pixel consumers want."""
+    return ImageOps.exif_transpose(open_image(source_path, db_path=db_path)).convert("RGB")
 
 
 def iter_source_paths(
@@ -232,3 +318,17 @@ def _shared(db_path: Path | None) -> ArchiveReader:
             reader = ArchiveReader(resolved)
             _SHARED[key] = reader
         return reader
+
+
+def invalidate_shared(db_path: Path | None = None) -> None:
+    """Drop cached readers so the next call reopens the catalog.
+
+    An ``immutable=1`` connection pins the snapshot it opened; after a rebuild
+    replaces the database file, cached readers keep answering from the old
+    snapshot and freshly landed paths stay invisible until the reader reopens.
+    """
+    with _SHARED_LOCK:
+        if db_path is None:
+            _SHARED.clear()
+        else:
+            _SHARED.pop(str(Path(db_path)), None)

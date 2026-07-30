@@ -8,8 +8,9 @@ import random
 import threading
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable, Container, Iterable, Mapping
 
 from .config import PRESET_FILTERS, DatabuildConfig
 from .state import stable_id
@@ -85,8 +86,55 @@ def _has_embedded_local(feature: Mapping[str, Any]) -> bool:
     return any(marker in text for marker in markers)
 
 
+def packed_lut_paths(bank_dir: Path) -> frozenset[str]:
+    """Realpaths whose LUT grid the bank already carries in ``luts.npz``.
+
+    ``tools/pack_lut_npz.py`` writes one ``luts_meta.json`` row per LUT it
+    packed, and ``rendering._LutLoader`` keys the packed grids by exactly this
+    realpath — so a hit means the renderer will serve that preset from memory and
+    never parse the file.  The discovery condition is deliberately the loader's:
+    without both files the renderer parses at render time, so the capability scan
+    parses too rather than trusting a half-present bank.
+    """
+    meta_path = Path(bank_dir) / "luts_meta.json"
+    if not meta_path.is_file() or not (Path(bank_dir) / "luts.npz").is_file():
+        return frozenset()
+    try:
+        with meta_path.open("r", encoding="utf-8") as handle:
+            metadata = json.load(handle)
+    except (OSError, ValueError):
+        return frozenset()
+    if not isinstance(metadata, Mapping):
+        return frozenset()
+    return frozenset(
+        os.path.realpath(str(row.get("path")))
+        for row in metadata.values()
+        if isinstance(row, Mapping) and row.get("path")
+    )
+
+
+def _decodes_strictly(path: Path) -> bool:
+    """Re-check the one rule the packed bank is known to predate: strict UTF-8.
+
+    ``lut_io._read_cube`` opens ``errors="strict"``; the production bank's npz
+    was packed on 2026-07-18 by a laxer reader, and 24 of its 4051 rows are
+    ``.cube`` files carrying GBK bytes in the TITLE comment.  Trusting the pack
+    blindly would silently widen the inventory by those 24 and move every
+    coverage draw with it, so the decode stays (0.9 ms/LUT) and only the float
+    parsing (57.5 ms/LUT) is skipped.  A packed row is still taken on trust for
+    LUT *structure*, which is the pack's own contract: re-run
+    ``tools/pack_lut_npz.py`` whenever ``lut_io`` gets stricter.
+    """
+    try:
+        path.read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return True
+
+
 def default_capability(feature: Mapping[str, Any], fidelity_de: float | None,
-                       fidelity_de_max: float) -> CapabilityResult:
+                       fidelity_de_max: float,
+                       packed_luts: Container[str] = frozenset()) -> CapabilityResult:
     """Static local-GPU capability scan; runtime CUDA is checked by the renderer factory."""
     path = Path(str(feature.get("path") or ""))
     normalized = _format_of(feature)
@@ -95,6 +143,12 @@ def default_capability(feature: Mapping[str, Any], fidelity_de: float | None,
     if _has_embedded_local(feature):
         return CapabilityResult(False, "none", "embedded local correction")
     if normalized == "lut":
+        # ``_read_cube`` is a pure-Python line parser (median 57.5 ms per LUT, so
+        # 334.8 s over the bank) whose only question here is "does this parse".
+        # A packed grid plus a clean decode answers it; a miss on either falls
+        # through to the parse, which also keeps the rejection reason exact.
+        if os.path.realpath(path) in packed_luts and _decodes_strictly(path):
+            return CapabilityResult(True, "gpu_lut")
         try:
             from dataset_build.lut_io import load_lut
 
@@ -142,8 +196,9 @@ class PresetCatalog:
         capability: Callable[[Mapping[str, Any], float | None, float], CapabilityResult]
         | None = None,
     ) -> "PresetCatalog":
-        capability = capability or default_capability
         bank_dir = config.presets.bank_dir
+        if capability is None:
+            capability = partial(default_capability, packed_luts=packed_lut_paths(bank_dir))
         feature_path = bank_dir / "features.jsonl"
         if not feature_path.is_file():
             raise PresetError(f"missing preset features: {feature_path}")
@@ -158,7 +213,8 @@ class PresetCatalog:
         fidelity: dict[str, float] = {}
         if fidelity_path.is_file():
             for row in _read_jsonl(fidelity_path):
-                value = row.get("de_mean", row.get("de_med"))
+                # perceptual_de.jsonl 只有 de_med（无 de_mean 字段）；保真判据即中位 ΔE00。
+                value = row.get("de_med")
                 if row.get("preset_id") and isinstance(value, (int, float)):
                     fidelity[str(row["preset_id"])] = float(value)
 
@@ -451,6 +507,26 @@ class GroupReservation:
                 raise PresetError("candidate is not pending for this reservation")
             selector._active_preset[candidate.link.preset.preset_id] -= 1
             self._pending.pop(candidate.slot_id)
+
+    def cancel_speculative(self, candidate: CandidateReservation) -> None:
+        """Undo an unobserved later-slot reservation as if it never happened."""
+        selector = self.selector
+        with selector._lock:
+            self._ensure_open()
+            pending = self._pending.get(candidate.slot_id)
+            if pending != candidate:
+                raise PresetError("candidate is not pending for this reservation")
+            if self._slot_attempts[candidate.slot_id] != candidate.attempt:
+                raise PresetError("speculative candidate is not the latest slot attempt")
+            selector._active_preset[candidate.link.preset.preset_id] -= 1
+            self._pending.pop(candidate.slot_id)
+            self._attempted_group_ids.remove(candidate.link.preset.preset_id)
+            self._slot_attempts[candidate.slot_id] -= 1
+            if not self._slot_attempts[candidate.slot_id]:
+                self._slot_attempts.pop(candidate.slot_id)
+            minor = self._slot_minor.pop(candidate.slot_id)
+            selector._active_minor[(self.major, minor)] -= 1
+            self._slot_tried_minors.pop(candidate.slot_id, None)
 
     def accept(self, candidate: CandidateReservation) -> None:
         selector = self.selector

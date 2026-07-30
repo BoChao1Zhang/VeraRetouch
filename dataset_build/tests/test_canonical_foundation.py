@@ -47,6 +47,7 @@ from construct.presets import (
     PresetRecord,
     TaxonomyLink,
     default_capability,
+    packed_lut_paths,
 )
 from construct.sources import SourceRecord, allocate_sources, largest_remainder
 from construct.state import ArtifactStore, StateError, scan_jsonl, stable_id
@@ -86,8 +87,17 @@ class ConfigTests(unittest.TestCase):
 
     def replace(self, old: str, new: str) -> None:
         text = self.path.read_text(encoding="utf-8")
+        if old not in text:
+            self.fail(f"databuild.example.toml no longer contains {old!r}")
         self.path.write_text(text.replace(old, new), encoding="utf-8")
         self.path.chmod(0o600)
+
+    def config_line(self, key: str) -> str:
+        prefix = f"{key} = "
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            if line.startswith(prefix):
+                return line
+        self.fail(f"databuild.example.toml has no top-level {key!r} assignment")
 
     def test_example_parses_and_records_effective_formats(self) -> None:
         config = self.load()
@@ -162,7 +172,7 @@ class ConfigTests(unittest.TestCase):
 
         output_root = Path(self.tmp.name) / "must-not-exist"
         self.replace(
-            'output_root = "/home/bc/data/datasets/vera_directionA_1M/builds/example-build"',
+            self.config_line("output_root"),
             f'output_root = "{output_root}"',
         )
         self.replace("seed = 0", "seed = 0\nlegacy_mode = true")
@@ -748,6 +758,168 @@ class CoverageTests(unittest.TestCase):
         snapshot = selector.snapshot()
         self.assertEqual(sum(snapshot["major"].values()), 0)
         self.assertEqual(sum(snapshot["preset"].values()), 0)
+
+
+class PackedLutPreflightTests(unittest.TestCase):
+    """capability preflight 用 luts.npz 的预解析结果代替逐个 load_lut。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.bank = self.root / "bank"
+        self.bank.mkdir()
+        self.recipes = self.root / "recipes"
+        self.recipes.mkdir()
+        rows = "\n".join(
+            f"{r} {g} {b}"
+            for b in (0.0, 1.0) for g in (0.0, 1.0) for r in (0.0, 1.0)
+        )
+        self.good = self.recipes / "good.cube"
+        self.good.write_text(f"TITLE \"good\"\nLUT_3D_SIZE 2\n{rows}\n", encoding="utf-8")
+        self.spare = self.recipes / "spare.cube"
+        self.spare.write_text(f"TITLE \"spare\"\nLUT_3D_SIZE 2\n{rows}\n", encoding="utf-8")
+        # 生产 bank 的 24 个真实样本：结构合法但 TITLE 里是 GBK 字节，
+        # 现行 strict 解析拒收，而 npz 里却有它们的网格。
+        self.gbk = self.recipes / "gbk.cube"
+        self.gbk.write_bytes(
+            "TITLE \"胶片\"\n".encode("gbk") + f"LUT_3D_SIZE 2\n{rows}\n".encode("utf-8")
+        )
+        self.broken = self.recipes / "broken.cube"
+        self.broken.write_text("LUT_3D_SIZE 2\n0 0 0\n", encoding="utf-8")
+        self.packed = (self.good, self.gbk)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _write_pack(self, *, npz: bool = True, meta: bool = True) -> None:
+        if meta:
+            (self.bank / "luts_meta.json").write_text(
+                json.dumps({
+                    f"rcp_{path.stem}": {
+                        "path": os.path.realpath(path), "dmin": [0, 0, 0], "dmax": [1, 1, 1],
+                    }
+                    for path in self.packed
+                }),
+                encoding="utf-8",
+            )
+        if npz:
+            np.savez(self.bank / "luts.npz", **{
+                f"rcp_{path.stem}": np.zeros((2, 2, 2, 3), np.float32) for path in self.packed
+            })
+
+    @staticmethod
+    def _counting_load_lut():
+        real = load_lut
+        calls: list[str] = []
+
+        def spy(path):
+            calls.append(str(path))
+            return real(path)
+
+        return spy, calls
+
+    def test_packed_hit_answers_without_parsing_the_file(self) -> None:
+        self._write_pack()
+        spy, calls = self._counting_load_lut()
+        with mock.patch("dataset_build.lut_io.load_lut", spy):
+            result = default_capability(
+                {"path": str(self.good), "kind": "lut"}, None, 6.0,
+                packed_lut_paths(self.bank),
+            )
+        self.assertTrue(result.supported)
+        self.assertEqual(result.engine, "gpu_lut")
+        self.assertEqual(calls, [])
+
+    def test_a_lut_the_pack_does_not_know_still_goes_through_the_parser(self) -> None:
+        self._write_pack()
+        spy, calls = self._counting_load_lut()
+        with mock.patch("dataset_build.lut_io.load_lut", spy):
+            result = default_capability(
+                {"path": str(self.spare), "kind": "lut"}, None, 6.0,
+                packed_lut_paths(self.bank),
+            )
+        self.assertTrue(result.supported)
+        self.assertEqual(calls, [str(self.spare)])
+
+    def test_bad_luts_are_still_rejected_with_their_original_reason(self) -> None:
+        self._write_pack()
+        packed = packed_lut_paths(self.bank)
+        for path, packed_row, expected in (
+            # 未进 npz 的坏 LUT：兜底解析照旧拒收。
+            (self.broken, False, "LUT parse failed:ValueError"),
+            # 进了 npz 但不是 UTF-8：npz 是 2026-07-18 用更宽松的解析器打的，
+            # strict 解码这一关必须留着，否则生产 bank 的 24 个 .cube 会悄悄
+            # 挤进 inventory（实测 3522→3546）。
+            (self.gbk, True, "LUT parse failed:UnicodeDecodeError"),
+        ):
+            with self.subTest(path=path.name):
+                self.assertEqual(os.path.realpath(path) in packed, packed_row)
+                result = default_capability(
+                    {"path": str(path), "kind": "lut"}, None, 6.0, packed
+                )
+                self.assertFalse(result.supported)
+                self.assertEqual(result.reason, expected)
+
+    def test_discovery_needs_both_meta_and_npz(self) -> None:
+        self.assertEqual(packed_lut_paths(self.bank), frozenset())
+        self._write_pack(npz=False)
+        # 只有 meta：渲染期 _LutLoader 仍会逐个解析，preflight 不能比它更乐观。
+        self.assertEqual(packed_lut_paths(self.bank), frozenset())
+        self._write_pack()
+        self.assertEqual(
+            packed_lut_paths(self.bank),
+            frozenset(os.path.realpath(path) for path in self.packed),
+        )
+
+    def _catalog_config(self) -> Path:
+        (self.bank / "features.jsonl").write_text(
+            "".join(
+                json.dumps({
+                    "preset_id": f"rcp_{path.stem}", "kind": "lut", "fmt": "cube",
+                    "path": str(path), "style_name": path.stem,
+                }) + "\n"
+                for path in (self.good, self.spare)
+            ),
+            encoding="utf-8",
+        )
+        taxonomy = self.bank / "taxonomy.jsonl"
+        taxonomy.write_text(
+            "".join(
+                json.dumps({"preset_id": f"rcp_{path.stem}", "major": "m", "minor": "n"}) + "\n"
+                for path in (self.good, self.spare)
+            ),
+            encoding="utf-8",
+        )
+        path = self.root / "databuild.toml"
+        text = EXAMPLE.read_text(encoding="utf-8")
+        text = text.replace(
+            'bank_dir = "/var/cache/veradata/preset_bank_full"', f'bank_dir = "{self.bank}"'
+        ).replace(
+            'taxonomy = "/var/cache/veradata/preset_bank_full/taxonomy.jsonl"',
+            f'taxonomy = "{taxonomy}"',
+        )
+        path.write_text(text, encoding="utf-8")
+        path.chmod(0o600)
+        return path
+
+    def test_catalog_load_wires_the_pack_and_keeps_the_same_inventory(self) -> None:
+        config = load_config(self._catalog_config(), validate_paths=False)
+        spy, calls = self._counting_load_lut()
+        with mock.patch("dataset_build.lut_io.load_lut", spy):
+            plain = PresetCatalog.load(config)
+        self.assertEqual(sorted(calls), [str(self.good), str(self.spare)])
+
+        self._write_pack()
+        spy, calls = self._counting_load_lut()
+        with mock.patch("dataset_build.lut_io.load_lut", spy):
+            packed = PresetCatalog.load(config)
+        # good 在 npz 里（免解析），spare 不在（照旧解析）；两条路径同一份 inventory。
+        self.assertEqual(calls, [str(self.spare)])
+        self.assertEqual(
+            [link.preset.preset_id for link in packed.links],
+            [link.preset.preset_id for link in plain.links],
+        )
+        self.assertEqual(packed.rejected, plain.rejected)
 
 
 class OneAlignCompatibilityTests(unittest.TestCase):

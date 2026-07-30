@@ -125,34 +125,78 @@ def _materialise_meta(staging: Path, sample_id: str, payload: Mapping[str, objec
     return path
 
 
+def _interleave_meta(rows: list[PlanRow], meta_rows: list[PlanRow]) -> list[PlanRow]:
+    """把每个 sample 的 ``.vrmeta.json`` 排在该 sample 最后一个成员之后。
+
+    保序模式下不能像排序模式那样把 meta 行统一追加到末尾：那会让 A 的 meta 行
+    落在 B 的成员之后，打断"同一 sample 的成员必须连续"这个打包不变量。
+    没有任何数据成员的 meta 行（纯元数据 sample）按 sample_id 追加在最后。
+    """
+    pending = {row.sample_id: row for row in meta_rows}
+    ordered: list[PlanRow] = []
+    for index, row in enumerate(rows):
+        ordered.append(row)
+        following = rows[index + 1].sample_id if index + 1 < len(rows) else None
+        if row.sample_id != following and row.sample_id in pending:
+            ordered.append(pending.pop(row.sample_id))
+    ordered.extend(pending[sample_id] for sample_id in sorted(pending))
+    return ordered
+
+
+def _assert_contiguous(rows: list[PlanRow]) -> None:
+    """调用方给定的行序必须让同一 sample 的成员连续（打包器的硬约束）。
+
+    打包器本来就会拒绝，但那要等到读 plan 文件时才报错；在这里先报，错误信息里
+    还带得上产生这一行的物理路径。
+    """
+    previous: str | None = None
+    closed: set[str] = set()
+    for row in rows:
+        if row.sample_id == previous:
+            continue
+        if row.sample_id in closed:
+            raise PlanError(f"sample {row.sample_id} is not contiguous at {row.path}")
+        if previous is not None:
+            closed.add(previous)
+        previous = row.sample_id
+
+
 def write_group(
     group: PlanGroup,
     out_dir: Path,
     *,
     meta_staging: Path,
     sample_meta: Mapping[str, Mapping[str, object]] | None = None,
+    preserve_order: bool = False,
 ) -> dict[str, object]:
     """Write ``plan.jsonl`` and ``metadata.jsonl`` for one group.
 
-    Rows are sorted by member name, which is exactly the order the packer
-    requires and the order that groups a sample.  Duplicate members are a
-    planning bug rather than something to silently resolve, so they raise.
+    Rows are sorted by member name by default, which is one order the packer
+    accepts and which groups a sample.  ``preserve_order=True`` keeps the caller's
+    row order instead, so the archived member order equals the production order
+    (``indexed_tar.MEMBER_ORDER_PLAN``); the caller then owns the weaker invariant
+    the packer actually enforces — members unique and one sample's members
+    contiguous — and gets a ``PlanError`` here when it breaks it.  Duplicate
+    members are a planning bug rather than something to silently resolve, so they
+    raise either way.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     meta_staging.mkdir(parents=True, exist_ok=True)
 
     rows = list(group.rows)
+    meta_rows: list[PlanRow] = []
     if sample_meta:
         for sample_id, payload in sorted(sample_meta.items()):
             enriched = {"sample_id": sample_id, "group": group.group, **payload}
             path = _materialise_meta(meta_staging, sample_id, enriched)
-            rows.append(
+            meta_rows.append(
                 PlanRow(
                     path=path,
                     logical_path=f"{group.group}/{sample_id}{META_SUFFIX}",
                     meta=enriched,
                 )
             )
+    rows = _interleave_meta(rows, meta_rows) if preserve_order else rows + meta_rows
 
     seen: dict[str, str] = {}
     for row in rows:
@@ -163,7 +207,10 @@ def write_group(
         if previous is not None:
             raise PlanError(f"member collision {member}: {previous} and {row.path}")
         seen[member] = str(row.path)
-    rows.sort(key=lambda item: item.member)
+    if preserve_order:
+        _assert_contiguous(rows)
+    else:
+        rows.sort(key=lambda item: item.member)
 
     plan_path = out_dir / "plan.jsonl"
     metadata_path = out_dir / "metadata.jsonl"

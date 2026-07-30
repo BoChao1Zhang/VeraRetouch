@@ -688,11 +688,16 @@ def build_indexed_tar(
     prefetch_bytes: int = DEFAULT_PREFETCH_BYTES,
     parallel_file_max: int = DEFAULT_PARALLEL_FILE_MAX,
     progress: Callable[[Mapping[str, object]], None] | None = None,
+    member_order: str = MEMBER_ORDER,
 ) -> dict[str, object]:
     """Build and atomically publish an indexed tar dataset.
 
     Pass either a `source_root` to archive a directory as-is, or a `plan` JSONL
     naming each source file and the logical path it takes inside the archive.
+
+    Members always land in input order; `member_order` only records which order
+    that was, so a plan the caller deliberately left unsorted must declare
+    `MEMBER_ORDER_PLAN` (see `dataset_plan.write_group(preserve_order=True)`).
     """
     if type(shard_size_bytes) is not int or shard_size_bytes < 2 * BLOCK_SIZE:
         raise IndexedTarError("shard_size_bytes must be an integer of at least 1024")
@@ -821,7 +826,7 @@ def build_indexed_tar(
             "input_mode": input_mode,
             "archive_format": "ustar",
             "compression": "none",
-            "member_order": MEMBER_ORDER,
+            "member_order": member_order,
             "key_policy": KEY_POLICY,
             "target_shard_size_bytes": shard_size_bytes,
             "read_workers": read_workers,

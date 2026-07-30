@@ -5,16 +5,17 @@ import os
 
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
-from PIL import Image, ImageOps
+from dataset_build.tools.archive_reader import open_rgb
 
 from . import config
 
 
-def _decode_rgb(path: str) -> Image.Image:
-    with Image.open(path) as image:
-        return ImageOps.exif_transpose(image).convert("RGB")
+# ponytail: a pure alias for open_rgb, kept only because the compatibility tests
+# patch this name as their decode seam.
+_decode_rgb = open_rgb
 
 
 def _prepare_qalign_transformers_compat(modeling_llama: Any) -> None:
@@ -173,11 +174,26 @@ class OneAlignRunner:
         "VERA_ONEALIGN_MODEL", "/var/cache/veradata/models/OneAlign"
     )
 
+    # One group hands OneAlign nine images.  Decoding them and running Q-Align's
+    # own expand2square + CLIP preprocess costs ~450 ms of Pillow resampling and
+    # NumPy normalization on a single thread while the H100 waits, which is more
+    # than the forward itself.  The work is per-image independent and both
+    # Pillow's resampler and NumPy's ufuncs release the GIL, so a small bounded
+    # pool turns it into ~125 ms without altering a single pixel.  It is not a
+    # tunable: the pool only has to be wide enough for one group's images.
+    PREPROCESS_WORKERS = 8
+
     def __init__(self, device: Optional[str] = None):
         self.device = device or config.IAA_DEVICE
         self.scorer = None
         self._torch = None
         self._lock = threading.Lock()
+        # Threads are created on first submit and retired when this executor
+        # becomes unreachable, so an unused runner costs nothing.
+        self._preprocess = ThreadPoolExecutor(
+            max_workers=self.PREPROCESS_WORKERS,
+            thread_name_prefix="onealign-preprocess",
+        )
 
     def load(self) -> None:
         if self.scorer is not None:
@@ -239,6 +255,49 @@ class OneAlignRunner:
     def score_path(self, path: str) -> dict[str, Optional[float]]:
         score = self._score_pils([_decode_rgb(path)])[0]
         return {"iaa_mixed": score, "onealign": score}
+
+    def _pixel_values(self, path: str) -> Any:
+        """Q-Align's own image pipeline for one path, off the forward thread.
+
+        Every step is the one ``QAlignAestheticScorer.forward`` would have run —
+        the same decode, the same square padding against the processor's mean
+        colour, the same CLIP preprocess — so the batch this feeds is bit-equal
+        to the one the serial path built.
+        """
+        processor = self.scorer.image_processor
+        square = self.scorer.expand2square(
+            _decode_rgb(path),
+            tuple(int(value * 255) for value in processor.image_mean),
+        )
+        return processor.preprocess([square], return_tensors="pt")["pixel_values"]
+
+    def _score_pixel_values(self, batch: Any) -> list[float]:
+        """The tail of ``QAlignAestheticScorer.forward`` over a prepared batch."""
+        scorer = self.scorer
+        with self._lock, self._torch.inference_mode():
+            image_tensor = batch.half().to(scorer.model.device)
+            logits = scorer.model(
+                scorer.input_ids.repeat(image_tensor.shape[0], 1),
+                images=image_tensor,
+            )["logits"][:, -1, scorer.preferential_ids_]
+            raw = (
+                self._torch.softmax(logits, -1) @ scorer.weight_tensor
+            ).detach().float().cpu().tolist()
+        return [max(0.0, min(100.0, float(score) * 100.0)) for score in raw]
+
+    def score_paths(self, paths: list[str]) -> list[float]:
+        """Score several images in one forward pass; scores are clamped to 0..100.
+
+        The forward stays one batched call, so the scores are unchanged; only the
+        per-image preprocessing that feeds it is spread over the pool.
+        """
+        if not paths:
+            return []
+        if len(paths) == 1:
+            return self._score_pils([_decode_rgb(paths[0])])
+        self.load()
+        prepared = list(self._preprocess.map(self._pixel_values, paths))
+        return self._score_pixel_values(self._torch.cat(prepared))
 
     def preprocess_path(self, path: str) -> dict[str, Any]:
         return {"pil": _decode_rgb(path)}

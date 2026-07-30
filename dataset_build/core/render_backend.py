@@ -77,7 +77,7 @@ _RENDER_GPU_IDX = os.environ.get("MONETGPT_TORCH_DEVICE", "cuda:1").rsplit(":", 
 # 免去每次 load_cube 的 Python 解析税（GIL 串行 → GPU 饥饿）。首次访问懒加载全量
 # 进内存 {realpath: (grid, dmin, dmax)}（~2-3GB）；文件缺失则回退逐次 load_cube。
 _LUT_PACK_DIR = os.environ.get(
-    "RENDER_LUT_PACK_DIR", "/home/bc/data/datasets/vera_directionA_1M/preset_bank_full")
+    "RENDER_LUT_PACK_DIR", "/var/cache/veradata/preset_bank_full")
 _lut_pack: Optional[dict] = None
 _lut_pack_lock = threading.Lock()
 

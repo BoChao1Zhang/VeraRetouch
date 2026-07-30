@@ -7,12 +7,25 @@ import json
 import math
 import os
 import random
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from dataset_build.tools.archive_reader import iter_source_paths, path_exists, read_bytes
+from dataset_build.tools.archive_reader import (
+    default_db,
+    iter_source_paths,
+    path_exists,
+    prefix_range,
+    read_bytes,
+)
+from dataset_build.tools.land import (
+    NOT_A_CACHE_ENTRY,
+    SUBJECT_CACHE_GROUP,
+    SUBJECT_MAX_AREA,
+    SUBJECT_MIN_AREA,
+)
 
 from .config import MixConfig
 from .state import stable_id
@@ -183,7 +196,7 @@ def _inspect_cache_dir(
         if mask.ndim != 2 or not mask.size or not np.isfinite(mask).all():
             return None, "invalid_subject_mask"
         area = float((mask > 0.5).mean())
-        if area < 0.005 or area > 0.85:
+        if area < SUBJECT_MIN_AREA or area > SUBJECT_MAX_AREA:
             return None, "subject_mask_area_guard"
         with Image.open(io.BytesIO(read_bytes(source_path))) as source_image:
             source_image.load()
@@ -238,12 +251,103 @@ def refresh_source_record(source: SourceRecord) -> tuple[SourceRecord | None, st
     ), reason
 
 
+# 前缀过滤一律用 archive_reader.prefix_range 的范围比较（原因见该函数）。批次组名
+# 是 "<group>/batch-NNNN"，而 chr(ord('/') + 1) == '0'，所以下界 "cache/subject/"
+# 与上界 "cache/subject0" 精确覆盖该组及其全部批次子组。
+_GROUP_WHERE = '("group" = ? OR ("group" >= ? AND "group" < ?))'
+# ``cache_dir`` 前缀把结果限定在本次请求的 subject_cache 根下，顺带滤掉没有预
+# 计算路径的行（json_extract 返回 NULL，范围比较必假）。
+_ROW_WHERE = (
+    f"{_GROUP_WHERE} "
+    "AND json_extract(meta, '$.ineligible_reason') IS NOT ? "
+    "AND json_extract(meta, '$.cache_dir') >= ? AND json_extract(meta, '$.cache_dir') < ?"
+)
+
+
+def _precomputed_inventory(
+    root: Path,
+    by_id: Mapping[str, str],
+    by_path: Mapping[str, str],
+) -> tuple[list[SourceRecord], dict[str, int]] | None:
+    """Read the gate result that ``land`` precomputed, or None to fall back.
+
+    Every check in ``_inspect_cache_dir`` except ``mask_area`` is answerable from
+    metadata, and ``mask_area`` itself was computed when the bytes were packed —
+    so the whole 56,777-entry, 8-minute decode pass collapses into three queries.
+    Anything unexpected (no catalog, a group that predates the precomputation, a
+    row that will not parse) returns None so the caller re-inspects the archive.
+    """
+    db_path = default_db()
+    if not db_path.is_file():
+        return None
+    lower, upper = prefix_range(f"{os.fspath(root).rstrip('/')}/")
+    group = (SUBJECT_CACHE_GROUP, *prefix_range(f"{SUBJECT_CACHE_GROUP}/"))
+    row_params = (*group, NOT_A_CACHE_ENTRY, lower, upper)
+    connection = sqlite3.connect(f"{db_path.as_uri()}?immutable=1", uri=True)
+    try:
+        connection.row_factory = sqlite3.Row
+        total, missing = connection.execute(
+            "SELECT COUNT(*), COALESCE(SUM(json_extract(meta, '$.eligible') IS NULL), 0) "
+            f"FROM samples WHERE {_GROUP_WHERE}",
+            group,
+        ).fetchone()
+        if not total or missing:
+            # 组不存在，或还没回填过预计算字段：交回旧路径。
+            return None
+        counts = {
+            str(row["reason"]): int(row["n"])
+            for row in connection.execute(
+                "SELECT COALESCE(json_extract(meta, '$.ineligible_reason'), 'eligible') AS reason,"
+                f" COUNT(*) AS n FROM samples WHERE {_ROW_WHERE} GROUP BY reason",
+                row_params,
+            )
+        }
+        rows = connection.execute(
+            f"SELECT sample_id, meta FROM samples WHERE {_ROW_WHERE}"
+            " AND json_extract(meta, '$.eligible') = 1",
+            row_params,
+        ).fetchall()
+    except sqlite3.Error:
+        return None
+    finally:
+        connection.close()
+    if not counts:
+        return None
+    eligible: list[SourceRecord] = []
+    for row in rows:
+        try:
+            meta = json.loads(str(row["meta"]))
+            cache_dir = Path(str(meta["cache_dir"]))
+            source_path = Path(str(meta["source_path"]))
+            asset_id = str(meta.get("asset_id") or "")
+            real = os.path.realpath(source_path)
+            eligible.append(
+                SourceRecord(
+                    source_id=asset_id or stable_id("source", real),
+                    source_path=source_path,
+                    cache_dir=cache_dir,
+                    subject_path=cache_dir / "subject.png",
+                    subject_meta_path=cache_dir / "subject.json",
+                    # 本机 postgres 还在时它仍是权威，预计算值只是它消失后的兜底。
+                    scene=_normalize_scene(
+                        by_id.get(asset_id) or by_path.get(real) or meta.get("scene")
+                    ),
+                    subject=dict(meta.get("subject") or {}),
+                    mask_area=float(meta["mask_area"]),
+                )
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+    return eligible, {"cache_entries": sum(counts.values()), **counts}
+
+
 def build_inventory(
     subject_cache: str | os.PathLike[str],
     postgres_dsn: str,
     *,
     workers: int = 16,
     connection_factory: Callable[[str], Any] | None = None,
+    legacy_inspect: bool = False,
 ) -> SourceInventoryResult:
     root = Path(subject_cache)
     by_id, by_path, metadata_status = load_scene_metadata(
@@ -258,9 +362,43 @@ def build_inventory(
             ),
             key=lambda path: path.name,
         )
+        # 迁移后本机树是 SAM3 relabel 写出的稀疏覆盖层，不是全量池：有预计算
+        # 归档行时以归档为底座、本机目录逐条实检并覆盖同源，否则（legacy 全量
+        # 树 / 无预计算）继续走下方的全量实检。
+        if not legacy_inspect:
+            precomputed = _precomputed_inventory(root, by_id, by_path)
+            if precomputed is not None:
+                rows, counts = precomputed
+                overlay = {str(entry): entry for entry in cache_dirs}
+                merged = [r for r in rows if str(r.cache_dir) not in overlay]
+                counts = dict(counts)
+                counts["local_overlay"] = len(overlay)
+                for entry in overlay.values():
+                    record, reason = _inspect_cache_dir(entry, by_id, by_path)
+                    counts[f"overlay_{reason}"] = counts.get(f"overlay_{reason}", 0) + 1
+                    if record is not None:
+                        merged.append(record)
+                counts["eligible"] = len(merged)
+                merged = _require_unique_source_ids(merged)
+                merged.sort(key=lambda row: row.source_id)
+                return SourceInventoryResult(
+                    tuple(merged), dict(sorted(counts.items())), metadata_status
+                )
     else:
-        # The local cache tree is archived: enumerate the same entries from the
-        # archive instead of failing, so a migrated pool still builds.
+        # The local cache tree is archived: the gate was precomputed at landing,
+        # so read it back instead of re-decoding every entry.  ``legacy_inspect``
+        # is the rollback switch onto the reference implementation below.
+        if not legacy_inspect:
+            precomputed = _precomputed_inventory(root, by_id, by_path)
+            if precomputed is not None:
+                rows, counts = precomputed
+                rows = _require_unique_source_ids(rows)
+                rows.sort(key=lambda row: row.source_id)
+                return SourceInventoryResult(
+                    tuple(rows), dict(sorted(counts.items())), metadata_status
+                )
+        # Enumerate the same entries from the archive instead of failing, so a
+        # migrated pool still builds.
         cache_dirs = sorted(
             {
                 Path(path).parent
@@ -272,21 +410,14 @@ def build_inventory(
         if not cache_dirs:
             raise FileNotFoundError(root)
     counts: dict[str, int] = {"cache_entries": len(cache_dirs)}
-    inspect = lambda path: _inspect_cache_dir(path, by_id, by_path)
-    if workers <= 1:
-        inspected = map(inspect, cache_dirs)
-    else:
-        pool = ThreadPoolExecutor(max_workers=workers)
-        inspected = pool.map(inspect, cache_dirs)
     eligible: list[SourceRecord] = []
-    try:
-        for record, reason in inspected:
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        for record, reason in pool.map(
+            lambda path: _inspect_cache_dir(path, by_id, by_path), cache_dirs
+        ):
             counts[reason] = counts.get(reason, 0) + 1
             if record is not None:
                 eligible.append(record)
-    finally:
-        if workers > 1:
-            pool.shutdown(wait=True)
     eligible = _require_unique_source_ids(eligible)
     eligible.sort(key=lambda row: row.source_id)
     return SourceInventoryResult(tuple(eligible), dict(sorted(counts.items())), metadata_status)

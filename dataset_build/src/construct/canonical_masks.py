@@ -5,11 +5,12 @@ import hashlib
 import math
 import random
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
 from PIL import Image, ImageFilter
+
+from dataset_build.tools.archive_reader import open_image
 
 from .sources import SourceRecord
 from .state import stable_id
@@ -63,10 +64,9 @@ def _seed_int(*parts: object) -> int:
 
 def load_subject_alpha(source: SourceRecord, width: int, height: int) -> np.ndarray:
     try:
-        with Image.open(source.subject_path) as image:
-            image.load()
-            mask = image.convert("L").resize((width, height), _RESAMPLING.NEAREST)
-            hard = np.asarray(mask, dtype=np.float32) / 255.0
+        image = open_image(source.subject_path)
+        mask = image.convert("L").resize((width, height), _RESAMPLING.NEAREST)
+        hard = np.asarray(mask, dtype=np.float32) / 255.0
     except Exception as exc:  # noqa: BLE001
         raise MaskPlanError("subject_cache_corrupt", "subject.png is unreadable") from exc
     hard = (hard > 0.5).astype(np.float32)

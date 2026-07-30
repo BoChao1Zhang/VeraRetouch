@@ -7,12 +7,13 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image
 
 from dataset_build.lut_io import load_lut
+from dataset_build.tools.archive_reader import open_rgb
 
 from .canonical_masks import MaskAsset
 from .config import DatabuildConfig
@@ -48,15 +49,13 @@ class RenderedCandidate:
 def preprocess_source(path: str | os.PathLike[str], short_edge: int = 1024) -> PreparedSource:
     if short_edge <= 0:
         raise ValueError("short_edge must be positive")
-    with Image.open(path) as image:
-        image.load()
-        oriented = ImageOps.exif_transpose(image).convert("RGB")
-        scale = short_edge / min(oriented.width, oriented.height)
-        width = max(1, int(round(oriented.width * scale)))
-        height = max(1, int(round(oriented.height * scale)))
-        if oriented.size != (width, height):
-            oriented = oriented.resize((width, height), _RESAMPLING.LANCZOS)
-        pixels = np.asarray(oriented, dtype=np.float32) / 255.0
+    oriented = open_rgb(path)
+    scale = short_edge / min(oriented.width, oriented.height)
+    width = max(1, int(round(oriented.width * scale)))
+    height = max(1, int(round(oriented.height * scale)))
+    if oriented.size != (width, height):
+        oriented = oriented.resize((width, height), _RESAMPLING.LANCZOS)
+    pixels = np.asarray(oriented, dtype=np.float32) / 255.0
     return PreparedSource(pixels=pixels, width=width, height=height)
 
 
@@ -257,43 +256,90 @@ class LocalGpuOnlyRenderer:
 
     def render(self, source: PreparedSource, preset: PresetRecord,
                mask: MaskAsset | None = None) -> RenderedCandidate:
-        self.assert_ready()
-        self._assert_bound_preset(preset)
+        result = self.render_many(source, ((preset, mask),))[0]
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    def render_many(
+        self,
+        source: PreparedSource,
+        requests: Sequence[tuple[PresetRecord, MaskAsset | None]],
+    ) -> list[RenderedCandidate | Exception]:
+        """Render one speculative slot wave with one upload and one host transfer."""
+        if not requests:
+            return []
+        results: list[RenderedCandidate | Exception | None] = [None] * len(requests)
+        queued: list[tuple[int, Any, str, dict[str, Any], MaskAsset | None]] = []
+        try:
+            self.assert_ready()
+        except Exception as exc:  # every slot observes the same lost-device boundary
+            return [exc for _ in requests]
+        for index, (preset, _) in enumerate(requests):
+            try:
+                self._assert_bound_preset(preset)
+            except Exception as exc:  # keep one bad capability local to its slot
+                results[index] = exc
+        if all(result is not None for result in results):
+            return [result for result in results if result is not None]
         with self._semaphore:
             before = self._upload(source.pixels)
             try:
-                if preset.format == "lut":
-                    edited, diagnostics = self._apply_lut(before, preset)
-                    engine = "gpu_lut"
-                elif preset.format in {"xmp", "lrtemplate"}:
-                    edited, diagnostics = self._apply_param(before, preset)
-                    engine = "gpu_local_preset"
-                else:
-                    raise GpuRenderError("unsupported_format", preset.format)
-                self._assert_gpu_tensor(edited)
-                if mask is None:
-                    output = edited
-                else:
-                    if mask.effective_alpha.shape != (source.height, source.width):
-                        raise GpuRenderError("mask_shape_mismatch", "C_GT does not match source grid")
-                    alpha = self._torch.as_tensor(
-                        mask.effective_alpha, dtype=before.dtype, device=self.device
-                    )[None, None]
-                    mixed = before * (1.0 - alpha) + edited * alpha
-                    output = self._torch.where(
-                        alpha == 0, before, self._torch.where(alpha == 1, edited, mixed)
-                    )
-                self._assert_gpu_tensor(output)
-                array = output[0].permute(1, 2, 0).detach().cpu().numpy().astype(np.float32)
-            except GpuRenderError:
-                raise
-            except Exception as exc:  # noqa: BLE001 - fail closed; never select another backend
-                raise GpuRenderError("gpu_render_failed", f"{type(exc).__name__}: {exc}") from exc
+                for index, (preset, mask) in enumerate(requests):
+                    if results[index] is not None:
+                        continue
+                    try:
+                        if preset.format == "lut":
+                            edited, diagnostics = self._apply_lut(before, preset)
+                            engine = "gpu_lut"
+                        elif preset.format in {"xmp", "lrtemplate"}:
+                            edited, diagnostics = self._apply_param(before, preset)
+                            engine = "gpu_local_preset"
+                        else:
+                            raise GpuRenderError("unsupported_format", preset.format)
+                        self._assert_gpu_tensor(edited)
+                        if mask is None:
+                            output = edited
+                        else:
+                            if mask.effective_alpha.shape != (source.height, source.width):
+                                raise GpuRenderError(
+                                    "mask_shape_mismatch", "C_GT does not match source grid"
+                                )
+                            alpha = self._torch.as_tensor(
+                                mask.effective_alpha, dtype=before.dtype, device=self.device
+                            )[None, None]
+                            mixed = before * (1.0 - alpha) + edited * alpha
+                            output = self._torch.where(
+                                alpha == 0, before, self._torch.where(alpha == 1, edited, mixed)
+                            )
+                        self._assert_gpu_tensor(output)
+                        queued.append((index, output, engine, diagnostics, mask))
+                    except GpuRenderError as exc:
+                        results[index] = exc
+                    except Exception as exc:  # noqa: BLE001 - one slot fails closed
+                        results[index] = GpuRenderError(
+                            "gpu_render_failed", f"{type(exc).__name__}: {exc}"
+                        )
+
+                if queued:
+                    batch = self._torch.stack([
+                        output[0].permute(1, 2, 0) for _, output, _, _, _ in queued
+                    ])
+                    arrays = batch.detach().cpu().numpy().astype(np.float32, copy=False)
+                    for array, (index, _, engine, diagnostics, mask) in zip(arrays, queued):
+                        try:
+                            if mask is not None:
+                                assert_alpha_zero_endpoint(
+                                    source.pixels, array, mask.effective_alpha
+                                )
+                            results[index] = RenderedCandidate(array, engine, diagnostics)
+                        except Exception as exc:  # preserve the candidate-local retry boundary
+                            results[index] = exc
             finally:
                 del before
-        if mask is not None:
-            assert_alpha_zero_endpoint(source.pixels, array, mask.effective_alpha)
-        return RenderedCandidate(array, engine, diagnostics)
+        if any(result is None for result in results):
+            raise GpuRenderError("gpu_render_failed", "batched render lost a slot result")
+        return [result for result in results if result is not None]
 
     def _upload(self, pixels: np.ndarray):
         tensor = self._torch.from_numpy(

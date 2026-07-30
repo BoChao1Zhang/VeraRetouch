@@ -23,6 +23,30 @@ class ConfigError(ValueError):
 PRESET_FORMATS = frozenset({"xmp", "lrtemplate", "lut"})
 PRESET_FILTERS = frozenset({*PRESET_FORMATS, "all"})
 
+# Sources kept in flight behind the ordered selector turn.  Five is the smallest
+# window whose per-group source-thread occupancy falls below the dual-OneAlign
+# ranking floor, which is what makes QA rather than preprocessing the limit.
+# Optional in [render] so configs written before the key keep loading.
+DEFAULT_SOURCE_WINDOW = 5
+
+# Independent OneAlign copies sharing the QA device.  Ranking is bounded by one
+# scorer's serialized forward, so copies are how QA throughput scales; two is the
+# historical production value and stays the default.  Each copy costs ~16.5 GiB
+# on the 95.6 GiB QA H100, so four still leaves room for SAM3 and its activations.
+# Optional in [render] so configs written before the key keep loading.
+DEFAULT_QA_SCORER_INSTANCES = 2
+MAX_QA_SCORER_INSTANCES = 4
+
+# OneAlign points between the best and second-best scored candidate of a group.
+# WP5 stage C measured the winner beating rank2 in 56% of pairs (p=0.69, i.e.
+# chance) when that gap is small and 92% once it exceeds 10, so the gap is the
+# scorer's own resolution limit rather than a taste knob: under ``ABSTAIN`` the
+# group publishes no winner at all, between the two thresholds the winner ships
+# marked ``low``, above ``LOW`` it is a normal winner.
+# Optional in [render] so configs written before the keys keep loading.
+DEFAULT_QA_WINNER_MARGIN_ABSTAIN = 1.0
+DEFAULT_QA_WINNER_MARGIN_LOW = 2.0
+
 
 @dataclass(frozen=True, slots=True)
 class MixConfig:
@@ -53,6 +77,16 @@ class RenderConfig:
     visible_de_min: float
     visible_fraction_de: float
     visible_fraction_min: float
+    # Trailing defaults keep positional construction working; the loader always
+    # supplies the validated [render] values.
+    iaa_batch: int = 8
+    qa_preflight_forward: bool = True
+    postprocess_workers: int = 16
+    visibility_backend: str = "torch"
+    source_window: int = DEFAULT_SOURCE_WINDOW
+    qa_scorer_instances: int = DEFAULT_QA_SCORER_INSTANCES
+    qa_winner_margin_abstain: float = DEFAULT_QA_WINNER_MARGIN_ABSTAIN
+    qa_winner_margin_low: float = DEFAULT_QA_WINNER_MARGIN_LOW
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,8 +346,9 @@ def _check_private_file(path: Path) -> None:
 
 
 def _validate_runtime_paths(config: DatabuildConfig) -> None:
+    # subject_cache 不要求本机存在：本机树迁入归档后它是反查前缀（逻辑键），
+    # 归档也无该前缀时 build_inventory 会以 FileNotFoundError 明确失败。
     required_dirs = {
-        "sources.subject_cache": config.sources.subject_cache,
         "presets.bank_dir": config.presets.bank_dir,
     }
     required_files = {"presets.taxonomy": config.presets.taxonomy}
@@ -420,10 +455,21 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
 
     render_t = _table(data, "render")
     render_keys = {
-        "short_edge", "jpeg_quality", "gpu_concurrency", "diff_short_edge",
+        "short_edge", "jpeg_quality", "gpu_concurrency", "iaa_batch",
+        "diff_short_edge", "qa_preflight_forward", "postprocess_workers",
+        "visibility_backend", "source_window", "qa_scorer_instances",
+        "qa_winner_margin_abstain", "qa_winner_margin_low",
         "visible_de_min", "visible_fraction_de", "visible_fraction_min",
     }
-    _keys(render_t, render_keys, render_keys, "render")
+    _keys(
+        render_t,
+        render_keys,
+        render_keys.difference({
+            "source_window", "qa_scorer_instances",
+            "qa_winner_margin_abstain", "qa_winner_margin_low",
+        }),
+        "render",
+    )
     render = RenderConfig(
         short_edge=_typed(render_t, "short_edge", int, "render"),
         jpeg_quality=_typed(render_t, "jpeg_quality", int, "render"),
@@ -432,11 +478,56 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
         visible_de_min=_typed(render_t, "visible_de_min", float, "render"),
         visible_fraction_de=_typed(render_t, "visible_fraction_de", float, "render"),
         visible_fraction_min=_typed(render_t, "visible_fraction_min", float, "render"),
+        iaa_batch=_typed(render_t, "iaa_batch", int, "render"),
+        qa_preflight_forward=_typed(
+            render_t, "qa_preflight_forward", bool, "render"),
+        postprocess_workers=_typed(render_t, "postprocess_workers", int, "render"),
+        visibility_backend=_typed(render_t, "visibility_backend", str, "render"),
+        source_window=(
+            _typed(render_t, "source_window", int, "render")
+            if "source_window" in render_t else DEFAULT_SOURCE_WINDOW
+        ),
+        qa_scorer_instances=(
+            _typed(render_t, "qa_scorer_instances", int, "render")
+            if "qa_scorer_instances" in render_t else DEFAULT_QA_SCORER_INSTANCES
+        ),
+        qa_winner_margin_abstain=(
+            _typed(render_t, "qa_winner_margin_abstain", float, "render")
+            if "qa_winner_margin_abstain" in render_t
+            else DEFAULT_QA_WINNER_MARGIN_ABSTAIN
+        ),
+        qa_winner_margin_low=(
+            _typed(render_t, "qa_winner_margin_low", float, "render")
+            if "qa_winner_margin_low" in render_t else DEFAULT_QA_WINNER_MARGIN_LOW
+        ),
     )
     for name in ("short_edge", "jpeg_quality", "gpu_concurrency", "diff_short_edge"):
         _positive(getattr(render, name), f"render.{name}")
     if render.short_edge != 1024 or render.jpeg_quality != 95:
         raise ConfigError("canonical rendering is fixed at short edge 1024 and JPEG quality 95")
+    if not 1 <= render.iaa_batch <= 8:
+        raise ConfigError("render.iaa_batch must be between 1 and 8")
+    if not 16 <= render.postprocess_workers <= 32:
+        raise ConfigError("render.postprocess_workers must be between 16 and 32")
+    if not 1 <= render.source_window <= 8:
+        raise ConfigError("render.source_window must be between 1 and 8")
+    if not 1 <= render.qa_scorer_instances <= MAX_QA_SCORER_INSTANCES:
+        raise ConfigError(
+            "render.qa_scorer_instances must be between 1 and "
+            f"{MAX_QA_SCORER_INSTANCES}"
+        )
+    # Both are OneAlign points on the same 0-100 scale the scorer emits, so the
+    # abstain gate can never sit above the low-confidence gate and neither can
+    # exceed the widest gap the scale admits.  Setting both to 0 disables the
+    # policy: no gap is below zero, so every winner stays and is called normal.
+    if not 0.0 <= render.qa_winner_margin_abstain <= render.qa_winner_margin_low <= 100.0:
+        raise ConfigError(
+            "render.qa_winner_margin_abstain must be between 0 and "
+            "render.qa_winner_margin_low, which must not exceed the 100-point "
+            "OneAlign range"
+        )
+    if render.visibility_backend not in {"numpy", "torch"}:
+        raise ConfigError("render.visibility_backend must be numpy or torch")
     if not 0.0 <= render.visible_fraction_min <= 1.0:
         raise ConfigError("render.visible_fraction_min must be in [0, 1]")
     _positive(render.visible_de_min, "render.visible_de_min")

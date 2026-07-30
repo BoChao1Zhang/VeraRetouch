@@ -166,7 +166,18 @@ def _sam_forward_batch(masker, sam_rows: list, img_works: list, min_score: float
         torch.cuda.empty_cache()   # 大块瞬时分配不留在缓存池（防碎片化膨胀）
         return out
     except Exception as e:  # noqa: BLE001 - 批前向失败退回逐张（含 OOM/尺寸兼容问题）
-        print(f"[sam-batch] fallback to per-image: {type(e).__name__}: {str(e)[:150]}",
+        detail = f"{type(e).__name__}: {str(e)[:150]}"
+        # 失败批次的显存必须在逐图重试之前还回去：OOM 时 inputs/outputs 仍挂在本帧
+        # 局部名上，异常的 traceback 还钉着前向内部各帧的激活，不松手的话整段
+        # fallback 都在少了一整批显存的卡上跑（B6 之后这张卡还有 2×OneAlign）。
+        # 用重新绑定而非 del：前向抛错时 outputs/results 可能从未绑定过。
+        e.__traceback__ = None
+        images = inputs = outputs = results = None
+        try:
+            torch.cuda.empty_cache()
+        except Exception:  # noqa: BLE001 - CPU-only/驱动异常不能盖掉真正的失败
+            pass
+        print(f"[sam-batch] fallback to per-image: {detail}",
               file=sys.stderr, flush=True)
         out = []
         for r, work in zip(sam_rows, img_works):

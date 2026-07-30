@@ -24,6 +24,9 @@ PHASES = (
     "complete_with_failures",
 )
 TERMINAL_STATUSES = frozenset({"complete", "complete_with_failures"})
+# Terminal failure code for a group whose rendered assets are gone (tmpfs wiped
+# before the group was landed).  Named here because the store subtracts it.
+ASSETS_LOST_CODE = "group_assets_lost"
 
 
 class StateError(RuntimeError):
@@ -276,6 +279,13 @@ class ArtifactStore:
             )
         if not set(winner_ids).issubset(candidate_ids):
             raise StateError(f"{prefix}group winner_ids must reference group candidates")
+        # The margin policy's verdict, absent from every group journalled before
+        # the policy existed and from groups where no candidate cleared the SFT
+        # threshold, so only its vocabulary is closed.
+        if record.get("winner_confidence") not in {None, "abstain", "low", "normal"}:
+            raise StateError(
+                f"{prefix}group winner_confidence must be abstain, low or normal"
+            )
 
     def append_group(self, record: dict[str, Any]) -> bool:
         stored = copy.deepcopy(record)
@@ -342,6 +352,20 @@ class ArtifactStore:
     def external_pool_exhausted(self) -> bool:
         return any(row.get("error_code") == "external_pool_exhausted" for row in self.failures)
 
+    def lost_group_ids(self) -> set[str]:
+        """Groups whose durable assets no longer exist anywhere.
+
+        A restarted build finds its tmpfs empty; every group whose candidates
+        were neither landed in the archive nor still staged is dead weight.  The
+        JSONL is append-only, so the group stays on disk and this derived set is
+        what annotation, counting and manifest accounting subtract.
+        """
+        return {
+            str(row["group_id"])
+            for row in self.failures
+            if row.get("error_code") == ASSETS_LOST_CODE and row.get("group_id")
+        }
+
     def completed_sources(self) -> set[str]:
         return {str(row["source_id"]) for row in self.groups.values()}
 
@@ -360,8 +384,11 @@ class ArtifactStore:
 
     def pending_annotation_tasks(self) -> list[dict[str, Any]]:
         done = self.completed_annotation_tasks()
+        lost = self.lost_group_ids()
         tasks: list[dict[str, Any]] = []
         for group in sorted(self.groups.values(), key=lambda row: str(row["group_id"])):
+            if str(group["group_id"]) in lost:
+                continue
             candidates = {row["candidate_id"]: row for row in group["candidates"]}
             for rank, candidate_id in enumerate(group.get("winner_ids") or [], start=1):
                 task_id = stable_id("annotation", group["group_id"], candidate_id, rank)
@@ -372,6 +399,11 @@ class ArtifactStore:
                     "group_id": group["group_id"],
                     "candidate_id": candidate_id,
                     "winner_rank": rank,
+                    # Decided when the winner was chosen and journalled with it,
+                    # so re-annotating an old build never re-judges its winners
+                    # under today's thresholds.  Missing on groups written before
+                    # the policy existed, which is what ``None`` means here.
+                    "winner_confidence": group.get("winner_confidence"),
                     "group": group,
                     "candidate": candidates[candidate_id],
                 })

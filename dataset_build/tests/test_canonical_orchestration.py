@@ -11,6 +11,7 @@ from unittest import mock
 import numpy as np
 from PIL import Image
 
+from construct import agent
 from construct.agent import PipelineDependencies, run
 from construct.config import (
     AnnotationConfig,
@@ -120,7 +121,15 @@ class OrchestrationFixture(unittest.TestCase):
             mix=MixConfig(local=local, global_=global_),
             sources=SourcesConfig(self.root / "cache", "postgresql://u:p@db/source"),
             presets=PresetsConfig(self.root / "bank", self.root / "taxonomy.jsonl", 6.0, ()),
-            render=RenderConfig(1024, 95, 2, 512, 2.5, 2.3, 0.5),
+            # ``FakeScorer`` answers one constant for every candidate, so every
+            # group here is an exact rank1-rank2 tie.  A margin policy cannot be
+            # evaluated against a stub with no ranking signal, so it is switched
+            # off (0.0/0.0) for the orchestration fixtures and exercised on its
+            # own terms in test_winner_margin.py, which re-enables it on top of
+            # this very config precisely because the ties are total.
+            render=RenderConfig(1024, 95, 2, 512, 2.5, 2.3, 0.5,
+                                qa_winner_margin_abstain=0.0,
+                                qa_winner_margin_low=0.0),
             masks=MasksConfig(0.5, relabel_attempts),
             annotation=AnnotationConfig(
                 "external", 768, 90, "low", 6000, 4, 3,
@@ -463,6 +472,75 @@ class PipelineTests(OrchestrationFixture):
         }
         self.assertEqual(resumed["status"], "complete")
         self.assertEqual(before_counts, after_counts)
+
+    def test_sam3_batches_keep_the_renderer_and_scorer_resident(self):
+        """SAM3 与 OneAlign 同卡共存：每批次卸载重建曾花 11.5-11.8s/轮。"""
+        config = self.config(target=1, local=1.0, global_=0.0, relabel_attempts=1)
+        sources = [self.source(index) for index in range(3)]
+        allocation = allocate_sources(
+            sources,
+            build_id=config.build_id,
+            seed=config.seed,
+            target_groups=1,
+            mix=config.mix,
+        )
+        first = allocation.local[0]
+        border = np.zeros((32, 48), dtype=np.uint8)
+        border[:2] = border[-2:] = 255
+        border[:, :2] = border[:, -2:] = 255
+        Image.fromarray(border, "L").save(first.subject_path)
+        inventory = SourceInventoryResult(
+            tuple(sources), {"cache_entries": 3, "eligible": 3}, "ok"
+        )
+
+        events: list[str] = []
+        renderers: list[object] = []
+        scorers: list[object] = []
+
+        def relabeler(batch, _config, _attempt):
+            events.append("relabel")
+            return {source.source_id: "ready" for source in batch}
+
+        dependencies = self.dependencies(inventory, relabeler=relabeler)
+        base_renderer, base_scorer = dependencies.renderer_factory, dependencies.scorer_factory
+        dependencies.renderer_factory = lambda config_: (
+            renderers.append(base_renderer(config_)) or renderers[-1]
+        )
+        dependencies.scorer_factory = lambda: scorers.append(base_scorer()) or scorers[-1]
+        base_release = agent.CanonicalPipeline._release_heavy_resources
+
+        def release_spy(pipeline):
+            events.append("release")
+            base_release(pipeline)
+
+        with mock.patch("construct.agent.preprocess_source", self.small_preprocess), \
+                mock.patch.object(
+                    agent.CanonicalPipeline, "_release_heavy_resources", release_spy
+                ):
+            run(config, dependencies=dependencies)
+
+        # SAM3 批次两侧不再有 release/restore；唯一一次释放留给 annotation。
+        self.assertEqual(events, ["relabel", "release"])
+        self.assertEqual(len(renderers), 1)
+        self.assertEqual(len(scorers), 1)
+
+    def test_annotation_phase_still_hands_the_cards_back(self):
+        config = self.config(target=1, local=0.0, global_=1.0)
+        source = self.source(0)
+        inventory = SourceInventoryResult((source,), {"eligible": 1}, "ok")
+        dependencies = self.dependencies(inventory)
+        released: list[tuple[object, object]] = []
+        base = agent.CanonicalPipeline._release_heavy_resources
+
+        def spy(pipeline):
+            base(pipeline)
+            released.append((pipeline.renderer, pipeline.scorer))
+
+        with mock.patch("construct.agent.preprocess_source", self.small_preprocess), \
+                mock.patch.object(agent.CanonicalPipeline, "_release_heavy_resources", spy):
+            run(config, dependencies=dependencies)
+        # 唯一一次释放发生在 annotation 之前，且确实把两个引用清空了。
+        self.assertEqual(released, [(None, None)])
 
     def test_terminal_sam3_source_uses_same_mode_replacement(self):
         config = self.config(target=1, local=1.0, global_=0.0, relabel_attempts=1)
