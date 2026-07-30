@@ -34,9 +34,11 @@ for _root in ("/home/bc/VeraRetouch", "/home/bc/VeraRetouch/dataset_build/src"):
 from construct.responses import (  # noqa: E402
     AFTER_REFERENCE_RE,
     MACHINE_VOCAB_RE,
+    SELF_INSTRUCTION_RE,
     after_reference_hits,
     hint_contradictions,
     machine_vocab_hits,
+    self_instruction_hits,
     split_reasoning,
 )
 
@@ -252,18 +254,33 @@ def word_count(text: str) -> int:
 # is reported as ``benign`` instead of ``leak`` so the leak count stays honest.
 BENIGN_SENSE = (
     # bird plumage, not an alpha edge
-    re.compile(r"\bfeather(?:s|ed|ing)?\b(?=\s+(?:texture|detail|tone|color|pattern))", re.I),
+    re.compile(r"\bfeather(?:s|ed|ing)?\b(?=\s+(?:texture|detail|tone|color|pattern|"
+               r"marking))", re.I),
     re.compile(r"(?<=\bfine\s)\bfeather\b", re.I),
     re.compile(r"(?<=\bnatural\s)\bfeather\b", re.I),
     re.compile(r"(?<=\bpale\s)\bfeather\b", re.I),
     re.compile(r"(?<=\bsubtle\s)\bfeather\b", re.I),
     re.compile(r"(?<=\bpeach\s)\bfeather\b", re.I),
-    # matte print/tonal finish, not an alpha matte
-    re.compile(r"\bmatte\b(?=\s+(?:appearance|finish|look|tonal|texture|surface))", re.I),
+    # matte print/tonal finish, not an alpha matte.  fresh150 uses it
+    # predicatively as often as attributively -- "feels luminous yet matte",
+    # "should remain cinematic and matte", "softly matte color mood" -- so the
+    # copula and coordination forms are adjudicated alongside the noun phrase.
+    re.compile(r"\bmatte\b(?=\s+(?:appearance|finish|look|tonal|texture|surface|mood|"
+               r"color|colour|quality|rendering|treatment))", re.I),
+    re.compile(r"\b(?:feels?|felt|looks?|looked|seems?|reads?|remains?|remained|stays?|"
+               r"stayed|is|are|was|were|and|yet|but|still|softly|slightly|subtly|"
+               r"gently|cinematic)\s+matte\b", re.I),
     # architectural geometry of the depicted scene, not mask geometry
     re.compile(r"(?:structural|building|architectural|edges,)\s+geometry\b", re.I),
     # facial "mask" markings on an animal, not a segmentation mask
     re.compile(r"\bwing,\s*mask\b|\bfacial\s+mask\b|\bmask\s+markings?\b|\beye\s+mask\b", re.I),
+    # a mask the *subject* is wearing, listed among the other things they wear.
+    # fresh150's carnival portrait says "the woman, mask, clothing, and interior"
+    # four times over: a bare ``mask`` sitting inside a noun coordination is an
+    # object in the photograph, never the pipeline's matte, which is never one
+    # item in a list of scene content.
+    re.compile(r"(?:,|\band)\s+mask\b(?=\s*(?:,|\band\b))", re.I),
+    re.compile(r"(?:’|')s\s+(?:face|head|hair)\s*,\s*mask\b", re.I),
 )
 
 
@@ -295,8 +312,32 @@ GEOMETRY_BENIGN = (
     # weather and material banding in the scene
     re.compile(r"\bbands?\s+of\s+(?:cloud|mist|fog|haze|rock|stone|sand|snow|"
                r"water|trees?|foliage|fabric|hair|colou?r)", re.I),
+    # the same thing in modifier-head order.  fresh150's rock formation has
+    # "brown weathering adds another warm colour band" -- a band *of* colour in
+    # the picture, which is the sense already adjudicated above, only written the
+    # other way round.
+    re.compile(r"\b(?:colou?r|warm|cool|tonal|mineral|sediment|rust|ochre|amber|"
+               r"grey|gray|dark|pale|bright)\s+bands?\b", re.I),
+    # a band that is part of a depicted object rather than the edit's shape.
+    # The WP18 mini30 smoke produced the first of these: "the bracelet's curved
+    # band, edge highlights, and recessed areas".  The geometry hint calls a band
+    # mask a *straight* band, so a curved or worn one is never that.
+    re.compile(r"\b(?:curved|curving|metal|metallic|gold|golden|silver|leather|"
+               r"elastic|woven|beaded|rubber|fabric|braided|wrist|head|hat|arm|"
+               r"neck|watch)\s+bands?\b", re.I),
     re.compile(r"\b(?:rock|sand|stone|grass|water|cloud|snow|bark|paint|fabric|"
                r"weed|seaweed)\s+strips?\b", re.I),
+    # stripes that are painted onto a depicted object.  "the red-painted stripes
+    # and stars on the boxes" is the scene's own decoration, not the edit's shape.
+    re.compile(r"\b(?:painted|printed|woven|striped|coloured|colored|red|blue|green|"
+               r"yellow|white|black|gold|silver)[\s-]*(?:painted[\s-]*)?stripes?\b", re.I),
+    # a tonal axis being pushed, not a spatial direction.  "Push brightness
+    # strongly upward across the portrait" is the plain way to say the edit
+    # raises a value, and ``upward``/``downward`` are only geometry when they
+    # point somewhere in the frame.
+    re.compile(r"\b(?:brightness|exposure|luminance|tone|tones|tonality|contrast|"
+               r"saturation|vibrance|warmth|chroma|levels?|values?|midtones?|"
+               r"highlights?|shadows?)\b[^.;:!?]{0,40}?\b(?:up|down)wards?\b", re.I),
 )
 
 
@@ -498,6 +539,7 @@ def check_unit(
         ("problem_lighting", "problem_global_color", "problem_specific_color")
     ))[:8]
     machine_vocab = machine_vocab_hits(" \n".join(fields.values()))[:8]
+    self_instruction = self_instruction_hits(" \n".join(fields.values()))[:8]
     hint_contradiction = hint_contradictions(fields, hints)
     # The v4-only rules below are gated on the contract: the legacy rows were
     # written under a prompt that *asked* for the coarse region by name and set no
@@ -534,6 +576,10 @@ def check_unit(
         "after_reference_in_problem": bool(after_reference),
         "machine_vocab_leak": bool(machine_vocab),
         "hint_contradiction": bool(hint_contradiction),
+        # v5.2 (WP18): the same posture for the reading rule being copied back
+        # out.  It fires on 16 of 136 fresh150 rows and on none of the 386 rows
+        # written before that rule existed, so a hit anywhere is a real one.
+        "self_instruction_echo": bool(self_instruction),
     }
     short = short_is_truncation(instruction, instruction_short)
     flags["short_is_truncation"] = short["is_prefix_truncation"]
@@ -562,6 +608,7 @@ def check_unit(
         "numeric_geometry": numeric_geometry,
         "after_reference": after_reference,
         "machine_vocab": machine_vocab,
+        "self_instruction": self_instruction,
         "hint_contradiction": hint_contradiction,
         "style_named": style_named,
         "short": short,

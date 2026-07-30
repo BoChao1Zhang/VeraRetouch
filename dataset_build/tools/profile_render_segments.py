@@ -37,6 +37,7 @@ from construct.rendering import (
     save_candidate_jpeg,
 )
 from construct.visibility import (
+    hint_support,
     objective_edit_hints_from_lab,
     prepare_torch_lab_reference,
     prepare_working_after,
@@ -274,7 +275,8 @@ def _visibility(
         after_lab = srgb_to_lab(after)
         metrics = visibility_metrics_from_lab(working_reference.lab, after_lab, **kwargs)
         objective_edit_hints_from_lab(
-            working_reference.lab, after_lab, weight=weight
+            working_reference.lab, after_lab, weight=weight,
+            support=hint_support(working_reference, after),
         )
     if not metrics.accepted:
         raise ProfileError("fixture candidate failed the configured visibility gate")

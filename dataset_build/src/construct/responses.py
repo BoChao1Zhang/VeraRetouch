@@ -501,9 +501,24 @@ _DEAD_BANDS: dict[str, float] = {
     # at 5.0, and WP14 measured luna as unable to see a* shifts at any of the
     # amplitudes it was probed with, so a narrower band would be pure anchoring.
     "hue_gm": 5.0,
-    # Widened 1.0 -> 1.3.  Dropping the clipped pixels raises the magnitude of
-    # a genuine contrast move, so the band moves with it.
-    "contrast": 1.3,
+    # v5.1 set 1.3 and it was wrong twice over.  The number came from the ROC's
+    # operating point for *full*.d_contrast while the axis shipped was
+    # noclip.d_contrast, whose own operating point on the same sweep is 2.37 --
+    # so the shipped band was roughly half what the shipped statistic needed,
+    # and at 1.3 that statistic asserts 110 of 160 panel rows with 7 reversals
+    # instead of 75 with 4.
+    #
+    # v5.2 re-derives it for the tone-curve axis on the same n=160 Direction-List
+    # labels, with the precision target raised from 0.90 to 0.95: the gate that
+    # now binds is fresh150's G3 (direction reversals <= 2%), and a statistic
+    # allowed to be wrong one assertion in ten cannot meet it.  The operating
+    # point there is 2.2629, rounded to 2.3.  At that cut the new axis asserts 76
+    # of 160 rows at 0.934 precision with 4 reversals -- the same coverage and
+    # the same precision the shipped v5.1 statistic reaches at *its* own 0.90
+    # operating point (75 rows, 0.933, 4) -- while being right about p050 and
+    # p066, which no cut on the old statistic can be.  (At the 0.90 target the
+    # tone curve gives 1.4767; that arm asserts 105 rows with 9 reversals.)
+    "contrast": 2.3,
 }
 _HINT_OPPOSITE = {
     "brighter": "darker", "darker": "brighter",
@@ -531,10 +546,20 @@ _OVERALL_AXES: tuple[tuple[str, str], ...] = (
 _HOW_TO_USE = (
     "Treat the OVERALL lines as a veto, not a script: never assert a direction "
     "they rule out, and never assert one they decline to call.",
-    "A colour listed above is where you are allowed to be specific: name the "
-    "scene content carrying that colour and describe what happened to it there, "
-    "rather than restating the overall line. A colour marked uncertain may be "
-    "mentioned only as a possibility, and the OVERALL line wins.",
+    # The hard "inside the edited area" limit is WP18 fix 2.  The fresh150 panel
+    # found the colour name being resolved to the most conspicuous object of that
+    # colour anywhere in the frame rather than inside the edit -- one row named a
+    # brown guitar sitting "at mask value 0.01" with "L 22.3->22.1, chroma
+    # 10.8->10.8, i.e. zero change".  The position note that follows each colour
+    # is the other half of the repair: it says which part of the picture that
+    # colour's pixels actually occupy.
+    "A colour listed above is where you are allowed to be specific: name only "
+    "content that lies inside the edited area and carries that colour, and "
+    "describe what happened to it there rather than restating the overall line. "
+    "Use the position note to pick the right object out of the picture; it is "
+    "there to aim you, not to be repeated, and you should never describe where "
+    "the edit falls in those terms. A colour marked uncertain may be mentioned "
+    "only as a possibility, and the OVERALL line wins.",
     "With no colour listed, stay at the level the OVERALL lines support: call "
     "the effect mixed rather than claiming every object changes uniformly, and "
     "do not invent a narrower colour claim to fill the gap.",
@@ -559,19 +584,50 @@ _HOW_TO_USE = (
 # the restrained colors", which is both an under-report and a veto violation, so
 # the case is named outright in the table rather than left to be inferred.
 _STRONG_AXIS = 4.0
+# --- v5.2: the single-hue note is calibrated on what is LEFT (WP18 fix 3) ---
+#
+# v5.1 fired the conversion wording off the drop alone (delta <= -4.0), which
+# says how far the saturation moved and nothing about where it landed.  On the
+# fresh150 panel that produced one outright disaster and 25 overstatement flags:
+#
+#   p138 (sft_03f1e6db): delta -21.3, so the table asserted "the original colours
+#     are gone".  The judge measured the result at "0.000% pixels in any green
+#     hue band and 0.003% with chroma<10 (median chroma 100.8)" -- the water
+#     stays blue-violet and the jellyfish turns a *more* vivid orange-red.
+#   The rows that did earn it measured after-chroma 0.55, 3.07 and 5.73; every
+#   overstated one measured 8.06 or above.  There is no overlap, so the split
+#   goes between them, at 6.0.
+#
+# The two tiers say different things on purpose.  Below the floor the palette
+# really is gone and the annotator must not soften it; above it the edit is a
+# strong desaturation whose colours are still visible, and calling that a
+# conversion is the failure the panel kept naming.
+_CHROMA_AFTER_FLOOR = 6.0
 _MONOCHROME_RULE = (
-    "  NOTE: saturation is strongly negative and no listed colour pulls the "
-    "other way. "
+    "  NOTE: saturation is strongly negative, no listed colour pulls the other "
+    "way, and almost no colour is left in the result. "
     "This is a conversion to a monochrome or near-monochrome palette (black and "
     "white, sepia, a single-hue tone), not a softening. Describe it as a "
     "conversion and say the original colours are gone; never write enrich, "
     "richer or more colourful about it, and do not downgrade it to 'slightly "
     "more muted'."
 )
+_STRONG_DESATURATION_RULE = (
+    "  NOTE: saturation is strongly negative, but measurable colour is still "
+    "present in the result. "
+    "This is a strong desaturation -- the colours remain visible while being "
+    "strongly subdued. Say they are subdued, not that they are gone, and do not "
+    "call this a conversion; never write enrich, richer or more colourful about "
+    "it either."
+    # The words the conversion tier uses are pointedly not repeated here to
+    # forbid them.  WP16 measured that printing a banned phrase in this table is
+    # how it ends up in the answer, and the tier that must not be reached is the
+    # one whose vocabulary would do the damage.
+)
 
 
 def _monochrome_note(hints: Mapping[str, Any]) -> str | None:
-    """The near-monochrome warning line, when the table earns it."""
+    """The single-hue warning line, in whichever of its two tiers is earned."""
     chroma = hints.get("chroma")
     if not isinstance(chroma, Mapping):
         return None
@@ -579,7 +635,10 @@ def _monochrome_note(hints: Mapping[str, Any]) -> str | None:
         delta = float(chroma["delta"])
     except (KeyError, TypeError, ValueError):
         return None
-    if delta > -_STRONG_AXIS:
+    # Nothing here may ever fire on a saturation that rose or stayed inside its
+    # dead band.  ``-_STRONG_AXIS`` is well past the 2.0 band, so this single
+    # comparison covers both, and it is the first thing the function does.
+    if not delta <= -_STRONG_AXIS:
         return None
     surfaces = hints.get("surfaces")
     rows = surfaces if isinstance(surfaces, (list, tuple)) else ()
@@ -588,7 +647,16 @@ def _monochrome_note(hints: Mapping[str, Any]) -> str | None:
         for row in rows
     ):
         return None
-    return _MONOCHROME_RULE
+    # Journals written before WP18 have no after-chroma reading.  They get the
+    # softer tier: "the colours are gone" is the claim that needs evidence, and
+    # an absent measurement is not evidence.
+    try:
+        after_mean = float(chroma["after_mean"])
+    except (KeyError, TypeError, ValueError):
+        return _STRONG_DESATURATION_RULE
+    if after_mean <= _CHROMA_AFTER_FLOOR:
+        return _MONOCHROME_RULE
+    return _STRONG_DESATURATION_RULE
 
 
 def _hint_phrase(name: str, delta: float, direction: str) -> str:
@@ -651,7 +719,11 @@ def _surface_line(row: Any) -> str | None:
     # ``prose_violation`` redraws the WP16 smoke triggered were this row's own
     # wording being echoed, and one draw evaded the ban by writing "colored
     # surface".  The words the model is meant to use are the only ones it now sees.
-    line = (f"  the {name} areas ({round(area * 100)}% of the region, "
+    # ``position`` postdates WP18; a journal written before it simply has no
+    # place clue and the line renders without one.
+    position = str(row.get("position") or "").strip()
+    where = f"mostly in the {position}, " if position else ""
+    line = (f"  the {name} areas ({round(area * 100)}% of the region, {where}"
             f"saturation {d_c:+.1f}, lightness {d_l:+.1f}): {phrase}")
     if row.get("low_confidence"):
         line += (" [uncertain: the whole-region saturation moves the other way, "
@@ -867,6 +939,38 @@ _CLAUSE_SPLIT_RE = re.compile(r"[.;:!?]")
 _HEDGE_WINDOW = 80
 
 
+# 4. The hint table's reading rule, copied back out as an instruction to the
+# reader (WP18).  A silent axis tells the annotator "do not state a direction
+# either way"; fresh150 shows it answering by writing that sentence down --
+# "Avoid making a directional contrast or color-balance claim", "leaving
+# saturation without a stated directional change", "while avoiding an asserted
+# contrast shift".  A retouching instruction is about the picture, so a sentence
+# about whether a *claim* may be made is always the scaffolding leaking.
+#
+# The register is what makes this safe to match on: "claim", "assert" and
+# "stated <axis> change" are the annotation pipeline's words, not a
+# photographer's.  Measured on the archived corpora, it fires on 16 of 136
+# fresh150 rows and on 0 of the 386 rows across fresh100, fresh200 and eval100 --
+# all three written before the silence wording existed.  The obvious wider
+# pattern ("avoid/without making ...") was tried and rejected on the same
+# evidence: it hits 55 of 160 fresh200 rows, where it is ordinary English
+# ("without making the far corners feel altered").
+SELF_INSTRUCTION_RE = re.compile(
+    r"\b(?:claims?|claimed|assert(?:s|ed|ing)?|assertions?)\b"
+    r"|\bstated\s+(?:\w+[\s-]+){0,4}?(?:changes?|shifts?|directions?)\b"
+    r"|\bdirectional\s+(?:changes?|shifts?)\b",
+    re.IGNORECASE,
+)
+
+
+def self_instruction_hits(text: str) -> list[str]:
+    """Phrases where the annotation talks about its own claims, not the picture."""
+    return sorted({
+        match.group(0).lower().strip()
+        for match in SELF_INSTRUCTION_RE.finditer(text or "")
+    })
+
+
 def after_reference_hits(text: str) -> list[str]:
     """Phrases in ``text`` that point at the after image, lowercased and unique."""
     return sorted({
@@ -1004,6 +1108,12 @@ def prose_violations(
     if vocab_hits:
         reasons.append(
             "annotation vocabulary leaked into the prose: " + ", ".join(vocab_hits)
+        )
+    instruction_hits = self_instruction_hits(prose)
+    if instruction_hits:
+        reasons.append(
+            "the answer copies back its own reading rule instead of describing "
+            "the picture: " + ", ".join(instruction_hits)
         )
     for row in hint_contradictions(fields, hints):
         reasons.append(
@@ -1303,12 +1413,26 @@ def build_prompt(
                 retryable=False,
             )
         if slot_mode in _GEOMETRY_MODES:
+            # v5.1's version of this clause ended "Do not claim the edit is
+            # confined to that subject or that nearby background stays
+            # unchanged."  It was obeyed, and the way it was obeyed is the
+            # fresh150 panel's main language deduction: the model argued the
+            # point in the instruction itself -- "rather than treating the woman
+            # alone", "rather than treating the bird as an isolated subject",
+            # "as one connected local treatment" -- a scope defence against an
+            # accusation the reader never made.  WP16 already learned that
+            # naming a forbidden phrasing is how it gets written, so the
+            # inducement is removed rather than answered with a ban: the clause
+            # now asks for the list itself, which is the sentence that leaves
+            # nothing to argue about.
             task_clause = (
                 f"This is a local task with a regional edit affecting visible image content around the "
                 f'{region}. The edited area may include "{subject}" and neighboring scene '
-                "elements. Name the coarse image region and the actual scene content that "
-                "changes. Do not claim the edit is confined to that subject or that nearby "
-                "background stays unchanged. Do not name a preset, style, or selection mechanism."
+                "elements. Name the coarse image region, then name the scene content that "
+                "changes -- the subject together with the neighbouring elements that move "
+                "with it -- as a plain list of what the edit covers. Say what changes and "
+                "stop there; how far it reaches belongs in region_scope and nowhere else. "
+                "Do not name a preset, style, or selection mechanism."
             )
             geometry_hint = edit_geometry_hint(candidate, size=before_size)
         else:

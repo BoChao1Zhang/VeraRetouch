@@ -272,6 +272,34 @@ class RequestShapeTests(ResponseFixture):
         self.assertNotIn("instance_id", prompt)
         self.assertNotIn("preset-0", prompt)
 
+    def test_the_local_task_clause_asks_for_the_list_not_for_an_argument(self):
+        # WP18.  v5.1 ended this clause with "Do not claim the edit is confined
+        # to that subject or that nearby background stays unchanged", and the
+        # fresh150 panel's main language deduction is what obeying it looked
+        # like: the instruction argued the point -- "rather than treating the
+        # woman alone", "as one connected local treatment".  The inducement is
+        # removed rather than answered with a ban on the phrasings it produced.
+        task = self.task(mode="local")
+        task["candidate"].update(
+            slot_mode="band",
+            geometry={"Angle": 71.72, "Top": 0.26, "Bottom": 0.89, "Left": -0.3,
+                      "Right": 0.82, "Feather": 55.0, "Flipped": "true"},
+        )
+        prompt = build_prompt(task)
+        self.assertIn("the subject together with the neighbouring elements that "
+                      "move with it -- as a plain list of what the edit covers",
+                      prompt)
+        self.assertIn("how far it reaches belongs in region_scope and nowhere else",
+                      prompt)
+        for inducement in (
+            "Do not claim the edit is confined",
+            "stays unchanged",
+            "full extent",
+            "isolated",
+        ):
+            with self.subTest(inducement=inducement):
+                self.assertNotIn(inducement, prompt)
+
     def test_geometry_hint_is_read_in_the_aspect_ratio_of_the_before_image(self):
         # The before image is 1200x600, so this band's stored 71.72 deg -- vertical
         # in the normalised frame the geometry is written in -- is a 56 deg
@@ -368,18 +396,19 @@ class ObjectiveHintWordingTests(ResponseFixture):
             "the shift is subtle and may not be visible -- do not state a "
             "direction either way"), 4)
 
-    def test_each_axis_dead_band_is_the_wp15_operating_point(self):
-        # brightness 1.0 and saturation 2.0 survived the ROC unchanged; warmth
-        # tightened to 1.2 because the axis is now a projection on the high-alpha
-        # core, contrast widened to 1.3 because dropping clipped pixels raises a
-        # real move, and green/magenta enters at 5.0.
+    def test_each_axis_dead_band_is_its_own_roc_operating_point(self):
+        # brightness 1.0 and saturation 2.0 survived the WP15 ROC unchanged;
+        # warmth tightened to 1.2 because the axis is now a projection on the
+        # high-alpha core, and green/magenta enters at 5.0.  Contrast moved again
+        # in v5.2: 1.3 was the operating point of a statistic that never shipped,
+        # and the tone-curve axis re-derives 2.3 at a 0.95 precision target.
         just_under = self.prompt_for(self.hints(
-            brightness=0.99, contrast=1.29, chroma=1.99, warmth=1.19, hue_gm=4.99))
+            brightness=0.99, contrast=2.29, chroma=1.99, warmth=1.19, hue_gm=4.99))
         for axis in ("brightness", "contrast", "saturation", "warmth", "green/magenta"):
             self.assertIn(f"{axis}: the shift is subtle", just_under)
 
         just_over = self.prompt_for(self.hints(
-            brightness=1.0, contrast=1.3, chroma=2.0, warmth=1.2, hue_gm=5.0))
+            brightness=1.0, contrast=2.3, chroma=2.0, warmth=1.2, hue_gm=5.0))
         self.assertIn("brightness: moderately brighter", just_over)
         self.assertIn("contrast: moderately higher contrast", just_over)
         self.assertIn("saturation: moderately richer", just_over)
@@ -425,6 +454,38 @@ class ObjectiveHintWordingTests(ResponseFixture):
         self.assertIn("the blue areas (9% of the region", listed)
         self.assertNotIn(
             "none -- no single colour moved enough on its own to be named", listed)
+
+    def test_a_surface_says_where_in_the_picture_it_sits(self):
+        # WP18 fix 2.  A colour name alone does not say *which* red thing, and
+        # the fresh150 panel caught the annotator resolving it to the most
+        # conspicuous object of that colour anywhere in the frame -- a brown
+        # guitar at mask value 0.01, measured at zero change.
+        prompt = self.prompt_for(self.hints(
+            chroma=-3.0,
+            surfaces=[self.surface("red", 0.12, -9.2, d_L=1.4, position="lower half")],
+        ))
+        self.assertIn(
+            "the red areas (12% of the region, mostly in the lower half, "
+            "saturation -9.2, lightness +1.4): clearly more muted", prompt)
+
+    def test_a_journal_written_before_the_position_still_renders(self):
+        row = self.surface("red", 0.12, -9.2, d_L=1.4)
+        row.pop("position", None)
+        prompt = self.prompt_for(self.hints(chroma=-3.0, surfaces=[row]))
+        self.assertIn("the red areas (12% of the region, saturation -9.2", prompt)
+        self.assertNotIn("mostly in the", prompt)
+
+    def test_a_colour_may_only_be_resolved_inside_the_edited_area(self):
+        prompt = self.prompt_for(self.hints(
+            chroma=-3.0,
+            surfaces=[self.surface("red", 0.12, -9.2, position="upper right")],
+        ))
+        self.assertIn("name only content that lies inside the edited area and "
+                      "carries that colour", prompt)
+        # The clue is for finding the object, not for describing the edit: the
+        # geometry rule stays intact and the words are not offered as vocabulary.
+        self.assertIn("Use the position note to pick the right object out of the "
+                      "picture; it is there to aim you, not to be repeated", prompt)
 
     def test_a_surface_that_contradicts_the_region_is_demoted_not_dropped(self):
         # The whole-region figure is the one the ROC operating point was fitted

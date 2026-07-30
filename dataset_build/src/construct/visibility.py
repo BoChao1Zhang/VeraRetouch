@@ -30,10 +30,9 @@ class WorkingImageReference:
     pixels: np.ndarray
     lab: np.ndarray
     # Per-pixel facts about the BEFORE image that every candidate in the group
-    # reuses: the two clipping rails and the colour-name surface each pixel
+    # reuses: the blown-out highlights and the colour-name surface each pixel
     # belongs to.  Both are v5 hint inputs (see below) and both are functions of
     # the before image alone, so they are computed once per group.
-    clip: np.ndarray
     highlight: np.ndarray
     surface: np.ndarray
 
@@ -43,7 +42,6 @@ class TorchLabReference:
     lab: Any
     device: str
     lock: Any
-    clip: Any
     highlight: Any
     surface: Any
 
@@ -74,11 +72,63 @@ WARM_ANGLE_DEG = 70.0
 # scaled by amount < 1 never reaches an absolute 0.75 anywhere, which would make
 # an absolute cut degenerate on exactly the slots that need it most.
 HI_ALPHA_RATIO = 0.75
-# A pixel already at a rail cannot move further, so it pulls the tonal spread
-# toward zero and inverts the contrast direction (HINTS_MEAN_BIAS §3.1).  Read
-# on 0-255 sRGB, in *either* image: WP15b's ``noclip`` support.
+# Blown-out highlights, read on 0-255 sRGB.  A pixel already at the rail cannot
+# move further, which is why v5.1 measured contrast on the pixels that were not
+# (HINTS_MEAN_BIAS §3.1); v5.2's tone curve does not need that filter -- see the
+# block below -- so the rails survive only as the two fractions the journal
+# records for diagnosis.
 CLIP_HIGH_255 = 250.0
-CLIP_LOW_255 = 5.0
+
+# --- v5.2 contrast: the tone curve, not the tonal spread (WP18 fix 1) -------
+#
+# v5.1 measured contrast as a difference of alpha-weighted L* standard
+# deviations with the clipping rails dropped.  The fresh150 factory panel
+# (2026-07-30) proved that proxy structurally blind in both directions, and the
+# two reversals it produced are opposite in sign, so no threshold move repairs
+# them:
+#
+#   p066 (sft_85dc238d): the judge fitted a tone curve inside the mask core and
+#     found before-L 30-40 mapping to 17.7 and 70-80 mapping to 84.4 -- a 40-unit
+#     input range opened to 67 units, a 1.67x expansion, "contrast is clearly
+#     RAISED".  The stored hint said "lower contrast" (-3.25) because two thirds
+#     of the band is backdrop that the edit flattened to a constant: flattening
+#     removes *spread* without touching the slope the eye reads.
+#   p050 (sft_a47d94b7): blacks lifted from p5 5.7 to 19.7 and the frame went
+#     visibly flat and washed out, yet the stored hint said "higher contrast"
+#     (+2.27).  Those crushed blacks sit on the low rail, so the noclip support
+#     deleted exactly the pixels carrying the change.
+#
+# So the axis is now the slope of the tone curve itself, and it is read on the
+# high-alpha core rather than on a rail-filtered support -- the curve caps a
+# rail's influence at one band on its own (see TONE_BAND_WEIGHT_CAP below),
+# which is what the noclip filter was there to do.
+#
+# Scale.  The reported number stays in L* units and stays comparable with the
+# v5.1 figure by construction: for an edit that is a linear tone map
+# L2 = g*L1 + c, every band mean satisfies y = g*x + c exactly, so the fitted
+# slope is g whatever the band weights are, and
+#     (slope - 1) * std(L1) == std(L2) - std(L1)
+# identically.  The two statistics differ only where the map is *not* linear --
+# which is precisely the p050/p066 structure -- so a dead band in L* units keeps
+# meaning what it meant.
+#
+# Bands are 10 L* wide over the full 0-100 scale, which is the instrument the
+# judge quoted ("before-L 30-40", "70-80"), and each occupied band contributes
+# one point (mean before-L, mean after-L) to a least-squares fit.
+TONE_BANDS = 10
+# A band holding less than this share of the core is a handful of stray pixels,
+# not a tone anybody looks at; it is dropped rather than allowed to lever the
+# fit.  Below 1% the AUC on the WP15a Direction-List contrast labels falls from
+# 0.920 to 0.916 and the fit starts chasing single-pixel bands.
+TONE_BAND_MIN_MASS = 0.01
+# No band may speak for more than an equal share of the curve -- that is the
+# whole repair, stated as arithmetic: p066's flattened backdrop owns two thirds
+# of the mask and would otherwise decide the slope exactly as it decides the
+# variance.  A band thinner than an equal share still counts only its true mass,
+# so a sliver cannot outvote a real tone either.  Weighting bands by their raw
+# mass instead reproduces the v5.1 blindness (p066 comes back at -2.79);
+# weighting them all equally fixes p066 but drops the label AUC to 0.900.
+TONE_BAND_WEIGHT_CAP = 1.0 / TONE_BANDS
 
 # Colour-name surfaces.  van de Weijer's w2c LUT is not obtainable without a
 # download, so this is the sanctioned fallback carried over verbatim from the
@@ -114,6 +164,14 @@ SURFACE_MIN_D_C = 6.0
 # WP14 anchoring result (a wrong hint drives luna from 55.8% to 5.8%) says every
 # extra asserted line is a liability, not extra information.
 SURFACE_TOP_N = 2
+# Where the surface sits, in thirds of the frame (WP18 fix 2).  A colour name on
+# its own does not say *which* red thing, and the fresh150 panel caught the
+# annotator naming the most conspicuous object of that colour anywhere in the
+# picture instead of inside the edit: on one row it named a brown guitar that
+# "sits at mask value 0.01 and measures L 22.3->22.1, chroma 10.8->10.8, i.e.
+# zero change".  The centroid is alpha-weighted over the surface's own pixels,
+# so it points at the part of the frame the edit actually reaches.
+SURFACE_POSITION_THIRDS = 3
 # Below this weighted mass a support set is empty for all practical purposes.
 _MIN_SUPPORT_MASS = 1e-6
 
@@ -133,17 +191,20 @@ class HintSupport:
     ``surface`` indexes ``COLOUR_SURFACES`` and is always read off the *before*
     image: the annotator is told "the red things got duller", which is a claim
     about what was red to start with, not about what is red afterwards.
+
+    The highlight masks are the two blown-out fractions the journal records.
+    v5.1 also carried an "at either rail" mask, because contrast was measured on
+    the pixels it excluded; v5.2's tone curve caps a rail's influence at one
+    band, so that support -- and the p050 reversal it caused -- is gone.
     """
 
-    before_clip: np.ndarray
-    after_clip: np.ndarray
     before_highlight: np.ndarray
     after_highlight: np.ndarray
     surface: np.ndarray
 
 
-def clip_masks(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """``(at either rail, at the highlight rail)`` for one 0..1 RGB image.
+def highlight_mask(rgb: np.ndarray) -> np.ndarray:
+    """Pixels at the highlight rail in one 0..1 RGB image.
 
     Written channel-wise rather than as ``(rgb * 255).max(axis=-1)``.  The
     obvious form materialises the whole scaled HxWx3 array and then reduces over
@@ -156,9 +217,7 @@ def clip_masks(rgb: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     channels = np.asarray(rgb, dtype=np.float32)
     red, green, blue = channels[..., 0], channels[..., 1], channels[..., 2]
     highest = np.maximum(np.maximum(red, green), blue)
-    lowest = np.minimum(np.minimum(red, green), blue)
-    highlight = highest * 255.0 >= CLIP_HIGH_255
-    return highlight | (lowest * 255.0 <= CLIP_LOW_255), highlight
+    return highest * 255.0 >= CLIP_HIGH_255
 
 
 def colour_surface_labels(lab: np.ndarray) -> np.ndarray:
@@ -189,12 +248,9 @@ def colour_surface_labels(lab: np.ndarray) -> np.ndarray:
 
 def hint_support(reference: WorkingImageReference, after: np.ndarray) -> HintSupport:
     """Pair one candidate's after image with the group's cached before masks."""
-    after_clip, after_highlight = clip_masks(after)
     return HintSupport(
-        before_clip=reference.clip,
-        after_clip=after_clip,
         before_highlight=reference.highlight,
-        after_highlight=after_highlight,
+        after_highlight=highlight_mask(after),
         surface=reference.surface,
     )
 
@@ -213,6 +269,81 @@ def _direction(name: str, value: float) -> str:
     if abs(value) < 1e-6:
         return "unchanged"
     return positive if value > 0 else negative
+
+
+def tone_band_labels(lightness: np.ndarray) -> np.ndarray:
+    """Which fixed-width L* band each pixel's BEFORE lightness falls in.
+
+    Deliberately a fixed grid over 0-100 rather than mass quantiles: quantile
+    bands are defined by the mass distribution, which is the thing p066 shows
+    cannot be trusted to decide the answer, and a fixed grid is also the same
+    integer arithmetic on both backends, so band membership is bit-equal.
+    """
+    width = 100.0 / TONE_BANDS
+    return np.clip(
+        (np.asarray(lightness, dtype=np.float64) / width).astype(np.int64),
+        0, TONE_BANDS - 1,
+    )
+
+
+def _band_weights(mass: np.ndarray, total: float) -> np.ndarray:
+    """Per-band fit weight: floored for thinness, capped at an equal share."""
+    keep = mass > max(_MIN_SUPPORT_MASS, TONE_BAND_MIN_MASS * total)
+    return np.where(keep, np.minimum(mass, TONE_BAND_WEIGHT_CAP * total), 0.0)
+
+
+def tone_curve_contrast(
+    l_before: np.ndarray,
+    l_after: np.ndarray,
+    weight: np.ndarray,
+    total: float,
+) -> float:
+    """``(tone-curve slope - 1) * spread(before)``, in L* units.
+
+    Falls back to the v5.1 spread difference on the same support when the curve
+    cannot be fitted -- fewer than two bands carry weight, or every band that
+    does sits at the same lightness.  That is a flat or single-tone region, where
+    a slope is undefined and the spread difference is all there is to say.
+    """
+    spread_before = _weighted_std(l_before, weight, total)
+    labels = tone_band_labels(l_before).reshape(-1)
+    flat_weight = np.asarray(weight, dtype=np.float64).reshape(-1)
+    mass = np.bincount(labels, weights=flat_weight, minlength=TONE_BANDS)
+    sum_x = np.bincount(labels, weights=flat_weight * np.asarray(l_before).reshape(-1),
+                        minlength=TONE_BANDS)
+    sum_y = np.bincount(labels, weights=flat_weight * np.asarray(l_after).reshape(-1),
+                        minlength=TONE_BANDS)
+    safe_mass = np.where(mass > 0.0, mass, 1.0)
+    band_x = sum_x / safe_mass
+    band_y = sum_y / safe_mass
+    band_weight = _band_weights(mass, total)
+    band_total = float(band_weight.sum())
+    if band_total > _MIN_SUPPORT_MASS:
+        centre_x = float((band_weight * band_x).sum()) / band_total
+        centre_y = float((band_weight * band_y).sum()) / band_total
+        variance = float((band_weight * (band_x - centre_x) ** 2).sum()) / band_total
+        if variance > _MIN_SUPPORT_MASS:
+            covariance = float(
+                (band_weight * (band_x - centre_x) * (band_y - centre_y)).sum()
+            ) / band_total
+            return (covariance / variance - 1.0) * spread_before
+    return _weighted_std(l_after, weight, total) - spread_before
+
+
+def _position_word(centre_y: float, centre_x: float) -> str:
+    """A weighted centroid in [0, 1]^2 as the coarse place a reader would say."""
+    thirds = SURFACE_POSITION_THIRDS
+    row = min(thirds - 1, max(0, int(centre_y * thirds)))
+    column = min(thirds - 1, max(0, int(centre_x * thirds)))
+    vertical = ("upper", "", "lower")[row]
+    horizontal = ("left", "", "right")[column]
+    if vertical and horizontal:
+        return f"{vertical} {horizontal}"
+    if vertical:
+        return f"{vertical} half"
+    if horizontal:
+        return f"{horizontal} half"
+    return "middle of the frame"
 
 
 def _surface_rows(
@@ -239,6 +370,8 @@ def _surface_rows(
             "d_b": round(float(sums["d_b"][index]) / mass, 6),
             "d_C": round(d_c, 6),
             "direction": _direction("chroma", d_c),
+            "position": _position_word(float(sums["cy"][index]) / mass,
+                                       float(sums["cx"][index]) / mass),
             # The whole-support figure is the one the ROC operating point was
             # fitted on, so where a surface disagrees with it in sign the region
             # keeps authority and the surface line is demoted rather than
@@ -273,8 +406,7 @@ def objective_edit_hints_from_lab(
     total = float(normalized_weight.sum())
     if not math.isfinite(total) or total <= 0:
         raise VisibilityError("weight map has no mass")
-    for mask in (support.before_clip, support.after_clip, support.before_highlight,
-                 support.after_highlight, support.surface):
+    for mask in (support.before_highlight, support.after_highlight, support.surface):
         if np.shape(mask) != first.shape[:2]:
             raise VisibilityError("hint support masks must match the Lab grid")
 
@@ -289,7 +421,7 @@ def objective_edit_hints_from_lab(
     chroma = _weighted_mean(d_c, normalized_weight, total)
     hue_gm = _weighted_mean(d_a, normalized_weight, total)
 
-    # -- warmth on the high-alpha core --------------------------------------
+    # -- warmth and contrast on the high-alpha core -------------------------
     # The peak is > 0 because the total is, so this support is never empty.
     core = normalized_weight >= HI_ALPHA_RATIO * float(normalized_weight.max())
     core_weight = normalized_weight * core
@@ -298,27 +430,24 @@ def objective_edit_hints_from_lab(
     core_d_b = _weighted_mean(d_b, core_weight, core_total)
     radians = math.radians(WARM_ANGLE_DEG)
     warmth = math.cos(radians) * core_d_a + math.sin(radians) * core_d_b
-
-    # -- contrast with the rails removed ------------------------------------
-    unclipped_weight = normalized_weight * ~(support.before_clip | support.after_clip)
-    unclipped_total = float(unclipped_weight.sum())
-    if unclipped_total <= _MIN_SUPPORT_MASS:
-        # Every pixel in the support sits on a rail; there is no unclipped
-        # tonal spread to compare, so fall back to the v4.1 whole-support form
-        # rather than reporting a contrast direction off an empty set.
-        unclipped_weight, unclipped_total = normalized_weight, total
-    contrast = (_weighted_std(l2, unclipped_weight, unclipped_total)
-                - _weighted_std(l1, unclipped_weight, unclipped_total))
+    contrast = tone_curve_contrast(l1, l2, core_weight, core_total)
 
     # -- colour-surface table ------------------------------------------------
     labels = np.asarray(support.surface, dtype=np.int64).reshape(-1)
     flat_weight = normalized_weight.reshape(-1)
     counts = np.bincount(labels, weights=flat_weight, minlength=len(COLOUR_SURFACES))
+    rows, columns = first.shape[:2]
+    # Pixel centres in [0, 1], so a one-row image is not pinned to the top edge.
+    centre_y = np.repeat((np.arange(rows, dtype=np.float64) + 0.5) / rows, columns)
+    centre_x = np.tile((np.arange(columns, dtype=np.float64) + 0.5) / columns, rows)
     sums = {
         field: np.bincount(labels, weights=(flat_weight * delta.reshape(-1)),
                            minlength=len(COLOUR_SURFACES))
         for field, delta in (("d_L", d_l), ("d_a", d_a), ("d_b", d_b), ("d_C", d_c))
     }
+    for field, grid in (("cy", centre_y), ("cx", centre_x)):
+        sums[field] = np.bincount(labels, weights=(flat_weight * grid),
+                                  minlength=len(COLOUR_SURFACES))
 
     return {
         "brightness": {"delta": round(brightness, 6),
@@ -326,7 +455,11 @@ def objective_edit_hints_from_lab(
         "warmth": {"delta": round(warmth, 6), "direction": _direction("warmth", warmth),
                    "components": {"d_a": round(core_d_a, 6), "d_b": round(core_d_b, 6)}},
         "hue_gm": {"delta": round(hue_gm, 6), "direction": _direction("hue_gm", hue_gm)},
-        "chroma": {"delta": round(chroma, 6), "direction": _direction("chroma", chroma)},
+        "chroma": {"delta": round(chroma, 6), "direction": _direction("chroma", chroma),
+                   # WP18 fix 3's ``chroma_after_mean``: what colour is left, not
+                   # how much moved.  A delta alone cannot tell a real conversion
+                   # from a big cut that lands somewhere still vivid.
+                   "after_mean": round(_weighted_mean(c2, normalized_weight, total), 6)},
         "contrast": {
             "delta": round(contrast, 6), "direction": _direction("contrast", contrast),
             "clip_frac_before": round(
@@ -363,17 +496,13 @@ def objective_edit_hints(
         raise VisibilityError("weight map has no mass")
 
     before_lab = srgb_to_lab(before)
-    before_clip, before_highlight = clip_masks(before)
-    after_clip, after_highlight = clip_masks(after)
     return objective_edit_hints_from_lab(
         before_lab,
         srgb_to_lab(after),
         weight=normalized_weight,
         support=HintSupport(
-            before_clip=before_clip,
-            after_clip=after_clip,
-            before_highlight=before_highlight,
-            after_highlight=after_highlight,
+            before_highlight=highlight_mask(before),
+            after_highlight=highlight_mask(after),
             surface=colour_surface_labels(before_lab),
         ),
     )
@@ -432,13 +561,11 @@ def prepare_working_reference(before: np.ndarray, short_edge: int) -> WorkingIma
         target_height = max(1, int(round(height * scale)))
         working = _resize_rgb(before, target_width, target_height)
     lab = srgb_to_lab(working)
-    clip, highlight = clip_masks(working)
     return WorkingImageReference(
         source_shape=tuple(before.shape),
         pixels=working,
         lab=lab,
-        clip=clip,
-        highlight=highlight,
+        highlight=highlight_mask(working),
         surface=colour_surface_labels(lab),
     )
 
@@ -666,7 +793,6 @@ def _objective_edit_hints_torch(
     weight: Any,
     total: float,
     *,
-    unclipped: Any,
     before_highlight: Any,
     after_highlight: Any,
     surface: Any,
@@ -698,43 +824,78 @@ def _objective_edit_hints_torch(
     core_d_b = mean(d_b, core_weight, core_total)
     radians = math.radians(WARM_ANGLE_DEG)
     warmth = math.cos(radians) * core_d_a + math.sin(radians) * core_d_b
+    chroma_after = mean(c2)
 
-    # The degenerate "every pixel is on a rail" case is selected on the device
-    # rather than branched on the host: reading the mass back here would cost a
-    # full synchronisation, and both arms are exactly the arithmetic the NumPy
-    # oracle performs in its own branch.
-    unclipped_weight = weight * unclipped
-    unclipped_total = unclipped_weight.sum()
-    total_tensor = torch.as_tensor(total, dtype=weight.dtype, device=weight.device)
-    degenerate = unclipped_total <= _MIN_SUPPORT_MASS
-    unclipped_weight = torch.where(degenerate, weight, unclipped_weight)
-    unclipped_total = torch.where(degenerate, total_tensor, unclipped_total)
-
+    # -- the tone curve, on the same core -----------------------------------
+    # Band membership is integer arithmetic on the before lightness, so it is
+    # bit-equal with the NumPy oracle without shipping a mask.  The two
+    # degenerate arms are selected on the device rather than branched on the
+    # host: reading the band masses back here would cost a full synchronisation,
+    # and each arm is exactly the arithmetic the oracle performs in its branch.
     def spread(values: Any) -> Any:
-        centre = mean(values, unclipped_weight, unclipped_total)
+        centre = mean(values, core_weight, core_total)
         return torch.sqrt(torch.clamp(
-            mean((values - centre) ** 2, unclipped_weight, unclipped_total), min=0.0))
+            mean((values - centre) ** 2, core_weight, core_total), min=0.0))
 
-    contrast = spread(l2) - spread(l1)
+    spread_before = spread(l1)
+    band_index = torch.clamp(
+        (l1.reshape(-1) / (100.0 / TONE_BANDS)).to(torch.int64), 0, TONE_BANDS - 1)
+    core_flat = core_weight.reshape(-1)
+    band_table = torch.zeros((3, TONE_BANDS), dtype=weight.dtype, device=weight.device)
+    band_table[0].index_add_(0, band_index, core_flat)
+    band_table[1].index_add_(0, band_index, core_flat * l1.reshape(-1))
+    band_table[2].index_add_(0, band_index, core_flat * l2.reshape(-1))
+    band_mass, band_sum_x, band_sum_y = band_table.unbind(0)
+    zero = torch.zeros((), dtype=weight.dtype, device=weight.device)
+    one = torch.ones((), dtype=weight.dtype, device=weight.device)
+    safe_mass = torch.where(band_mass > 0.0, band_mass, one)
+    band_x = band_sum_x / safe_mass
+    band_y = band_sum_y / safe_mass
+    floor = torch.clamp(TONE_BAND_MIN_MASS * core_total, min=_MIN_SUPPORT_MASS)
+    band_weight = torch.where(
+        band_mass > floor,
+        torch.minimum(band_mass, TONE_BAND_WEIGHT_CAP * core_total),
+        zero,
+    )
+    band_total = band_weight.sum()
+    safe_band_total = torch.where(band_total > _MIN_SUPPORT_MASS, band_total, one)
+    centre_x = (band_weight * band_x).sum() / safe_band_total
+    centre_y = (band_weight * band_y).sum() / safe_band_total
+    variance = (band_weight * (band_x - centre_x) ** 2).sum() / safe_band_total
+    covariance = (
+        band_weight * (band_x - centre_x) * (band_y - centre_y)
+    ).sum() / safe_band_total
+    fittable = (band_total > _MIN_SUPPORT_MASS) & (variance > _MIN_SUPPORT_MASS)
+    slope = covariance / torch.where(fittable, variance, one)
+    contrast = torch.where(
+        fittable, (slope - 1.0) * spread_before, spread(l2) - spread_before)
 
     labels = surface.reshape(-1).to(torch.int64)
     flat_weight = weight.reshape(-1)
     bins = len(COLOUR_SURFACES)
-    table = torch.zeros((5, bins), dtype=flat_weight.dtype, device=flat_weight.device)
+    rows, columns = l1.shape
+    grid_y = ((torch.arange(rows, dtype=weight.dtype, device=weight.device) + 0.5)
+              / rows).repeat_interleave(columns)
+    grid_x = ((torch.arange(columns, dtype=weight.dtype, device=weight.device) + 0.5)
+              / columns).repeat(rows)
+    table = torch.zeros((7, bins), dtype=flat_weight.dtype, device=flat_weight.device)
     table[0].index_add_(0, labels, flat_weight)
     for row, delta in enumerate((d_l, d_a, d_b, d_c), start=1):
         table[row].index_add_(0, labels, flat_weight * delta.reshape(-1))
+    for row, grid in ((5, grid_y), (6, grid_x)):
+        table[row].index_add_(0, labels, flat_weight * grid)
 
     # Two device-to-host transfers for the whole record rather than one per
     # figure.  Each read back is a synchronisation, and eight candidates a group
     # queue behind one CUDA lock; the kernels themselves are ~2 ms.
     scalars = torch.stack((brightness, chroma, hue_gm, warmth, core_d_a, core_d_b,
                            contrast, mean(before_highlight.to(weight.dtype)),
-                           mean(after_highlight.to(weight.dtype)))).cpu().tolist()
+                           mean(after_highlight.to(weight.dtype)),
+                           chroma_after)).cpu().tolist()
     counts, *sum_rows = table.cpu().numpy()
     (brightness_value, chroma_value, hue_gm_value, warmth_value, core_a, core_b,
-     contrast_value, clip_before, clip_after) = scalars
-    sums = dict(zip(("d_L", "d_a", "d_b", "d_C"), sum_rows))
+     contrast_value, clip_before, clip_after, chroma_after_value) = scalars
+    sums = dict(zip(("d_L", "d_a", "d_b", "d_C", "cy", "cx"), sum_rows))
     return {
         "brightness": {"delta": round(brightness_value, 6),
                        "direction": _direction("brightness", brightness_value)},
@@ -744,7 +905,8 @@ def _objective_edit_hints_torch(
         "hue_gm": {"delta": round(hue_gm_value, 6),
                    "direction": _direction("hue_gm", hue_gm_value)},
         "chroma": {"delta": round(chroma_value, 6),
-                   "direction": _direction("chroma", chroma_value)},
+                   "direction": _direction("chroma", chroma_value),
+                   "after_mean": round(chroma_after_value, 6)},
         "contrast": {
             "delta": round(contrast_value, 6),
             "direction": _direction("contrast", contrast_value),
@@ -782,7 +944,6 @@ def prepare_torch_lab_reference(
         lab=lab,
         device=str(lab.device),
         lock=threading.Lock(),
-        clip=torch.as_tensor(reference.clip, device=torch_device),
         highlight=torch.as_tensor(reference.highlight, device=torch_device),
         surface=torch.as_tensor(reference.surface, device=torch_device),
     )
@@ -862,7 +1023,7 @@ def visibility_and_hints_torch(
             or not math.isfinite(hints_total) or hints_total <= 0:
         raise VisibilityError("weight map has no mass")
 
-    after_clip, after_highlight = clip_masks(after)
+    after_highlight = highlight_mask(after)
     with reference.lock:
         second_rgb = torch.tensor(
             after, dtype=torch.float64, device=reference.device
@@ -879,10 +1040,8 @@ def visibility_and_hints_torch(
             (torch_weight * (delta >= visible_fraction_de)).sum().item()
             / visibility_total
         )
-        torch_after_clip = torch.as_tensor(after_clip, device=reference.device)
         hints = _objective_edit_hints_torch(
             reference.lab, second_lab, torch_weight, hints_total,
-            unclipped=~(reference.clip | torch_after_clip),
             before_highlight=reference.highlight,
             after_highlight=torch.as_tensor(after_highlight, device=reference.device),
             surface=reference.surface,

@@ -63,10 +63,13 @@ from construct.rendering import (
 from dataset_build.source_qa import db as source_db
 from construct.visibility import (
     COLOUR_SURFACES,
+    TONE_BANDS,
     WARM_ANGLE_DEG,
+    HintSupport,
+
     ciede2000,
-    clip_masks,
     colour_surface_labels,
+    highlight_mask,
     hint_support,
     objective_edit_hints,
     objective_edit_hints_from_lab,
@@ -1461,10 +1464,159 @@ class ObjectiveHintMetricTests(unittest.TestCase):
         self.assertNotEqual(hints["warmth"]["delta"], 0.0)
         self.assertTrue(math.isfinite(hints["warmth"]["components"]["d_b"]))
 
-    def test_contrast_drops_the_clipped_pixels_and_reports_the_fractions(self):
-        # Half the frame is blown out in both images.  Those pixels cannot move,
-        # so leaving them in shrinks the measured spread; the noclip form reads
-        # the tonal change on the pixels that were free to move.
+    # -- contrast: the tone curve (WP18 fix 1) -------------------------------
+
+    @staticmethod
+    def contrast_of(l_before: np.ndarray, l_after: np.ndarray) -> float:
+        """The contrast axis for a pair given directly as before/after L* rows.
+
+        The axis is defined on L*, and sRGB is not linear in it, so a fixture
+        built by scaling 0..1 pixels would not be the tone map it looks like.
+        These tests state the lightness they mean and hand it over as Lab.
+        """
+        lab_before = np.zeros(l_before.shape + (3,), dtype=np.float64)
+        lab_before[..., 0] = l_before
+        lab_after = np.zeros_like(lab_before)
+        lab_after[..., 0] = l_after
+        flat = np.zeros(l_before.shape, dtype=bool)
+        hints = objective_edit_hints_from_lab(
+            lab_before, lab_after,
+            weight=np.ones(l_before.shape, dtype=np.float64),
+            support=HintSupport(before_highlight=flat, after_highlight=flat,
+                                surface=np.zeros(l_before.shape, dtype=np.int8)),
+        )
+        return float(hints["contrast"]["delta"])
+
+    @staticmethod
+    def spread_difference(l_before: np.ndarray, l_after: np.ndarray) -> float:
+        """What v5.1 would have reported for the same pair."""
+        return float(l_after.std() - l_before.std())
+
+    @staticmethod
+    def anchored_pair(dark_share: float, gain: float) -> tuple[np.ndarray, np.ndarray]:
+        """p066's shape: one huge near-black band, and an expansion above it.
+
+        Two thirds of that row's mask core sits in the 0-10 band and stays
+        near-black, which is what pins a variance statistic; the bands above it
+        run 35.3 -> 17.7 and 75.6 -> 84.9, the expansion the judge measured.
+        """
+        count = 2000
+        dark = int(count * dark_share)
+        midtones = np.linspace(25.0, 95.0, count - dark)
+        before = np.concatenate([np.full(dark, 3.0), midtones])
+        after = np.concatenate([
+            np.full(dark, 9.0),
+            np.clip(60.0 + (midtones - 60.0) * gain, 0.0, 100.0),
+        ])
+        return before[None, :], after[None, :]
+
+    def test_a_linear_tone_map_reproduces_the_v51_spread_difference_exactly(self):
+        # The scale claim in visibility.py: where the edit *is* a linear map of
+        # L*, the slope is the gain and (slope - 1) * std(L1) is identically
+        # std(L2) - std(L1).  That equality is what lets a dead band in L* units
+        # keep meaning what it meant, so it is pinned rather than described.
+        before = np.linspace(2.0, 98.0, 400)[None, :]
+        for gain, offset in ((1.4, -18.0), (0.7, 14.0), (1.0, 5.0)):
+            with self.subTest(gain=gain):
+                after = before * gain + offset
+                self.assertAlmostEqual(self.contrast_of(before, after),
+                                       self.spread_difference(before, after), places=5)
+
+    def test_one_dominant_band_no_longer_decides_the_direction(self):
+        # p066's failure, reproduced and repaired, over the range of dominance
+        # that produced it rather than at one tuned point.  A variance statistic
+        # is a mass average, so the near-black majority decides it and reports
+        # "lower contrast"; the curve caps that band's say and reads the
+        # expansion in the bands above it.  p066 itself measures 68.6% of its
+        # mask core in the 0-10 band, which is inside this range.
+        for dark_share in (0.5, 0.6, 0.7):
+            with self.subTest(dark_share=dark_share):
+                before, after = self.anchored_pair(dark_share, gain=1.3)
+                self.assertLess(self.spread_difference(before, after), -0.3)
+                self.assertGreater(self.contrast_of(before, after), 0.3)
+
+    def test_the_cap_cuts_a_dominant_bands_say_to_about_an_equal_share(self):
+        # What the cap does, as a number: on p066's own mass profile a band
+        # holding 68.6% of the region carries 24.2% of the fit.  It is a cap,
+        # not an equaliser -- a band below an equal share still counts only its
+        # own mass, so a sliver cannot outvote a real tone either.
+        from construct.visibility import _band_weights
+        mass = np.array([0.686] + [0.0392] * 8 + [0.0002])
+        weights = _band_weights(mass, float(mass.sum()))
+        self.assertAlmostEqual(weights[0] / weights.sum(), 0.242, places=2)
+        self.assertEqual(weights[9], 0.0)          # under the 1% floor
+        self.assertAlmostEqual(weights[1], mass[1], places=6)   # under the cap
+
+        # And the same thing end to end: a 60-unit expansion carried by 0.5% of
+        # the region does not get to overrule the flat 99.5% around it.
+        count = 2000
+        sliver = int(count * 0.005)
+        before = np.concatenate([np.full(count - sliver, 50.0),
+                                 np.linspace(20.0, 25.0, sliver)])[None, :]
+        after = np.concatenate([np.full(count - sliver, 50.0),
+                                np.linspace(0.0, 60.0, sliver)])[None, :]
+        self.assertLess(abs(self.contrast_of(before, after)), 2.3)
+
+    def test_lifting_the_blacks_reads_as_flatter_even_though_they_are_railed(self):
+        # p050's shape: the blacks lift off the low rail and the frame goes
+        # washed out.  v5.1 measured contrast with the railed pixels deleted,
+        # which removed exactly the pixels carrying the change and reported
+        # "higher contrast"; the tone curve keeps them as one band among ten.
+        ramp = np.linspace(0.02, 0.98, 100, dtype=np.float32)
+        before = np.repeat(ramp[None, :, None], 3, axis=2).repeat(4, axis=0)
+        before[:, :40] = 0.005                 # crushed blacks, on the rail
+        after = before.copy()
+        after[:, :40] = 0.28                   # ... lifted well clear of it
+        hints = objective_edit_hints(before, after, weight=None)
+        self.assertLess(hints["contrast"]["delta"], 0.0)
+        self.assertEqual(hints["contrast"]["direction"], "lower contrast")
+
+    def test_a_flat_region_falls_back_to_the_spread_difference(self):
+        # One lightness everywhere: there is no curve to fit, so the axis says
+        # what the spread difference says rather than dividing by zero.
+        before = np.full((6, 6), 50.0)
+        for after, expected in ((np.full((6, 6), 80.0), 0.0),
+                                (np.full((6, 6), 50.0), 0.0)):
+            self.assertTrue(math.isfinite(self.contrast_of(before, after)))
+            self.assertAlmostEqual(self.contrast_of(before, after), expected, places=6)
+        # A flat before and a spread after has no curve either, and the spread
+        # difference is the whole of what can be said.
+        rng = np.random.default_rng(20260730)
+        noisy = rng.uniform(20.0, 80.0, (6, 6))
+        self.assertAlmostEqual(self.contrast_of(before, noisy),
+                               self.spread_difference(before, noisy), places=6)
+
+    def test_the_band_grid_is_fixed_width_over_the_whole_lightness_scale(self):
+        # Bands are the judge's instrument -- 10 L* wide on the 0-100 scale --
+        # and not mass quantiles, whose edges would be defined by the same mass
+        # distribution the axis exists to stop trusting.
+        self.assertEqual(TONE_BANDS, 10)
+        from construct.visibility import tone_band_labels
+        probes = np.array([[0.0, 9.99, 10.0, 55.0, 99.99, 100.0, 140.0]])
+        self.assertTrue(np.array_equal(tone_band_labels(probes),
+                                       np.array([[0, 0, 1, 5, 9, 9, 9]])))
+
+    def test_the_highlight_mask_matches_the_literal_definition_of_the_rail(self):
+        # highlight_mask is written channel-wise for speed: the literal
+        # ``(rgb * 255).max(axis=-1)`` reduces over a length-3 innermost axis,
+        # which NumPy walks with its generic loop at 49 ms a candidate.  The two
+        # forms have to stay bit-equal, because the mask decides the two
+        # clipping fractions the journal records.
+        rng = np.random.default_rng(20260730)
+        for image in (
+            rng.random((23, 31, 3), dtype=np.float32),
+            np.zeros((4, 4, 3), dtype=np.float32),
+            np.ones((4, 4, 3), dtype=np.float32),
+            # the rail itself, and the values either side of it
+            np.array([[[249.0, 0.0, 6.0], [250.0, 6.0, 6.0], [251.0, 6.0, 6.0],
+                       [100.0, 100.0, 5.0], [100.0, 100.0, 4.0],
+                       [100.0, 100.0, 6.0]]], dtype=np.float32) / 255.0,
+        ):
+            scaled = np.asarray(image, dtype=np.float32) * 255.0
+            self.assertTrue(np.array_equal(highlight_mask(image),
+                                           scaled.max(axis=-1) >= 250.0))
+
+    def test_the_clipping_fractions_are_still_reported_for_diagnosis(self):
         before = np.full((8, 8, 3), 0.6, dtype=np.float32)
         before[:4] = 0.99
         after = before.copy()
@@ -1473,40 +1625,56 @@ class ObjectiveHintMetricTests(unittest.TestCase):
         hints = objective_edit_hints(before, after, weight=None)
         self.assertAlmostEqual(hints["contrast"]["clip_frac_before"], 0.5, places=6)
         self.assertAlmostEqual(hints["contrast"]["clip_frac_after"], 0.5, places=6)
-        # Only the unclipped half survives, and it moved uniformly, so its own
-        # spread is unchanged -- the whole-frame form would have shown a swing.
-        self.assertAlmostEqual(hints["contrast"]["delta"], 0.0, places=6)
-        self.assertEqual(hints["contrast"]["direction"], "unchanged")
 
-    def test_the_clip_masks_match_the_literal_definition_of_the_rails(self):
-        # clip_masks is written channel-wise for speed: the literal
-        # ``(rgb * 255).max(axis=-1)`` reduces over a length-3 innermost axis,
-        # which NumPy walks with its generic loop at 49 ms a candidate.  The two
-        # forms have to stay bit-equal, because the mask decides which pixels
-        # the contrast axis is measured on.
-        rng = np.random.default_rng(20260730)
-        for image in (
-            rng.random((23, 31, 3), dtype=np.float32),
-            np.zeros((4, 4, 3), dtype=np.float32),
-            np.ones((4, 4, 3), dtype=np.float32),
-            # the rails themselves, and the values either side of them
-            np.array([[[249.0, 0.0, 6.0], [250.0, 6.0, 6.0], [251.0, 6.0, 6.0],
-                       [100.0, 100.0, 5.0], [100.0, 100.0, 4.0],
-                       [100.0, 100.0, 6.0]]], dtype=np.float32) / 255.0,
+    # -- what colour is left (WP18 fix 3) ------------------------------------
+
+    def test_chroma_reports_what_is_left_as_well_as_how_far_it_moved(self):
+        # p138 is the case: a huge drop that still lands somewhere vivid.  The
+        # delta cannot tell that apart from a conversion; the after mean can.
+        before = np.zeros((8, 8, 3), dtype=np.float32)
+        before[:] = (0.95, 0.05, 0.05)
+        vivid = objective_edit_hints(before, np.full_like(before, 0.0)
+                                     + np.array([0.9, 0.35, 0.1], dtype=np.float32),
+                                     weight=None)
+        self.assertLess(vivid["chroma"]["delta"], 0.0)
+        self.assertGreater(vivid["chroma"]["after_mean"], 6.0)
+
+        grey = objective_edit_hints(before, np.full_like(before, 0.45), weight=None)
+        self.assertLess(grey["chroma"]["delta"], 0.0)
+        self.assertLess(grey["chroma"]["after_mean"], 6.0)
+
+    # -- where the surface is (WP18 fix 2) -----------------------------------
+
+    def test_a_surface_carries_the_part_of_the_frame_it_occupies(self):
+        for slice_, expected in (
+            ((slice(0, 4), slice(0, 4)), "upper left"),
+            ((slice(8, 12), slice(8, 12)), "lower right"),
+            ((slice(0, 4), slice(4, 8)), "upper half"),
+            ((slice(4, 8), slice(0, 4)), "left half"),
+            ((slice(4, 8), slice(4, 8)), "middle of the frame"),
         ):
-            scaled = np.asarray(image, dtype=np.float32) * 255.0
-            expected_highlight = scaled.max(axis=-1) >= 250.0
-            expected_either = expected_highlight | (scaled.min(axis=-1) <= 5.0)
-            either, highlight = clip_masks(image)
-            self.assertTrue(np.array_equal(highlight, expected_highlight))
-            self.assertTrue(np.array_equal(either, expected_either))
+            with self.subTest(position=expected):
+                before = np.full((12, 12, 3), 0.5, dtype=np.float32)
+                before[slice_] = (0.95, 0.25, 0.25)
+                after = before.copy()
+                after[slice_] = (0.62, 0.50, 0.50)
+                hints = objective_edit_hints(before, after, weight=None)
+                row = next(r for r in hints["surfaces"] if r["name"] == "orange")
+                self.assertEqual(row["position"], expected)
 
-    def test_a_fully_clipped_support_falls_back_instead_of_dividing_by_zero(self):
-        before = np.full((6, 6, 3), 1.0, dtype=np.float32)
-        after = np.full_like(before, 0.0)
-        hints = objective_edit_hints(before, after, weight=None)
-        self.assertTrue(math.isfinite(hints["contrast"]["delta"]))
-        self.assertEqual(hints["contrast"]["clip_frac_before"], 1.0)
+    def test_the_position_is_the_centroid_inside_the_mask_not_of_the_colour(self):
+        # The guitar case: the same colour appears twice, and only one of the two
+        # is inside the edit.  The clue has to point at the edited one.
+        before = np.full((12, 12, 3), 0.5, dtype=np.float32)
+        before[0:4, 0:4] = (0.95, 0.25, 0.25)    # untouched, upper left
+        before[8:12, 8:12] = (0.95, 0.25, 0.25)  # edited, lower right
+        after = before.copy()
+        after[8:12, 8:12] = (0.62, 0.50, 0.50)
+        weight = np.zeros((12, 12), dtype=np.float64)
+        weight[6:12, 6:12] = 1.0
+        hints = objective_edit_hints(before, after, weight=weight)
+        row = next(r for r in hints["surfaces"] if r["name"] == "orange")
+        self.assertEqual(row["position"], "lower right")
 
     def test_green_magenta_is_its_own_axis_on_the_whole_support(self):
         before = np.full((6, 6, 3), 0.5, dtype=np.float32)
@@ -1616,6 +1784,8 @@ class ObjectiveHintMetricTests(unittest.TestCase):
         for field in ("clip_frac_before", "clip_frac_after"):
             self.assertAlmostEqual(oracle["contrast"][field],
                                    production["contrast"][field], places=6)
+        self.assertAlmostEqual(oracle["chroma"]["after_mean"],
+                               production["chroma"]["after_mean"], places=6)
         self.assertEqual([row["name"] for row in oracle["surfaces"]],
                          [row["name"] for row in production["surfaces"]])
         for expected, actual in zip(oracle["surfaces"], production["surfaces"]):
@@ -1623,6 +1793,7 @@ class ObjectiveHintMetricTests(unittest.TestCase):
                 self.assertAlmostEqual(expected[field], actual[field], places=6)
             self.assertEqual(expected["low_confidence"], actual["low_confidence"])
             self.assertEqual(expected["direction"], actual["direction"])
+            self.assertEqual(expected["position"], actual["position"])
 
     def test_the_torch_path_production_runs_matches_the_numpy_oracle(self):
         # visibility.py has two implementations of this metric and the GPU one
@@ -1650,12 +1821,16 @@ class ObjectiveHintMetricTests(unittest.TestCase):
                 self.assert_hints_equal(*self.torch_and_numpy(before, after, weight))
 
     def test_production_reproduces_the_wp15b_bank_numbers(self):
-        """Replay: the five winning statistics against the ROC's own figures.
+        """Replay: the winning statistics against the ROC's own figures.
 
         This is the acceptance check for the swap.  ``metric_bank.py`` computed
         the numbers the ROC selected on, so if production disagrees with it on
         the archived pixels then the operating points in responses.py are
         anchored to a statistic nothing is actually computing.
+
+        Contrast is absent from this list since WP18: the bank predates the tone
+        curve and has no column for it, and the axis is instead pinned by the
+        WP18 calibration replay below.
         """
         if not self.BANK.is_file():
             self.skipTest("WP15b metric bank is not on this machine")
@@ -1673,7 +1848,6 @@ class ObjectiveHintMetricTests(unittest.TestCase):
                     "hue_gm": support["full"]["d_a"],
                     "warmth": (math.cos(radians) * support["hi"]["d_a"]
                                + math.sin(radians) * support["hi"]["d_b"]),
-                    "contrast": support["noclip"]["d_contrast"],
                 }
                 for axis, value in expected.items():
                     # Production rounds to 6 decimals; nothing else may differ.
@@ -1688,6 +1862,37 @@ class ObjectiveHintMetricTests(unittest.TestCase):
                     self.assertAlmostEqual(surface["area"], bank["area_before"], places=5)
                     for field in ("d_L", "d_a", "d_b", "d_C"):
                         self.assertAlmostEqual(surface[field], bank[field], places=5)
+
+    # The two fresh150 rows the factory panel adjudicated as contrast reversals,
+    # by their sample numbers in /var/cache/veradata/annot_review/wp17_blind_keys.
+    # They are the acceptance case for WP18 fix 1 and they point in opposite
+    # directions, which is why no threshold move on the old statistic could have
+    # repaired them: p050 was called "higher contrast" (+2.27) against a judge
+    # who measured it flat and washed out, p066 "lower contrast" (-3.25) against
+    # a judge who fitted a 1.67x expansion.
+    REVERSALS = (
+        ("p050", "g060_group_6e4c4d", "lower contrast", 2.266133),
+        ("p066", "g142_group_f3b015", "higher contrast", -3.250809),
+    )
+    PANEL = Path("/var/cache/veradata/annot_review/fresh150-v51-20260730")
+
+    def test_the_tone_curve_agrees_with_the_panel_on_both_reversals(self):
+        if not self.PANEL.is_dir():
+            self.skipTest("the fresh150 factory panel is not on this machine")
+        for sample, directory, judged, stored in self.REVERSALS:
+            with self.subTest(sample=sample):
+                base = self.PANEL / directory
+                before, after, weight = _load_bank_pair({
+                    "before": base / "before.jpg",
+                    "after": base / "after_rank1.jpg",
+                    "cgt": base / "cgt_rank1.png",
+                })
+                hints = objective_edit_hints(before, after, weight=weight)
+                self.assertEqual(hints["contrast"]["direction"], judged)
+                # And the direction really is the one v5.1 got wrong, not a
+                # coincidence of the two happening to agree.
+                self.assertNotEqual(
+                    "higher contrast" if stored > 0 else "lower contrast", judged)
 
 
 def _bank_rows(path: Path, limit: int) -> list[dict]:

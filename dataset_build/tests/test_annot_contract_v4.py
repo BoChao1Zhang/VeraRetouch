@@ -733,8 +733,11 @@ def v5_hints(**overrides: object) -> dict[str, object]:
     base: dict[str, object] = {
         "brightness": {"delta": -6.0, "direction": "darker"},
         "warmth": {"delta": 3.0, "direction": "warmer"},
-        "chroma": {"delta": -8.0, "direction": "more muted"},
-        "contrast": {"delta": 2.0, "direction": "higher contrast"},
+        # ``after_mean`` above the 6.0 floor by default: a table that says the
+        # colours are *gone* is the exceptional claim and every test that wants
+        # it says so.
+        "chroma": {"delta": -8.0, "direction": "more muted", "after_mean": 11.0},
+        "contrast": {"delta": 3.0, "direction": "higher contrast"},
         "hue_gm": {"delta": 7.0, "direction": "shifted toward magenta/red"},
         "surfaces": [],
     }
@@ -996,24 +999,25 @@ class ProseViolationTests(unittest.TestCase):
         }
         self.assertEqual(responses.prose_violations(clean, v5_hints()), [])
 
-    def test_all_three_bans_are_reported_together(self):
+    def test_all_four_bans_are_reported_together(self):
         dirty = {
             "problem_lighting": "The scene is flatter than in the finished image.",
             "problem_global_color": "The palette is clean and cold.",
             "problem_specific_color": "No color surface shows a visible chroma change.",
             "region_scope": GLOBAL_REGION_SCOPE,
             "plan_lighting": "Brighten the seaside scene throughout.",
-            "plan_global_color": "Warm the frame overall.",
+            "plan_global_color": "Warm the frame, without a stated directional change.",
             "plan_specific_color": "Keep the rocks as they are.",
             "instruction_long": "Please brighten and warm this seaside photograph.",
             "instruction_short": "Brighten and warm the seaside scene.",
         }
         reasons = responses.prose_violations(dirty, v5_hints())
-        self.assertEqual(len(reasons), 3)
+        self.assertEqual(len(reasons), 4)
         self.assertIn("than in the finished", reasons[0])
         self.assertIn("chroma", reasons[1])
-        self.assertIn("brightness", reasons[2])
-        self.assertIn("darker", reasons[2])
+        self.assertIn("stated directional change", reasons[2])
+        self.assertIn("brightness", reasons[3])
+        self.assertIn("darker", reasons[3])
 
     def test_the_code_is_a_bounded_redraw_that_does_not_rotate_lanes(self):
         self.assertEqual(
@@ -1026,30 +1030,128 @@ class ProseViolationTests(unittest.TestCase):
         self.assertNotIn(responses.PROSE_VIOLATION, responses._LANE_ROTATING_CODES)
 
 
+class SelfInstructionEchoTests(unittest.TestCase):
+    """The silence rule, copied back out as prose (WP18).
+
+    A silent axis tells the annotator "do not state a direction either way", and
+    fresh150 shows it answering by writing that sentence into the plan.  Every
+    positive below is lifted verbatim from that build's ``sft.jsonl``; the
+    negatives are the neighbouring English the pattern must not touch.
+    """
+
+    def test_the_observed_phrasings_are_caught(self):
+        for text in (
+            "Avoid making a directional contrast or color-balance claim.",
+            "while leaving saturation without a stated directional change",
+            "giving the subject more presence while avoiding an asserted contrast shift",
+            "so the scene reads brighter, without making a directional contrast claim",
+            "with moderately stronger contrast and no asserted shift in overall colour",
+            "letting saturation respond without forcing a specific directional shift",
+            "avoiding a claimed brightness or contrast shift while shaping the palette",
+            "keeping the balance intact and avoiding any asserted warmth shift",
+        ):
+            with self.subTest(text=text[:40]):
+                self.assertTrue(responses.self_instruction_hits(text), text)
+
+    def test_ordinary_retouching_english_is_left_alone(self):
+        # "avoid/without + making" on its own is not the pattern: it hits 55 of
+        # 160 fresh200 rows, where it is how a photographer writes.
+        for text in (
+            "Warm the interior without making the far corners feel altered.",
+            "Enrich the amber presence without making every element equally vivid.",
+            "Brighten the room while keeping the highlights from clipping.",
+            "Give the frame a warmer cast and a directional key light.",
+            "The change is subtle and the colours stay where they are.",
+            "Lift the shadows so the stated subject reads clearly.",
+        ):
+            with self.subTest(text=text[:40]):
+                self.assertEqual(responses.self_instruction_hits(text), [], text)
+
+    def test_the_audit_and_the_gate_share_one_pattern(self):
+        self.assertIs(mech.SELF_INSTRUCTION_RE, responses.SELF_INSTRUCTION_RE)
+
+
 class MonochromeNoteTests(unittest.TestCase):
     def hint_block(self, hints):
         return responses._objective_hints({"objective_hints": hints})
 
-    def test_a_strong_desaturation_is_named_as_a_conversion(self):
-        block = self.hint_block(v5_hints(
-            chroma={"delta": -9.4, "direction": "more muted"}
-        ))
-        self.assertIn("monochrome or near-monochrome palette", block)
-        self.assertIn("never write enrich", block)
+    @staticmethod
+    def muted(delta: float, **extra: object) -> dict[str, object]:
+        return {"delta": delta, "direction": "more muted", **extra}
+
+    def test_a_conversion_is_named_only_when_almost_no_colour_is_left(self):
+        # The fresh150 rows that earned the conversion wording measured after
+        # chroma 0.55, 3.07 and 5.73; every overstated one measured 8.06 or
+        # more.  The floor sits in that gap, and the two tiers say opposite
+        # things about whether the colours are gone.
+        gone = self.hint_block(v5_hints(chroma=self.muted(-9.4, after_mean=3.07)))
+        self.assertIn("monochrome or near-monochrome palette", gone)
+        self.assertIn("say the original colours are gone", gone)
+        self.assertIn("never write enrich", gone)
+
+        for after_mean in (0.55, 5.73, 6.0):
+            with self.subTest(after_mean=after_mean):
+                self.assertIn("near-monochrome", self.hint_block(
+                    v5_hints(chroma=self.muted(-9.4, after_mean=after_mean))))
+
+    def test_colour_still_in_the_result_is_named_a_desaturation_instead(self):
+        # p138: delta -21.3 with a median after chroma of 100.8 -- the water is
+        # still blue-violet and the jellyfish turns *more* vivid, and v5.1 told
+        # the annotator to write that the original colour was removed.
+        for after_mean in (6.01, 8.06, 100.8):
+            with self.subTest(after_mean=after_mean):
+                block = self.hint_block(
+                    v5_hints(chroma=self.muted(-21.3, after_mean=after_mean)))
+                self.assertIn("strong desaturation", block)
+                self.assertIn("colours remain visible while being strongly "
+                              "subdued", block)
+                self.assertIn("do not call this a conversion", block)
+                # And the tier that must not be reached does not get its
+                # vocabulary printed here either -- WP16's lesson is that this
+                # table's own words come straight back out of the answer.
+                self.assertNotIn("monochrome", block)
+                self.assertNotIn("gone", block.replace("not that they are gone", ""))
+
+    def test_a_journal_without_the_reading_gets_the_weaker_claim(self):
+        # Rows written before WP18 carry no after-chroma figure.  "The colours
+        # are gone" is the claim that needs evidence, and a missing measurement
+        # is not evidence, so the softer tier is the safe default.
+        block = self.hint_block(v5_hints(chroma=self.muted(-9.4)))
+        self.assertIn("strong desaturation", block)
+        self.assertNotIn("monochrome", block)
 
     def test_a_moderate_or_contested_desaturation_gets_no_note(self):
         for name, hints in (
-            ("moderate", v5_hints(chroma={"delta": -3.0, "direction": "more muted"})),
-            ("richer", v5_hints(chroma={"delta": 9.0, "direction": "richer"})),
+            ("moderate", v5_hints(chroma=self.muted(-3.0, after_mean=1.0))),
+            ("richer", v5_hints(chroma={"delta": 9.0, "direction": "richer",
+                                        "after_mean": 1.0})),
             ("surface disagrees", v5_hints(
-                chroma={"delta": -9.4, "direction": "more muted"},
+                chroma=self.muted(-9.4, after_mean=1.0),
                 surfaces=[{"name": "red", "area": 0.2, "d_L": 0.0, "d_a": 1.0,
                            "d_b": 1.0, "d_C": 8.0, "direction": "richer",
                            "low_confidence": True}],
             )),
         ):
             with self.subTest(name=name):
-                self.assertNotIn("near-monochrome", self.hint_block(hints))
+                block = self.hint_block(hints)
+                self.assertNotIn("near-monochrome", block)
+                self.assertNotIn("strong desaturation", block)
+
+    def test_no_single_hue_wording_can_reach_a_rise_or_a_silent_axis(self):
+        # The disaster clause.  Whatever the after reading says, a saturation
+        # that rose or never cleared its dead band may not be described in any
+        # of this vocabulary -- p138 is what one wrong table line costs.
+        for delta in (12.0, 4.0, 1.9, 0.0, -1.9, -3.99):
+            for after_mean in (0.0, 0.55, 6.0, 100.8):
+                with self.subTest(delta=delta, after_mean=after_mean):
+                    direction = "richer" if delta > 0 else "more muted"
+                    block = self.hint_block(v5_hints(chroma={
+                        "delta": delta, "direction": direction,
+                        "after_mean": after_mean}))
+                    self.assertNotIn("NOTE:", block)
+                    for word in ("monochrome", "conversion", "desaturation",
+                                 "colours are gone"):
+                        self.assertNotIn(word, block)
 
 
 class SystemPromptClauseTests(unittest.TestCase):
@@ -1149,6 +1251,69 @@ class MechanicalProseFlagTests(unittest.TestCase):
         without = self.unit(None)
         self.assertNotIn("hint_contradiction", without["flags"])
         self.assertEqual(without["hint_contradiction"], [])
+
+    def test_the_reading_rule_echo_is_its_own_flag(self):
+        echoed = self.unit(
+            v5_hints(),
+            plan_global_color="Warm the frame without a stated directional change.",
+        )
+        self.assertIn("self_instruction_echo", echoed["flags"])
+        self.assertEqual(echoed["self_instruction"], ["stated directional change"])
+        self.assertNotIn("self_instruction_echo", self.unit(v5_hints())["flags"])
+
+
+class BenignWordSenseTests(unittest.TestCase):
+    """Word senses adjudicated against the sentence that produced them.
+
+    Each entry below was written for a false alarm the fresh150 review threw, so
+    the positives are that build's own text; the negatives are the pipeline
+    senses the same word has, which must keep firing.
+    """
+
+    def leaks(self, text: str) -> dict[str, list[str]]:
+        return mech.leak_hits(text)[0]
+
+    def test_scene_objects_are_not_the_pipelines_mask_vocabulary(self):
+        for text in (
+            "The owl's brown feather markings and the branches look muted.",
+            "so the result feels luminous, cinematic, and softly matte",
+            "The brighter treatment should remain cinematic and matte.",
+            "the overall image feels luminous yet matte",
+            "a cool cast throughout the woman, mask, clothing, and interior",
+            "especially across the woman's face, floral clothing, mask, "
+            "and illuminated interior",
+        ):
+            with self.subTest(text=text[:44]):
+                self.assertEqual(self.leaks(text), {}, text)
+
+    def test_the_pipeline_senses_of_the_same_words_still_leak(self):
+        for text in (
+            "The mask edge is visible around the subject.",
+            "Feather the selection edge so the transition is smooth.",
+            "The alpha matte covers the whole subject.",
+            "The segmentation map missed one arm.",
+        ):
+            with self.subTest(text=text[:44]):
+                self.assertTrue(self.leaks(text), text)
+
+    def test_depicted_bands_stripes_and_tonal_moves_are_not_edit_geometry(self):
+        for text in (
+            "brown weathering adds another warm colour band",
+            "Make the red-painted stripes and stars on the boxes clearly richer.",
+            "Push brightness strongly upward across the portrait.",
+            "letting the overall tone settle downward",
+        ):
+            with self.subTest(text=text[:44]):
+                self.assertEqual(mech.geometry_words(text), [], text)
+
+    def test_the_edit_pointed_at_by_its_shape_is_still_flagged(self):
+        for text, expected in (
+            ("Warm the diagonal band across the meadow.", ["band", "diagonal"]),
+            ("The effect fades outward from the centre.", ["outward"]),
+            ("Lighten the upper left of the scene.", ["upper left"]),
+        ):
+            with self.subTest(text=text[:44]):
+                self.assertEqual(mech.geometry_words(text), expected)
 
 
 if __name__ == "__main__":

@@ -570,3 +570,134 @@ fresh 两轮 NO-GO 的根因收敛到 hints 均值失真（档案 docs/HINTS_MEA
 渲染重放符号硬门 + 反转对 2AFC Avg@4 仅可判别区 + recaption）→ fresh 批次 #3
 出厂判定。preset 重分类（TS-WCL 路线）解耦后置。证据包 `_hints_bias`、
 标定 `jnd_calib_20260729`、度量筛选 `wp15_metric_roc`。
+
+## 9. fresh #3 出厂裁决与 v5.2（2026-07-30）
+
+fresh150-v51-20260730（136 SFT 行）+ Claude opus 面板（10 评委、186 样本含 50
+对照重判、评委不知批次、逐条数值复核）。**5/6 门过，G3（方向反转 5.1% vs ≤2%）
+单门不过 → NO-GO**。产物 wp17_blind_panel* / wp17_panel_scores/。
+
+关键事实：
+- **同仪器下 v5.1 全面优于 v4.1**：pass 63.2% vs 52.0%（+11.2pt）、reasoning
+  +0.44、after 指涉评委点名率 **1.5% vs 24.0%**（v5.1 禁令跨批直接证明有效）；
+  生产 prose 门交付残留 0（触发 2.9% 全被重抽吸收）。
+- **仪器漂移 −16pt**：同 50 条对照上轮 68% pass 本轮 52%——本轮评委系统做
+  色调曲线级数值复核，捕获旧仪器不可见的反转类；对照批（v4.1）在新仪器下
+  反转率也有 4.0%，G3 的 2% 是旧仪器灵敏度下定的数。
+- G3 的 7 条反转分解 → **v5.2 三件套**（全部有面板给出的修法）：
+  1. contrast 度量结构盲区（std 代理在压平背景下反向；改逐十分位色调曲线斜率）；
+  2. surfaces 桶被映射到 mask 外显眼物体（加域内限定 + 位置线索）；
+  3. 单色 NOTE 过度触发（fresh 侧 25 条夸大 flag + 1 条灾难；阈值绑定实测
+     残余 chroma ≤6.0 双档化）。
+- 数据侧发现：源池存在 540×360 低分辨率 before（面板 ~7 例）；同源图多编辑对
+  需按源图分组切分 train/eval；SAM3 空转损耗 26% 源池（P1 仍未决）；
+  `overlay_subject_not_ready` 53→161 持续爬升待查。
+
+v5.2 实施中（WP18：三件套 + rather-than 语域 + mech benign 五条 + 自我指令
+回抄模式 + mini30 冒烟），完成后 fresh #4 同门槛判定。
+
+## 10. WP18 / v5.2 落地终态（2026-07-30）
+
+三件套全部落地，标定数字如下（校准脚本 `/tmp/wp18-*.py`，只读面板产物）。
+
+### 10.1 contrast：色调曲线斜率（`visibility.py`）
+
+度量 = `(色调曲线斜率 − 1) × before-L 加权标准差`，在高 α 核心上按 **固定
+10 L\* 宽**的亮度带做最小二乘（评委引用的正是 30-40 / 70-80 这种绝对带，
+不是质量分位）。每条带贡献一个点，带权重 = `min(带质量, 核心质量/10)`——
+**封顶是修复本身**：p066 的压平背景占 mask 三分之二，按质量加权就会像支配
+方差一样支配斜率。
+
+- **量纲等价**：编辑为线性色调映射 `L2 = g·L1 + c` 时，斜率恒等于 g，
+  `(斜率−1)·std(L1) ≡ std(L2)−std(L1)`，与 v5.1 数值完全相同；两者只在
+  非线性处分歧，也就是 p050/p066 的结构。死区因此仍是 L\* 单位。
+- **AUC（fresh200 n=160 Direction-List contrast 标签）**：新度量 **0.9196**
+  vs 生产旧度量 `noclip.d_contrast` **0.9117**（`full` 0.9234 / `core`
+  0.9248，均在噪声内）。带权方案对照：按质量加权 0.911（p066 回退到 −2.79，
+  等于没修）、等权 0.900。
+- **死区 1.3 → 2.3**。1.3 本就是错的：它取自 ROC 里 `full.d_contrast` 的
+  工作点，而出厂的是 `noclip.d_contrast`（同一次扫描的工作点是 2.37）。
+  新值按同一 `operating_point` 程序重算，精度目标从 0.90 提到 **0.95**——
+  现在卡住的门是 G3（反转 ≤2%），十次断言错一次的统计量达不到。2.2629→2.3
+  时：160 行里断言 76 条、精度 0.934、反转 4——与出厂 v5.1 统计量在它自己
+  0.90 工作点上的表现（75 / 0.933 / 4）完全相同，但 p050/p066 是对的。
+- **p050 / p066 复核**（归档像素，生产 512 网格，numpy/torch 逐位一致）：
+  p050 `+2.27 higher` → **−5.47 lower**（评委：变平、发灰）；
+  p066 `−3.25 lower` → **+0.68**（评委：1.67× 扩张；落死区内 → 沉默，
+  不再反向断言）。
+- **noclip 支撑取消**。p050 的反转正是它造成的：抬黑位的像素全在低轨上，
+  被 noclip 删掉了。色调曲线自带封顶，不需要这道滤除。
+
+### 10.2 surfaces 域内锚定（`visibility.py` + `responses.py`）
+
+每桶落盘 `position`：mask 内加权质心 → 三分法粗位置词（`upper left` /
+`lower half` / `middle of the frame` …），hint 行渲染成
+`the red areas (12% of the region, mostly in the lower half, saturation …)`。
+`_HOW_TO_USE` 第 2 条加硬限定「只许点名编辑区域内承载该色的内容」，并写明
+位置词是用来**认物**、不得回抄。旧 journal 缺 `position` 键照常渲染。
+
+### 10.3 单色 NOTE 双档（`responses.py`）
+
+落盘补 `chroma["after_mean"]`（mask 内加权 after 图 C 均值）。
+`delta ≤ −4.0` 且无相反色面时：`after_mean ≤ 6.0` → 原「转换、颜色没了」；
+`> 6.0` → 新「强去饱和，颜色仍可见但被大幅压低」。阈值 6.0 取自面板实测的
+兑现案 0.55/3.07/5.73 与虚假案 ≥8.06 之间的空档。旧 journal 无该键时走
+**软档**（「颜色没了」是需要证据的那一句）。防灾条款：`delta` 为正或在死区
+内一律不注入任何单色措辞。
+
+**fresh150 全量重放（136 行，归档像素）**：v5.1 规则在 **38 行**上注入
+「原色已消失」；v5.2 只在 **9 行**保留（after_mean 1.05–5.73，全部落在面板
+兑现区间内），**29 行降级**（after_mean 4.65–68.40，含 p138 的 68.40）。
+面板点名的「25 条夸大 + 1 条灾难」被完整覆盖。
+contrast 侧同一重放：断言 88 → 64 行，唯一一条方向对翻是 p050（修对）。
+
+> 重放读的是归档 JPEG，生产算的是 pre-JPEG；HINTS_MEAN_BIAS §2.2 记录的残差
+> 中位数为一阶轴 0.032、contrast 0.093，故重放为指示性数字，不是存档事实。
+
+### 10.4 附带小项
+
+- **task_clause 语域**：删掉 v5.1 结尾的「Do not claim the edit is confined
+  to that subject…」——面板的 language 扣分主源正是模型照办的样子（"rather
+  than treating the woman alone"、"as one connected local treatment"）。改成
+  正面要求「把主体连同一起变化的邻近元素列出来；能走多远只写在 region_scope」。
+  按 WP16 教训移除诱因，而不是再加禁词。
+- **prose 门第 4 类 `self_instruction_echo`**：把沉默规则回抄成散文
+  （"Avoid making a directional contrast or color-balance claim"、"without a
+  stated directional change"、"avoiding an asserted contrast shift"）。锚在
+  fresh150 实际措辞上：命中 **16/136**，而在该措辞出现之前的 fresh100 +
+  fresh200 + eval100 共 **386 行上命中 0**。更宽的 "avoid/without + making"
+  被证伪并否决（fresh200 命中 55/160，是正常英语）。
+- **mech benign 六条**（各锚一句真实语料）：`feather markings`；表语/并列裸
+  `matte`；并列名词裸 `mask`（"the woman, mask, clothing"）；`colour band`
+  定中语序；`painted stripes`；`brightness/tone … upward`。另加 mini30 冒烟
+  发现的第七条：被摄物体的 `curved band`（手镯）。
+
+### 10.5 mini30 冒烟（`mini30-v52-20260730`，30 组）
+
+`complete_with_failures`，27 SFT 行，relay 27 次成功 + 20 次重试 ≈ **47**
+（预算 60）；terminal_failures 1。
+
+- **mech 全量 27/27 clean，零 flag**（对照：同工具跑 v5.1 的 fresh150 是
+  120/136 clean，16 条 `self_instruction_echo` + 1 条几何词）。
+- 新门在线生效：2 次 `prose_violation` 全部为自我指令回抄，均被有界重抽
+  吸收（非 terminal），**交付残留 0**。
+- **位置词零回抄**：27 行里没有一行把 `upper/lower half`、`middle of the
+  frame` 之类写进散文——这是 §10.2 最大的风险点，已实测排除。
+- **6 条人工核对全部相符**：单色 NOTE 两档各一例（after_mean 4.89 的确近乎
+  无彩；12.80 的荷叶与荷花颜色明显尚存，v5.1 会在这条上说「颜色没了」）；
+  contrast 最正 +5.87（暗部压到 16→4、亮部守住 75→78，画面确为强反差）与
+  最负 −3.97（画面发灰发平，且该行 39.6% 像素在轨上，正是 v5.1 会删掉四成
+  支撑的情形）；两条位置词与图相符（背景粉色花带 → `upper half`，绿叶 →
+  `middle of the frame`）。
+
+### 10.6 遗留
+
+- `after_mean` 分的是「中性 vs 有彩」，不是「单色 vs 多色」。棕褐（sepia）
+  转换带着 15 左右的残余 chroma，会落进软档。mini30 该行的实际文本写的是
+  "sepia-leaning … while leaving some color visible"，反而比硬档准确，故未
+  处理；若日后要区分，需要的是色相集中度而非残余 chroma。
+- `profile_render_segments.py` 的 numpy 回退分支调用 `objective_edit_hints_
+  from_lab` 时漏传 `support=`（WP15c 起就会 TypeError，该分支从未被触发）。
+  本次顺手补上。
+- fresh150 §9 列的数据侧问题（540×360 低分辨率源、同源图分组切分、SAM3 空转
+  26%、`overlay_subject_not_ready` 爬升）本轮未动。
