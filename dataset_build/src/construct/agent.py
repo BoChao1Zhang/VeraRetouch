@@ -95,9 +95,16 @@ from .visibility import (
 # image, so a checkpoint adds roughly 0.6x the watermark again in real bytes.
 # Measured on the first production checkpoint at 8 GiB: 7.8 GiB of assets became
 # ~13 GiB at the peak, and two builds in lockstep took a 24 GiB mount to 716 MiB
-# free.  4 GiB keeps each build's peak near 7.7 GiB, both near 16 GiB, and the
-# only cost is more (idempotent, now lock-serialized) landing checkpoints.
-LAND_WATERMARK_BYTES = 4 * 1024**3
+# free.
+#
+# 8, not 4: a local-only build carries an unreclaimable staged base of ~5.2 GiB
+# (masks/C_GT/in-flight winners that landing cannot release), so a 4 GiB mark sat
+# permanently above threshold and the land loop thrashed — prod-l1 measured 183
+# checkpoints per ~50 min and rendering throughput collapsed 3,170 -> ~250
+# groups/h.  The mark must clear the unreclaimable base with room for one real
+# batch; 8 GiB restores batching (peak ~13 GiB per build) and the tmpfs monitor
+# alarms below 3 GiB free if two builds ever land in lockstep.
+LAND_WATERMARK_BYTES = 8 * 1024**3
 # Sources per prefetch buffer.  ponytail: a module constant for the same reason
 # as the water mark — one chunk is ~1 GiB of a 24 GiB tmpfs, the buffer is
 # rebuildable, and the only requirement is that a chunk take long enough to
