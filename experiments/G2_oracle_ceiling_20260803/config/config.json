@@ -1,0 +1,79 @@
+{
+  "exp_id": "G2_oracle_ceiling",
+  "date": "2026-08-03",
+  "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+  "git_branch": "lens-exp",
+  "seed": 20260803,
+  "gpu": "CUDA_VISIBLE_DEVICES=1 (H100, 单卡串行)",
+  "estimator": {
+    "primary": "affine",
+    "color_levels": [
+      33,
+      17,
+      9
+    ],
+    "alt_levels_for_bandwidth_check": [
+      17,
+      9
+    ],
+    "n_min_affine": 60,
+    "n_min_offset": 20,
+    "n_min_const": 20,
+    "s_buckets": 8,
+    "s_bucket_rule": "全局分位桶(torch.quantile)，并列值不拆；禁逐图 min-max/softmax 归一化",
+    "psnr": "round(x*255) 后 10log10(255^2/MSE)，cap 100 dB（与 tools/harness/metrics.py 同式）",
+    "cv": "二折交叉拟合（分区结构用全量定，单元系数只用另一折）"
+  },
+  "data": {
+    "construct": "experiments/tooling-wave1/T4_construct/sanity/val (8 级 × 24 = 192，s = GT 掩膜)",
+    "real": "D-SFT-L(S-val, normal) prod-l1..l6，索引 index/dsftl_sval_normal.jsonl (1061 组，每组取 1 候选)，s = C_GT",
+    "control": "D-SFT-G(S-val, normal) prod-g1..g4，索引 index/dsftg_sval_normal.jsonl (1275 组)，s = 从 l 系移植的 C_GT",
+    "n_real": 600,
+    "n_control": 600,
+    "n_xcheck": 100,
+    "split_source": "tools/data_splits/splits.sqlite3 同式哈希 (verasplit-v1)",
+    "i_in_reconstruction": "img 银行源图 → exif_transpose → RGB → LANCZOS 短边 1024（生产 rendering.preprocess_source 复刻）",
+    "pixel_sampling": "原生分辨率全像素；无插值 resize"
+  },
+  "mlp_probe": {
+    "arch": "4 -> 256x4 -> 3 (ReLU)",
+    "n_params": 199427,
+    "steps": 6000,
+    "bs": 65536,
+    "lr": 0.002,
+    "opt": "Adam + cosine",
+    "samples": [
+      "L1_val_0000..0002",
+      "L4_val_0000..0002"
+    ],
+    "control_arm": "同网络但 in_dim=3（不给 s）"
+  },
+  "glut_crosscheck": {
+    "engine": "model/glut_repro BatchedGLUT + fit_e1.weighted_kmeans_init",
+    "n_gaussians": 32,
+    "params_per_lut": 716,
+    "steps": 1200,
+    "bs": 8192,
+    "lr": 0.005,
+    "p_sample": 131072,
+    "arms": [
+      "1lut",
+      "mask3 (C_GT 三分位桶)",
+      "luma3 (Rec.709 亮度三分位桶)"
+    ]
+  },
+  "code_sha256_16": {
+    "__init__.py": "e3b0c44298fc1c14",
+    "delta_ceil.py": "03886bd24c895b65",
+    "fit_crosscheck.py": "bfbf24e79d833f33",
+    "index_builds.py": "5fc4e91cb0a2ce43",
+    "loader.py": "3ece7d85b238d4ca",
+    "mlp_probe.py": "f813c29501127e12",
+    "run_analytic.py": "0036615aa7e63ec7",
+    "selfcheck.py": "212bad794bad3b2d",
+    "summarize.py": "8fca5003b320a960",
+    "viz.py": "1a67a4c3e89bc539",
+    "run_all.sh": "ad401bb2e8d664ae"
+  },
+  "note_on_snapshot": "快照 = 跑批当时的代码。跑批启动(09:32:51)后对 delta_ceil.py 只改过模块 docstring，对 summarize.py 改过判据展示语义(死刑线 triggered/ok)与判据①的局部级口径——两者都在 summarize 步骤执行前完成，无行为漂移。"
+}
