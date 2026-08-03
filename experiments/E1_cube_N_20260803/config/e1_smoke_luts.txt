@@ -1,0 +1,5 @@
+e18__e18_000007	/var/cache/veradata/dcube/npy33/e18__e18_000007.npy	高饱和暖调_00
+e18__e18_000041	/var/cache/veradata/dcube/npy33/e18__e18_000041.npy	青橙胶片_01
+e18__e18_000042	/var/cache/veradata/dcube/npy33/e18__e18_000042.npy	青橙胶片_01
+e18__e18_000084	/var/cache/veradata/dcube/npy33/e18__e18_000084.npy	撞色暖调_06
+e18__e18_000089	/var/cache/veradata/dcube/npy33/e18__e18_000089.npy	撞色暖调_06
