@@ -1,0 +1,347 @@
+[e1] 400 LUTs x N in [8, 16, 24, 32, 48, 64, 96, 128]
+[e1] GT cache ready in 492s
+[e1] N=8 chunk 0: 16 LUTs in 53s de00_mean=1.457
+[e1] N=8 chunk 1: 16 LUTs in 46s de00_mean=0.902
+[e1] N=8 chunk 2: 16 LUTs in 45s de00_mean=1.084
+[e1] N=8 chunk 3: 16 LUTs in 46s de00_mean=1.633
+[e1] N=8 chunk 4: 16 LUTs in 46s de00_mean=1.260
+[e1] N=8 chunk 5: 16 LUTs in 45s de00_mean=1.415
+[e1] N=8 chunk 6: 16 LUTs in 46s de00_mean=1.314
+[e1] N=8 chunk 7: 16 LUTs in 44s de00_mean=1.231
+[e1] N=8 chunk 8: 16 LUTs in 82s de00_mean=1.166
+[e1] N=8 chunk 9: 16 LUTs in 131s de00_mean=1.492
+[e1] N=8 chunk 10: 16 LUTs in 127s de00_mean=1.467
+[e1] N=8 chunk 11: 16 LUTs in 130s de00_mean=1.458
+[e1] N=8 chunk 12: 16 LUTs in 121s de00_mean=1.771
+[e1] N=8 chunk 13: 16 LUTs in 116s de00_mean=1.993
+[e1] N=8 chunk 14: 16 LUTs in 120s de00_mean=2.538
+[e1] N=8 chunk 15: 16 LUTs in 114s de00_mean=1.283
+[e1] N=8 chunk 16: 16 LUTs in 116s de00_mean=1.141
+[e1] N=8 chunk 17: 16 LUTs in 116s de00_mean=1.404
+[e1] N=8 chunk 18: 16 LUTs in 123s de00_mean=1.494
+[e1] N=8 chunk 19: 16 LUTs in 135s de00_mean=1.406
+[e1] N=8 chunk 20: 16 LUTs in 118s de00_mean=0.944
+[e1] N=8 chunk 21: 16 LUTs in 118s de00_mean=1.145
+[e1] N=8 chunk 22: 16 LUTs in 121s de00_mean=0.846
+[e1] N=8 chunk 23: 16 LUTs in 119s de00_mean=1.089
+[e1] N=8 chunk 24: 16 LUTs in 114s de00_mean=1.052
+[e1] N=16 chunk 0: 16 LUTs in 121s de00_mean=0.966
+[e1] N=16 chunk 1: 16 LUTs in 134s de00_mean=0.588
+[e1] N=16 chunk 2: 16 LUTs in 131s de00_mean=0.702
+[e1] N=16 chunk 3: 16 LUTs in 148s de00_mean=1.076
+[e1] N=16 chunk 4: 16 LUTs in 130s de00_mean=0.807
+[e1] N=16 chunk 5: 16 LUTs in 124s de00_mean=0.934
+[e1] N=16 chunk 6: 16 LUTs in 119s de00_mean=0.877
+[e1] N=16 chunk 7: 16 LUTs in 123s de00_mean=0.776
+[e1] N=16 chunk 8: 16 LUTs in 120s de00_mean=0.753
+[e1] N=16 chunk 9: 16 LUTs in 122s de00_mean=0.973
+[e1] N=16 chunk 10: 16 LUTs in 127s de00_mean=1.013
+[e1] N=16 chunk 11: 16 LUTs in 123s de00_mean=0.928
+[e1] N=16 chunk 12: 16 LUTs in 141s de00_mean=1.123
+[e1] N=16 chunk 13: 16 LUTs in 143s de00_mean=1.281
+[e1] N=16 chunk 14: 16 LUTs in 101s de00_mean=1.725
+[e1] N=16 chunk 15: 16 LUTs in 55s de00_mean=0.841
+[e1] N=16 chunk 16: 16 LUTs in 55s de00_mean=0.768
+[e1] N=16 chunk 17: 16 LUTs in 55s de00_mean=0.911
+[e1] N=16 chunk 18: 16 LUTs in 60s de00_mean=1.044
+[e1] N=16 chunk 19: 16 LUTs in 57s de00_mean=0.921
+[e1] N=16 chunk 20: 16 LUTs in 56s de00_mean=0.651
+[e1] N=16 chunk 21: 16 LUTs in 55s de00_mean=0.783
+[e1] N=16 chunk 22: 16 LUTs in 55s de00_mean=0.543
+[e1] N=16 chunk 23: 16 LUTs in 55s de00_mean=0.762
+[e1] N=16 chunk 24: 16 LUTs in 55s de00_mean=0.733
+[e1] N=24 chunk 0: 16 LUTs in 73s de00_mean=0.769
+[e1] N=24 chunk 1: 16 LUTs in 73s de00_mean=0.471
+[e1] N=24 chunk 2: 16 LUTs in 73s de00_mean=0.561
+[e1] N=24 chunk 3: 16 LUTs in 73s de00_mean=0.868
+[e1] N=24 chunk 4: 16 LUTs in 73s de00_mean=0.637
+[e1] N=24 chunk 5: 16 LUTs in 72s de00_mean=0.751
+[e1] N=24 chunk 6: 16 LUTs in 73s de00_mean=0.696
+[e1] N=24 chunk 7: 16 LUTs in 72s de00_mean=0.632
+[e1] N=24 chunk 8: 16 LUTs in 77s de00_mean=0.615
+[e1] N=24 chunk 9: 16 LUTs in 74s de00_mean=0.781
+[e1] N=24 chunk 10: 16 LUTs in 73s de00_mean=0.825
+[e1] N=24 chunk 11: 16 LUTs in 72s de00_mean=0.758
+[e1] N=24 chunk 12: 16 LUTs in 73s de00_mean=0.901
+[e1] N=24 chunk 13: 16 LUTs in 73s de00_mean=1.033
+[e1] N=24 chunk 14: 16 LUTs in 73s de00_mean=1.362
+[e1] N=24 chunk 15: 16 LUTs in 73s de00_mean=0.672
+[e1] N=24 chunk 16: 16 LUTs in 73s de00_mean=0.615
+[e1] N=24 chunk 17: 16 LUTs in 73s de00_mean=0.722
+[e1] N=24 chunk 18: 16 LUTs in 73s de00_mean=0.857
+[e1] N=24 chunk 19: 16 LUTs in 73s de00_mean=0.733
+[e1] N=24 chunk 20: 16 LUTs in 73s de00_mean=0.521
+[e1] N=24 chunk 21: 16 LUTs in 73s de00_mean=0.632
+[e1] N=24 chunk 22: 16 LUTs in 75s de00_mean=0.456
+[e1] N=24 chunk 23: 16 LUTs in 73s de00_mean=0.587
+[e1] N=24 chunk 24: 16 LUTs in 73s de00_mean=0.586
+[e1] N=32 chunk 0: 16 LUTs in 90s de00_mean=0.684
+[e1] N=32 chunk 1: 16 LUTs in 90s de00_mean=0.399
+[e1] N=32 chunk 2: 16 LUTs in 91s de00_mean=0.480
+[e1] N=32 chunk 3: 16 LUTs in 90s de00_mean=0.743
+[e1] N=32 chunk 4: 16 LUTs in 90s de00_mean=0.525
+[e1] N=32 chunk 5: 16 LUTs in 90s de00_mean=0.621
+[e1] N=32 chunk 6: 16 LUTs in 91s de00_mean=0.592
+[e1] N=32 chunk 7: 16 LUTs in 90s de00_mean=0.532
+[e1] N=32 chunk 8: 16 LUTs in 90s de00_mean=0.516
+[e1] N=32 chunk 9: 16 LUTs in 91s de00_mean=0.658
+[e1] N=32 chunk 10: 16 LUTs in 91s de00_mean=0.735
+[e1] N=32 chunk 11: 16 LUTs in 90s de00_mean=0.651
+[e1] N=32 chunk 12: 16 LUTs in 90s de00_mean=0.777
+[e1] N=32 chunk 13: 16 LUTs in 90s de00_mean=0.914
+[e1] N=32 chunk 14: 16 LUTs in 90s de00_mean=1.153
+[e1] N=32 chunk 15: 16 LUTs in 90s de00_mean=0.577
+[e1] N=32 chunk 16: 16 LUTs in 90s de00_mean=0.529
+[e1] N=32 chunk 17: 16 LUTs in 91s de00_mean=0.630
+[e1] N=32 chunk 18: 16 LUTs in 90s de00_mean=0.748
+[e1] N=32 chunk 19: 16 LUTs in 91s de00_mean=0.639
+[e1] N=32 chunk 20: 16 LUTs in 90s de00_mean=0.465
+[e1] N=32 chunk 21: 16 LUTs in 90s de00_mean=0.542
+[e1] N=32 chunk 22: 16 LUTs in 90s de00_mean=0.390
+[e1] N=32 chunk 23: 16 LUTs in 90s de00_mean=0.510
+[e1] N=32 chunk 24: 16 LUTs in 90s de00_mean=0.499
+[e1] N=48 chunk 0: 16 LUTs in 126s de00_mean=0.569
+[e1] N=48 chunk 1: 16 LUTs in 126s de00_mean=0.329
+[e1] N=48 chunk 2: 16 LUTs in 126s de00_mean=0.401
+[e1] N=48 chunk 3: 16 LUTs in 126s de00_mean=0.606
+[e1] N=48 chunk 4: 16 LUTs in 126s de00_mean=0.425
+[e1] N=48 chunk 5: 16 LUTs in 126s de00_mean=0.504
+[e1] N=48 chunk 6: 16 LUTs in 126s de00_mean=0.490
+[e1] N=48 chunk 7: 16 LUTs in 126s de00_mean=0.433
+[e1] N=48 chunk 8: 16 LUTs in 126s de00_mean=0.427
+[e1] N=48 chunk 9: 16 LUTs in 126s de00_mean=0.533
+[e1] N=48 chunk 10: 16 LUTs in 126s de00_mean=0.601
+[e1] N=48 chunk 11: 16 LUTs in 126s de00_mean=0.543
+[e1] N=48 chunk 12: 16 LUTs in 127s de00_mean=0.645
+[e1] N=48 chunk 13: 16 LUTs in 126s de00_mean=0.747
+[e1] N=48 chunk 14: 16 LUTs in 126s de00_mean=0.936
+[e1] N=48 chunk 15: 16 LUTs in 126s de00_mean=0.470
+[e1] N=48 chunk 16: 16 LUTs in 126s de00_mean=0.435
+[e1] N=48 chunk 17: 16 LUTs in 126s de00_mean=0.503
+[e1] N=48 chunk 18: 16 LUTs in 126s de00_mean=0.614
+[e1] N=48 chunk 19: 16 LUTs in 126s de00_mean=0.529
+[e1] N=48 chunk 20: 16 LUTs in 126s de00_mean=0.395
+[e1] N=48 chunk 21: 16 LUTs in 126s de00_mean=0.461
+[e1] N=48 chunk 22: 16 LUTs in 126s de00_mean=0.332
+[e1] N=48 chunk 23: 16 LUTs in 126s de00_mean=0.410
+[e1] N=48 chunk 24: 16 LUTs in 126s de00_mean=0.408
+[e1] N=64 chunk 0: 16 LUTs in 153s de00_mean=0.502
+[e1] N=64 chunk 1: 16 LUTs in 138s de00_mean=0.294
+[e1] N=64 chunk 2: 16 LUTs in 164s de00_mean=0.349
+[e1] N=64 chunk 3: 16 LUTs in 163s de00_mean=0.529
+[e1] N=64 chunk 4: 16 LUTs in 164s de00_mean=0.364
+[e1] N=64 chunk 5: 16 LUTs in 155s de00_mean=0.428
+[e1] N=64 chunk 6: 16 LUTs in 161s de00_mean=0.431
+[e1] N=64 chunk 7: 16 LUTs in 163s de00_mean=0.379
+[e1] N=64 chunk 8: 16 LUTs in 163s de00_mean=0.370
+[e1] N=64 chunk 9: 16 LUTs in 162s de00_mean=0.455
+[e1] N=64 chunk 10: 16 LUTs in 162s de00_mean=0.538
+[e1] N=64 chunk 11: 16 LUTs in 163s de00_mean=0.473
+[e1] N=64 chunk 12: 16 LUTs in 163s de00_mean=0.557
+[e1] N=64 chunk 13: 16 LUTs in 163s de00_mean=0.669
+[e1] N=64 chunk 14: 16 LUTs in 163s de00_mean=0.807
+[e1] N=64 chunk 15: 16 LUTs in 163s de00_mean=0.416
+[e1] N=64 chunk 16: 16 LUTs in 164s de00_mean=0.381
+[e1] N=64 chunk 17: 16 LUTs in 163s de00_mean=0.451
+[e1] N=64 chunk 18: 16 LUTs in 162s de00_mean=0.550
+[e1] N=64 chunk 19: 16 LUTs in 163s de00_mean=0.465
+[e1] N=64 chunk 20: 16 LUTs in 163s de00_mean=0.349
+[e1] N=64 chunk 21: 16 LUTs in 162s de00_mean=0.405
+[e1] N=64 chunk 22: 16 LUTs in 163s de00_mean=0.296
+[e1] N=64 chunk 23: 16 LUTs in 163s de00_mean=0.360
+[e1] N=64 chunk 24: 16 LUTs in 162s de00_mean=0.371
+[e1] N=96 chunk 0: 16 LUTs in 233s de00_mean=0.432
+[e1] N=96 chunk 1: 16 LUTs in 233s de00_mean=0.253
+[e1] N=96 chunk 2: 16 LUTs in 233s de00_mean=0.297
+[e1] N=96 chunk 3: 16 LUTs in 233s de00_mean=0.454
+[e1] N=96 chunk 4: 16 LUTs in 233s de00_mean=0.302
+[e1] N=96 chunk 5: 16 LUTs in 183s de00_mean=0.351
+[e1] N=96 chunk 6: 16 LUTs in 180s de00_mean=0.363
+[e1] N=96 chunk 7: 16 LUTs in 179s de00_mean=0.320
+[e1] N=96 chunk 8: 16 LUTs in 179s de00_mean=0.311
+[e1] N=96 chunk 9: 16 LUTs in 179s de00_mean=0.380
+[e1] N=96 chunk 10: 16 LUTs in 180s de00_mean=0.462
+[e1] N=96 chunk 11: 16 LUTs in 180s de00_mean=0.401
+[e1] N=96 chunk 12: 16 LUTs in 180s de00_mean=0.471
+[e1] N=96 chunk 13: 16 LUTs in 180s de00_mean=0.552
+[e1] N=96 chunk 14: 16 LUTs in 180s de00_mean=0.697
+[e1] N=96 chunk 15: 16 LUTs in 180s de00_mean=0.348
+[e1] N=96 chunk 16: 16 LUTs in 180s de00_mean=0.325
+[e1] N=96 chunk 17: 16 LUTs in 180s de00_mean=0.377
+[e1] N=96 chunk 18: 16 LUTs in 180s de00_mean=0.474
+[e1] N=96 chunk 19: 16 LUTs in 180s de00_mean=0.391
+[e1] N=96 chunk 20: 16 LUTs in 180s de00_mean=0.303
+[e1] N=96 chunk 21: 16 LUTs in 180s de00_mean=0.346
+[e1] N=96 chunk 22: 16 LUTs in 180s de00_mean=0.255
+[e1] N=96 chunk 23: 16 LUTs in 180s de00_mean=0.308
+[e1] N=96 chunk 24: 16 LUTs in 180s de00_mean=0.321
+[e1] N=128 chunk 0: 16 LUTs in 233s de00_mean=0.380
+[e1] N=128 chunk 1: 16 LUTs in 233s de00_mean=0.226
+[e1] N=128 chunk 2: 16 LUTs in 234s de00_mean=0.264
+[e1] N=128 chunk 3: 16 LUTs in 233s de00_mean=0.401
+[e1] N=128 chunk 4: 16 LUTs in 233s de00_mean=0.267
+[e1] N=128 chunk 5: 16 LUTs in 233s de00_mean=0.312
+[e1] N=128 chunk 6: 16 LUTs in 233s de00_mean=0.322
+[e1] N=128 chunk 7: 16 LUTs in 233s de00_mean=0.287
+[e1] N=128 chunk 8: 16 LUTs in 233s de00_mean=0.278
+[e1] N=128 chunk 9: 16 LUTs in 233s de00_mean=0.339
+[e1] N=128 chunk 10: 16 LUTs in 233s de00_mean=0.419
+[e1] N=128 chunk 11: 16 LUTs in 234s de00_mean=0.358
+[e1] N=128 chunk 12: 16 LUTs in 233s de00_mean=0.420
+[e1] N=128 chunk 13: 16 LUTs in 234s de00_mean=0.494
+[e1] N=128 chunk 14: 16 LUTs in 234s de00_mean=0.624
+[e1] N=128 chunk 15: 16 LUTs in 234s de00_mean=0.311
+[e1] N=128 chunk 16: 16 LUTs in 234s de00_mean=0.290
+[e1] N=128 chunk 17: 16 LUTs in 234s de00_mean=0.334
+[e1] N=128 chunk 18: 16 LUTs in 234s de00_mean=0.431
+[e1] N=128 chunk 19: 16 LUTs in 234s de00_mean=0.358
+[e1] N=128 chunk 20: 16 LUTs in 234s de00_mean=0.273
+[e1] N=128 chunk 21: 16 LUTs in 234s de00_mean=0.309
+[e1] N=128 chunk 22: 16 LUTs in 234s de00_mean=0.231
+[e1] N=128 chunk 23: 16 LUTs in 234s de00_mean=0.272
+[e1] N=128 chunk 24: 16 LUTs in 233s de00_mean=0.290
+{
+ "exp": "E1_cube_N",
+ "n_list": [
+  8,
+  16,
+  24,
+  32,
+  48,
+  64,
+  96,
+  128
+ ],
+ "n_luts": 400,
+ "steps": 3000,
+ "criteria": {
+  "p50": 0.5,
+  "p90": 1.0,
+  "p99": 2.0,
+  "r_unsaturated": 1.25,
+  "r_saturated": 1.15
+ },
+ "per_n": {
+  "8": {
+   "n_luts": 400,
+   "p50": 1.243370532989502,
+   "p90": 2.1008641719818115,
+   "p99": 3.2965873622894266,
+   "max": 4.237032413482666,
+   "mean": 1.3594622349366545,
+   "psnr_mean": 36.398730965437196,
+   "alive_frac_mean": 0.9990625
+  },
+  "16": {
+   "n_luts": 400,
+   "p50": 0.8429805040359497,
+   "p90": 1.390690588951111,
+   "p99": 2.1925847411155694,
+   "max": 2.705700635910034,
+   "mean": 0.8992128559201956,
+   "psnr_mean": 39.748606610148414,
+   "alive_frac_mean": 0.99765625
+  },
+  "24": {
+   "n_luts": 400,
+   "p50": 0.67793208360672,
+   "p90": 1.1282314896583558,
+   "p99": 1.692090951204299,
+   "max": 2.2508740425109863,
+   "mean": 0.7216347922198474,
+   "psnr_mean": 41.49846538390988,
+   "alive_frac_mean": 0.9963541666666665
+  },
+  "32": {
+   "n_luts": 400,
+   "p50": 0.5724693536758423,
+   "p90": 0.979639166593552,
+   "p99": 1.5593339574336997,
+   "max": 1.9920368194580078,
+   "mean": 0.620319953057915,
+   "psnr_mean": 42.70721924117185,
+   "alive_frac_mean": 0.99421875
+  },
+  "48": {
+   "n_luts": 400,
+   "p50": 0.46718430519104004,
+   "p90": 0.7846381187438966,
+   "p99": 1.2639128208160397,
+   "max": 1.6882537603378296,
+   "mean": 0.5098413201235235,
+   "psnr_mean": 44.330096646209476,
+   "alive_frac_mean": 0.9929166666666667
+  },
+  "64": {
+   "n_luts": 400,
+   "p50": 0.41569265723228455,
+   "p90": 0.6968647956848145,
+   "p99": 1.1266331350803365,
+   "max": 1.5850780010223389,
+   "mean": 0.4475742285326123,
+   "psnr_mean": 45.376896764477834,
+   "alive_frac_mean": 0.9909765625
+  },
+  "96": {
+   "n_luts": 400,
+   "p50": 0.3492230921983719,
+   "p90": 0.5948720216751099,
+   "p99": 0.9233301419019692,
+   "max": 1.3819524049758911,
+   "mean": 0.3798341717943549,
+   "psnr_mean": 46.74988123225708,
+   "alive_frac_mean": 0.987734375
+  },
+  "128": {
+   "n_luts": 400,
+   "p50": 0.31379085779190063,
+   "p90": 0.5246273577213288,
+   "p99": 0.8733695536851881,
+   "max": 1.268510341644287,
+   "mean": 0.33963012262247505,
+   "psnr_mean": 47.70261777992124,
+   "alive_frac_mean": 0.9864453125
+  }
+ },
+ "r_of_n": {
+  "8": {
+   "r": 1.5106625360615469,
+   "verdict": "unsaturated"
+  },
+  "16": {
+   "r": 1.4195947205611292,
+   "verdict": "unsaturated"
+  },
+  "24": {
+   "r": 1.4379004316850008,
+   "verdict": "unsaturated"
+  },
+  "32": {
+   "r": 1.4057808238552973,
+   "verdict": "unsaturated"
+  },
+  "48": {
+   "r": 1.3190032312066404,
+   "verdict": "unsaturated"
+  },
+  "64": {
+   "r": 1.32830433912479,
+   "verdict": "unsaturated"
+  }
+ },
+ "n_star": 32,
+ "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+ "args": {
+  "subset": "experiments/E1_cube_N_20260803/config/e1_subset_400.txt",
+  "n_list": "8,16,24,32,48,64,96,128",
+  "outdir": "experiments/E1_cube_N_20260803/runs/main",
+  "steps": 3000,
+  "bs": 8192,
+  "lr": 0.005,
+  "seed": 0,
+  "batch_luts": 16,
+  "gt_workers": 12,
+  "de_workers": 12
+ }
+}
+E1_FULL_DONE

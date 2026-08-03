@@ -1,0 +1,53 @@
+{
+ "exp": "E1_cube_N",
+ "n_list": [
+  8,
+  32
+ ],
+ "n_luts": 5,
+ "steps": 3000,
+ "criteria": {
+  "p50": 0.5,
+  "p90": 1.0,
+  "p99": 2.0,
+  "r_unsaturated": 1.25,
+  "r_saturated": 1.15
+ },
+ "per_n": {
+  "8": {
+   "n_luts": 5,
+   "p50": 1.5764142202030786,
+   "p90": 2.123824449934361,
+   "p99": 2.257436578757419,
+   "max": 2.27228237084887,
+   "mean": 1.4175811589874852,
+   "psnr_mean": 35.56508419124708,
+   "alive_frac_mean": 1.0
+  },
+  "32": {
+   "n_luts": 5,
+   "p50": 0.7501389979900751,
+   "p90": 0.9518168567079125,
+   "p99": 1.0000636963691287,
+   "max": 1.005424456331486,
+   "mean": 0.6593549636769647,
+   "psnr_mean": 41.38203534735895,
+   "alive_frac_mean": 1.0
+  }
+ },
+ "r_of_n": {},
+ "n_star": 32,
+ "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+ "args": {
+  "subset": "experiments/E1_cube_N_20260803/config/e1_smoke_luts.txt",
+  "n_list": "8,32",
+  "outdir": "/tmp/claude-1001/-home-bc-VeraRetouch/f674d6ab-1b2e-4c71-a169-d6e3faebf675/scratchpad/e1_smoke",
+  "steps": 3000,
+  "bs": 8192,
+  "lr": 0.005,
+  "seed": 0,
+  "batch_luts": 5,
+  "gt_workers": 5,
+  "de_workers": 5
+ }
+}
