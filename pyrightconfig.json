@@ -1,0 +1,27 @@
+{
+  "//": [
+    "仓库级 Pyright 配置（F7-3）。tools/ 下每个子目录都是顶层脚本包：",
+    "运行时靠 sys.path[0]=脚本目录（或显式 sys.path.insert）解析兄弟模块，",
+    "静态层面用 per-module executionEnvironments 的 extraPaths 镜像同一约定，",
+    "使 pyright 结果与运行目录/编辑器上下文无关；不改任何 import 结构。",
+    "注意：executionEnvironment 一旦匹配即接管搜索路径，仓库根不再自动加入，",
+    "故每个 env 显式带 '.'（dataset_build 命名空间包在仓库根）。",
+    "executionEnvironments 按首个匹配 root 生效：子目录在前，兜底 '.' 在最后。",
+    "experiments/G1_*：analyze_g1.py 运行时 sys.path.insert(tools/scache, tools/readout)，extraPaths 镜像之（D-21）。"
+  ],
+  "executionEnvironments": [
+    { "root": "tools/cube", "extraPaths": ["tools/cube", "."] },
+    { "root": "tools/bgr_check", "extraPaths": ["tools/bgr_check", "tools/cube", "."] },
+    { "root": "tools/harness", "extraPaths": ["tools/harness", "tools/cube", "."] },
+    { "root": "tools/scache", "extraPaths": ["tools/scache", "."] },
+    { "root": "tools/data_splits", "extraPaths": ["tools/data_splits", "."] },
+    { "root": "tools/construct", "extraPaths": ["tools/construct", "."] },
+    { "root": "tools/readout", "extraPaths": ["tools/readout", "tools/scache", "."] },
+    { "root": "tools", "extraPaths": ["tools", "."] },
+    { "root": "experiments/G1_s_identifiability_20260803",
+      "extraPaths": ["experiments/G1_s_identifiability_20260803", "tools/readout", "tools/scache", "."] },
+    { "root": "experiments/G3_collapse_20260803",
+      "extraPaths": ["experiments/G3_collapse_20260803", "tools/harness", "tools/cube", "."] },
+    { "root": ".", "extraPaths": ["tools/harness", "tools/construct", "tools/cube"] }
+  ]
+}

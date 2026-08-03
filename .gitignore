@@ -47,3 +47,26 @@ build
 # LUT 渲染器 pilot 的产出（7 GB，可再生）
 experiments/**/outputs/
 *.egg-info/
+
+# Campaign scratch / caches (2026-08)
+experiments/**/__pycache__/
+experiments/**/pred_tmp/
+lr_caches/
+lrc_scripts/
+_annot_ab/
+_annot_worst/
+_hints_bias/
+
+# 实验数据产物（可由 manifest+seed 确定性重生成，勿入 git）
+experiments/tooling-wave1/T4_construct/sanity/
+experiments/tooling-wave1/scache/s_cache/
+experiments/*/run_full/
+experiments/*/run_regfull/
+experiments/*/run_shufctrl/
+experiments/*/run_smoke30/
+experiments/*/run_regsmoke20/
+experiments/*/runs/*/pred_tmp/
+experiments/*/runs/*/ckpt_*.pt
+experiments/*/hypA/gt_tmp/
+experiments/*/**/gt_tmp/
+experiments/tooling-wave1/T4_construct/cache/
