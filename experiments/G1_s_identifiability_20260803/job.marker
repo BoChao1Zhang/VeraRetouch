@@ -1,0 +1,6 @@
+job: G1 终版归档（REPORT 终版 + REVIEW-result + viz 判据化命名 + 指令无关性主图）
+pid: -（已完成，无在途进程）
+cmd: analyze_g1.py --run-dirs run_smoke30 run_full run_regsmoke20 run_regfull run_shufctrl --out <exp> --viz-n 6
+log: experiments/G1_s_identifiability_20260803/analyze_final.log
+gpu: 无（纯 CPU 分析侧；卡 0/1 全程未占用）
+finished: 2026-08-03T11:25+08:00 ｜ gate=FAIL（D-30）
