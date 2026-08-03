@@ -1,0 +1,42 @@
+{
+  "construct_delta_ge_8db": {
+    "kind": "gate",
+    "measured": 13.563517166480146,
+    "ok": true
+  },
+  "real_delta_ge_1db": {
+    "kind": "gate",
+    "measured": 7.969169108808286,
+    "ok": true
+  },
+  "real_delta_death_lt_04db": {
+    "kind": "death_line",
+    "measured": 7.969169108808286,
+    "ok": true
+  },
+  "control_delta_near_zero": {
+    "kind": "gate",
+    "measured": 0.04013345573844518,
+    "ok": true
+  },
+  "mlp_probe_ge_45db": {
+    "kind": "gate",
+    "measured": 67.66445690153935,
+    "ok": true
+  },
+  "mlp_probe_death_lt_40db": {
+    "kind": "death_line",
+    "measured": 67.66445690153935,
+    "ok": true
+  },
+  "bandwidth_spearman_gt_08": {
+    "kind": "gate",
+    "measured": 0.9982059950166527,
+    "ok": true
+  },
+  "l0_degenerate_lt_01db": {
+    "kind": "gate",
+    "measured": 0.0,
+    "ok": true
+  }
+}

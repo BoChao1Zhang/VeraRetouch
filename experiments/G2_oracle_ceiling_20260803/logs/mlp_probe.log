@@ -1,0 +1,105 @@
+[probe] L1_val_0000 level=L1 mask=semantic_binary P=699392
+    step     0 psnr=15.41 loss=5.03e-02 0s
+    step  1000 psnr=51.17 loss=5.99e-06 5s
+    step  2000 psnr=56.47 loss=1.91e-06 10s
+    step  3000 psnr=50.18 loss=1.10e-05 14s
+    step  4000 psnr=72.57 loss=9.86e-08 19s
+    step  5000 psnr=73.83 loss=6.39e-08 24s
+    step  5999 psnr=73.96 loss=5.77e-08 29s
+    step     0 psnr=15.56 loss=4.52e-02 0s
+    step  1000 psnr=49.66 loss=1.03e-05 5s
+    step  2000 psnr=51.89 loss=6.60e-06 9s
+    step  3000 psnr=51.88 loss=6.05e-06 14s
+    step  4000 psnr=52.34 loss=5.70e-06 19s
+    step  5000 psnr=52.37 loss=5.64e-06 24s
+    step  5999 psnr=52.38 loss=5.67e-06 28s
+[probe] L1_val_0000: 4D=73.96 dB | 3D-only=52.38 dB
+[probe] L1_val_0001 level=L1 mask=semantic_binary P=698368
+    step     0 psnr=11.70 loss=1.08e-01 0s
+    step  1000 psnr=46.61 loss=1.94e-05 5s
+    step  2000 psnr=49.18 loss=7.77e-06 10s
+    step  3000 psnr=64.93 loss=6.03e-07 14s
+    step  4000 psnr=67.55 loss=3.64e-07 19s
+    step  5000 psnr=67.58 loss=3.46e-07 24s
+    step  5999 psnr=67.66 loss=3.36e-07 29s
+    step     0 psnr=12.32 loss=9.71e-02 0s
+    step  1000 psnr=60.51 loss=1.16e-06 5s
+    step  2000 psnr=61.43 loss=1.13e-06 10s
+    step  3000 psnr=62.42 loss=8.27e-07 14s
+    step  4000 psnr=63.34 loss=6.08e-07 19s
+    step  5000 psnr=63.24 loss=5.93e-07 24s
+    step  5999 psnr=63.25 loss=6.00e-07 29s
+[probe] L1_val_0001: 4D=67.66 dB | 3D-only=63.25 dB
+[probe] L1_val_0002 level=L1 mask=semantic_binary P=788480
+    step     0 psnr=7.98 loss=2.59e-01 0s
+    step  1000 psnr=51.47 loss=6.42e-06 5s
+    step  2000 psnr=52.04 loss=5.89e-06 9s
+    step  3000 psnr=61.38 loss=3.20e-07 14s
+    step  4000 psnr=71.66 loss=1.19e-07 19s
+    step  5000 psnr=72.22 loss=1.08e-07 24s
+    step  5999 psnr=72.33 loss=1.04e-07 29s
+    step     0 psnr=8.40 loss=2.41e-01 0s
+    step  1000 psnr=52.78 loss=4.90e-06 5s
+    step  2000 psnr=54.77 loss=3.31e-06 10s
+    step  3000 psnr=55.14 loss=3.11e-06 14s
+    step  4000 psnr=55.40 loss=2.84e-06 19s
+    step  5000 psnr=55.53 loss=2.73e-06 24s
+    step  5999 psnr=55.57 loss=2.65e-06 29s
+[probe] L1_val_0002: 4D=72.33 dB | 3D-only=55.57 dB
+[probe] L4_val_0000 level=L4 mask=geom_radial P=787456
+    step     0 psnr=4.24 loss=5.38e-01 0s
+    step  1000 psnr=60.21 loss=8.96e-07 5s
+    step  2000 psnr=61.18 loss=1.03e-06 10s
+    step  3000 psnr=57.20 loss=1.59e-06 14s
+    step  4000 psnr=67.00 loss=2.52e-07 19s
+    step  5000 psnr=67.62 loss=2.36e-07 24s
+    step  5999 psnr=67.77 loss=2.11e-07 29s
+    step     0 psnr=4.52 loss=5.14e-01 0s
+    step  1000 psnr=42.67 loss=5.32e-05 5s
+    step  2000 psnr=42.77 loss=5.07e-05 10s
+    step  3000 psnr=42.98 loss=4.94e-05 14s
+    step  4000 psnr=43.08 loss=4.88e-05 19s
+    step  5000 psnr=43.13 loss=4.84e-05 24s
+    step  5999 psnr=43.14 loss=4.96e-05 29s
+[probe] L4_val_0000: 4D=67.77 dB | 3D-only=43.14 dB
+[probe] L4_val_0001 level=L4 mask=geom_linear P=699392
+    step     0 psnr=8.38 loss=2.30e-01 0s
+    step  1000 psnr=48.56 loss=1.04e-05 5s
+    step  2000 psnr=66.73 loss=3.24e-07 9s
+    step  3000 psnr=69.09 loss=5.60e-07 14s
+    step  4000 psnr=73.30 loss=1.17e-07 19s
+    step  5000 psnr=74.21 loss=1.04e-07 24s
+    step  5999 psnr=74.39 loss=9.69e-08 29s
+    step     0 psnr=8.65 loss=2.14e-01 0s
+    step  1000 psnr=51.15 loss=4.96e-06 5s
+    step  2000 psnr=60.28 loss=1.07e-06 10s
+    step  3000 psnr=61.34 loss=9.66e-07 14s
+    step  4000 psnr=61.98 loss=6.14e-07 19s
+    step  5000 psnr=62.05 loss=6.29e-07 24s
+    step  5999 psnr=62.06 loss=5.86e-07 29s
+[probe] L4_val_0001: 4D=74.39 dB | 3D-only=62.06 dB
+[probe] L4_val_0002 level=L4 mask=geom_elliptical P=698368
+    step     0 psnr=4.60 loss=4.96e-01 0s
+    step  1000 psnr=45.69 loss=2.30e-05 5s
+    step  2000 psnr=59.82 loss=1.09e-06 10s
+    step  3000 psnr=63.77 loss=6.18e-07 14s
+    step  4000 psnr=68.09 loss=3.13e-07 19s
+    step  5000 psnr=69.05 loss=2.62e-07 24s
+    step  5999 psnr=69.26 loss=2.52e-07 29s
+    step     0 psnr=4.81 loss=4.71e-01 0s
+    step  1000 psnr=46.29 loss=2.24e-05 5s
+    step  2000 psnr=49.77 loss=1.06e-05 10s
+    step  3000 psnr=50.16 loss=9.48e-06 14s
+    step  4000 psnr=50.32 loss=9.41e-06 19s
+    step  5000 psnr=50.37 loss=9.27e-06 24s
+    step  5999 psnr=50.38 loss=8.94e-06 29s
+[probe] L4_val_0002: 4D=69.26 dB | 3D-only=50.38 dB
+{
+  "n": 6,
+  "n_params": 199427,
+  "psnr_4d_min": 67.66445690153935,
+  "psnr_4d_mean": 70.89606310505906,
+  "psnr_4d_median": 70.7928133722607,
+  "criterion_ge_45db_all": true,
+  "criterion_lt_40db_any": false
+}

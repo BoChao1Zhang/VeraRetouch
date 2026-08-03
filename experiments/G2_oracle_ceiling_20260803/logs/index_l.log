@@ -1,0 +1,7 @@
+[index] prod-l1-local17k-20260731: val_groups=201 cands=201 kept=157
+[index] prod-l2-local17k-20260731: val_groups=206 cands=206 kept=167
+[index] prod-l3-local17k-20260731: val_groups=238 cands=238 kept=202
+[index] prod-l4-local17k-20260801: val_groups=228 cands=228 kept=179
+[index] prod-l5-local17k-20260801: val_groups=211 cands=211 kept=171
+[index] prod-l6-local17k-20260801: val_groups=226 cands=226 kept=185
+{"n": 1061, "out": "experiments/G2_oracle_ceiling_20260803/index/dsftl_sval_normal.jsonl"}

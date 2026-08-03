@@ -1,0 +1,20 @@
+/home/bc/VeraRetouch/tools/ceiling/viz.py:91: UserWarning: Glyph 772 (\N{COMBINING MACRON}) missing from font(s) WenQuanYi Micro Hei.
+  fig.tight_layout()
+/home/bc/VeraRetouch/tools/ceiling/viz.py:93: UserWarning: Glyph 772 (\N{COMBINING MACRON}) missing from font(s) WenQuanYi Micro Hei.
+  fig.savefig(out, dpi=100, bbox_inches="tight")
+[viz] success_0 866286f027 Δ=17.78
+[viz] success_1 df0623a8db Δ=16.64
+[viz] success_2 4fe4620a22 Δ=16.57
+[viz] failure_0 b740b2b74f Δ=0.16
+[viz] failure_1 6a466726da Δ=0.19
+[viz] failure_2 a5de74d8c1 Δ=0.22
+/home/bc/VeraRetouch/tools/ceiling/viz.py:91: UserWarning: Glyph 772 (\N{COMBINING MACRON}) missing from font(s) WenQuanYi Micro Hei.
+  fig.tight_layout()
+/home/bc/VeraRetouch/tools/ceiling/viz.py:93: UserWarning: Glyph 772 (\N{COMBINING MACRON}) missing from font(s) WenQuanYi Micro Hei.
+  fig.savefig(out, dpi=100, bbox_inches="tight")
+[viz] success_0 866286f027 Δ=15.66
+[viz] success_1 564ce3c5b1 Δ=15.48
+[viz] success_2 afc77d17df Δ=15.31
+[viz] failure_0 b740b2b74f Δ=0.08
+[viz] failure_1 6a466726da Δ=0.13
+[viz] failure_2 02035f8e67 Δ=0.14

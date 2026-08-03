@@ -1,0 +1,43 @@
+{
+  "per_build": {
+    "prod-l1-local17k-20260731": {
+      "val_groups": 201,
+      "candidates": 201,
+      "kept": 157
+    },
+    "prod-l2-local17k-20260731": {
+      "val_groups": 206,
+      "candidates": 206,
+      "kept": 167
+    },
+    "prod-l3-local17k-20260731": {
+      "val_groups": 238,
+      "candidates": 238,
+      "kept": 202
+    },
+    "prod-l4-local17k-20260801": {
+      "val_groups": 228,
+      "candidates": 228,
+      "kept": 179
+    },
+    "prod-l5-local17k-20260801": {
+      "val_groups": 211,
+      "candidates": 211,
+      "kept": 171
+    },
+    "prod-l6-local17k-20260801": {
+      "val_groups": 226,
+      "candidates": 226,
+      "kept": 185
+    }
+  },
+  "skip": {
+    "not_sft_row": 38303,
+    "dup_group": 1138,
+    "conf=low": 1889,
+    "source_unresolved:ppr10k": 177,
+    "source_unresolved:fivek_gold": 38,
+    "source_unresolved:raise6k": 34
+  },
+  "total": 1061
+}
