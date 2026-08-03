@@ -1,0 +1,90 @@
+{
+ "exp": "G3_collapse",
+ "arm": "naive",
+ "dataset": "fixed",
+ "fixed_spec": {
+  "class": "exposure",
+  "tier": 2,
+  "amp": 0.6,
+  "sign": 1,
+  "dev": 0.6
+ },
+ "levels": [
+  "L1",
+  "L4"
+ ],
+ "n_train_pairs": 400,
+ "n_val_pairs": 48,
+ "n_final_eval": 48,
+ "criteria": {
+  "delta_shuffle_collapsed": 0.3,
+  "delta_shuffle_no_collapse": 3.0,
+  "delta_const_collapsed": 0.05,
+  "m3_frac_at_upper": 0.8
+ },
+ "metrics": {
+  "delta_const": 15.265775075688545,
+  "delta_const_mode": "provided_constant",
+  "delta_shuffle": 18.20303455837583,
+  "psnr_true": 46.729277472206526,
+  "psnr_null": 31.46350239651798,
+  "psnr_shuffled": 28.526242913830696,
+  "shuffle_seed": 0,
+  "n": 48,
+  "psnr_in": 44.247882285973965,
+  "psnr_band": 28.52939178204876,
+  "psnr_out": 61.80339630250916,
+  "psnr_full": 46.729277472206526,
+  "s_sensitivity": 0.0017241043969988823,
+  "sigma_s": {
+   "q05": 0.0879523903131485,
+   "q25": 0.1319790780544281,
+   "q50": 0.13980135321617126,
+   "q75": 0.15128137171268463,
+   "q95": 0.16616034507751465,
+   "mean": 0.13823869824409485,
+   "std": 0.021355563774704933,
+   "min": 0.08733022958040237,
+   "max": 0.17747993767261505,
+   "frac_ge_r2_max": 0.0,
+   "frac_le_r2_min": 0.0
+  },
+  "mu_s": {
+   "q05": 0.28250226378440857,
+   "q25": 0.35091790556907654,
+   "q50": 0.41758131980895996,
+   "q75": 0.5827162265777588,
+   "q95": 0.7328490614891052,
+   "mean": 0.4691029191017151,
+   "std": 0.15424399077892303,
+   "min": 0.22282961010932922,
+   "max": 0.789596438407898,
+   "below_gamma_mu": false
+  }
+ },
+ "identity_baseline": {
+  "psnr_full": 31.457468579428696,
+  "psnr_in": 21.284497167109226
+ },
+ "verdict": "no_collapse",
+ "params": 876,
+ "wallclock_sec": 947.7,
+ "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+ "args": {
+  "arm": "naive",
+  "dataset": "fixed",
+  "outdir": "experiments/G3_collapse_20260803/runs/fixed_naive_s0",
+  "n_gaussians": 32,
+  "steps": 25000,
+  "bs": 16384,
+  "lr": 0.002,
+  "seed": 0,
+  "px_per_img": 30000,
+  "probe_every": 100,
+  "probe_n": 8,
+  "final_n": 48,
+  "sens_delta": 0.1,
+  "cache_dir": "/var/cache/veradata/g3",
+  "device": "cuda"
+ }
+}
