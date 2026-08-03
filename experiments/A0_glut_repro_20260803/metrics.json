@@ -1,0 +1,358 @@
+{
+ "exp": "A0_glut_repro / anchor-gap attribution",
+ "date": "2026-08-03",
+ "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+ "anchor": {
+  "psnr_db": 45.47,
+  "tolerance": 0.3,
+  "de00": 0.41,
+  "source": "GLUT arXiv:2605.19889v1, GLUT-32 @ 75-LUT Hald (IMPL_DOSSIER 2.2/2.4); their 75 files are not public"
+ },
+ "headline_75lut": {
+  "rec": {
+   "psnr_float_mean": 41.9157189498622,
+   "psnr_float_std": 3.3037779443520554,
+   "psnr_8bit_mean": 41.685266411082175,
+   "de00_mean_over_luts": 0.744523401260376,
+   "de00_p50": 0.7455989122390747,
+   "psnr_min": 36.193807628187315,
+   "anchor_pass": false,
+   "gap_vs_anchor_db": -3.5542810501377957
+  },
+  "full": {
+   "psnr_float_mean": 32.71593298779021,
+   "psnr_float_std": 4.429031517765537,
+   "psnr_8bit_mean": 32.66785568328134,
+   "de00_mean_over_luts": 2.0591169995069505,
+   "de00_p50": 1.9797589778900146,
+   "psnr_min": 22.666733597535075,
+   "anchor_pass": false,
+   "gap_vs_anchor_db": -12.754067012209788
+  },
+  "full_minus_rec_db": -9.199785962071992
+ },
+ "task1_ingredient_isolation": {
+  "protocol": "9 stratified LUTs of the A0 75 (spanning the rec-arm PSNR range), 20 ep, N=32, identical seed -> paired comparison; eval on the fixed 2^21 held-out colour subsample",
+  "lut_ids": [
+   "e18__e18_001006",
+   "e18__e18_001514",
+   "e18__e18_001615",
+   "e18__e18_001959",
+   "e18__e18_001961",
+   "e18__e18_002049",
+   "e18__e18_002594",
+   "e18__e18_002631",
+   "quandian__quandian_004319"
+  ],
+  "arms": {
+   "rec": {
+    "psnr_float_mean": 42.62726940921017,
+    "de00_mean": 0.7393850021892123,
+    "cfg": {
+     "hc": 0.0,
+     "sparse": 0.0,
+     "mining": false,
+     "init": "glut",
+     "hc_mode": "paper"
+    },
+    "alive_frac_mean": 0.8541666865348816,
+    "opacity_mean": 0.9533500671386719,
+    "opacity_frac_below_0.05": 0.0,
+    "gnorm_p50": 0.026912333443760872,
+    "gnorm_max_over_p50": 8.133730617037164,
+    "gnorm_spikes_100x": 0,
+    "final_l_rec": 0.005441049113869667,
+    "final_l_hc_monitor": 0.018419299274683,
+    "opacity_frac_at_1": 0.8715277910232544,
+    "delta_vs_rec_db": 0.0
+   },
+   "hc": {
+    "psnr_float_mean": 31.90079588706463,
+    "de00_mean": 2.3270800047450595,
+    "cfg": {
+     "hc": 10.0,
+     "sparse": 0.0,
+     "mining": false,
+     "init": "glut",
+     "hc_mode": "paper"
+    },
+    "alive_frac_mean": 0.9548611044883728,
+    "opacity_mean": 0.9680574536323547,
+    "opacity_frac_below_0.05": 0.0,
+    "gnorm_p50": 1.4265189170837402,
+    "gnorm_max_over_p50": 1729.7872388502979,
+    "gnorm_spikes_100x": 11,
+    "final_l_rec": 0.022253209725022316,
+    "final_l_hc_monitor": 0.00262597668915987,
+    "opacity_frac_at_1": 0.9201388955116272,
+    "delta_vs_rec_db": -10.726473522145543
+   },
+   "sparse": {
+    "psnr_float_mean": 42.58623279750768,
+    "de00_mean": 0.7403422163592445,
+    "cfg": {
+     "hc": 0.0,
+     "sparse": 0.001,
+     "mining": false,
+     "init": "glut",
+     "hc_mode": "paper"
+    },
+    "alive_frac_mean": 0.8541666865348816,
+    "opacity_mean": 1.0,
+    "opacity_frac_below_0.05": 0.0,
+    "gnorm_p50": 0.026033107191324234,
+    "gnorm_max_over_p50": 8.408501234007169,
+    "gnorm_spikes_100x": 0,
+    "final_l_rec": 0.005474640987813473,
+    "final_l_hc_monitor": 0.018641484901309013,
+    "opacity_frac_at_1": 1.0,
+    "delta_vs_rec_db": -0.04103661170249495
+   },
+   "mining": {
+    "psnr_float_mean": 43.28599392444072,
+    "de00_mean": 0.7712636308537589,
+    "cfg": {
+     "hc": 0.0,
+     "sparse": 0.0,
+     "mining": true,
+     "init": "glut",
+     "hc_mode": "paper"
+    },
+    "alive_frac_mean": 0.8611111044883728,
+    "opacity_mean": 0.9547024965286255,
+    "opacity_frac_below_0.05": 0.0,
+    "gnorm_p50": 0.02605569362640381,
+    "gnorm_max_over_p50": 8.401145394402734,
+    "gnorm_spikes_100x": 0,
+    "final_l_rec": 0.008349768817424774,
+    "final_l_hc_monitor": 0.03201998770236969,
+    "opacity_frac_at_1": 0.881944477558136,
+    "delta_vs_rec_db": 0.6587245152305456
+   },
+   "full": {
+    "psnr_float_mean": 33.03587723365912,
+    "de00_mean": 2.105446000893911,
+    "cfg": {
+     "hc": 10.0,
+     "sparse": 0.001,
+     "mining": true,
+     "init": "glut",
+     "hc_mode": "paper"
+    },
+    "alive_frac_mean": 0.9270833134651184,
+    "opacity_mean": 1.0,
+    "opacity_frac_below_0.05": 0.0,
+    "gnorm_p50": 1.6277196407318115,
+    "gnorm_max_over_p50": 5146.7144546824875,
+    "gnorm_spikes_100x": 32,
+    "final_l_rec": 0.03000727854669094,
+    "final_l_hc_monitor": 0.0028999047353863716,
+    "opacity_frac_at_1": 1.0,
+    "delta_vs_rec_db": -9.59139217555105
+   },
+   "hc_cal": {
+    "psnr_float_mean": 42.51223921394064,
+    "de00_mean": 0.7264042877488666,
+    "cfg": {
+     "hc": 0.006,
+     "sparse": 0.0,
+     "mining": false,
+     "init": "glut",
+     "hc_mode": "stable",
+     "opacity": "clamp"
+    },
+    "alive_frac_mean": 0.8541666865348816,
+    "opacity_mean": 0.9541081190109253,
+    "opacity_frac_below_0.05": 0.0,
+    "gnorm_p50": 0.028136171400547028,
+    "gnorm_max_over_p50": 9.526614028857848,
+    "gnorm_spikes_100x": 0,
+    "final_l_rec": 0.00546775059774518,
+    "final_l_hc_monitor": 0.013639035634696484,
+    "opacity_frac_at_1": 0.881944477558136,
+    "delta_vs_rec_db": -0.11503019526953295
+   }
+  }
+ },
+ "task1_root_cause": {
+  "defect_D2_loss_scale_mismatch": {
+   "grad_ratio_10Lhc_over_Lrec_at_init": 869.0288078872027,
+   "grad_ratio_10Lhc_over_Lrec_at_convergence": 228.90009106647295,
+   "lambda_that_would_make_it_a_10pct_perturbation": {
+    "paper_formula": 0.004368718226982262,
+    "chroma_floored": 0.0054441008574439
+   }
+  },
+  "defect_D1_chroma_singularity": {
+   "grad_max_over_p50_paper_at_init": 165.00398481818272,
+   "grad_max_over_p50_paper_at_convergence": 5.187673793813851,
+   "grad_max_over_p50_chroma_floored_at_convergence": 1.6136995344262428,
+   "singular_samples_per_1024_batch_at_convergence": 1.333984375
+  }
+ },
+ "task2a_representation_vs_recipe": {
+  "protocol": "E1 direct-overfit engine (k-means init, f(x)=x at step 0, sigma annealing, density control, bs 8192 / lr 5e-3) on the SAME 75 LUTs / same GT / same held-out colours",
+  "runs": {
+   "e1_on_a0_3k": {
+    "n": 32,
+    "steps": 3000,
+    "n_luts": 75,
+    "psnr_float_mean": 41.75690836856447,
+    "de00_mean_over_luts": 0.7630786202351252,
+    "alive_frac_mean": 0.99875,
+    "paired_delta_vs_a0_rec_db": -0.1588105812977444,
+    "n_luts_e1_better": 33,
+    "gap_vs_anchor_db": -3.713091631435532
+   },
+   "e1_on_a0_N48": {
+    "n": 48,
+    "steps": 3000,
+    "n_luts": 75,
+    "psnr_float_mean": 43.47998804193831,
+    "de00_mean_over_luts": 0.6218502273162206,
+    "alive_frac_mean": 0.9966666666666668,
+    "paired_delta_vs_a0_rec_db": 1.564269092076098,
+    "n_luts_e1_better": 71,
+    "gap_vs_anchor_db": -1.990011958061686
+   },
+   "e1_on_a0_N64": {
+    "n": 64,
+    "steps": 3000,
+    "n_luts": 75,
+    "psnr_float_mean": 44.59007922434266,
+    "de00_mean_over_luts": 0.5442108126481374,
+    "alive_frac_mean": 0.9964583333333333,
+    "paired_delta_vs_a0_rec_db": 2.674360274480449,
+    "n_luts_e1_better": 75,
+    "gap_vs_anchor_db": -0.8799207756573395
+   }
+  }
+ },
+ "task2b_epoch_budget": {
+  "protocol": "same 9 stratified LUTs, rec arm, 20 / 40 / 60 epochs",
+  "by_epochs": {
+   "20": {
+    "psnr_float_mean": 42.62726940921017,
+    "de00_mean": 0.7393850021892123,
+    "delta_vs_20ep_db": 0.0
+   },
+   "40": {
+    "psnr_float_mean": 43.649830212025435,
+    "de00_mean": 0.6478192425436444,
+    "delta_vs_20ep_db": 1.0225608028152635
+   },
+   "60": {
+    "psnr_float_mean": 44.15575323901385,
+    "de00_mean": 0.6207127802901797,
+    "delta_vs_20ep_db": 1.528483829803676
+   }
+  }
+ },
+ "task2c_corpus_difficulty": {
+  "best_predictor": "affine_psnr",
+  "corr_with_rec_psnr": {
+   "affine_psnr": {
+    "pearson_r": 0.8146857917166768,
+    "spearman_r": 0.8467994310099574
+   },
+   "resid_rms": {
+    "pearson_r": -0.453519535986379,
+    "spearman_r": -0.33115220483641533
+   },
+   "nonaffine_rms": {
+    "pearson_r": -0.8022907983743451,
+    "spearman_r": -0.8467994310099574
+   },
+   "clip_frac": {
+    "pearson_r": -0.13117915045189674,
+    "spearman_r": -0.3741109530583214
+   },
+   "lip_p999": {
+    "pearson_r": -0.6635953610745388,
+    "spearman_r": -0.873456614509246
+   },
+   "lip_med": {
+    "pearson_r": -0.36277773484365794,
+    "spearman_r": -0.4779800853485064
+   },
+   "curv_mean": {
+    "pearson_r": -0.6973707954286779,
+    "spearman_r": -0.8868563300142247
+   },
+   "hue_rot_std": {
+    "pearson_r": -0.3226007089987923,
+    "spearman_r": -0.4526600284495021
+   },
+   "hue_rot_mean": {
+    "pearson_r": -0.22089628404731124,
+    "spearman_r": -0.13652916073968704
+   }
+  },
+  "corpus_summary": {
+   "affine_psnr": {
+    "p10": 18.91974073975785,
+    "p50": 22.222948674398864,
+    "p90": 25.804264972146584
+   },
+   "nonaffine_rms": {
+    "p10": 0.05126494976414284,
+    "p50": 0.07741989291509173,
+    "p90": 0.11324343168140318
+   },
+   "clip_frac": {
+    "p10": 0.0,
+    "p50": 0.0,
+    "p90": 0.04918381373087573
+   },
+   "lip_p999": {
+    "p10": 2.915583944320679,
+    "p50": 4.146029949188232,
+    "p90": 11.168514060974124
+   },
+   "curv_mean": {
+    "p10": 2.6121717929840087,
+    "p50": 4.224660873413086,
+    "p90": 8.527096748352054
+   },
+   "hue_rot_std": {
+    "p10": 0.1526516900138748,
+    "p50": 0.2477077660082867,
+    "p90": 0.4204012824392863
+   }
+  },
+  "psnr_projection": {
+   "our_top_decile": {
+    "affine_psnr": 25.804264972146584,
+    "predicted_rec_psnr": 45.23145838079769
+   },
+   "our_top_quartile": {
+    "affine_psnr": 24.739669488634352,
+    "predicted_rec_psnr": 44.20584813878939
+   },
+   "our_median": {
+    "affine_psnr": 22.222948674398864,
+    "predicted_rec_psnr": 41.781289061345475
+   },
+   "nilut_LUT01": {
+    "affine_psnr": 27.734971656448945,
+    "predicted_rec_psnr": 47.09146303082835,
+    "measured_rec_psnr_smoke": 49.02
+   }
+  },
+  "nilut_LUT01_reference": {
+   "lut_id": "nilut__LUT01",
+   "affine_psnr": 27.734971656448945,
+   "resid_rms": 0.06849350035190582,
+   "nonaffine_rms": 0.04104416427666444,
+   "clip_frac": 0.07905133565266927,
+   "lip_p999": 3.5283150672912598,
+   "lip_med": 1.8643715381622314,
+   "curv_mean": 1.4010006189346313,
+   "hue_rot_std": 0.1529404501082373,
+   "hue_rot_mean": 0.04478287655501384,
+   "native_size": 33,
+   "rec_psnr": null,
+   "rec_de00": null
+  }
+ }
+}

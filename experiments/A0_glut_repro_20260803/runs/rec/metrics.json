@@ -1,0 +1,38 @@
+{
+ "exp": "A0_glut_repro",
+ "arm": "rec",
+ "n_gaussians": 32,
+ "n_luts": 75,
+ "eval_part": "eval",
+ "anchor": {
+  "psnr_db": 45.47,
+  "tolerance": 0.3,
+  "de00": 0.41,
+  "note": "GLUT-32@75-LUT, paper's own 64^3 subset (files not public; ours is a local 64^3 sample)"
+ },
+ "psnr_float_mean": 41.9157189498622,
+ "psnr_float_std": 3.3037779443520554,
+ "psnr_8bit_mean": 41.685266411082175,
+ "de00_mean_over_luts": 0.744523401260376,
+ "de00_p50": 0.7455989122390747,
+ "de00_p90": 0.9925312757492067,
+ "psnr_p10": 37.61006875614656,
+ "psnr_min": 36.193807628187315,
+ "anchor_pass": false,
+ "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+ "args": {
+  "lut_list": "experiments/A0_glut_repro_20260803/config/a0_luts_75.txt",
+  "arm": "rec",
+  "outdir": "experiments/A0_glut_repro_20260803/runs/rec",
+  "n": 32,
+  "epochs": 20,
+  "bs": 1024,
+  "lr": 0.001,
+  "seed": 0,
+  "chunk_size": 25,
+  "gt_workers": 8,
+  "de_workers": 8,
+  "loss_on_clamped": false,
+  "smoke": false
+ }
+}

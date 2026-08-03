@@ -1,0 +1,33 @@
+{
+ "exp": "A0_gap_hypA_e1_engine",
+ "n_gaussians": 64,
+ "steps": 3000,
+ "n_luts": 75,
+ "eval_part": "evalsub_2^21",
+ "psnr_float_mean": 44.59007922434266,
+ "psnr_float_std": 3.5149886248083537,
+ "psnr_8bit_mean": 44.18544708707275,
+ "psnr_min": 36.55278844930148,
+ "psnr_p10": 39.88542687192081,
+ "de00_mean_over_luts": 0.5442108126481374,
+ "de00_p50": 0.5340627431869507,
+ "de00_p90": 0.7520773053169252,
+ "alive_frac_mean": 0.9964583333333333,
+ "anchor": {
+  "psnr_db": 45.47,
+  "de00": 0.41
+ },
+ "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+ "args": {
+  "lut_list": "experiments/A0_glut_repro_20260803/config/a0_luts_75.txt",
+  "outdir": "experiments/A0_glut_repro_20260803/hypA",
+  "n": 64,
+  "steps": 3000,
+  "bs": 8192,
+  "lr": 0.005,
+  "batch_luts": 16,
+  "seed": 0,
+  "de_workers": 8,
+  "tag": "e1_on_a0_N64"
+ }
+}

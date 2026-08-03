@@ -1,0 +1,7 @@
+[ablate] 9 LUTs, arms=rec, epochs=40
+[ablate] rec: PSNR 43.650 dB  dE00 0.6478  alive 0.878  gspike100x 0  (1396s)
+ABLATE_DONE
+[ablate] 9 LUTs, arms=rec, epochs=60
+[ablate] rec: PSNR 44.156 dB  dE00 0.6207  alive 0.878  gspike100x 0  (1469s)
+ABLATE_DONE
+HYPB_DONE
