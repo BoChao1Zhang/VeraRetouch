@@ -1,0 +1,106 @@
+{
+  "builds": {
+    "prod-l1-local17k-20260731": {
+      "is_local": true,
+      "groups_total": 300,
+      "per_confidence": {
+        "normal": {
+          "groups": 76,
+          "candidates": 608,
+          "after_landed": 608,
+          "mask_landed": 608,
+          "usable_pairs": 560
+        },
+        "low": {
+          "groups": 60,
+          "candidates": 480,
+          "after_landed": 480,
+          "mask_landed": 480,
+          "usable_pairs": 472
+        },
+        "abstain": {
+          "groups": 88,
+          "candidates": 704,
+          "after_landed": 704,
+          "mask_landed": 704,
+          "usable_pairs": 680
+        },
+        "unannotated": {
+          "groups": 76,
+          "candidates": 608,
+          "after_landed": 608,
+          "mask_landed": 608,
+          "usable_pairs": 448
+        }
+      },
+      "journal_candidates": 2400,
+      "landed_after_jpg": 136000,
+      "landed_after_not_in_journal": 133600,
+      "landed_cgt_png": 136000,
+      "sources": {
+        "distinct": 300,
+        "i_in_available": 270,
+        "by_pool": {
+          "awards": [
+            61,
+            61
+          ],
+          "fivek_gold": [
+            0,
+            30
+          ],
+          "greysky": [
+            1,
+            1
+          ],
+          "korean": [
+            8,
+            8
+          ],
+          "mmart_ppr10k": [
+            28,
+            28
+          ],
+          "ppr10k": [
+            36,
+            36
+          ],
+          "quandian": [
+            16,
+            16
+          ],
+          "raise6k": [
+            29,
+            29
+          ],
+          "unsplash": [
+            91,
+            91
+          ]
+        }
+      },
+      "render_failure_events": {
+        "visibility_rejected": 10034
+      }
+    }
+  },
+  "limit": 300,
+  "totals": {
+    "candidates_total": 2400,
+    "usable_render_pairs_total": 2160,
+    "usable_by_confidence": {
+      "normal": 560,
+      "low": 472,
+      "abstain": 680,
+      "unannotated": 448
+    },
+    "candidates_by_confidence": {
+      "normal": 608,
+      "low": 480,
+      "abstain": 704,
+      "unannotated": 608
+    },
+    "abstain_usable_pairs": 680,
+    "d_render_scale_note": "usable = after .jpg landed in groups dataset AND source retrievable (img bank / local path)"
+  }
+}

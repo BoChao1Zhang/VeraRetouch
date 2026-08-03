@@ -1,0 +1,77 @@
+[
+  {
+    "name": "split.table_backed",
+    "status": "PASS",
+    "detail": "rule=t1_side_table:splits.sqlite3(rows=33652) spotcheck=200/200"
+  },
+  {
+    "name": "split.inline_guard_refuses",
+    "status": "PASS",
+    "detail": "inline S-split fallback REFUSED: T1 side-table /home/bc/Vera"
+  },
+  {
+    "name": "split.distribution",
+    "status": "PASS",
+    "detail": "n=14374 train=12865 val=747 test=760 unknown=2"
+  },
+  {
+    "name": "shards.ranged_read_sha256",
+    "status": "PASS",
+    "detail": "12/12"
+  },
+  {
+    "name": "color.hsv_vs_colorsys",
+    "status": "PASS",
+    "detail": "maxerr=0.00e+00 roundtrip=6.66e-16"
+  },
+  {
+    "name": "color.srgb_roundtrip",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "name": "composite.identity_outside",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "name": "composite.exact_inside",
+    "status": "PASS",
+    "detail": ""
+  },
+  {
+    "name": "geom.area_within_1pct",
+    "status": "PASS",
+    "detail": "worst=0.0029 fails=0/64"
+  },
+  {
+    "name": "hardpwl.non_monotone_200",
+    "status": "PASS",
+    "detail": "monotone=0"
+  },
+  {
+    "name": "replay.bitwise",
+    "status": "PASS",
+    "detail": "L4[3]=ok L1[0]=ok L6[1]=ok"
+  },
+  {
+    "name": "L5.mismatch_fields",
+    "status": "PASS",
+    "detail": "iou=0.178 met=True"
+  },
+  {
+    "name": "L6.dual_mask_fields",
+    "status": "PASS",
+    "detail": "iou=0.135 met=True"
+  },
+  {
+    "name": "L7.homogeneity_fields",
+    "status": "PASS",
+    "detail": "std=0.0141 cross=0.0279 ref_linear_median=0.0758"
+  },
+  {
+    "name": "split.manifest_vs_table",
+    "status": "PASS",
+    "detail": "rule=t1_side_table:splits.sqlite3(rows=33652) train:1600/1600 val:192/192"
+  }
+]

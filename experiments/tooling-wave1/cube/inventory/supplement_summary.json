@@ -1,0 +1,14 @@
+{
+ "pool_size": 1981,
+ "excluded": {
+  "dup_of_used_or_pool": 1479,
+  "parse_failed": 15,
+  "near_identity": 101
+ },
+ "proposed": 478,
+ "proposed_by_bucket": {
+  "e18": 239,
+  "quandian": 239
+ },
+ "target_total": 4000
+}

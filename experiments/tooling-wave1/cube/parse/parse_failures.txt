@@ -1,0 +1,15 @@
+/home/bc/data/datasets/recipes/e18/e18_000635.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004407.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004411.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004425.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004428.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004432.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004438.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004439.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004533.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004535.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004542.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004543.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004547.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004550.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT
+/home/bc/data/datasets/recipes/quandian/quandian_004551.cube	ValueError: AppleDouble resource fork (macOS metadata), not a LUT

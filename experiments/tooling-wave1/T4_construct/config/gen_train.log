@@ -1,0 +1,160 @@
+/home/bc/miniconda3/lib/python3.13/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.7) doesn't match a supported version!
+  warnings.warn(
+[train/L0] 200 samples in 144.1s
+{
+  "split": "train",
+  "per_level": 200,
+  "seed": 20260802,
+  "levels": {
+    "L0": {
+      "n": 200,
+      "area_hits": 0,
+      "area_targeted": 0,
+      "source_attempts": 200,
+      "iou_ok": 0,
+      "iou_all": 0,
+      "seconds": 144.1
+    }
+  },
+  "n_sources": 12865
+}
+/home/bc/miniconda3/lib/python3.13/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.7) doesn't match a supported version!
+  warnings.warn(
+[train/L1] 200 samples in 178.8s
+{
+  "split": "train",
+  "per_level": 200,
+  "seed": 20260802,
+  "levels": {
+    "L1": {
+      "n": 200,
+      "area_hits": 0,
+      "area_targeted": 0,
+      "source_attempts": 545,
+      "iou_ok": 0,
+      "iou_all": 0,
+      "seconds": 178.8
+    }
+  },
+  "n_sources": 12865
+}
+/home/bc/miniconda3/lib/python3.13/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.7) doesn't match a supported version!
+  warnings.warn(
+[train/L2] 200 samples in 163.3s
+{
+  "split": "train",
+  "per_level": 200,
+  "seed": 20260802,
+  "levels": {
+    "L2": {
+      "n": 200,
+      "area_hits": 0,
+      "area_targeted": 0,
+      "source_attempts": 560,
+      "iou_ok": 0,
+      "iou_all": 0,
+      "seconds": 163.3
+    }
+  },
+  "n_sources": 12865
+}
+/home/bc/miniconda3/lib/python3.13/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.7) doesn't match a supported version!
+  warnings.warn(
+[train/L3] 200 samples in 173.9s
+{
+  "split": "train",
+  "per_level": 200,
+  "seed": 20260802,
+  "levels": {
+    "L3": {
+      "n": 200,
+      "area_hits": 0,
+      "area_targeted": 0,
+      "source_attempts": 562,
+      "iou_ok": 0,
+      "iou_all": 0,
+      "seconds": 173.9
+    }
+  },
+  "n_sources": 12865
+}
+/home/bc/miniconda3/lib/python3.13/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.7) doesn't match a supported version!
+  warnings.warn(
+[train/L4] 200 samples in 155.7s
+{
+  "split": "train",
+  "per_level": 200,
+  "seed": 20260802,
+  "levels": {
+    "L4": {
+      "n": 200,
+      "area_hits": 200,
+      "area_targeted": 200,
+      "source_attempts": 200,
+      "iou_ok": 0,
+      "iou_all": 0,
+      "seconds": 155.7
+    }
+  },
+  "n_sources": 12865
+}
+/home/bc/miniconda3/lib/python3.13/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.7) doesn't match a supported version!
+  warnings.warn(
+[train/L5] 200 samples in 212.2s
+{
+  "split": "train",
+  "per_level": 200,
+  "seed": 20260802,
+  "levels": {
+    "L5": {
+      "n": 200,
+      "area_hits": 200,
+      "area_targeted": 200,
+      "source_attempts": 581,
+      "iou_ok": 188,
+      "iou_all": 200,
+      "seconds": 212.2
+    }
+  },
+  "n_sources": 12865
+}
+/home/bc/miniconda3/lib/python3.13/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.7) doesn't match a supported version!
+  warnings.warn(
+[train/L6] 200 samples in 209.3s
+{
+  "split": "train",
+  "per_level": 200,
+  "seed": 20260802,
+  "levels": {
+    "L6": {
+      "n": 200,
+      "area_hits": 0,
+      "area_targeted": 0,
+      "source_attempts": 200,
+      "iou_ok": 200,
+      "iou_all": 200,
+      "seconds": 209.3
+    }
+  },
+  "n_sources": 12865
+}
+/home/bc/miniconda3/lib/python3.13/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.5.0) or chardet (6.0.0.post1)/charset_normalizer (3.4.7) doesn't match a supported version!
+  warnings.warn(
+[train/L7] 200 samples in 201.0s
+{
+  "split": "train",
+  "per_level": 200,
+  "seed": 20260802,
+  "levels": {
+    "L7": {
+      "n": 200,
+      "area_hits": 0,
+      "area_targeted": 0,
+      "source_attempts": 207,
+      "iou_ok": 0,
+      "iou_all": 0,
+      "seconds": 201.0
+    }
+  },
+  "n_sources": 12865
+}

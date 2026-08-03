@@ -1,0 +1,29 @@
+{
+ "expected_used": 3522,
+ "distinct_used_preset_paths": 3522,
+ "reconciles_with_expected": true,
+ "preset_path_vs_recipe_mismatches": 0,
+ "used_missing_on_disk": 0,
+ "used_outside_recipe_roots": 0,
+ "disk_cube_files": 7098,
+ "unused_on_disk": 3576,
+ "unused_dup_of_used_content": 965,
+ "duplicate_content_groups": 961,
+ "per_bucket_used": {
+  "quandian": 1935,
+  "e18": 1587
+ },
+ "per_bucket_disk": {
+  "e18": 3014,
+  "quandian": 4084
+ },
+ "per_format_used": {
+  "cube": 3479,
+  "3dl": 43
+ },
+ "per_format_disk": {
+  "cube": 7046,
+  "3dl": 52
+ },
+ "deficit_to_4000": 478
+}

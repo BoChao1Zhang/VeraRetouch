@@ -1,0 +1,358 @@
+{
+  "task": "T4 INF-2 construct generator sanity (wave-1.5 B3-fix regen: T1 side-table split, PNG)",
+  "selftest": "15/15 PASS (config/selftest.json)",
+  "splits": {
+    "train": {
+      "n_samples": 1600,
+      "n_sources_pool": 12865,
+      "n_distinct_sources_used": 1488,
+      "levels": {
+        "L0": {
+          "n": 200,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 200,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 144.1,
+          "transform_class_coverage": {
+            "exposure": 34,
+            "wb": 34,
+            "sat": 33,
+            "hue": 33,
+            "gamma": 33,
+            "hardpwl": 33
+          }
+        },
+        "L1": {
+          "n": 200,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 545,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 178.8,
+          "transform_class_coverage": {
+            "exposure": 34,
+            "wb": 34,
+            "sat": 33,
+            "hue": 33,
+            "gamma": 33,
+            "hardpwl": 33
+          }
+        },
+        "L2": {
+          "n": 200,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 560,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 163.3,
+          "transform_class_coverage": {
+            "exposure": 34,
+            "wb": 34,
+            "sat": 33,
+            "hue": 33,
+            "gamma": 33,
+            "hardpwl": 33
+          }
+        },
+        "L3": {
+          "n": 200,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 562,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 173.9,
+          "transform_class_coverage": {
+            "exposure": 34,
+            "wb": 34,
+            "sat": 33,
+            "hue": 33,
+            "gamma": 33,
+            "hardpwl": 33
+          },
+          "feather_coverage": {
+            "0": 50,
+            "2": 50,
+            "8": 50,
+            "24": 50
+          }
+        },
+        "L4": {
+          "n": 200,
+          "area_hits": 200,
+          "area_targeted": 200,
+          "source_attempts": 200,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 155.7,
+          "transform_class_coverage": {
+            "exposure": 34,
+            "wb": 34,
+            "sat": 33,
+            "hue": 33,
+            "gamma": 33,
+            "hardpwl": 33
+          },
+          "feather_coverage": {
+            "0": 52,
+            "2": 52,
+            "8": 48,
+            "24": 48
+          }
+        },
+        "L5": {
+          "n": 200,
+          "area_hits": 200,
+          "area_targeted": 200,
+          "source_attempts": 581,
+          "iou_ok": 188,
+          "iou_all": 200,
+          "seconds": 212.2,
+          "transform_class_coverage": {
+            "exposure": 40,
+            "wb": 40,
+            "sat": 40,
+            "hue": 40,
+            "gamma": 40
+          },
+          "feather_coverage": {
+            "0": 50,
+            "2": 50,
+            "8": 50,
+            "24": 50
+          },
+          "mismatch_iou": {
+            "median": 0.126,
+            "p90": 0.2815,
+            "max": 0.5611
+          }
+        },
+        "L6": {
+          "n": 200,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 200,
+          "iou_ok": 200,
+          "iou_all": 200,
+          "seconds": 209.3,
+          "transform_class_coverage": {
+            "exposure": 80,
+            "wb": 80,
+            "sat": 80,
+            "hue": 80,
+            "gamma": 80
+          },
+          "overlap_iou": {
+            "min": 0.1002,
+            "median": 0.2878,
+            "max": 0.5402
+          }
+        },
+        "L7": {
+          "n": 200,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 207,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 201.0,
+          "transform_class_coverage": {
+            "exposure": 40,
+            "wb": 40,
+            "sat": 40,
+            "hue": 40,
+            "gamma": 40
+          },
+          "cross_boundary_rgb_dist": {
+            "median": 0.0023,
+            "p90": 0.0143
+          },
+          "homog_window_std": {
+            "median": 0.0061,
+            "max": 0.0545
+          }
+        }
+      }
+    },
+    "val": {
+      "n_samples": 192,
+      "n_sources_pool": 747,
+      "n_distinct_sources_used": 168,
+      "levels": {
+        "L0": {
+          "n": 24,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 24,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 33.0,
+          "transform_class_coverage": {
+            "exposure": 4,
+            "wb": 4,
+            "sat": 4,
+            "hue": 4,
+            "gamma": 4,
+            "hardpwl": 4
+          }
+        },
+        "L1": {
+          "n": 24,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 54,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 40.8,
+          "transform_class_coverage": {
+            "exposure": 4,
+            "wb": 4,
+            "sat": 4,
+            "hue": 4,
+            "gamma": 4,
+            "hardpwl": 4
+          }
+        },
+        "L2": {
+          "n": 24,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 57,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 31.1,
+          "transform_class_coverage": {
+            "exposure": 4,
+            "wb": 4,
+            "sat": 4,
+            "hue": 4,
+            "gamma": 4,
+            "hardpwl": 4
+          }
+        },
+        "L3": {
+          "n": 24,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 53,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 22.9,
+          "transform_class_coverage": {
+            "exposure": 4,
+            "wb": 4,
+            "sat": 4,
+            "hue": 4,
+            "gamma": 4,
+            "hardpwl": 4
+          },
+          "feather_coverage": {
+            "0": 6,
+            "2": 6,
+            "8": 6,
+            "24": 6
+          }
+        },
+        "L4": {
+          "n": 24,
+          "area_hits": 24,
+          "area_targeted": 24,
+          "source_attempts": 24,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 19.8,
+          "transform_class_coverage": {
+            "exposure": 4,
+            "wb": 4,
+            "sat": 4,
+            "hue": 4,
+            "gamma": 4,
+            "hardpwl": 4
+          },
+          "feather_coverage": {
+            "0": 8,
+            "2": 8,
+            "8": 4,
+            "24": 4
+          }
+        },
+        "L5": {
+          "n": 24,
+          "area_hits": 24,
+          "area_targeted": 24,
+          "source_attempts": 69,
+          "iou_ok": 24,
+          "iou_all": 24,
+          "seconds": 17.9,
+          "transform_class_coverage": {
+            "exposure": 5,
+            "wb": 5,
+            "sat": 5,
+            "hue": 5,
+            "gamma": 4
+          },
+          "feather_coverage": {
+            "0": 6,
+            "2": 6,
+            "8": 6,
+            "24": 6
+          },
+          "mismatch_iou": {
+            "median": 0.1288,
+            "p90": 0.2509,
+            "max": 0.279
+          }
+        },
+        "L6": {
+          "n": 24,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 24,
+          "iou_ok": 24,
+          "iou_all": 24,
+          "seconds": 22.8,
+          "transform_class_coverage": {
+            "exposure": 12,
+            "wb": 9,
+            "sat": 9,
+            "hue": 9,
+            "gamma": 9
+          },
+          "overlap_iou": {
+            "min": 0.1013,
+            "median": 0.323,
+            "max": 0.5408
+          }
+        },
+        "L7": {
+          "n": 24,
+          "area_hits": 0,
+          "area_targeted": 0,
+          "source_attempts": 26,
+          "iou_ok": 0,
+          "iou_all": 0,
+          "seconds": 27.0,
+          "transform_class_coverage": {
+            "exposure": 5,
+            "wb": 5,
+            "sat": 5,
+            "hue": 5,
+            "gamma": 4
+          },
+          "cross_boundary_rgb_dist": {
+            "median": 0.0024,
+            "p90": 0.0201
+          },
+          "homog_window_std": {
+            "median": 0.0076,
+            "max": 0.0499
+          }
+        }
+      }
+    }
+  }
+}

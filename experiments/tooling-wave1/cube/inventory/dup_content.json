@@ -1,0 +1,4373 @@
+{
+ "e0ad982a9bd87ae39f439533e4c46a70": [
+  "/home/bc/data/datasets/recipes/e18/e18_000014.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000034.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000656.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000667.cube"
+ ],
+ "d7eccca09b2d11821f68cee25b7feb1a": [
+  "/home/bc/data/datasets/recipes/e18/e18_000015.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000051.cube"
+ ],
+ "07ea20460a60f152f60f4bc3a1c15a1a": [
+  "/home/bc/data/datasets/recipes/e18/e18_000016.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000052.cube"
+ ],
+ "8b75145577f6be296fd777f63bb4b12b": [
+  "/home/bc/data/datasets/recipes/e18/e18_000017.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000032.cube"
+ ],
+ "5ac4816a7b134e04249fe1fd59e66274": [
+  "/home/bc/data/datasets/recipes/e18/e18_000018.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000033.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000660.cube"
+ ],
+ "069d2a16cf7050200223c00a72d2c22f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000019.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000059.cube"
+ ],
+ "fbb523bb62450b330230c7c9f69d3c4b": [
+  "/home/bc/data/datasets/recipes/e18/e18_000020.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000050.cube"
+ ],
+ "59bbdbdeb6a5277d84c69cea29e53916": [
+  "/home/bc/data/datasets/recipes/e18/e18_000021.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000056.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000661.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000678.cube"
+ ],
+ "8c69670460fdb267da514cfe0275ae58": [
+  "/home/bc/data/datasets/recipes/e18/e18_000022.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000061.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000651.cube"
+ ],
+ "3f6a50257eea3a611823f6ef3331f0ae": [
+  "/home/bc/data/datasets/recipes/e18/e18_000023.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000035.cube"
+ ],
+ "b30d3eb483cafc333beb50243ef14904": [
+  "/home/bc/data/datasets/recipes/e18/e18_000024.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000047.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000666.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000670.cube"
+ ],
+ "13bfc8cea8e896d1e03b7e9cd0df19f2": [
+  "/home/bc/data/datasets/recipes/e18/e18_000025.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000060.cube"
+ ],
+ "f5ba1c390ac0c47ea391c03002a234fa": [
+  "/home/bc/data/datasets/recipes/e18/e18_000026.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000039.cube"
+ ],
+ "ae4ddd06ec83b41bbceffc98cc29bd7a": [
+  "/home/bc/data/datasets/recipes/e18/e18_000027.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000040.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000645.cube"
+ ],
+ "779d992d6f10c23736bd42215e653183": [
+  "/home/bc/data/datasets/recipes/e18/e18_000028.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000046.cube"
+ ],
+ "04ab24c818d4a446a433aa8a6ae738ab": [
+  "/home/bc/data/datasets/recipes/e18/e18_000029.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000036.cube"
+ ],
+ "f34696deaa92eacd0da0a05ed0d1a16a": [
+  "/home/bc/data/datasets/recipes/e18/e18_000030.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000044.cube"
+ ],
+ "ae0ba82d8f7ab3ffc134d403ac5104be": [
+  "/home/bc/data/datasets/recipes/e18/e18_000031.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000049.cube"
+ ],
+ "c9f72fcc6f282caaf0a39e64bfc53e29": [
+  "/home/bc/data/datasets/recipes/e18/e18_000037.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000062.cube"
+ ],
+ "fb5f58e9eabcffd4caf40ac6a919aa86": [
+  "/home/bc/data/datasets/recipes/e18/e18_000038.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000063.cube"
+ ],
+ "3216f6a0c61b41cb88a8937bdacc48be": [
+  "/home/bc/data/datasets/recipes/e18/e18_000041.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000071.cube"
+ ],
+ "b744c07cae689c049592504c27a13c89": [
+  "/home/bc/data/datasets/recipes/e18/e18_000042.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000072.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000647.cube"
+ ],
+ "4b50bf1ede07cd9ff9cf0a6d90e82c05": [
+  "/home/bc/data/datasets/recipes/e18/e18_000043.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000068.cube"
+ ],
+ "9de784b424a4e65752eb41b3c55b49e5": [
+  "/home/bc/data/datasets/recipes/e18/e18_000045.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000065.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000671.cube"
+ ],
+ "0422cff9613d5f14562987165c693e8c": [
+  "/home/bc/data/datasets/recipes/e18/e18_000048.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000069.cube"
+ ],
+ "c9bd8a73c56d532078b948f54e4bc4ec": [
+  "/home/bc/data/datasets/recipes/e18/e18_000053.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000073.cube"
+ ],
+ "55fb8178b055a0afa8a9d5e774b24d8f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000054.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000066.cube"
+ ],
+ "99888e35121049f8b48206aab226fe46": [
+  "/home/bc/data/datasets/recipes/e18/e18_000055.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000064.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000348.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000665.cube"
+ ],
+ "9137c042e4a4d111638de8fcd76c842e": [
+  "/home/bc/data/datasets/recipes/e18/e18_000057.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000070.cube"
+ ],
+ "12a80c4ba16ff5fe370f69d64e6a5db6": [
+  "/home/bc/data/datasets/recipes/e18/e18_000058.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000067.cube"
+ ],
+ "6916ce6794bc8d820b89c7e75ca3fa62": [
+  "/home/bc/data/datasets/recipes/e18/e18_000074.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000075.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000140.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000151.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000163.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009177.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009242.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009243.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009254.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009299.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009439.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009470.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009471.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009557.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009618.cube"
+ ],
+ "b702f9ca51dd2f57d09d509634994178": [
+  "/home/bc/data/datasets/recipes/e18/e18_000096.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009512.cube"
+ ],
+ "78d79dc9d22f27b066d5883e516f0a38": [
+  "/home/bc/data/datasets/recipes/e18/e18_000097.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009513.cube"
+ ],
+ "a37e7973c858a374703bc8c4b50b494a": [
+  "/home/bc/data/datasets/recipes/e18/e18_000098.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009514.cube"
+ ],
+ "ef185facb052022a7be5ffa0542d8379": [
+  "/home/bc/data/datasets/recipes/e18/e18_000099.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009515.cube"
+ ],
+ "9972aba3e8fb77a63197b3d63a0c9c7f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000100.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009516.cube"
+ ],
+ "399aa4c02a2ca654fe9a0ea73d27cb49": [
+  "/home/bc/data/datasets/recipes/e18/e18_000101.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009517.cube"
+ ],
+ "ddd5d92aa862902f18169883a3a9b00c": [
+  "/home/bc/data/datasets/recipes/e18/e18_000102.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009518.cube"
+ ],
+ "7fe658a66117d4896dd8e4c1d955a49e": [
+  "/home/bc/data/datasets/recipes/e18/e18_000103.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009519.cube"
+ ],
+ "451ed4ebee8a30ccd3866fb4beee7474": [
+  "/home/bc/data/datasets/recipes/e18/e18_000104.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009520.cube"
+ ],
+ "d51382e0a2bfa6c02ca1a62fb9f2a06b": [
+  "/home/bc/data/datasets/recipes/e18/e18_000105.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009521.cube"
+ ],
+ "82109c7732081df658e306f6b0b61266": [
+  "/home/bc/data/datasets/recipes/e18/e18_000106.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009522.cube"
+ ],
+ "24a2e043ce87d496170fed0d203e8f98": [
+  "/home/bc/data/datasets/recipes/e18/e18_000107.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009523.cube"
+ ],
+ "a9672a30d0335f5c93bc3323b3792560": [
+  "/home/bc/data/datasets/recipes/e18/e18_000108.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009524.cube"
+ ],
+ "265d8421cd402e6963107e8dbedcd4b2": [
+  "/home/bc/data/datasets/recipes/e18/e18_000109.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009525.cube"
+ ],
+ "403cd27c412e4f5d4fc69c89e86bbf70": [
+  "/home/bc/data/datasets/recipes/e18/e18_000110.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009526.cube"
+ ],
+ "b98d6dca9daf23681355a21e32e653b7": [
+  "/home/bc/data/datasets/recipes/e18/e18_000111.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009527.cube"
+ ],
+ "ccb97634bd0284f8b86f41899e06c282": [
+  "/home/bc/data/datasets/recipes/e18/e18_000112.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009528.cube"
+ ],
+ "5279939d07104160927164c1aa438049": [
+  "/home/bc/data/datasets/recipes/e18/e18_000113.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009529.cube"
+ ],
+ "5da8cff365d657d12692609beb348985": [
+  "/home/bc/data/datasets/recipes/e18/e18_000114.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009530.cube"
+ ],
+ "1d90d089d37f7d38e567f457b5ad1378": [
+  "/home/bc/data/datasets/recipes/e18/e18_000115.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009531.cube"
+ ],
+ "9f374dd9e96d9a98b272afa5361e4c4c": [
+  "/home/bc/data/datasets/recipes/e18/e18_000128.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009287.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009606.cube"
+ ],
+ "c2ca73285ae3cc966a2fd2db04b8b6cf": [
+  "/home/bc/data/datasets/recipes/e18/e18_000129.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009288.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009607.cube"
+ ],
+ "7c9ee117aefa733ed56b4764e1577897": [
+  "/home/bc/data/datasets/recipes/e18/e18_000130.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009289.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009608.cube"
+ ],
+ "0023c716b1a48d974d9badd01f4cf092": [
+  "/home/bc/data/datasets/recipes/e18/e18_000131.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009290.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009609.cube"
+ ],
+ "57f4fc29357760ae46aadbb32fe6bf37": [
+  "/home/bc/data/datasets/recipes/e18/e18_000132.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009291.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009610.cube"
+ ],
+ "d898d0ce5b02211ab02b3babcb1e7ce9": [
+  "/home/bc/data/datasets/recipes/e18/e18_000133.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009292.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009611.cube"
+ ],
+ "0b2167c1bb71a8df1bf210a7fbec5a70": [
+  "/home/bc/data/datasets/recipes/e18/e18_000134.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009293.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009612.cube"
+ ],
+ "03b38ca258d57d5a631e4c86cdd84654": [
+  "/home/bc/data/datasets/recipes/e18/e18_000135.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009294.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009613.cube"
+ ],
+ "9e93f509524a992469f4635372d90a04": [
+  "/home/bc/data/datasets/recipes/e18/e18_000136.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009295.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009614.cube"
+ ],
+ "6152fdf7cbf9dac87de7db5711aa9af7": [
+  "/home/bc/data/datasets/recipes/e18/e18_000137.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009296.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009615.cube"
+ ],
+ "2a5a84b1ed1c03e6649f076482dede5d": [
+  "/home/bc/data/datasets/recipes/e18/e18_000138.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009297.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009616.cube"
+ ],
+ "98095c07b9903105dbf502a6849f8821": [
+  "/home/bc/data/datasets/recipes/e18/e18_000139.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009298.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009617.cube"
+ ],
+ "ea823f2f33a9cc381181e43a51c7f33b": [
+  "/home/bc/data/datasets/recipes/e18/e18_000152.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009255.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009460.cube"
+ ],
+ "4b962a9d49ad3431579b81648e12c2c3": [
+  "/home/bc/data/datasets/recipes/e18/e18_000153.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009256.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009461.cube"
+ ],
+ "3d70ff94df69a58ef8a536ce69a0aa05": [
+  "/home/bc/data/datasets/recipes/e18/e18_000154.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009257.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009462.cube"
+ ],
+ "a77c78c830b04fe7e2c7ad421db1e01a": [
+  "/home/bc/data/datasets/recipes/e18/e18_000155.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009258.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009463.cube"
+ ],
+ "08a48ddef5c36e3a6a86782d9dfc7789": [
+  "/home/bc/data/datasets/recipes/e18/e18_000156.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009259.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009464.cube"
+ ],
+ "e0740ad0a5eeb61397d1abc7d493b63a": [
+  "/home/bc/data/datasets/recipes/e18/e18_000157.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009260.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009465.cube"
+ ],
+ "ecc2ee33581537d75a27de77d0e64670": [
+  "/home/bc/data/datasets/recipes/e18/e18_000158.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009261.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009466.cube"
+ ],
+ "47a855f11497a74fbf3db8843003b5e2": [
+  "/home/bc/data/datasets/recipes/e18/e18_000159.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009262.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009467.cube"
+ ],
+ "7808debfd56c3eb2b6148f2905d919ef": [
+  "/home/bc/data/datasets/recipes/e18/e18_000160.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009263.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009468.cube"
+ ],
+ "a789abb7077cc2181825c1ba43d0d9c4": [
+  "/home/bc/data/datasets/recipes/e18/e18_000161.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009264.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009469.cube"
+ ],
+ "b5a1a9ecf9fb8ca9000141d8a9d19d58": [
+  "/home/bc/data/datasets/recipes/e18/e18_000162.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009176.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009556.cube"
+ ],
+ "3acc431f6afd1820bd907abdcddac7cb": [
+  "/home/bc/data/datasets/recipes/e18/e18_000176.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009532.cube"
+ ],
+ "6649856e283d56b53e4ecb4afd31e466": [
+  "/home/bc/data/datasets/recipes/e18/e18_000177.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009533.cube"
+ ],
+ "1cd05c432818d2c9cf2f1c9caf5540c4": [
+  "/home/bc/data/datasets/recipes/e18/e18_000178.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009534.cube"
+ ],
+ "98b08c27355a7cc0c372147e1f2b32e3": [
+  "/home/bc/data/datasets/recipes/e18/e18_000179.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009535.cube"
+ ],
+ "5401d8e7cfc710b39d973b0d7344e91f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000180.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009536.cube"
+ ],
+ "e499f08e6c2fe258cb1a793af1d2edb8": [
+  "/home/bc/data/datasets/recipes/e18/e18_000181.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009537.cube"
+ ],
+ "56a120a7e75ef0987827f2f112e39492": [
+  "/home/bc/data/datasets/recipes/e18/e18_000182.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009538.cube"
+ ],
+ "db8be0a9f4767fe461925df010cf8e80": [
+  "/home/bc/data/datasets/recipes/e18/e18_000183.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009539.cube"
+ ],
+ "748d0d7d67214ca270fb131aaafe90de": [
+  "/home/bc/data/datasets/recipes/e18/e18_000184.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009540.cube"
+ ],
+ "d917526b16f02b313a0eaee5f658bda7": [
+  "/home/bc/data/datasets/recipes/e18/e18_000185.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009541.cube"
+ ],
+ "a8eed85084d6067996e43c33ed51d24d": [
+  "/home/bc/data/datasets/recipes/e18/e18_000186.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009542.cube"
+ ],
+ "d89fcb4c46ed17de6c0af0ae10f39733": [
+  "/home/bc/data/datasets/recipes/e18/e18_000187.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009543.cube"
+ ],
+ "26705a15164c2f259b9039885f521549": [
+  "/home/bc/data/datasets/recipes/e18/e18_000188.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009544.cube"
+ ],
+ "72ddde68aca2e95213794b38d16834a7": [
+  "/home/bc/data/datasets/recipes/e18/e18_000189.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009545.cube"
+ ],
+ "0adabb9ee615a4945ec2dbf4ee7f1607": [
+  "/home/bc/data/datasets/recipes/e18/e18_000190.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009546.cube"
+ ],
+ "f8d624e1cf20c437717292eb1a0caae1": [
+  "/home/bc/data/datasets/recipes/e18/e18_000191.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009547.cube"
+ ],
+ "3efcfcc8ce8a0354214db10e77a0f302": [
+  "/home/bc/data/datasets/recipes/e18/e18_000192.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009548.cube"
+ ],
+ "4721327d5f88b684dd1a82a6beeb46c9": [
+  "/home/bc/data/datasets/recipes/e18/e18_000193.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009549.cube"
+ ],
+ "9d1e33794eec623693122736c635b019": [
+  "/home/bc/data/datasets/recipes/e18/e18_000194.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009550.cube"
+ ],
+ "0a5a8d6edf8a50cf790e6c58624f64e0": [
+  "/home/bc/data/datasets/recipes/e18/e18_000195.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009551.cube"
+ ],
+ "e0d1326a0511e7b66cd0bab1ec2103e4": [
+  "/home/bc/data/datasets/recipes/e18/e18_000196.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009552.cube"
+ ],
+ "e4a9e979638b4b39dbfd45caddd58bde": [
+  "/home/bc/data/datasets/recipes/e18/e18_000197.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009553.cube"
+ ],
+ "6cabd92018a614ecef6dfcc65526e926": [
+  "/home/bc/data/datasets/recipes/e18/e18_000198.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009554.cube"
+ ],
+ "41fa75d1de95d757dae06e12595c281e": [
+  "/home/bc/data/datasets/recipes/e18/e18_000199.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009555.cube"
+ ],
+ "dcdc4f2ff02434d1e64eb6eca26792f9": [
+  "/home/bc/data/datasets/recipes/e18/e18_000244.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000887.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000889.cube"
+ ],
+ "e35bb79e961afc0f18e6b2366c146d4f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000249.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000850.cube"
+ ],
+ "6e630d384fb1c822444541031b4b853d": [
+  "/home/bc/data/datasets/recipes/e18/e18_000263.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000886.cube"
+ ],
+ "20d8c026cabaccd45cfed931503fc073": [
+  "/home/bc/data/datasets/recipes/e18/e18_000297.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000383.cube"
+ ],
+ "fdf4c7a2a814e5d250b0662a71ee4652": [
+  "/home/bc/data/datasets/recipes/e18/e18_000298.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000363.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000740.cube"
+ ],
+ "a95c12cea6e16fd96255b604f26374f2": [
+  "/home/bc/data/datasets/recipes/e18/e18_000300.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000320.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000359.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000397.cube"
+ ],
+ "9a91451bdd17047e8d8c1443a14994b6": [
+  "/home/bc/data/datasets/recipes/e18/e18_000302.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000327.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000366.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000382.cube"
+ ],
+ "03a5f8ef25c8cfc0bb87cbdd48852cdd": [
+  "/home/bc/data/datasets/recipes/e18/e18_000303.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000349.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000387.cube"
+ ],
+ "e68de6629e04925b52e43f57f10f094e": [
+  "/home/bc/data/datasets/recipes/e18/e18_000307.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000338.cube"
+ ],
+ "4b1e6987f9128dd2afffb3c8e5c4be46": [
+  "/home/bc/data/datasets/recipes/e18/e18_000311.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000352.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000729.cube"
+ ],
+ "78e770395ec1022b6151af8822e55ba4": [
+  "/home/bc/data/datasets/recipes/e18/e18_000313.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000395.cube"
+ ],
+ "871c85bf24377cde79f744217105fd0e": [
+  "/home/bc/data/datasets/recipes/e18/e18_000314.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000358.cube"
+ ],
+ "1214828bd4fa52b3bb82899e4d9e7e7d": [
+  "/home/bc/data/datasets/recipes/e18/e18_000315.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000368.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000399.cube"
+ ],
+ "a880695075e945a461c87d284dd4b085": [
+  "/home/bc/data/datasets/recipes/e18/e18_000318.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000718.cube"
+ ],
+ "3dc368a608d6e26078cd9b99f99e7c09": [
+  "/home/bc/data/datasets/recipes/e18/e18_000322.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000402.cube"
+ ],
+ "dd1ea7a19c4ea94f417148619689df70": [
+  "/home/bc/data/datasets/recipes/e18/e18_000333.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000380.cube"
+ ],
+ "d8b7243b631c9469d7b405050fa9fd93": [
+  "/home/bc/data/datasets/recipes/e18/e18_000334.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000355.cube"
+ ],
+ "7d92110d011f7f29e1f1ca6b10c667fd": [
+  "/home/bc/data/datasets/recipes/e18/e18_000336.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000373.cube"
+ ],
+ "e5150382162dc2e2eafe1a9001444b22": [
+  "/home/bc/data/datasets/recipes/e18/e18_000337.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000365.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000390.cube"
+ ],
+ "2069435b638840e2ee5de55c555b1def": [
+  "/home/bc/data/datasets/recipes/e18/e18_000339.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000351.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000400.cube"
+ ],
+ "e2b62960aee778e983eb0bdf70bde90f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000341.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000377.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000705.cube"
+ ],
+ "514330c25a33169287a951c5237ebc2f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000343.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000546.cube"
+ ],
+ "8a4e44094779ef0759a2b0ee050bc851": [
+  "/home/bc/data/datasets/recipes/e18/e18_000345.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000370.cube"
+ ],
+ "08707e774a5ceebce0ff8ec2e90b6a1b": [
+  "/home/bc/data/datasets/recipes/e18/e18_000350.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000384.cube"
+ ],
+ "13b59f8edb24719ca087715c303bf7a6": [
+  "/home/bc/data/datasets/recipes/e18/e18_000362.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000885.cube"
+ ],
+ "95c337592e050240aa03c2d5d0d5e7c9": [
+  "/home/bc/data/datasets/recipes/e18/e18_000367.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000739.cube"
+ ],
+ "3ad59341a14238c5ed806198f4d38a2d": [
+  "/home/bc/data/datasets/recipes/e18/e18_000372.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000381.cube"
+ ],
+ "2cc91676b771659e0e5022f9e12cc06a": [
+  "/home/bc/data/datasets/recipes/e18/e18_000473.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000489.cube"
+ ],
+ "78ff13e9dd4973a7505427f84b1016fb": [
+  "/home/bc/data/datasets/recipes/e18/e18_000576.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000585.cube"
+ ],
+ "3f563497cd41f8a6cff1805d487e7fca": [
+  "/home/bc/data/datasets/recipes/e18/e18_000596.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000602.cube"
+ ],
+ "8c74e452f242701b5d4f7afd9b23eff8": [
+  "/home/bc/data/datasets/recipes/e18/e18_000597.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000601.cube"
+ ],
+ "1cd011693575cc170f10e8b16684781f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000599.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000606.cube"
+ ],
+ "ac9ed66acdec4aa4a190e52341f66aad": [
+  "/home/bc/data/datasets/recipes/e18/e18_000600.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000607.cube"
+ ],
+ "b9932e03bf9eecd375bb66836315c82b": [
+  "/home/bc/data/datasets/recipes/e18/e18_000615.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002935.cube"
+ ],
+ "fefcdcfce2039d7996281878cff96d8c": [
+  "/home/bc/data/datasets/recipes/e18/e18_000618.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002941.cube"
+ ],
+ "dba49ef8c3ca485b399162b4b2a452a5": [
+  "/home/bc/data/datasets/recipes/e18/e18_000624.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000637.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000680.cube"
+ ],
+ "1980a7043ef1b96df406754dc3e8d422": [
+  "/home/bc/data/datasets/recipes/e18/e18_000625.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000636.cube"
+ ],
+ "166eb58a672219041cd6a2b00825bb61": [
+  "/home/bc/data/datasets/recipes/e18/e18_000638.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000669.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000676.cube"
+ ],
+ "1d45093a96c35a6cb39dcc4fd58a4e3b": [
+  "/home/bc/data/datasets/recipes/e18/e18_000664.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000677.cube"
+ ],
+ "823d64bc28456359e5f605afbd3a7b56": [
+  "/home/bc/data/datasets/recipes/e18/e18_000760.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000767.cube"
+ ],
+ "3cf031dad58779a97aaecab5c48a9968": [
+  "/home/bc/data/datasets/recipes/e18/e18_000852.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008159.cube"
+ ],
+ "b3aa19db8a97b89fee08f1128b3ec46b": [
+  "/home/bc/data/datasets/recipes/e18/e18_000855.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008160.cube"
+ ],
+ "05c1d9c3f4b0f6aba2bd09163cb8556f": [
+  "/home/bc/data/datasets/recipes/e18/e18_000859.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008157.cube"
+ ],
+ "ec343b1d35de2ab412b39339145217a9": [
+  "/home/bc/data/datasets/recipes/e18/e18_000864.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008155.cube"
+ ],
+ "fe36b21b0f43b46972c3a63acb0e4566": [
+  "/home/bc/data/datasets/recipes/e18/e18_000870.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009322.cube"
+ ],
+ "0f5345fe9e6b109157539aa541b66ef7": [
+  "/home/bc/data/datasets/recipes/e18/e18_000879.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000907.cube"
+ ],
+ "fcdf527cb2a7823a0429c35aebacc628": [
+  "/home/bc/data/datasets/recipes/e18/e18_000882.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000884.cube"
+ ],
+ "565ce2ca6b4c3e11d2e03a2b22baad59": [
+  "/home/bc/data/datasets/recipes/e18/e18_000890.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000899.cube"
+ ],
+ "8de507eeef933b5f60ee118cac786cac": [
+  "/home/bc/data/datasets/recipes/e18/e18_000893.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000897.cube"
+ ],
+ "f16e342f45591aec19f9b6fd9fc77d59": [
+  "/home/bc/data/datasets/recipes/e18/e18_000905.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000914.cube"
+ ],
+ "c1b4ccdb53966cf6acdca04691665a7e": [
+  "/home/bc/data/datasets/recipes/e18/e18_000906.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000931.cube"
+ ],
+ "70bb07c8c0517b79ad9151eb952befde": [
+  "/home/bc/data/datasets/recipes/e18/e18_000909.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000925.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000929.cube"
+ ],
+ "5c9a75a948a5e117d5e24d6175c67897": [
+  "/home/bc/data/datasets/recipes/e18/e18_000910.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_000911.cube"
+ ],
+ "01bc2de5941c24edfe78aae7e7972e83": [
+  "/home/bc/data/datasets/recipes/e18/e18_001025.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001297.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001702.cube"
+ ],
+ "43c9cb5d03876005d37a0b0c51ba6830": [
+  "/home/bc/data/datasets/recipes/e18/e18_001026.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001334.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001666.cube"
+ ],
+ "cfd71f4700db43c1c300a189c86a2420": [
+  "/home/bc/data/datasets/recipes/e18/e18_001027.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001322.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001708.cube"
+ ],
+ "d83a6230780b2489a0f50fb80db4db84": [
+  "/home/bc/data/datasets/recipes/e18/e18_001028.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001339.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001715.cube"
+ ],
+ "2333633729f7cba530d26d30544afed3": [
+  "/home/bc/data/datasets/recipes/e18/e18_001029.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001324.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001701.cube"
+ ],
+ "0b1e73a68755051fb0395c52e21ef6ce": [
+  "/home/bc/data/datasets/recipes/e18/e18_001030.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001323.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001719.cube"
+ ],
+ "d025bb5502750357fb5b3c8054cb3550": [
+  "/home/bc/data/datasets/recipes/e18/e18_001031.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001283.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001693.cube"
+ ],
+ "4d925828d00dc79c1309d712025afff1": [
+  "/home/bc/data/datasets/recipes/e18/e18_001032.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001318.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001722.cube"
+ ],
+ "527d850992a312c4cd92f68d0c64e79a": [
+  "/home/bc/data/datasets/recipes/e18/e18_001033.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001330.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001723.cube"
+ ],
+ "95dabbb0ff9953fa37ee95eb9dd3a5d6": [
+  "/home/bc/data/datasets/recipes/e18/e18_001034.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001312.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001726.cube"
+ ],
+ "9c0653606091bbbee18da4fec557ce75": [
+  "/home/bc/data/datasets/recipes/e18/e18_001035.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001320.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001697.cube"
+ ],
+ "12e6e23a086ef9241a8e3f3852e53f4c": [
+  "/home/bc/data/datasets/recipes/e18/e18_001036.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001306.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001672.cube"
+ ],
+ "943dd76e555c3cf24ca9d29eda310a1a": [
+  "/home/bc/data/datasets/recipes/e18/e18_001037.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001332.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001728.cube"
+ ],
+ "0525b3264c7439d6f4d540999a2dc1b1": [
+  "/home/bc/data/datasets/recipes/e18/e18_001038.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001309.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001688.cube"
+ ],
+ "b5ce263e5b5813d8bbe760e381380fe0": [
+  "/home/bc/data/datasets/recipes/e18/e18_001039.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001336.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001711.cube"
+ ],
+ "d30802026ac819285a4e94a92a74243b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001040.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001292.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001718.cube"
+ ],
+ "73fd1e6567a63cd070effee7a96a6c0c": [
+  "/home/bc/data/datasets/recipes/e18/e18_001041.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001314.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001675.cube"
+ ],
+ "7e78db72f6726b7917869ab1a9b7a379": [
+  "/home/bc/data/datasets/recipes/e18/e18_001042.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001328.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001680.cube"
+ ],
+ "5e5c84326096cc812e6cff555695e50f": [
+  "/home/bc/data/datasets/recipes/e18/e18_001043.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001338.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001678.cube"
+ ],
+ "83a24a66f2b989753330bc63ffc8d972": [
+  "/home/bc/data/datasets/recipes/e18/e18_001044.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001305.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001695.cube"
+ ],
+ "4a3188a305253d55f15635f4f54750d6": [
+  "/home/bc/data/datasets/recipes/e18/e18_001045.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001327.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001665.cube"
+ ],
+ "175b382d0492d2d152f32d2cdbca556d": [
+  "/home/bc/data/datasets/recipes/e18/e18_001046.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001319.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001703.cube"
+ ],
+ "5150803e239f19687244d0cd45c33b01": [
+  "/home/bc/data/datasets/recipes/e18/e18_001047.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001333.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001694.cube"
+ ],
+ "6fc4d4366814810968056847f5c6c86b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001048.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001329.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001686.cube"
+ ],
+ "652f435bbb22e27d76d9e1f4ae5c837e": [
+  "/home/bc/data/datasets/recipes/e18/e18_001049.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001302.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001714.cube"
+ ],
+ "98a78398381801703235f40f551fbc12": [
+  "/home/bc/data/datasets/recipes/e18/e18_001050.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001301.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001713.cube"
+ ],
+ "d0a3220e2098d9843717b28e94458a62": [
+  "/home/bc/data/datasets/recipes/e18/e18_001051.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001288.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001676.cube"
+ ],
+ "30cb1ce48ad327439da2b6e6d433874a": [
+  "/home/bc/data/datasets/recipes/e18/e18_001052.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001321.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001712.cube"
+ ],
+ "538b6ace8c5a70cb558733197f0962c0": [
+  "/home/bc/data/datasets/recipes/e18/e18_001053.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001311.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001699.cube"
+ ],
+ "fcf336e2bd0b5c345f2fc196d82791d8": [
+  "/home/bc/data/datasets/recipes/e18/e18_001054.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001308.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001682.cube"
+ ],
+ "1243e6a86a0af8613d7cae593361ef16": [
+  "/home/bc/data/datasets/recipes/e18/e18_001055.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001316.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001706.cube"
+ ],
+ "9ab103eb378490f16754328877f22af5": [
+  "/home/bc/data/datasets/recipes/e18/e18_001056.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001287.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001698.cube"
+ ],
+ "694218ad34413c59ca8b6ae886362139": [
+  "/home/bc/data/datasets/recipes/e18/e18_001057.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001285.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001677.cube"
+ ],
+ "6ea705d41955566be77e088e47c2f556": [
+  "/home/bc/data/datasets/recipes/e18/e18_001058.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001293.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001710.cube"
+ ],
+ "ef0b9975c6b687bac1270220aabea46b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001059.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001286.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001685.cube"
+ ],
+ "a9dae447174d39557e1e1c3c101664d2": [
+  "/home/bc/data/datasets/recipes/e18/e18_001060.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001340.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001721.cube"
+ ],
+ "3deda7a19fd77bb5c1ca208f1ced45ab": [
+  "/home/bc/data/datasets/recipes/e18/e18_001061.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001326.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001690.cube"
+ ],
+ "7dab617e5d7673b698b96993c7fc7541": [
+  "/home/bc/data/datasets/recipes/e18/e18_001062.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001342.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001670.cube"
+ ],
+ "762c19c76546da7f105c400db0debe80": [
+  "/home/bc/data/datasets/recipes/e18/e18_001063.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001343.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001681.cube"
+ ],
+ "2b6cd340cc415f5856552087aacbd9d2": [
+  "/home/bc/data/datasets/recipes/e18/e18_001064.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001294.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001673.cube"
+ ],
+ "e2fc9b85f0ecd80ffa2097bce85ae3f0": [
+  "/home/bc/data/datasets/recipes/e18/e18_001065.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001335.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001669.cube"
+ ],
+ "7cba2e389e2a86ea74d02aa1acc97f90": [
+  "/home/bc/data/datasets/recipes/e18/e18_001066.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001284.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001720.cube"
+ ],
+ "7108b99808bbd42609fcf2dee14765c9": [
+  "/home/bc/data/datasets/recipes/e18/e18_001067.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001331.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001671.cube"
+ ],
+ "96c2ec3057e157ea5a5e09928d009132": [
+  "/home/bc/data/datasets/recipes/e18/e18_001068.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001281.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001668.cube"
+ ],
+ "dc2dbf0b7e246bb3234cecb753a5f2e3": [
+  "/home/bc/data/datasets/recipes/e18/e18_001069.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001298.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001727.cube"
+ ],
+ "93f6f02eee0c4107c8cfd931041f2314": [
+  "/home/bc/data/datasets/recipes/e18/e18_001070.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001344.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001704.cube"
+ ],
+ "f10e69565ce7a011298c34f698bcef4f": [
+  "/home/bc/data/datasets/recipes/e18/e18_001071.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001310.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001684.cube"
+ ],
+ "bffefdbe652067ac1ef76d5f61643373": [
+  "/home/bc/data/datasets/recipes/e18/e18_001072.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001341.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001667.cube"
+ ],
+ "e30aa3f54ee0d6594fde81a14c0f765c": [
+  "/home/bc/data/datasets/recipes/e18/e18_001073.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001325.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001691.cube"
+ ],
+ "d0efb3d29a1414f2c3a2ef98b00fba41": [
+  "/home/bc/data/datasets/recipes/e18/e18_001074.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001337.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001679.cube"
+ ],
+ "b8a3eb824c9421bbdd064f721d215f30": [
+  "/home/bc/data/datasets/recipes/e18/e18_001075.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001300.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001687.cube"
+ ],
+ "b39fb807a3d52fc2dcf4c39913e75b1e": [
+  "/home/bc/data/datasets/recipes/e18/e18_001076.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001304.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001683.cube"
+ ],
+ "fc680c7558b8c674a05da63f05375018": [
+  "/home/bc/data/datasets/recipes/e18/e18_001077.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001289.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001724.cube"
+ ],
+ "b41fae378ce637149704c965daf857ee": [
+  "/home/bc/data/datasets/recipes/e18/e18_001078.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001313.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001717.cube"
+ ],
+ "243fe2aa91a2d1878c8af53fbf02777f": [
+  "/home/bc/data/datasets/recipes/e18/e18_001079.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001299.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001725.cube"
+ ],
+ "0f0a24a1b41840033cb60d99bfa2da45": [
+  "/home/bc/data/datasets/recipes/e18/e18_001080.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001290.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001700.cube"
+ ],
+ "be48ed1e5ca0e0d0941ce1265e85b69c": [
+  "/home/bc/data/datasets/recipes/e18/e18_001081.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001295.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001709.cube"
+ ],
+ "7da777c55f380665932865c389b201dd": [
+  "/home/bc/data/datasets/recipes/e18/e18_001082.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001303.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001674.cube"
+ ],
+ "d0e640da55f9fc2c018d7948766a2d3d": [
+  "/home/bc/data/datasets/recipes/e18/e18_001083.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001282.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001716.cube"
+ ],
+ "40d744cf2ea4d22550ed3dac3c5cb002": [
+  "/home/bc/data/datasets/recipes/e18/e18_001084.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001315.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001696.cube"
+ ],
+ "f21a8f0f1d41d70823c834cd5c0d0933": [
+  "/home/bc/data/datasets/recipes/e18/e18_001085.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001296.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001692.cube"
+ ],
+ "889012556404e67eeb3881e2fd88a52a": [
+  "/home/bc/data/datasets/recipes/e18/e18_001086.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001291.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001707.cube"
+ ],
+ "a63f962f29fbcd33184c345f991d22a3": [
+  "/home/bc/data/datasets/recipes/e18/e18_001087.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001307.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001689.cube"
+ ],
+ "109d8ec544a90d6435b0e97920e9270b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001088.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001317.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001705.cube"
+ ],
+ "fbb8b34484f02f2cfa6200c420f5cd03": [
+  "/home/bc/data/datasets/recipes/e18/e18_001345.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002020.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002448.cube"
+ ],
+ "ba086f5955a2b463d4448389d6c92a08": [
+  "/home/bc/data/datasets/recipes/e18/e18_001346.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002013.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002493.cube"
+ ],
+ "f4250bcfa90f7dd3886019ed66fca77b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001347.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002007.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002495.cube"
+ ],
+ "e9fd3748bf3a4741abef7b2f7c0f0714": [
+  "/home/bc/data/datasets/recipes/e18/e18_001348.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002033.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002474.cube"
+ ],
+ "d306b12e48976a51fda8289eb5280a2b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001349.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002038.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002462.cube"
+ ],
+ "1497a41c2bc897496a8d6b82d77bca0f": [
+  "/home/bc/data/datasets/recipes/e18/e18_001350.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002001.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002478.cube"
+ ],
+ "ee5882eb3904559f5eaff5f3a3289cf1": [
+  "/home/bc/data/datasets/recipes/e18/e18_001351.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002024.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002459.cube"
+ ],
+ "b3a5259b2aa1ac7418f0f4bbe0c6708e": [
+  "/home/bc/data/datasets/recipes/e18/e18_001352.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002034.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002490.cube"
+ ],
+ "cc33499db7c9c20d8fb53d3fbcb77553": [
+  "/home/bc/data/datasets/recipes/e18/e18_001353.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002048.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002463.cube"
+ ],
+ "42c71bebcc6c1c068136975ac1a9d3f7": [
+  "/home/bc/data/datasets/recipes/e18/e18_001354.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002041.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002505.cube"
+ ],
+ "b4c22e44734a4226d133b4d2c178a989": [
+  "/home/bc/data/datasets/recipes/e18/e18_001355.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002043.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002468.cube"
+ ],
+ "109062499c2c41f24753abac6af8bd19": [
+  "/home/bc/data/datasets/recipes/e18/e18_001356.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002042.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002450.cube"
+ ],
+ "5f84cc3de01bfe2b94d1b08a0bc54b91": [
+  "/home/bc/data/datasets/recipes/e18/e18_001357.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001987.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002480.cube"
+ ],
+ "53b7a040699b20a0ae739882c7b4b970": [
+  "/home/bc/data/datasets/recipes/e18/e18_001358.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001989.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002488.cube"
+ ],
+ "6e7a72cef37d9e7e69820300aa2894b4": [
+  "/home/bc/data/datasets/recipes/e18/e18_001359.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002036.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002492.cube"
+ ],
+ "097e20fc4139ef39f4f97f1dee454611": [
+  "/home/bc/data/datasets/recipes/e18/e18_001360.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002046.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002499.cube"
+ ],
+ "1a07e927a89a493696aa0ad372cf257b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001361.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002023.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002455.cube"
+ ],
+ "4f1f403c425e132a14d0b0eb80f3ecb5": [
+  "/home/bc/data/datasets/recipes/e18/e18_001362.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002031.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002471.cube"
+ ],
+ "fc2cbc33edb3efcd4813b85956fb674d": [
+  "/home/bc/data/datasets/recipes/e18/e18_001363.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001993.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002453.cube"
+ ],
+ "724c0cc5f8fc1237b25cfa7c1a8e0692": [
+  "/home/bc/data/datasets/recipes/e18/e18_001364.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002017.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002465.cube"
+ ],
+ "15560dafbdafa3fc74c8fde5bc109f38": [
+  "/home/bc/data/datasets/recipes/e18/e18_001365.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002026.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002491.cube"
+ ],
+ "260c012b30fc50752857667797ab898f": [
+  "/home/bc/data/datasets/recipes/e18/e18_001366.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001999.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002496.cube"
+ ],
+ "2fffb59752fb1499d7181221423aaa61": [
+  "/home/bc/data/datasets/recipes/e18/e18_001367.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001996.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002476.cube"
+ ],
+ "1aaa90577f0d241ff30a2c974eb9ab07": [
+  "/home/bc/data/datasets/recipes/e18/e18_001368.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001988.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002502.cube"
+ ],
+ "7c0d39f0074a08f8dbc1f850e0e69b0c": [
+  "/home/bc/data/datasets/recipes/e18/e18_001369.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002027.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002503.cube"
+ ],
+ "e7d0333beb6bb6dcd1c648846e0d4af0": [
+  "/home/bc/data/datasets/recipes/e18/e18_001370.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002040.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002479.cube"
+ ],
+ "1bea9133f18a6bab10544c0e1a8b5b7e": [
+  "/home/bc/data/datasets/recipes/e18/e18_001371.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002037.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002451.cube"
+ ],
+ "490129de60c8be7baa6b9b7d9cf15bc8": [
+  "/home/bc/data/datasets/recipes/e18/e18_001372.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002032.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002498.cube"
+ ],
+ "b052235c085dd5537d8039aa6154d394": [
+  "/home/bc/data/datasets/recipes/e18/e18_001373.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001998.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002494.cube"
+ ],
+ "3f8550d61a18b4ee74e3a59b329819aa": [
+  "/home/bc/data/datasets/recipes/e18/e18_001374.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001986.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002464.cube"
+ ],
+ "d921a0afc61a9ae0bc16701eec930bb7": [
+  "/home/bc/data/datasets/recipes/e18/e18_001375.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001991.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002457.cube"
+ ],
+ "f9389b34382e60aa9cc453b7c47c6779": [
+  "/home/bc/data/datasets/recipes/e18/e18_001376.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002035.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002452.cube"
+ ],
+ "304ace3bece88245f59ebb1f364cfaa4": [
+  "/home/bc/data/datasets/recipes/e18/e18_001377.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002009.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002501.cube"
+ ],
+ "2b4ca7ecddac4d249137f4cffac474d9": [
+  "/home/bc/data/datasets/recipes/e18/e18_001378.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002003.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002467.cube"
+ ],
+ "6c75555524ae1ebea8ec65deaab13388": [
+  "/home/bc/data/datasets/recipes/e18/e18_001379.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002005.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002506.cube"
+ ],
+ "86cd3c340348d77b37a308479007a32e": [
+  "/home/bc/data/datasets/recipes/e18/e18_001380.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002015.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002446.cube"
+ ],
+ "3b7a9f7997a5fcfdb2880fbbacc676d4": [
+  "/home/bc/data/datasets/recipes/e18/e18_001381.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001997.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002460.cube"
+ ],
+ "20be7d698ea9f151fa7c939397f64759": [
+  "/home/bc/data/datasets/recipes/e18/e18_001382.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002039.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002470.cube"
+ ],
+ "a6a62d6f5aa6cefdb5402f7f093cc197": [
+  "/home/bc/data/datasets/recipes/e18/e18_001383.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002011.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002487.cube"
+ ],
+ "023fa56bcca0e6d260b56514b3e7dc52": [
+  "/home/bc/data/datasets/recipes/e18/e18_001384.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002016.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002443.cube"
+ ],
+ "278f40109b48f9491dfe4e3a595c49cb": [
+  "/home/bc/data/datasets/recipes/e18/e18_001385.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002018.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002472.cube"
+ ],
+ "8e2202d63d7794649ce6cb11c1288471": [
+  "/home/bc/data/datasets/recipes/e18/e18_001386.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002030.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002484.cube"
+ ],
+ "60ab5a94e3571ef4a3f36466d0c4c9ec": [
+  "/home/bc/data/datasets/recipes/e18/e18_001387.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002004.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002489.cube"
+ ],
+ "5fd7dbff854a2260ecf200ede626717c": [
+  "/home/bc/data/datasets/recipes/e18/e18_001388.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002019.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002477.cube"
+ ],
+ "d1be599acfef7eea94c2679742662986": [
+  "/home/bc/data/datasets/recipes/e18/e18_001389.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001985.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002466.cube"
+ ],
+ "c497c45b9f17045c1bd9b0da4e78c05d": [
+  "/home/bc/data/datasets/recipes/e18/e18_001390.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001994.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002483.cube"
+ ],
+ "8a8865a83d544d07308275492e00622d": [
+  "/home/bc/data/datasets/recipes/e18/e18_001391.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002044.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002458.cube"
+ ],
+ "860fbf6ab6effd4a359285efd4872291": [
+  "/home/bc/data/datasets/recipes/e18/e18_001392.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002029.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002469.cube"
+ ],
+ "7d8f909a8446cf248e924d5a8c3453a3": [
+  "/home/bc/data/datasets/recipes/e18/e18_001393.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002045.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002486.cube"
+ ],
+ "05b44fa72c15690d7d40c8a4132904f1": [
+  "/home/bc/data/datasets/recipes/e18/e18_001394.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002021.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002500.cube"
+ ],
+ "54950970e739acb03090a140a99b9b34": [
+  "/home/bc/data/datasets/recipes/e18/e18_001395.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002014.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002481.cube"
+ ],
+ "af9c5f1a624634abbfd109eecebc0540": [
+  "/home/bc/data/datasets/recipes/e18/e18_001396.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002000.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002449.cube"
+ ],
+ "07fad94f2ce316221d2539b3046361b4": [
+  "/home/bc/data/datasets/recipes/e18/e18_001397.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002025.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002497.cube"
+ ],
+ "edefe88fa41d51e0daa3cee0068a971c": [
+  "/home/bc/data/datasets/recipes/e18/e18_001398.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002010.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002461.cube"
+ ],
+ "0613e09fb684f883bc60515dcdd3cd3b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001399.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001992.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002454.cube"
+ ],
+ "eed3784c7a517cd82b4d4febb4ec1a2d": [
+  "/home/bc/data/datasets/recipes/e18/e18_001400.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002022.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002475.cube"
+ ],
+ "983c3d782a94c4a7bb59d298d3289f88": [
+  "/home/bc/data/datasets/recipes/e18/e18_001401.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002047.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002444.cube"
+ ],
+ "8d167777dbb77e320dd191d558d93aed": [
+  "/home/bc/data/datasets/recipes/e18/e18_001402.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002006.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002482.cube"
+ ],
+ "b24a828af2396325d597426b01ae8831": [
+  "/home/bc/data/datasets/recipes/e18/e18_001403.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002008.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002504.cube"
+ ],
+ "1cc72c1f8ce1f90b5a3252f2fd19dcb8": [
+  "/home/bc/data/datasets/recipes/e18/e18_001404.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002012.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002473.cube"
+ ],
+ "6a15f9759a7e5556921dead7aba5924e": [
+  "/home/bc/data/datasets/recipes/e18/e18_001405.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002028.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002447.cube"
+ ],
+ "555849ac023216746230d61cfec0c92d": [
+  "/home/bc/data/datasets/recipes/e18/e18_001406.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001995.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002445.cube"
+ ],
+ "13f55d51169001f2fb1ae8ceac29d247": [
+  "/home/bc/data/datasets/recipes/e18/e18_001407.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_001990.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002456.cube"
+ ],
+ "b25dfe263ea76d03bc9a50003e013f6b": [
+  "/home/bc/data/datasets/recipes/e18/e18_001408.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002002.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002485.cube"
+ ],
+ "9e580fe0d069ca6f56f35d58c06a8a6d": [
+  "/home/bc/data/datasets/recipes/e18/e18_002699.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002765.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002831.cube"
+ ],
+ "b5eb095efb97d3071836572a0cbee1b7": [
+  "/home/bc/data/datasets/recipes/e18/e18_002700.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002770.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002835.cube"
+ ],
+ "37374c6fcc760331964f01dba9850c3e": [
+  "/home/bc/data/datasets/recipes/e18/e18_002701.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002767.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002830.cube"
+ ],
+ "c79f25e3faae2b4889c291dfb0bec87c": [
+  "/home/bc/data/datasets/recipes/e18/e18_002702.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002766.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002833.cube"
+ ],
+ "7d486ed98ac28ad01827373030c11f3a": [
+  "/home/bc/data/datasets/recipes/e18/e18_002703.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002771.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002832.cube"
+ ],
+ "b540b3a9cab2503ed8c7e609bf770d6c": [
+  "/home/bc/data/datasets/recipes/e18/e18_002704.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002772.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002837.cube"
+ ],
+ "208be9ffdac5f23c7a84034282e0a628": [
+  "/home/bc/data/datasets/recipes/e18/e18_002705.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002773.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002834.cube"
+ ],
+ "20e76fc4168be920b0b5ef8f152dedc4": [
+  "/home/bc/data/datasets/recipes/e18/e18_002706.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002774.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002838.cube"
+ ],
+ "b484aed6d1eab9c5368c05f0bf12a327": [
+  "/home/bc/data/datasets/recipes/e18/e18_002707.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002769.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002836.cube"
+ ],
+ "c7531762241db256dd9afd420df7e8dd": [
+  "/home/bc/data/datasets/recipes/e18/e18_002708.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002768.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002840.cube"
+ ],
+ "47c08ec96872f7c721a5b859ffdf7f7a": [
+  "/home/bc/data/datasets/recipes/e18/e18_002709.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002764.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002839.cube"
+ ],
+ "4097194ae91c09c10f77966038272c1f": [
+  "/home/bc/data/datasets/recipes/e18/e18_002742.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002778.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002814.cube"
+ ],
+ "f9c82e172f46ab73b3fd389d9b974894": [
+  "/home/bc/data/datasets/recipes/e18/e18_002743.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002776.cube"
+ ],
+ "c5226b12e5da90bd08d21c7a03a2474e": [
+  "/home/bc/data/datasets/recipes/e18/e18_002744.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002782.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002808.cube"
+ ],
+ "fd4efe5e260facb3e84899f04a7bb0d3": [
+  "/home/bc/data/datasets/recipes/e18/e18_002745.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002781.cube"
+ ],
+ "f82c84b2cb1f3f28194c97e8cdf723e8": [
+  "/home/bc/data/datasets/recipes/e18/e18_002746.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002784.cube"
+ ],
+ "94ca50a63c28f6c89da3c1e9dc67609e": [
+  "/home/bc/data/datasets/recipes/e18/e18_002747.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002780.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002812.cube"
+ ],
+ "953f19d6ee0de256f536cd3250acaaa2": [
+  "/home/bc/data/datasets/recipes/e18/e18_002748.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002785.cube"
+ ],
+ "e50cca7280b867d547897e658759787a": [
+  "/home/bc/data/datasets/recipes/e18/e18_002749.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002783.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002809.cube"
+ ],
+ "97f82f4880802f8c7b9f0e2630480285": [
+  "/home/bc/data/datasets/recipes/e18/e18_002750.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002779.cube"
+ ],
+ "a75c011dab8f024f49d291e37a496575": [
+  "/home/bc/data/datasets/recipes/e18/e18_002751.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002775.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002817.cube"
+ ],
+ "344bd653a94313fd7179461704440e5f": [
+  "/home/bc/data/datasets/recipes/e18/e18_002752.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002777.cube"
+ ],
+ "ab04695c969c2a3fb51d13f4454bb9c2": [
+  "/home/bc/data/datasets/recipes/e18/e18_002819.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002914.cube"
+ ],
+ "0be68e8504cee5f8c964528541cfb9cf": [
+  "/home/bc/data/datasets/recipes/e18/e18_002880.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002884.cube"
+ ],
+ "17d270bb5f5b48514889f91b49139a1d": [
+  "/home/bc/data/datasets/recipes/e18/e18_002899.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002905.cube"
+ ],
+ "ae6ee0ae89416715715a1f68bc5e945f": [
+  "/home/bc/data/datasets/recipes/e18/e18_002931.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002932.cube"
+ ],
+ "c9a87d0dadb3c7fd538acb5a6bbe1a95": [
+  "/home/bc/data/datasets/recipes/e18/e18_002992.cube",
+  "/home/bc/data/datasets/recipes/e18/e18_002994.cube"
+ ],
+ "2011f863a9737a947ac6654011bfead1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_000143.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006988.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007406.cube"
+ ],
+ "0f49b841be0ceba30d88e4b413bc0f18": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_000144.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007407.cube"
+ ],
+ "3901b98b6086d2a9ae1fd87bfcf409b0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_000145.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007405.cube"
+ ],
+ "175f8a5562f128dd8e649f14b909a974": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_000146.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006991.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007403.cube"
+ ],
+ "58810cb48d28f9f0eb958912a4c64e7f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_000147.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006998.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007404.cube"
+ ],
+ "6e0ee5b811f5b93e8eeaf1e32d385bc7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_000148.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006999.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007408.cube"
+ ],
+ "7dfdd4d8fbcd039b2fa43266af72c518": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_000224.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006154.cube"
+ ],
+ "bb4ef4f020de11c4673226f797e269f8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_000232.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006153.cube"
+ ],
+ "f61ba8e93b872d07f7ce0799ccc383a0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001222.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001748.cube"
+ ],
+ "4eac61a0f0da4303dbfd392d5875f8cb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001223.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001741.cube"
+ ],
+ "1905ffdaf28f6283e2eb74bc78edffc4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001224.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001735.cube"
+ ],
+ "44b32b8839fab09381974cb350bf93ee": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001225.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001742.cube"
+ ],
+ "abff8db0006b5f50b203a4862e090b2e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001226.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001245.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001679.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001737.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001753.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002184.cube"
+ ],
+ "4b8100c68c7a2aba9b211e6454bb4ca3": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001227.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001663.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001757.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002175.cube"
+ ],
+ "7903091410ddba1f27fda8ef911ed53e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001228.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001678.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001749.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002186.cube"
+ ],
+ "3d33f02705c654e54268b7ed4f82225d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001229.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001667.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001728.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002183.cube"
+ ],
+ "bb1f0d492e98c93022c963e24f8f1aa4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001230.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001669.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001730.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002174.cube"
+ ],
+ "6c2d7cadb22d91e4987f32d83edc49bb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001231.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001750.cube"
+ ],
+ "ac2ee2ffdf7c3e29ea17a7664c7f4d7f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001232.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001744.cube"
+ ],
+ "9b0ea942ef55de13514f89ba765a9ff4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001233.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001681.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001732.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002176.cube"
+ ],
+ "34d1182f2a2cfa0e2860cfb4c10f84ba": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001234.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001661.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001731.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002170.cube"
+ ],
+ "c755d32cb633ca5d2c58818bbac60524": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001235.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001666.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001738.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002167.cube"
+ ],
+ "66f2534873b4f866ee0cc8cf0e29c456": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001236.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001668.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001752.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002168.cube"
+ ],
+ "c7bd33ea348eab2a704e4edfff159b06": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001237.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001664.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001733.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002172.cube"
+ ],
+ "d29e2160fc5cb30d0bbcdb9defce0982": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001238.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001662.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001746.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002179.cube"
+ ],
+ "cc4c3893baa7ee0e3170aa584f428f06": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001239.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001739.cube"
+ ],
+ "ebc1e3f75c98693a214ccf74cf26c7a1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001240.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001755.cube"
+ ],
+ "7ad2d15d812689d0fedfe2f16facbe6d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001241.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001682.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001740.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002180.cube"
+ ],
+ "efc2d946324be5576234678766fee6b8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001242.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001756.cube"
+ ],
+ "b8c6345509668cac23620bf9d961d4c4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001243.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001244.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001665.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001736.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001743.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002169.cube"
+ ],
+ "42c0872940e6416069986b3ca906fbcf": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001246.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001676.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001751.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002188.cube"
+ ],
+ "bb52a76052e2c04eb1fa6811adc7f447": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001247.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001670.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001754.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002181.cube"
+ ],
+ "ed0038a9e08e7c403ec67ebfa9fee37f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001248.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001677.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001729.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002187.cube"
+ ],
+ "6e3cd40c4744a9d9dea3e6ceb886aa44": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001249.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001671.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001747.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002178.cube"
+ ],
+ "7a8e31d0f8ad6f6ec5f8e760e48933e5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001250.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001674.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001745.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002177.cube"
+ ],
+ "40bd6a4caa99664c937c1959c23dabcd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001251.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001734.cube"
+ ],
+ "58b6d46741ba360bfebe1450680910d6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001252.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001276.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001321.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001765.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001779.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001832.cube"
+ ],
+ "cd86ccc876ffd45c0607ba5ada8bee3d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001253.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001256.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001277.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001760.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001761.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001775.cube"
+ ],
+ "c5553e14946020801edadc719e1b0763": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001254.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001278.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001769.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001785.cube"
+ ],
+ "ec6a8ebd7d95d07430de7d44271099f9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001255.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001766.cube"
+ ],
+ "d8a23958bbdf01e19d01f37b45a44654": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001257.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001773.cube"
+ ],
+ "90c00a6d09982265b5811136e999a260": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001258.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001272.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001770.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001776.cube"
+ ],
+ "869b2c8ea83f02554821749a60396e02": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001259.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001762.cube"
+ ],
+ "0db830fac667608f6dd2ac94a9a1dd39": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001260.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001279.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001772.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001782.cube"
+ ],
+ "8d519d3a36b932944f7c1c6e75a4698f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001261.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001767.cube"
+ ],
+ "8f415fee26259f4979a64f63ca2f302f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001262.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001771.cube"
+ ],
+ "23369f9a12d0268f875e35117d83ed54": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001263.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001271.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001764.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001780.cube"
+ ],
+ "18bae5a210c5b18434198a7064137ae5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001264.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001274.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001768.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001777.cube"
+ ],
+ "54884c013726a605cff4e2d731e08aa1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001265.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001275.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001759.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001781.cube"
+ ],
+ "60d2472d249466c14a366270b862229c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001266.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001268.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001763.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001774.cube"
+ ],
+ "bd0c49f3065a9c466ace0d826c1f9703": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001267.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001758.cube"
+ ],
+ "d04c052e86710dcef93e4a225fa3937f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001269.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001778.cube"
+ ],
+ "3c166a8bc6d251be640c0c68d6adc070": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001270.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001784.cube"
+ ],
+ "b00a6ddad00c0cc3f9eedee5fb11c399": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001273.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001783.cube"
+ ],
+ "dc8a4c7edafb6d0135dc32480608c1e8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001280.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001789.cube"
+ ],
+ "7fd184f1eb17210b09126a6265f7831e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001281.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001791.cube"
+ ],
+ "a7dc29a00b6d9b74e92636c5b6d4e16d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001282.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001787.cube"
+ ],
+ "035e1bcf37cd15d7549651ee9a4151a8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001283.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001795.cube"
+ ],
+ "f248b712d645b14adea125c65ae84828": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001284.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001792.cube"
+ ],
+ "6f9a4e24dccfbd6c334a58fbfb75865f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001285.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001786.cube"
+ ],
+ "c5af2cdaad5ddfff4f4ad267bbc20674": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001286.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001793.cube"
+ ],
+ "cdcd1b185e7664ef6bfb7bae15029e11": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001287.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001794.cube"
+ ],
+ "396a9827f42d789901b395bef0be4f36": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001288.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001790.cube"
+ ],
+ "c91ed8eb08ea528e618ee3b05bb6cab7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001289.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001788.cube"
+ ],
+ "d3c4dc042e72aa857a27d671d0089696": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001290.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001797.cube"
+ ],
+ "d795d5c1a133fb0a9139c8060fedae54": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001291.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001796.cube"
+ ],
+ "86b6e731c64a95f46619a19f2bbd29dd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001292.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001804.cube"
+ ],
+ "7af8260575e2331f4b7fe63c4e7cd651": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001293.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001297.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001798.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001800.cube"
+ ],
+ "2f806b18af49fad3728b25a9437a91eb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001294.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001802.cube"
+ ],
+ "e97e925f44049fd3a973c6198553b076": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001295.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001298.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001803.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001805.cube"
+ ],
+ "6eba51503079c53999a4105160caf17b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001296.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001801.cube"
+ ],
+ "2fc08052bfca1f1d096f89e9bb27e598": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001299.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001799.cube"
+ ],
+ "ab1b611d58825f67ec99412d5f6adf7d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001300.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001807.cube"
+ ],
+ "36600b586803c0e170c0429100c6bdd8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001301.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001808.cube"
+ ],
+ "46b3abee5d2ecd7f047f27d8abf12c46": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001302.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001806.cube"
+ ],
+ "b3350f0bb320d424da3f0f77f279840b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001303.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001809.cube"
+ ],
+ "6919e64b3a66cc48c76ee9ef78ca1afc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001304.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001821.cube"
+ ],
+ "9cd1d4fd1a5abb89835a72cb5aedf106": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001305.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001818.cube"
+ ],
+ "da96ae4e820de7d34f1fb300da9e0df1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001306.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001811.cube"
+ ],
+ "249d920ef8e3f998ca3b647741892ab7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001307.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001810.cube"
+ ],
+ "aa0e84e8482425abe146c24316463a43": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001308.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001815.cube"
+ ],
+ "57bf2f66e7ae11732dff686faddacd91": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001309.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001814.cube"
+ ],
+ "6a87b7e57a4390b5cfbb8f62d0176a31": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001310.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001820.cube"
+ ],
+ "721eb64480f5cc7023f7118483e63333": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001311.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001817.cube"
+ ],
+ "6f6ead291f5e96366033084527e0ae46": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001312.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001819.cube"
+ ],
+ "104406bed2cf4963ed9a4bdac925798c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001313.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001816.cube"
+ ],
+ "8377d12bd7e3810b33bc804ae9bbeac2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001314.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001812.cube"
+ ],
+ "3c7448272974ec5694773529390d2d3c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001315.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001813.cube"
+ ],
+ "5f51ff8b716b2c704f1f9f71d6309df9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001316.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001830.cube"
+ ],
+ "aa9100b9263e02615b153227ce042c40": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001317.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001828.cube"
+ ],
+ "0761a82fc8503200458e70cd2d00e87b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001318.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001319.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001822.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001827.cube"
+ ],
+ "e369d8cb20173b6b2c7c5a6814dba9a4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001320.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001824.cube"
+ ],
+ "4a840238c4fbef47e685a6469c9a3bdd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001322.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001325.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001823.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001825.cube"
+ ],
+ "e1f9181e13f5c7638ea24ed8c6f95961": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001323.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001829.cube"
+ ],
+ "081a259e24c3e57d00723dc183bff588": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001324.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001826.cube"
+ ],
+ "85f123de6eee269565a4099e0140b69a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001326.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001831.cube"
+ ],
+ "8d655ff5de82cd4cc3bcb033cc197d8a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001327.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001839.cube"
+ ],
+ "62030ef9e7420e34c2fec6083358286b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001328.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001847.cube"
+ ],
+ "fab70172e8af0b3c5da847125c1f2993": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001329.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001840.cube"
+ ],
+ "f6ff161deb2821ebb0986f947ea0d963": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001330.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001843.cube"
+ ],
+ "8b90659c9029e6f527232e7a637a7b64": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001331.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001856.cube"
+ ],
+ "a2f4958bedd0b24b596bfde5b317ebaf": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001332.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001844.cube"
+ ],
+ "74ef7392fdf770e6ae91544487eeea29": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001333.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001851.cube"
+ ],
+ "1767bd7c57da18d1119ad2ca0a9480d8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001334.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001842.cube"
+ ],
+ "69ba18b8a8e521103890132fe079f05e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001335.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001846.cube"
+ ],
+ "f64542ffd0530fd26523c650a82cdfd5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001336.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001855.cube"
+ ],
+ "a80e086f04e2c4b4b7841047fc6f807f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001337.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001848.cube"
+ ],
+ "5eb6c6423cc4c4a4615dc18dc1dbd3b2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001338.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001853.cube"
+ ],
+ "dde7cb1d350b69b9df359736edbaf15e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001339.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001837.cube"
+ ],
+ "9650f81b02d42e970fcd76b6b5b9be99": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001340.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001835.cube"
+ ],
+ "5ced5aecd268cbd9d8ced360379d069e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001341.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001854.cube"
+ ],
+ "559d6de942933d788ee0a927c358a4b6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001342.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001849.cube"
+ ],
+ "d00a192c686bc26c677573e6330862a7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001343.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001838.cube"
+ ],
+ "48616d1fd84d1da53d9ab9e48a83668a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001344.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001857.cube"
+ ],
+ "d270395eef44b300f51701e074635b19": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001345.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001845.cube"
+ ],
+ "74c802612e1375415a1ae9bb0d6d6aba": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001346.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001833.cube"
+ ],
+ "d48d1b90d322ea87e17c82b235ec779f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001347.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001852.cube"
+ ],
+ "bed18d570c1077fa061e7f53d3ad133b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001348.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001841.cube"
+ ],
+ "d83d375ae8987337a6fc352fa74047d7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001349.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001850.cube"
+ ],
+ "92c7c0445f4bc404e6f1cff0305f62f2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001350.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001836.cube"
+ ],
+ "f82c04068c66407f04e0ecd8c9667745": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001351.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001834.cube"
+ ],
+ "b8cd3a3661c087dfb88f355228c6194a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001352.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001858.cube"
+ ],
+ "7044671d709e4ad8a669e1a20180cc9a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001353.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001884.cube"
+ ],
+ "a083db8ff5d684ed6fca3fd511b7fe96": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001354.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001435.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001502.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001902.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001952.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001982.cube"
+ ],
+ "22312a91ef1b12d585ede7f66ffb08ff": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001355.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001536.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001865.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002014.cube"
+ ],
+ "b29b699fc42a5690314a574bef931fe8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001356.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001927.cube"
+ ],
+ "36b8ac4a65cd4f1798583348d1b98195": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001357.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001873.cube"
+ ],
+ "74a2ecef3e41417a10bec86e685e0b95": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001358.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001538.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001876.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002059.cube"
+ ],
+ "27386753de7b12c6cc4dc122a59bc8ff": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001359.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001543.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001910.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001999.cube"
+ ],
+ "7f13027d56d47b83d109e4c1f0dbb3c2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001360.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001460.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001924.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002067.cube"
+ ],
+ "7cee66b9f324ea22cc984921a157bdf5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001361.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001930.cube"
+ ],
+ "f9326fb9d22c1fec6b7e0b6344eb166f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001362.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001862.cube"
+ ],
+ "53a96969f803b57338c43e3b9e9be1aa": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001363.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001511.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001956.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002038.cube"
+ ],
+ "2af4b6422fcb384b6c852944671c0fee": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001364.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001534.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001950.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002022.cube"
+ ],
+ "f5c6f57510c211524cf3bef76eda1959": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001365.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001407.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001533.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001879.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001940.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002020.cube"
+ ],
+ "bbf5ba988a3085d4a28ddc61cdabd3fd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001366.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001957.cube"
+ ],
+ "1c843769791e6bb05b7131d33f138edd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001367.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001389.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001449.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001568.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001861.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001887.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001925.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001979.cube"
+ ],
+ "a65213327f353974c4bc77a3a00ffb52": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001368.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001495.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001929.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002072.cube"
+ ],
+ "ad082593efb81f5c028629eabc0e4c22": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001369.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001513.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001881.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002074.cube"
+ ],
+ "d10c47d16d85afcecadfa004472321d2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001370.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001933.cube"
+ ],
+ "c75d8cc849978e49678f67561e33953b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001371.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001485.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001868.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001969.cube"
+ ],
+ "ad690576fb57fe88644a406282b90bd0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001372.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001442.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001895.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001947.cube"
+ ],
+ "dfab51f766398079306299f429f96034": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001373.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001892.cube"
+ ],
+ "863fe36bf28f5a417f2cca075db73a89": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001374.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001472.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001546.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001901.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002028.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002032.cube"
+ ],
+ "4573d5e895350b55115e1025cc73d082": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001375.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001473.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001911.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002027.cube"
+ ],
+ "8fdd3e6ecf4ccccd416391ffb8ae77bf": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001376.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001498.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001907.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001978.cube"
+ ],
+ "cb8c9a3baab49d8ec726dd19f6d99fc7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001377.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001477.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001871.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002045.cube"
+ ],
+ "465dc33e378de04a9d3f130ad648007b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001378.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001894.cube"
+ ],
+ "49d6e050377eaa2392a29a6e0856fbc2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001379.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001553.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001882.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002068.cube"
+ ],
+ "ea286cc0375a5510dd5e9fee028a48ef": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001380.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001500.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001897.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002061.cube"
+ ],
+ "07e909f09cc27dbc241938501b1151db": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001381.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001450.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001905.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001946.cube"
+ ],
+ "f06435fddbee1cf5a94ed51dcf888557": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001382.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001893.cube"
+ ],
+ "b1d8a725ad38684ef0f4b0a6fd290a17": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001383.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001504.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001530.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001878.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001988.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002016.cube"
+ ],
+ "165df6668f345f5e3b93940677929a92": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001384.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001464.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001505.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001904.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002036.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002063.cube"
+ ],
+ "a5a60cc8de13a757836dc93144f0cea2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001385.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001545.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001928.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002056.cube"
+ ],
+ "9419590acce10b3ed733a4ac6b9bda71": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001386.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001448.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001520.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001939.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001945.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002035.cube"
+ ],
+ "b1e7b86e62884b769417893c788d94de": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001387.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001867.cube"
+ ],
+ "57f19df2384891df876c7dc1f4454acb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001388.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001515.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001937.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002003.cube"
+ ],
+ "049cde985d0017a8ea47c054e376839e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001390.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001411.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001524.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001555.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001866.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001917.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001980.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002023.cube"
+ ],
+ "645a3b7eef571eb6a60140d764faad27": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001391.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001548.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001951.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001967.cube"
+ ],
+ "c36254715fd761021dce9fad7ebfb2b4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001392.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001404.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001506.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001922.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001931.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001964.cube"
+ ],
+ "4d1858123cd5a8edde09765556c14374": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001393.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001565.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001936.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002030.cube"
+ ],
+ "fa79483779ebc2c9e8ce19fbf9635c20": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001394.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001540.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001863.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002005.cube"
+ ],
+ "5f0684abc9aacba9144cea3911776909": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001395.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001872.cube"
+ ],
+ "27b793ebb3c610a9e6b9912e29e69f9a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001396.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001566.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001896.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001997.cube"
+ ],
+ "f331fbc1427b9ca0d575cc88baaefa2e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001397.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001408.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001470.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001890.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001916.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002071.cube"
+ ],
+ "405d8d7214c8da96ebf86e9fe33f71d4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001398.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001399.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001416.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001859.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001860.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001953.cube"
+ ],
+ "ea8971ee9f2e3c3b261f7346c09e3697": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001400.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001891.cube"
+ ],
+ "b356ea911de4e455a658f530f777e335": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001401.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001909.cube"
+ ],
+ "ad69be4c92a97bed025107d196a43d72": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001402.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001526.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001912.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002076.cube"
+ ],
+ "9d5e04e965d714129ee6f0c3f6c67a42": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001403.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001425.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001481.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001926.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001948.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002039.cube"
+ ],
+ "ea3b3f5186a17f1a7c7f6d2ef2f68fb0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001405.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001452.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001487.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001888.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001935.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002017.cube"
+ ],
+ "71bcd4569a804337527928fcfb286576": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001406.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001874.cube"
+ ],
+ "2f821697e6987dcb57931891e9c6e6e5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001409.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001412.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001539.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001864.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001919.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002007.cube"
+ ],
+ "709ed87d20587f87313aed487db59da2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001410.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001491.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001959.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002000.cube"
+ ],
+ "9b0161f280822cf11125dd824062cdfc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001413.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001932.cube"
+ ],
+ "077f984d7edfe10e5ed081068238642a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001414.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001461.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001941.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002041.cube"
+ ],
+ "9fe9c995588fe04d424690b8fcf31620": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001415.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001483.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001564.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001886.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001989.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002019.cube"
+ ],
+ "7d42bf744b06385f487f44f901ff2918": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001417.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001432.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001900.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001914.cube"
+ ],
+ "1009f6aa4f6688dd61fbd648d8170994": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001418.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001869.cube"
+ ],
+ "3bb932a03cd9ef144a094b16be3f17d3": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001419.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001908.cube"
+ ],
+ "587422fbdbd2be2f8372ddbc1a073aa9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001420.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001528.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001889.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002033.cube"
+ ],
+ "37c9e0487610ac6e8312643af1480260": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001421.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001466.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001960.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002066.cube"
+ ],
+ "b377132da0821d06cb3687c51d3c4411": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001422.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001562.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001880.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001965.cube"
+ ],
+ "3ed2b20777ee17df468a0dc0963bec09": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001423.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001459.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001958.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001996.cube"
+ ],
+ "03274c66d0ff878365da2369b010b5dd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001424.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001954.cube"
+ ],
+ "76c62248903bf8966ecdbc4ff91d0c57": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001426.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001475.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001942.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001962.cube"
+ ],
+ "023fdd0c6c3db92a72c0fcbe9e2e01f1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001427.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001544.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001955.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001991.cube"
+ ],
+ "03afe7f84427f6b9189c13b88b556dc3": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001428.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001903.cube"
+ ],
+ "25bbe1790e1a532c06069b6283779e01": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001429.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001918.cube"
+ ],
+ "b8907bf2fd4d48b4ac3743ff5a81a852": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001430.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001494.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001899.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002065.cube"
+ ],
+ "2303ae3f605d978373c76de969ed5269": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001431.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001532.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001943.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002054.cube"
+ ],
+ "0eec4a183d08ceef6aa546581fb5fd1d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001433.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001557.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001913.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001976.cube"
+ ],
+ "44b449a2b2729a48949975f112ecd8bd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001434.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001468.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001870.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002001.cube"
+ ],
+ "44efac2eb9e09db5067e71a99e50193a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001436.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001556.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001898.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002018.cube"
+ ],
+ "36712d70baa22936b93b39705a4af903": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001437.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001885.cube"
+ ],
+ "46bc6d853f54bfc27d578b3cf6b353ed": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001438.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001923.cube"
+ ],
+ "f150da2db47c94f48ea915e0b680de51": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001439.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001465.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001875.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002042.cube"
+ ],
+ "897ef214e70d0f37ea4eb667904c3cfd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001440.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001509.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001523.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001944.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002010.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002049.cube"
+ ],
+ "cf289d19ca1efde8f351c19850d59cec": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001441.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001877.cube"
+ ],
+ "9ce6c5256dc851cc77ff9599e2b90048": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001443.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001920.cube"
+ ],
+ "6a17ea1e6401578b775b1767b27beead": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001444.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001517.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001915.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002073.cube"
+ ],
+ "24600e5b42dc9f992e8c145f8cb3dc7d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001445.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001934.cube"
+ ],
+ "eebaca4fca77bfa460196aec4cc3a914": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001446.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001631.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001949.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002145.cube"
+ ],
+ "cfd11bd18fdd144adefd814f88d0afe6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001447.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001906.cube"
+ ],
+ "429917a36415060f3c3a606704ad01ce": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001451.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001921.cube"
+ ],
+ "6f98dd19c746cfd0be8aa872120c2ba4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001453.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001570.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001883.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002037.cube"
+ ],
+ "8b54d0c8dd88f5b30719434966d6aecc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001454.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001938.cube"
+ ],
+ "7ddc51cd3d494cc5fe70185a034c88d4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001455.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001986.cube"
+ ],
+ "bb6c8e5696c97ce051256628a538ac48": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001456.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001542.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001995.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002013.cube"
+ ],
+ "ea2842002ce92f47269d85c19bdd6532": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001457.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001493.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002015.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002031.cube"
+ ],
+ "da54a30fe35c59747c479ae9e09ec264": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001458.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001992.cube"
+ ],
+ "a9c052d74d103f02623ce4d2830ceaad": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001462.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001476.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002026.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002029.cube"
+ ],
+ "834fbdaffd2e0fad74b3e3171892ced8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001463.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002011.cube"
+ ],
+ "ff364c61b9178b75792c56b7b0918ff8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001467.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002046.cube"
+ ],
+ "3b46b32b58a00aed9d2513571661439d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001469.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002008.cube"
+ ],
+ "8db970b41ced00c47ae1e6d1ff364eaa": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001471.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001987.cube"
+ ],
+ "489863ac22c5ab5ee03b7ed155b8e2de": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001474.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001527.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002024.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002075.cube"
+ ],
+ "e641ab5696bced281a5b5c532ba25589": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001478.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002012.cube"
+ ],
+ "af13e3c4b9dbeda930e9ab2e8db83635": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001479.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002055.cube"
+ ],
+ "7b1caee4e33180288c29e1563884de97": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001480.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001977.cube"
+ ],
+ "24619a287fc1bdb7c9be6ee624e0e26d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001482.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001535.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001963.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002043.cube"
+ ],
+ "dc2fef748416d8d4eedd8497292245c9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001484.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001549.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001961.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002009.cube"
+ ],
+ "4db5f7c247f0895a421aa5171d5b40a6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001486.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002040.cube"
+ ],
+ "70459a649c8a93def3cdd1b240caa6e6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001488.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002051.cube"
+ ],
+ "d3de79ea280949ea33e2ea45503425d4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001489.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001975.cube"
+ ],
+ "e85a57c72af6ffa607f06c8257c60504": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001490.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001998.cube"
+ ],
+ "863a8f437a73ef6fdb9a250d57c5edbb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001492.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001525.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001994.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002002.cube"
+ ],
+ "96ddeac69926972321e2032e3b9cca1a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001496.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002004.cube"
+ ],
+ "5c28c35f026d1a6c272a454fe289ddcb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001497.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001993.cube"
+ ],
+ "97c122ef84c183f544935ad593e477a8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001499.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002006.cube"
+ ],
+ "c3fa3f352963af7ecf0f904fe0a78329": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001501.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002062.cube"
+ ],
+ "136802ef57f66aeb2e393580e9a17445": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001503.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002053.cube"
+ ],
+ "9de262102a997fe086cfe1e38226918f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001507.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001981.cube"
+ ],
+ "98e1e039cc7b9c4227dff85cf664cb20": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001508.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001970.cube"
+ ],
+ "c042a516963b639dd80698a9f0953ceb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001510.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002047.cube"
+ ],
+ "240ab2dde2e467d6bce3bf2877be9815": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001512.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001968.cube"
+ ],
+ "2874082aad4bd952a86bc1d086d7218c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001514.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002025.cube"
+ ],
+ "cb4984c890ca93a2708c11c558b71a57": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001516.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001974.cube"
+ ],
+ "a8eaba13fdd93e164e59dc76fb10a333": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001518.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002048.cube"
+ ],
+ "b3e9720f1cc1eb4a0552e0425a82a276": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001519.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001966.cube"
+ ],
+ "e5f5f2e5dccdf19a87aeb4df82c8637b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001521.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002064.cube"
+ ],
+ "dcade0887dc6820bae1a164fcaed5a96": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001522.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001973.cube"
+ ],
+ "bac260c59cfc04156676b239b893bef5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001529.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002044.cube"
+ ],
+ "115b553f16d11ef9d8623f8add259bff": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001531.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001971.cube"
+ ],
+ "f937944f3f246237617eb1e3dca240f2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001537.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001984.cube"
+ ],
+ "448c51ca06a53a98dc042c230a5ea5f4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001541.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002050.cube"
+ ],
+ "dfc2bfdc372dd11c3cf2bcf555d288ed": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001547.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002057.cube"
+ ],
+ "0ffd38dbf3abf6784239b8275226c0a0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001550.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002034.cube"
+ ],
+ "47d5075fae1e277485d4610492193fcd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001551.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002052.cube"
+ ],
+ "20ddc68f375090fe618a3a4106ef9232": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001552.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001983.cube"
+ ],
+ "b41e2dc71d16940a182d149f4e1c6708": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001554.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001985.cube"
+ ],
+ "755f238b962dacbfc5bae9745e057fdd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001558.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002058.cube"
+ ],
+ "98a8d9e32438d52626205e4d3f0c44db": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001559.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001990.cube"
+ ],
+ "1ba19b57459d1dcc838fbeab04132e35": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001560.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002060.cube"
+ ],
+ "edd13960bb37113d1a44362e41fc757d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001561.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001972.cube"
+ ],
+ "2fa957b5a5903697771cc06766e9d8e4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001563.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002021.cube"
+ ],
+ "301499aa9e379eb58ae5dae94e59650b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001567.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002069.cube"
+ ],
+ "1aa64c8697420ce53f029e037992280f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001569.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002070.cube"
+ ],
+ "275451c7b18aa688a654d92fb3f16109": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001571.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002080.cube"
+ ],
+ "4c3ca5e6757b215f7d8e469e254bb6dd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001572.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002078.cube"
+ ],
+ "aaa2b8e8a3209d73158684d331eba3ba": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001573.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002086.cube"
+ ],
+ "490ad4ede61bbb0666898b905569e5e8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001574.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002082.cube"
+ ],
+ "8b36d505e50eae8d1c445cd20d554d35": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001575.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002079.cube"
+ ],
+ "971bce0914599fd10407f458faf84be3": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001576.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002085.cube"
+ ],
+ "c9772a3213998546d5c8f7c19c9aea8c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001577.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002081.cube"
+ ],
+ "45ab490e79672340903c9f0005bf125b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001578.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002077.cube"
+ ],
+ "76ccac765c54b336d03c4385c5acccee": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001579.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002084.cube"
+ ],
+ "c37cfff2a5ba2f5df8f2196ce36b4591": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001580.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002083.cube"
+ ],
+ "2a3f316820f0dac0e792daec90128314": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001581.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002090.cube"
+ ],
+ "e79893e4c256dab00c45cc5738d5e48e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001582.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002089.cube"
+ ],
+ "554f9b45dab5e8b24fe0c5b621e52e5a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001583.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002091.cube"
+ ],
+ "b441d9ae66048829be84fec0cc2a8621": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001584.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002087.cube"
+ ],
+ "0b94eafd6a9b1211b52e0dcbdcb1121c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001585.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002088.cube"
+ ],
+ "441427fe3a313ded89bad027fc0f48b4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001586.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002098.cube"
+ ],
+ "288522406af4d17bd30b70d79d843039": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001587.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002101.cube"
+ ],
+ "6130a1e3a8d4d5eef1b27944e4e2b3d8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001588.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002100.cube"
+ ],
+ "85ba1ad59ea0d4f5af9df29f6a5196bb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001589.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002094.cube"
+ ],
+ "4330ffe6e08e4c101715ea784477cd4c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001590.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001595.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002095.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002102.cube"
+ ],
+ "60f0f7d51b7bae7d41cc031e988068ca": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001591.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002097.cube"
+ ],
+ "c9a19c19045969438092c0e2685e1195": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001592.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002092.cube"
+ ],
+ "26e3c3ebeb685894ac75b3fc2386c640": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001593.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002099.cube"
+ ],
+ "61e88777a66e6227ba7437e3267426ef": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001594.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002096.cube"
+ ],
+ "c429b66bcb0d06d5868a1721c78a98e4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001596.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002093.cube"
+ ],
+ "fb87ab5749adddd38ec9ffd4b1ee83fc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001597.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002134.cube"
+ ],
+ "b986bdf604bc9be9551a396a0b7a1af3": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001598.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002103.cube"
+ ],
+ "30dc57bdb27a5507191d937acf92d379": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001599.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002116.cube"
+ ],
+ "6e4b51eec63095d6f7678fe7055479d4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001600.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002136.cube"
+ ],
+ "a9fa33ec1637721ef4d114b4abd1e23c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001601.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002121.cube"
+ ],
+ "79b9ac9a6d765a62e811ca76a82103d8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001602.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002126.cube"
+ ],
+ "852d40cea6393aa9088d2adfa6eba811": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001603.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001608.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002118.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002140.cube"
+ ],
+ "3ec753cd2bc4bee9c9822d08520b9f12": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001604.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002112.cube"
+ ],
+ "7060dbae39044b4a7f7be21e54e95d6b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001605.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002117.cube"
+ ],
+ "afad23cf6bf1966deb189fa77ce89163": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001606.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002125.cube"
+ ],
+ "4eea2854e80948e108aaeb6609359a55": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001607.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002129.cube"
+ ],
+ "8b0ef4105c56bcc008df92320ad8bb32": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001609.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002106.cube"
+ ],
+ "53258e1581ff3e8b046b7e23ee57b6b5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001610.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002110.cube"
+ ],
+ "6622293ac179569cae52102bed11c162": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001611.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002135.cube"
+ ],
+ "052e43b021a7392a96132e52ef495556": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001612.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001637.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002128.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002143.cube"
+ ],
+ "7b8c5d894d1f5a097a05fa8d01ba6641": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001613.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002119.cube"
+ ],
+ "a7f17322b98235e7024566e6921db54c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001614.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002138.cube"
+ ],
+ "86d9d8d0aa63551fc5495de66acd8092": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001615.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002124.cube"
+ ],
+ "6eb5a3a495e83e6c0b8e039cdbeffe4a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001616.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002139.cube"
+ ],
+ "c08558e5fc7eb664d893bee075c07da2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001617.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002122.cube"
+ ],
+ "29f1c28bbf7a3763bb1cdb1ddaa98734": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001618.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001711.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002113.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002219.cube"
+ ],
+ "c5d9a4b2b2616f18af2643a50910ac2c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001619.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_001685.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002127.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002214.cube"
+ ],
+ "9d01f3e25c3ce2c6d2cbf6f01188dba3": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001620.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002130.cube"
+ ],
+ "067fd2166d6f43ca9da0e5d8f5e0eaf7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001621.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002109.cube"
+ ],
+ "7878324f8462bd3c428091aaf4e13bd2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001622.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002133.cube"
+ ],
+ "c5a0140a5d4b50c5c84e182298ed7a2e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001623.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002114.cube"
+ ],
+ "b0e21bc7bfd5fc4117495dd04e4d6a9f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001624.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002144.cube"
+ ],
+ "bfe8cd696e72ad760f6d841c23bb7d10": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001625.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002142.cube"
+ ],
+ "6873ad1af53c90744c5ccb73ae991397": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001626.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002141.cube"
+ ],
+ "530363f68367f99510bf6b5382d22207": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001627.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002131.cube"
+ ],
+ "a110cf7beedca1a3522bb845e0316842": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001628.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002111.cube"
+ ],
+ "1a12d610634ec10b4b76e2e0a6fe5cae": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001629.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002108.cube"
+ ],
+ "cbe5aabdf2ea3b24dcbe9de77c759aa2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001630.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002132.cube"
+ ],
+ "bf672b9eddad1216f40d39b1972d1cf1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001632.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002105.cube"
+ ],
+ "4c13c7c5e9f3ae3c36c4cf9b6fc33029": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001633.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002104.cube"
+ ],
+ "48ab7978de2611a5526330deea4b143a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001634.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002115.cube"
+ ],
+ "834801402b806e46b6fa5f5aeca9ed06": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001635.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002123.cube"
+ ],
+ "1826e513a626a70a9dc0e6639b2e8406": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001636.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002137.cube"
+ ],
+ "f2ba2b97f387f6743a40514fd2dede77": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001638.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002107.cube"
+ ],
+ "3d7504effc004ce7d2de0b6de641156d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001639.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002120.cube"
+ ],
+ "a08c1f0b5edbb724a57ac017e0ed636e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001640.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002149.cube"
+ ],
+ "ae23af230507d643b8a0ace1b7727359": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001641.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002151.cube"
+ ],
+ "a4810053cf9a3c0eaa5ad859a89b4b12": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001642.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002150.cube"
+ ],
+ "bc2e97108e5923c9cf82f6b67799e7b4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001643.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002147.cube"
+ ],
+ "d1506372632efa91e579ff71a38e49c4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001644.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002148.cube"
+ ],
+ "0f559d44c22fc3b6932bed9653a73144": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001645.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002146.cube"
+ ],
+ "2e09868b343bd5d9f1070770a90c7df5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001646.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002166.cube"
+ ],
+ "96607e2ec60135800f84e0f99388bb91": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001647.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002160.cube"
+ ],
+ "edccac99db7f94c1a678bd536d49a448": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001648.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002163.cube"
+ ],
+ "011430aa0b80022f91b3fb0bad567ea5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001649.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002165.cube"
+ ],
+ "92600837d5299aa2a218ddbe9ed43d55": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001650.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002154.cube"
+ ],
+ "279235ac52a775bc3a41eb5959768672": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001651.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002158.cube"
+ ],
+ "c161b9cb7f490cac43003be995468fdb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001652.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002155.cube"
+ ],
+ "be034bf199136f9239793ce0e63c6ed2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001653.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002162.cube"
+ ],
+ "8f0e897c956671bf5cae7e3b5e55bd93": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001654.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002152.cube"
+ ],
+ "225b9edbafe790ee07325d4a0f3a4bc3": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001655.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002161.cube"
+ ],
+ "ec961227c9f3b77d0dbb4f051e3ba614": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001656.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002153.cube"
+ ],
+ "fa98b0831ebb622c4032c8c397657853": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001657.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002156.cube"
+ ],
+ "3c985771fe021edc4470ab1cbdc16900": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001658.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002157.cube"
+ ],
+ "7919f0c9f046c9340eceb0d1fc9b25a4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001659.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002164.cube"
+ ],
+ "a6da36dbbcfd8f2cf0263871be13d4be": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001660.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002159.cube"
+ ],
+ "af772b8d12d65e616a320adf19b0fd07": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001672.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002182.cube"
+ ],
+ "fdeed9ed27b3ac3992e7ca893d54ea69": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001673.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002173.cube"
+ ],
+ "ceff22be935188dc04c93dfc3cad3c71": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001675.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002171.cube"
+ ],
+ "b67cbaab1f2b7b267fe45a0fdcbe5552": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001680.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002185.cube"
+ ],
+ "f0c89891f3901b22254d65955382d37a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001683.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002189.cube"
+ ],
+ "508f089457ab5a97951fed55fa1115b6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001684.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002208.cube"
+ ],
+ "0150601ce42ea0bd25c6ac3ce2e76b0e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001686.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002199.cube"
+ ],
+ "90a029cd2101cf12f9f6cd5d47ca8fc9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001687.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002193.cube"
+ ],
+ "214cea2e0473b7c9e6af2a2d9953e0cc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001688.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002212.cube"
+ ],
+ "2f61c8b00e9fb52397cccfffe8ab2bb2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001689.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002207.cube"
+ ],
+ "a8929650c46bd1a25a173de1d6207041": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001690.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002200.cube"
+ ],
+ "8a4adc26a49e6bad75321a53c130eb04": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001691.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002191.cube"
+ ],
+ "e3eaabc598ca304a788d83e7073c40f0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001692.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002213.cube"
+ ],
+ "d0b55e256b78c95540c6a3202121306a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001693.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002195.cube"
+ ],
+ "38e8723546bf746e0d2138b5257966a0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001694.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002202.cube"
+ ],
+ "9208ab25170f44f9d58f72478f6a7fd1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001695.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002198.cube"
+ ],
+ "c28b0fbb4255414780d739e0f24a8214": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001696.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002216.cube"
+ ],
+ "93fdcac79b88e81c310655c6f10af124": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001697.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002203.cube"
+ ],
+ "a4e464379d5768d1410e8e28aebf2b00": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001698.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002194.cube"
+ ],
+ "abf2c287168e93223013936d7cfd5b42": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001699.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002218.cube"
+ ],
+ "e83afce2b3411a2bcf3f2cbbdd1a61ac": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001700.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002211.cube"
+ ],
+ "f0d9e1101a7677d0c4d51f96056c2e56": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001701.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002204.cube"
+ ],
+ "139345dfa9fbb0e80efdc3b7548d0a03": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001702.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002217.cube"
+ ],
+ "f1de36a51e2a0cf6e242f0634271e7a4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001703.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002196.cube"
+ ],
+ "8f86e1c42310f990f2609894ca6891d1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001704.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002192.cube"
+ ],
+ "fb01c241643ada1b18e45429f9ca2517": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001705.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002209.cube"
+ ],
+ "6253b52ed05c6185ab735e62bd3f9490": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001706.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002220.cube"
+ ],
+ "d29a1e696bc3da81ce7b1008d350183b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001707.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002205.cube"
+ ],
+ "10ed00e115f0773453835138e5ddd59e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001708.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002190.cube"
+ ],
+ "2a4ca81b83263a1be92471aa7e35c78a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001709.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002206.cube"
+ ],
+ "751cd4b7bfcfd6cce82adc07285655b2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001710.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002201.cube"
+ ],
+ "a5f0a01a8bf6268eb954233379e40ef4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001712.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002210.cube"
+ ],
+ "ba635dc22ffa4f3fc74f5f42798a47a4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001713.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002215.cube"
+ ],
+ "5b030ad7fca463574f6a3123ef57374a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001714.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002197.cube"
+ ],
+ "1e733124f2203d02f49f6b7217783bba": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001715.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002226.cube"
+ ],
+ "a70c71f5d2ab458bd5cfeef3863a60e8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001716.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002223.cube"
+ ],
+ "e8c91d8da0a5190f77d5148b711e87c0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001717.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002221.cube"
+ ],
+ "b061d89d67ef3789eef503c10cfa5534": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001718.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002224.cube"
+ ],
+ "0c5aaf863a5bea8c88a01bede04cf908": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001719.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002222.cube"
+ ],
+ "0de5bce9949d3a4a773910e51ca039aa": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001720.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002225.cube"
+ ],
+ "258768f12a4f0712ad5275e4db1fad72": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001721.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002227.cube"
+ ],
+ "b26d0f07d134301f2bb5537dcf0f3102": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001722.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002228.cube"
+ ],
+ "ba315046ff4e3e88c10d251cf6072a9d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001723.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002229.cube"
+ ],
+ "b446f5fcd91142d3848b07c425eaacaf": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001724.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002232.cube"
+ ],
+ "401f08bba82e9cc983b9f0a9acab0ce5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001725.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002230.cube"
+ ],
+ "82d413ee8f6c2a45e43641d4833928e7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001726.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002233.cube"
+ ],
+ "0e49d0b7da2cf21901833b625f1fedda": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_001727.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_002231.cube"
+ ],
+ "139295711cd3efeed9c160ff5c8e91c6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_002792.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_012104.cube"
+ ],
+ "1c5564f8014c678b28d14b04837da6ae": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_002793.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_012114.cube"
+ ],
+ "9c737c344feaa3a297f0fa04d74dae0d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_003394.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_003397.cube"
+ ],
+ "5a8a5c8b8b730072997d09fac65cd055": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_003539.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_003568.cube"
+ ],
+ "b6288fbffb5f282fa90844019ae3240e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004334.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009920.cube"
+ ],
+ "68f69a6ed3ff07c19f93bac3eb0f16d1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004407.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004533.cube"
+ ],
+ "7c20b71380153f4ffd0ace1db88a3940": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004408.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004534.cube"
+ ],
+ "bf8b71220f175fde1b8805b6df6cb569": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004411.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004428.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004432.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004535.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004543.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004547.cube"
+ ],
+ "2a0a4bfba727c44404492a96a7ecf462": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004412.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004536.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013802.cube"
+ ],
+ "bc3e27e9fc5b3b0ee1120abe2fce127f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004413.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004537.cube"
+ ],
+ "9a4bfc6da4b6d6ef495b3c012e669f26": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004419.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004538.cube"
+ ],
+ "78d84614668ec560eb662d9c5b1eb2ce": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004421.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004539.cube"
+ ],
+ "5c0412f22e99b6a2a168b37abc9b33df": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004424.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004540.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013799.cube"
+ ],
+ "9f45ee40f234e7ace9d2da84cf4da936": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004425.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004542.cube"
+ ],
+ "e78417e53f1665918fbd78ffc4a2f4f6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004429.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004544.cube"
+ ],
+ "9c48912c33deff2790d2ce3230fd50f9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004430.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004545.cube"
+ ],
+ "c0c8291ca947c075c44602dbe958c33f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004431.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004446.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004546.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004552.cube"
+ ],
+ "1fe9d7a4c22dc1e5fe58fb20e2d4ec69": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004433.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004548.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013797.cube"
+ ],
+ "65548d9ba2e30476f14b3bf9d45c31fc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004436.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004549.cube"
+ ],
+ "306e787dbbe770c3dbf6dde91d9c2a17": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004438.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004550.cube"
+ ],
+ "9bc6a1aef1fa260f4d556ef016a3a060": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004439.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004551.cube"
+ ],
+ "8bbb8e9c9aa53888965b675d6b3c0347": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004449.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004553.cube"
+ ],
+ "122fc1dd0b13e02e77b82b92be9814ba": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004451.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004554.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013796.cube"
+ ],
+ "1120f8341bb28a9b4a06ba3db26fe691": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004452.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004555.cube"
+ ],
+ "d0fc080bddb491f89f031f63c62fa0e4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004453.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004556.cube"
+ ],
+ "07772a1cc53af0f56bb618f541b37d0e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004541.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004569.cube"
+ ],
+ "4b389aae9b6ce73f2938d23553726203": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004672.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004977.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007822.cube"
+ ],
+ "87a030bde07f246f1090077d553709d7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004673.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004978.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007823.cube"
+ ],
+ "f259edec457c04bb2dcaa96e30ae52df": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004674.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004979.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007824.cube"
+ ],
+ "e8840c694f2e956d1848c5b508f0e997": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004675.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007825.cube"
+ ],
+ "907b43dc1525047d7ab2366bdc0129f2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004676.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004980.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007826.cube"
+ ],
+ "c16dca3745e4fbfcdad7559309227c68": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004677.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004981.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007827.cube"
+ ],
+ "f74d3673785189d55101ff0ff7fb8ae2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004678.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004982.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007828.cube"
+ ],
+ "bbd74f7ff01caeb54a624c169b52e73c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004679.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007829.cube"
+ ],
+ "11b3cc4b6c32552317759aa3e3217c4f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004680.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004983.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007830.cube"
+ ],
+ "ba6b2c4a257bfc525e8a91587fe0a807": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004681.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004984.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007831.cube"
+ ],
+ "259abba4cdf3c199f1c461623aa0188f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004682.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004985.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007832.cube"
+ ],
+ "e075bc43b0f476766544a08f70e82dbd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004683.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004986.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007833.cube"
+ ],
+ "872bef8adff83bca3ad6ec66f036155d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004684.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004987.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007834.cube"
+ ],
+ "522eaec652eea0b180e1d2cf34441838": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004685.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004988.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007835.cube"
+ ],
+ "5446c14a3e2f2e35f68212b1a568534b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004686.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004989.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007836.cube"
+ ],
+ "6df593518f74d5401d4ac77a9a56f8cc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004687.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004990.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007837.cube"
+ ],
+ "c261ecf3831ecf50e1eb3dde7864588f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004688.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004991.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007838.cube"
+ ],
+ "fa3958b8a3014bf99b5ff81141757423": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004689.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007839.cube"
+ ],
+ "7f44a2ae0a853458b6cc4d9013b5c8d4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004690.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004992.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007840.cube"
+ ],
+ "3c89e3f1b6095115b37c99c30ab88301": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004691.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004993.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007841.cube"
+ ],
+ "e09cda6819e5c9095060420fab108861": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004692.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004994.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007842.cube"
+ ],
+ "c984c2193410cb2d7dd8871a9dbe316f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004693.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004995.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007843.cube"
+ ],
+ "7873234029591c73d8c04aa9b3bbc280": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004694.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004996.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007844.cube"
+ ],
+ "2ae7bd337350b8ebfb93cf3cc703d207": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004695.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004997.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007845.cube"
+ ],
+ "dce3165c9b8600b80634b3dd4cb625ab": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004696.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004998.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007846.cube"
+ ],
+ "86e58dd44277677aad8127a8ac914bdf": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004697.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_004999.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007847.cube"
+ ],
+ "048af7d4abdace56605f5f0fe6a2b874": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004698.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005000.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007848.cube"
+ ],
+ "82b12ab99d1d6bc212f50788dbd4d2c9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004699.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005001.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007849.cube"
+ ],
+ "94e568fc35988fcb37ef035e8fcaa45b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004700.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005002.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007850.cube"
+ ],
+ "6dfa3e085838f9a70da4b2da05caa2df": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004701.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005003.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007851.cube"
+ ],
+ "a4ae3f74066015aaa2f9bb98a616758b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004702.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005004.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007852.cube"
+ ],
+ "e793739853b4c4aca49149a9f2dfd904": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004703.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005005.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007853.cube"
+ ],
+ "a9efe2972a1619ad86e3edb6b4fc423a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004704.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007854.cube"
+ ],
+ "2b6d86e014d3d188d2f29af793ff6437": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004705.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005006.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007855.cube"
+ ],
+ "de01a3cd8aa03d1edbf3df3162d6b6fd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004706.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005007.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007856.cube"
+ ],
+ "21b007c91514c307c8ecd251d0dec754": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004707.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005008.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007857.cube"
+ ],
+ "5d5ca61798dfd855037a2f1a851c80ab": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004708.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005009.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007858.cube"
+ ],
+ "8b75d9bf017928bd5d28934ca2591c3c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004709.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005010.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007859.cube"
+ ],
+ "9f86b3414a759b3669ec7364d2b3e243": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004710.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005011.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007860.cube"
+ ],
+ "8b70af352eed45e426a42daa086921bc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004711.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005012.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007861.cube"
+ ],
+ "6b99e01d9cd4144e80cce3c4e6b3366e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004712.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005013.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007862.cube"
+ ],
+ "e5b37421903be1240eba734065bdbd6c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004713.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005014.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007863.cube"
+ ],
+ "9c941e15e13dd74a70bd18f6c2ae4e03": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004714.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005015.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007864.cube"
+ ],
+ "c7193f61732f6182ea4604cca1a678d6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004715.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005016.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007865.cube"
+ ],
+ "54c5cbde2e7c124ede72b6f778c6979e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004716.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005017.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007866.cube"
+ ],
+ "91fc41438124c3f9f06acb37a6530a3f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004717.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005018.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007867.cube"
+ ],
+ "b1180687d9b4382d21b532e579ab52bb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004718.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005019.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007868.cube"
+ ],
+ "e1a86544e80a1f8b49b4fd8b66ce8d4c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004719.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005020.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007869.cube"
+ ],
+ "c7fb60587e91616843bafba0e798f65e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004720.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007870.cube"
+ ],
+ "09d3ef36695398578e4de4d5f8ab7c0f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_004721.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005021.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_007871.cube"
+ ],
+ "3120e69d0c8696c58f0923bbbfb6469e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005258.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005342.cube"
+ ],
+ "667d0a8bb932a2d3664e7f66cf48f64b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005259.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005343.cube"
+ ],
+ "fdd29e4220652916a4f8d94f692888db": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005260.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005344.cube"
+ ],
+ "c431bfd1a6e646f6a52bface60c863c1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005261.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005345.cube"
+ ],
+ "385337248a74c435341f8662bbe9e22f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005262.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005346.cube"
+ ],
+ "5e5e34f256b1159f77470a697c599ebe": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005263.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005347.cube"
+ ],
+ "a24553d1d06ed12f3dadbeb3437f77c0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005264.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005348.cube"
+ ],
+ "86fdb3f692966a3ba5c93beb42446024": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005265.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005349.cube"
+ ],
+ "a7ce057a3a06f6b989c49a650512ee02": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005266.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005350.cube"
+ ],
+ "a387d05dab654e58114f465d26e9910b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005267.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005351.cube"
+ ],
+ "be558946289b6e7e271ad7b16afee73d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005268.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005352.cube"
+ ],
+ "87e587c621cffdc9e3421c6aa596d307": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005269.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005353.cube"
+ ],
+ "b41335021a152a6e8fe61bcd5d0b32a6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005270.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005354.cube"
+ ],
+ "654fb47b76e75b158bd8dc1002050ff5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005271.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005355.cube"
+ ],
+ "90760478d4299abc7edef0f884e754fb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005272.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005356.cube"
+ ],
+ "b70f6765f2b65db4fba05d7f8a0871bc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005273.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005357.cube"
+ ],
+ "6af30ff887b77dcda55403c59a6a80c5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005274.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005358.cube"
+ ],
+ "96676da5d22e4dd8b82986c31aac8c1c": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005275.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005359.cube"
+ ],
+ "046772261aa513dde029fe98cc9a2380": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005276.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005360.cube"
+ ],
+ "b9b00e35983cd4cd95a98b0e413fb8c2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005277.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005361.cube"
+ ],
+ "e2364613f73333251352bc40b8448d71": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005278.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005362.cube"
+ ],
+ "364523c092833514624e10a5c1731257": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005279.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005363.cube"
+ ],
+ "1ad7cf900732c7e38a9982b14c90b5d4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005280.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005364.cube"
+ ],
+ "250a2caadb4a2b0c8999c1257b3940ec": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005281.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005365.cube"
+ ],
+ "a940242e247e5e95253a23221062b514": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005282.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005366.cube"
+ ],
+ "fa866d60b3a83abfaa78160f749ae78f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005283.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005367.cube"
+ ],
+ "71b31c9f0c97e35c9a92fe7f68f99ebb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005284.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005368.cube"
+ ],
+ "39f7cc5580eb5f038467733c09faa16b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_005285.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_005369.cube"
+ ],
+ "b3c794282a033ffe05e754976c76d993": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006213.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006534.cube"
+ ],
+ "fad007c9cc118f768b731f4867746849": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006214.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006535.cube"
+ ],
+ "2b28465f664642606f91bb2a48239f5a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006215.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006536.cube"
+ ],
+ "7d2548c6988c43105c4166b5b94e563b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006216.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006537.cube"
+ ],
+ "c6bcd6d24b1752c0a27bd67b5f8be947": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006217.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006538.cube"
+ ],
+ "55bcfdea38073a6dc769fafb84fbd95d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006218.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006539.cube"
+ ],
+ "9ffbde6bf44f7304ee0eaf7f89b6835b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006219.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006540.cube"
+ ],
+ "a41d907e4ca130f95aa3c555ffd01af0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006220.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_006541.cube"
+ ],
+ "f3958f6ba20edc13931d49d488aceaef": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006444.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008565.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013770.cube"
+ ],
+ "d75ecf785bbcccbabda66400c32453bf": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006445.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008569.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013771.cube"
+ ],
+ "546ef4c8b83091c8828e8ac15855fd87": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006446.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008576.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013772.cube"
+ ],
+ "cc0a1114689cf19bce30347dcaa9db48": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006447.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008578.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013774.cube"
+ ],
+ "71483f36be6031e1b501b104fc0b6329": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006448.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008568.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013775.cube"
+ ],
+ "3d47a968895e4fe8f3f099f1f0c900e6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006449.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008573.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013782.cube"
+ ],
+ "62eb9da76eebc60301785a93f7cf3073": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006450.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008577.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013780.cube"
+ ],
+ "5414af4426b5883979a0e41fde0d8882": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006451.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008567.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013776.cube"
+ ],
+ "1b91f0bc7b12c52e8a24e06e695fe534": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006452.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008566.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013778.cube"
+ ],
+ "d247422fcb9fb1c26264fd372c001e04": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006453.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008570.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013779.cube"
+ ],
+ "97c496a6278587e11abe60b9791a6a97": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006454.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008571.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013781.cube"
+ ],
+ "d234fde5d43407932d31e19e67f2769f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006455.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008575.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013773.cube"
+ ],
+ "69f301b9af05257eb7b953612a944170": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006456.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008572.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013783.cube"
+ ],
+ "d40e4ab49a2cc62960a91e628b86bb76": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006457.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008574.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013777.cube"
+ ],
+ "1d5353f3a4a9b3b4e185c4a34acf63f1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006458.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008563.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013784.cube"
+ ],
+ "19c4c1fc07dfec1f2cb445342544642f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_006459.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_008564.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013785.cube"
+ ],
+ "bdfdc55e100ca5918e9367e3882a0c98": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009152.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009582.cube"
+ ],
+ "3c2fd4de449cfe67a63d639b644e8d75": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009153.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009583.cube"
+ ],
+ "5c95cffca7156857528970c2c133ea0e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009154.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009584.cube"
+ ],
+ "907eb63627cadaacd0adc33df5e6248a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009155.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009585.cube"
+ ],
+ "cd42384bd9108b97b2220039efac99a8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009156.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009586.cube"
+ ],
+ "99937ce83d19babf89e99297af5b00ad": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009157.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009587.cube"
+ ],
+ "1463d768a468bd08d121e92e5b43b50b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009158.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009588.cube"
+ ],
+ "919ed13434a6b573dc61feca9324912f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009159.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009589.cube"
+ ],
+ "45e9f3c51f21ad7b4617591c3cd8c842": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009160.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009590.cube"
+ ],
+ "2ca99139c8e9332944b4152a01020abb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009161.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009591.cube"
+ ],
+ "16f8cdbc6a98b0392255c10bc696a025": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009162.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009592.cube"
+ ],
+ "381d40e595d8f753133001ab6e24b159": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009163.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009593.cube"
+ ],
+ "f9b1f763674e4fa9bf22f88ab1c9adf4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009164.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009594.cube"
+ ],
+ "280513792f6a40d1c7c6df2ec7ddc3c2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009165.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009595.cube"
+ ],
+ "2d3ae24a451fe71d8712868605c5343a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009166.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009596.cube"
+ ],
+ "80b955712d5710bc58fc9180371b5d16": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009167.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009597.cube"
+ ],
+ "bdcdb58c26cafafe563a634d5eb796ed": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009168.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009598.cube"
+ ],
+ "515df17e2be39fa74d7e1009508d0f84": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009169.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009599.cube"
+ ],
+ "560f8a79b30320b97758d5d4210a1f58": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009170.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009600.cube"
+ ],
+ "f4db062a044a7936917289a48f2639f9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009171.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009601.cube"
+ ],
+ "5c5e6f313f4e68c45f02d2c60ea148ef": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009172.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009602.cube"
+ ],
+ "1b17ad84c2264cc23b99e30dc53ab36f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009173.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009603.cube"
+ ],
+ "792e056dde2d7509e54f2d91a3dbd69f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009174.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009604.cube"
+ ],
+ "a6f614d3a14e5633d80cf0b60068751d": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009175.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009605.cube"
+ ],
+ "91317831e03b29005e0ac580f2dbe094": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009178.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009558.cube"
+ ],
+ "e3cfc1e52ec7c2ad0ca20ec68442c2fa": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009179.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009559.cube"
+ ],
+ "9a4c5b5fc948aa036518cf7dfbd29cf8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009180.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009560.cube"
+ ],
+ "491c0b42c1717d96959eee813ddea094": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009181.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009561.cube"
+ ],
+ "08336375b3757980674a3d5e33ca63b0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009182.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009562.cube"
+ ],
+ "0688fdb471ea6a17e81c35caae644845": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009183.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009563.cube"
+ ],
+ "837959b45fccae81efe144ec57db2882": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009184.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009564.cube"
+ ],
+ "aa9d8ad51c7d6d2eced537192e1a2184": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009185.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009565.cube"
+ ],
+ "68498c2de51176669633f42750c19cad": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009186.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009566.cube"
+ ],
+ "a38e150997d54702f280ee6ba6dc8a4b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009187.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009567.cube"
+ ],
+ "e445f2870b4acb77f80e318b467f5fa0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009188.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009568.cube"
+ ],
+ "0d375a40121507d26daaea97646fd7bc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009189.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009569.cube"
+ ],
+ "3a9ebc696ef426f2369e4a65084e61b1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009190.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009570.cube"
+ ],
+ "623d8d58bc58fa9b3632bf5df35fa1e4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009191.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009571.cube"
+ ],
+ "d25b8d12f3993374fb8ad0817abad1cd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009192.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009572.cube"
+ ],
+ "80c604c0e3338380d18110d3325b3801": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009193.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009573.cube"
+ ],
+ "1ee383ba97299f44f0ce2b8e597a8d72": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009194.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009574.cube"
+ ],
+ "7bdd7b866d73468575e7aad54251f9fb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009195.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009575.cube"
+ ],
+ "61768dad49504cdd24c349b92c11b18e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009196.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009576.cube"
+ ],
+ "0a5a230d957b136ebcf26359af57f101": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009197.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009577.cube"
+ ],
+ "e418d1d99cfa4a0dceb36423b321ed19": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009198.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009578.cube"
+ ],
+ "369e5e4d07b1663e76dc2dfef7b510fb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009199.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009579.cube"
+ ],
+ "c36ee45902d3f25aaacbaa92af15b0a4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009200.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009580.cube"
+ ],
+ "1ed892e9eca4af60976076d6e693ebcd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009201.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009581.cube"
+ ],
+ "e25aca7fb9eec7cd0acc8e519975f886": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009202.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009492.cube"
+ ],
+ "f25416fb4cbd257f979399582d3cd020": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009203.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009493.cube"
+ ],
+ "75f1c2c68618a3f46a382cfd9ebede27": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009204.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009494.cube"
+ ],
+ "e62a455dd2bbef03f4992c673bc532d8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009205.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009495.cube"
+ ],
+ "75e76348b7e57ffa96d4dd6685c4fc95": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009206.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009496.cube"
+ ],
+ "9ad83db4b165fc708acceb1d62d538c5": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009207.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009497.cube"
+ ],
+ "58dee8f2be39b487707ca3e17c1cb871": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009208.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009498.cube"
+ ],
+ "0ad34b725f61fb8aa8619ee6f3d623b9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009209.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009499.cube"
+ ],
+ "83e4adaf63be5f1cc320a1219323283f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009210.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009500.cube"
+ ],
+ "87df4f617fe571996bd4f9485beeddd7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009211.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009501.cube"
+ ],
+ "6ab496751905c5ac2bffe44288a62ea8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009212.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009502.cube"
+ ],
+ "6ee86fcf4ca556b8aedf2bba3ddc71e6": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009213.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009503.cube"
+ ],
+ "74f0f431ad9d794d56740da5de6fa2ac": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009214.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009504.cube"
+ ],
+ "077c2c1e96cfe38c1e852fcc852d8c48": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009215.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009505.cube"
+ ],
+ "d0d6684aa7b72cb0c8381d5eb70b9473": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009216.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009506.cube"
+ ],
+ "daa4f971c3af196c92285a523cdda039": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009217.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009507.cube"
+ ],
+ "ad6340180217136869401f818a97f2fd": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009218.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009508.cube"
+ ],
+ "cddf932c25c184aed558f582793c7533": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009219.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009509.cube"
+ ],
+ "ca4e3542ed83de17d88f2f1170b55732": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009220.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009510.cube"
+ ],
+ "f60b7f7906a0d57e454ec2e471b7e668": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009221.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009511.cube"
+ ],
+ "565462da5d8864a2d294fe06cf623368": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009222.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009472.cube"
+ ],
+ "676a24f47f87fcea0a67e0d6ec9a3072": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009223.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009473.cube"
+ ],
+ "826af3798aa8dc70c62fce7e1f9ba47f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009224.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009474.cube"
+ ],
+ "643c07e51fbfb5a511efdaba3809960f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009225.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009475.cube"
+ ],
+ "f5ab1f6ae0a5522cb6984843cb8eae49": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009226.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009476.cube"
+ ],
+ "0a1521276a399ed2f54b66c12df4dcc8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009227.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009477.cube"
+ ],
+ "7cac1d614a70b87b78ad333c6acca358": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009228.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009478.cube"
+ ],
+ "ae814836a6038985e458975a09d2ba46": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009229.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009479.cube"
+ ],
+ "0264c9c57a60bde1249bf0ec6a8fed25": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009230.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009480.cube"
+ ],
+ "d0af73f381669b81eaeb0ec55036dc73": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009231.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009481.cube"
+ ],
+ "b0babb357a0fd1779fd8427e0026f686": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009232.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009482.cube"
+ ],
+ "664c677aef3590bc1d88c8f23d7ee8bc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009233.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009483.cube"
+ ],
+ "c421050895cdd0c5168dbf315382a3ba": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009234.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009484.cube"
+ ],
+ "d0a3408bb4e061a541d518a814707e72": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009235.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009485.cube"
+ ],
+ "d7fe334e9a969013492c3dbeaffe6378": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009236.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009486.cube"
+ ],
+ "76c755a5dd552bb49498716d748d2fe1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009237.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009487.cube"
+ ],
+ "b5c88233548aa395ce3aeaa3710f1080": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009238.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009488.cube"
+ ],
+ "ad6663f186d102ac236d873c227ae214": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009239.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009489.cube"
+ ],
+ "d520f9db0b5ffa63cfe3b7d383a208c7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009240.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009490.cube"
+ ],
+ "f19337f4e8001f67512323dd1eeebd1e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009241.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009491.cube"
+ ],
+ "7be3da9b0d2358a3f569305654adda55": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009244.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009450.cube"
+ ],
+ "aba46bcccaa55cca556359bba9e14cdc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009245.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009451.cube"
+ ],
+ "b069e674cb8ad6d9a0b9c22ee877f9dc": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009246.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009452.cube"
+ ],
+ "81bb1f29a743e1c0238741080768efbb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009247.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009453.cube"
+ ],
+ "fb6d3789bd2248168b818a94efe36aff": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009248.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009454.cube"
+ ],
+ "fa23d06362fab0fffa7c6c3d4165fa5b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009249.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009455.cube"
+ ],
+ "967e8fe92a5b155a3f7ecf029c649810": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009250.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009456.cube"
+ ],
+ "488097ef9ecfed7b72f607a6fdd62c25": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009251.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009457.cube"
+ ],
+ "86a53d44f6b09912feee7877cb2ba439": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009252.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009458.cube"
+ ],
+ "2b1cfb7ba9a783312425f3a339c1b1b1": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009253.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009459.cube"
+ ],
+ "d9c0afb5d996442f8c1e18ac97cbb70b": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009265.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009440.cube"
+ ],
+ "d1a1ae86e76f808cb975f2f05b5a3f12": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009266.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009441.cube"
+ ],
+ "16b96d1149d9259c5cbeb4f392e2a8d2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009267.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009442.cube"
+ ],
+ "01ce3fb34727de4de16d77fcc9c590a7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009268.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009443.cube"
+ ],
+ "a207c35030e9174c9d889058564633ea": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009269.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009444.cube"
+ ],
+ "bafe81807eb2d08f0501c6d19de0ee33": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009270.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009445.cube"
+ ],
+ "108e235d88a07b0677e1aae776559ad8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009271.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009446.cube"
+ ],
+ "abe61905f3ae05aff10c48f02aff7ce0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009272.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009447.cube"
+ ],
+ "542ddc28dc4d473de4a9465714c90f18": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009273.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009448.cube"
+ ],
+ "e4084ef2c16b513647164fbc5a00069f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009274.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009449.cube"
+ ],
+ "5e52e83603efde98d08831eec55e0a72": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009275.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009631.cube"
+ ],
+ "c9602ab5d950f14c5555e4728e06fe41": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009276.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009632.cube"
+ ],
+ "4a2bdd47bce45550fe1536cf50ab6b0a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009277.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009633.cube"
+ ],
+ "95092ec3a2fc1beea4129e0562b4cbd7": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009278.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009634.cube"
+ ],
+ "97aaa79dde25a450d034b70d3cc603d0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009279.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009635.cube"
+ ],
+ "1a3abf9e2981b19b4e478980e897a10f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009280.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009636.cube"
+ ],
+ "0778bfeccc49cbaf0c97351e2409b11f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009281.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009637.cube"
+ ],
+ "c6761b39d6b6daf914617439527d29fb": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009282.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009638.cube"
+ ],
+ "81d2ef93c4880ddf8398d8e2e93e6bca": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009283.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009639.cube"
+ ],
+ "2d30491a785dfc9afe5fee4e2a6be32e": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009284.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009640.cube"
+ ],
+ "d77a1cf5ec5fb947b4ca1ce49f4c55aa": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009285.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009641.cube"
+ ],
+ "20ddba592841a1d5fa39e9b6c08d89db": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009286.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009642.cube"
+ ],
+ "3d8a5c95247c1c896fa11a775dd4077f": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009300.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009619.cube"
+ ],
+ "e1f90454326eb5de368ee64e093935f4": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009301.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009620.cube"
+ ],
+ "745958d9b305ae425047be8b8fff4779": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009302.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009621.cube"
+ ],
+ "b0648fec6ce1408f22963cc29eb45341": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009303.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009622.cube"
+ ],
+ "d01d543937fd04e8f9f6b31928c050b2": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009304.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009623.cube"
+ ],
+ "baafd5963c10a844be4615cba5ed55ad": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009305.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009624.cube"
+ ],
+ "9fbc2178fec2f52c4b40b2d52e44a016": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009306.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009625.cube"
+ ],
+ "172824007545587fedabd22ec3959fb0": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009307.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009626.cube"
+ ],
+ "cffabf80a30bb412962bd3a533055ce9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009308.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009627.cube"
+ ],
+ "6b4de6c89c7b8e59904cc9890314a2b8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009309.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009628.cube"
+ ],
+ "cdc613c6b6aca3a73e672cca06d4c1c9": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009310.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009629.cube"
+ ],
+ "03481160c7c27e2723e75137d52292e8": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_009311.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_009630.cube"
+ ],
+ "97086a06fbfb1ff41447a2349915a64a": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_012112.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_012115.cube"
+ ],
+ "8a9f66b3e8891632c4c9fcc3bfe2a3de": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_012130.3dl",
+  "/home/bc/data/datasets/recipes/quandian/quandian_012137.3dl"
+ ],
+ "97b699ea2f018faba7b6a4296964d7c3": [
+  "/home/bc/data/datasets/recipes/quandian/quandian_013546.cube",
+  "/home/bc/data/datasets/recipes/quandian/quandian_013550.cube"
+ ]
+}

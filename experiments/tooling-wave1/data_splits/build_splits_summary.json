@@ -1,0 +1,38 @@
+{
+  "mode": "incremental",
+  "builds": {
+    "prod-g1-global25k-20260731": 25000,
+    "prod-g2-global25k-20260731": 25000,
+    "prod-g3-global25k-20260801": 25000,
+    "prod-l1-local17k-20260731": 17000,
+    "prod-l2-local17k-20260731": 17000,
+    "prod-l3-local17k-20260731": 17000,
+    "prod-l4-local17k-20260801": 17000
+  },
+  "n_sources": 33652,
+  "n_presets": 3522,
+  "s_split_totals": {
+    "train": 30229,
+    "test": 1700,
+    "val": 1723
+  },
+  "p_split_totals": {
+    "train": 3172,
+    "val": 175,
+    "test": 175
+  },
+  "n_minor_layers": 77,
+  "source_pool_conflicts": 0,
+  "preset_minor_conflicts": 0,
+  "preset_minor_conflict_examples": [],
+  "smoke_limit": null,
+  "incremental": {
+    "frozen_sources": 33652,
+    "frozen_presets": 3522,
+    "new_sources": 0,
+    "new_presets": 0,
+    "new_presets_by_split": {},
+    "gen_new": 1,
+    "frozen_minor_conflicts": 0
+  }
+}

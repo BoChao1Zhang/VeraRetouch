@@ -1,0 +1,31 @@
+{
+  "task": "T4 INF-2 construct generator (tooling-wave1, wave-1.5 B3-fix regen, completed 2026-08-03)",
+  "git_commit": "see manifest rows (git_commit field, recorded at generation time)",
+  "git_branch": "lens-exp",
+  "python": "3.13.5",
+  "numpy": "2.4.6",
+  "pillow": "12.2.0",
+  "scipy": "1.16.3",
+  "schema": "t4construct_v2",
+  "catalog": "cache/source_catalog.jsonl (6 prod-l builds x 4 batches, 39861 rows, 14374 sources; unchanged from wave-1)",
+  "split_rule": "t1_side_table:tools/data_splits/splits.sqlite3 (frozen T1 table, 33652 sources; inline s_split_v0 DEPRECATED, guarded fallback only)",
+  "amplitude_tiers": "PLAN section-3 2026-08-03 inline authoritative table (D-06); hardpwl node displacement keeps NOTES section-4 defaults",
+  "img_format": "png (D-08 formal format; masks always png)",
+  "execution_note": "train regenerated level-by-level in foreground (long-task discipline after the interrupted 2026-08-03 01:01 run): one generate call per level Lk with --levels Lk, per-level manifest/gen_stats verified (0-tolerance split check) then assembled by concatenation L0..L7. Bit-identical to a single full run: sample determinism is per (master_seed, level_id, index) and GeomMaskSampler is stateless (selftest replay.bitwise PASS). val ran as a single foreground call.",
+  "commands": [
+    "for k in 0..7: python3 -m tools.construct.generate generate --catalog experiments/tooling-wave1/T4_construct/cache/source_catalog.jsonl --out-dir experiments/tooling-wave1/T4_construct/sanity --split train --per-level 200 --seed 20260802 --img-format png --levels L$k   # then stash+verify per-level manifest, concat L0..L7 -> sanity/train/manifest.jsonl, merge gen_stats",
+    "python3 -m tools.construct.generate generate --catalog experiments/tooling-wave1/T4_construct/cache/source_catalog.jsonl --out-dir experiments/tooling-wave1/T4_construct/sanity --split val --per-level 24 --seed 20260803 --img-format png --viz-dir experiments/tooling-wave1/T4_construct/viz",
+    "python3 -c \"from pathlib import Path; from tools.construct.generate import make_grids; root=Path('experiments/tooling-wave1/T4_construct/sanity/train'); make_grids(root/'manifest.jsonl', root, Path('experiments/tooling-wave1/T4_construct/viz'), 'train')\"",
+    "python3 -m tools.construct.selftest --catalog experiments/tooling-wave1/T4_construct/cache/source_catalog.jsonl --manifests experiments/tooling-wave1/T4_construct/sanity/train/manifest.jsonl experiments/tooling-wave1/T4_construct/sanity/val/manifest.jsonl --out-json experiments/tooling-wave1/T4_construct/config/selftest.json"
+  ],
+  "single_command_equivalent": "python3 -m tools.construct.generate generate --catalog ... --out-dir ... --split train --per-level 200 --seed 20260802 --img-format png --viz-dir ... (levels default L0-L7)",
+  "seeds": {
+    "train": 20260802,
+    "val": 20260803
+  },
+  "gen_seconds": {
+    "train_total": 1438.3,
+    "val_total": 215.3
+  },
+  "deprecated_batches": "_deprecated/sanity_wave1_inline-split_jpg (inline-split contaminated, review B3), _deprecated/viz_wave1_inline-split, _deprecated/config_wave1"
+}
