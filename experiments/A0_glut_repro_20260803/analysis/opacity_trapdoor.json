@@ -1,0 +1,132 @@
+{
+ "lut_id": "e18__e18_001615",
+ "clamp_backward": {
+  "grad_at_raw_1.0": 1.0,
+  "grad_at_raw_1.0001": 0.0,
+  "grad_at_raw_0.0": 1.0,
+  "grad_at_raw_-0.0001": 0.0,
+  "note": "torch.clamp passes gradient only inside [min,max] inclusive"
+ },
+ "dR_sparse_do_at_o_eq_1": -14.8,
+ "rec_only": [
+  {
+   "step": 0,
+   "raw_min": 0.999696671962738,
+   "raw_max": 0.99998539686203,
+   "frac_above_1_frozen_high": 0.0,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 1.0
+  },
+  {
+   "step": 1,
+   "raw_min": 0.9990151524543762,
+   "raw_max": 1.0006664991378784,
+   "frac_above_1_frozen_high": 0.625,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.375
+  },
+  {
+   "step": 2,
+   "raw_min": 0.9981809258460999,
+   "raw_max": 1.0012316703796387,
+   "frac_above_1_frozen_high": 0.65625,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.34375
+  },
+  {
+   "step": 5,
+   "raw_min": 0.9955548644065857,
+   "raw_max": 1.0024175643920898,
+   "frac_above_1_frozen_high": 0.6875,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.3125
+  },
+  {
+   "step": 20,
+   "raw_min": 0.9805309772491455,
+   "raw_max": 1.0052990913391113,
+   "frac_above_1_frozen_high": 0.71875,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.28125
+  },
+  {
+   "step": 100,
+   "raw_min": 0.8656418323516846,
+   "raw_max": 1.013837456703186,
+   "frac_above_1_frozen_high": 0.875,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.125
+  },
+  {
+   "step": 399,
+   "raw_min": 0.8260055184364319,
+   "raw_max": 1.013909935951233,
+   "frac_above_1_frozen_high": 0.875,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.125
+  }
+ ],
+ "rec_plus_R_sparse": [
+  {
+   "step": 0,
+   "raw_min": 1.000999927520752,
+   "raw_max": 1.000999927520752,
+   "frac_above_1_frozen_high": 1.0,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.0
+  },
+  {
+   "step": 1,
+   "raw_min": 1.001670002937317,
+   "raw_max": 1.001670002937317,
+   "frac_above_1_frozen_high": 1.0,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.0
+  },
+  {
+   "step": 2,
+   "raw_min": 1.002187967300415,
+   "raw_max": 1.002187967300415,
+   "frac_above_1_frozen_high": 1.0,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.0
+  },
+  {
+   "step": 5,
+   "raw_min": 1.0032799243927002,
+   "raw_max": 1.0032799243927002,
+   "frac_above_1_frozen_high": 1.0,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.0
+  },
+  {
+   "step": 20,
+   "raw_min": 1.0053658485412598,
+   "raw_max": 1.0053658485412598,
+   "frac_above_1_frozen_high": 1.0,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.0
+  },
+  {
+   "step": 100,
+   "raw_min": 1.006004810333252,
+   "raw_max": 1.006004810333252,
+   "frac_above_1_frozen_high": 1.0,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.0
+  },
+  {
+   "step": 399,
+   "raw_min": 1.006004810333252,
+   "raw_max": 1.006004810333252,
+   "frac_above_1_frozen_high": 1.0,
+   "frac_below_0_dead": 0.0,
+   "frac_still_learnable": 0.0
+  }
+ ],
+ "verdict": {
+  "rec_only_frac_frozen_by_step_400": 0.875,
+  "R_sparse_frac_frozen_by_step_1": 1.0,
+  "statement": "raw+clamp opacity leaves the learnable band within a few hundred steps on its own; R_sparse pushes ALL N across on step 1, so opacity is a constant 1.0 for the whole run."
+ }
+}

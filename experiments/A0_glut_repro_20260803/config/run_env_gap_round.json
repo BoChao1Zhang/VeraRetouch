@@ -1,0 +1,43 @@
+{
+ "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+ "git_branch": "lens-exp",
+ "python": "3.13.5",
+ "torch": "2.6.0+cu124",
+ "numpy": "2.4.6",
+ "sklearn": "1.7.2",
+ "colour": "0.4.7",
+ "cuda": "12.4",
+ "gpus": "2x H100 96GB",
+ "date": "2026-08-03",
+ "seed": 0,
+ "round": "anchor-gap attribution (2nd handoff)",
+ "gpu_used": "cuda:0 (H100 96GB); cuda:1 reserved for G2/G3",
+ "eval_protocol": {
+  "train_colors": "128^3 = 2,097,152 (8-bit even values), cubelib.hald_train_image",
+  "held_out_colors": "256^3 - 128^3 = 14,680,064, cubelib.hald_eval_image",
+  "eval_subsample": "2^21 = 2,097,152, np.random.default_rng(12345).choice, sorted",
+  "subsample_bias_vs_full_db": 0.0019013600170509903,
+  "gt_path": "native-resolution .cube -> colour table_interpolation_tetrahedral (float16 cache)",
+  "de00": "tools/cube/cubelib.delta_e00 (colour-science CIEDE2000)"
+ },
+ "recipes": {
+  "a0_rec": "Adam lr 1e-3 cosine, bs 1024, 20 ep (40,960 steps), N=32, GLUT-original init (f=2x)",
+  "e1_engine": "Adam lr 5e-3 cosine, bs 8192, 3,000 steps, kmeans init (f=x), sigma anneal 0.30->0.02->0.005, density control /500",
+  "ablation": "same as a0_rec, 9 stratified LUTs, identical seed across arms"
+ },
+ "lut_lists": {
+  "a0_75": "config/a0_luts_75.txt",
+  "ablation_9": "config/ablate_luts_9.txt"
+ },
+ "launch_scripts": [
+  "launch_a0_full.sh",
+  "launch_ablate.sh",
+  "launch_hypA.sh",
+  "launch_hypA12k.sh",
+  "launch_hypB.sh",
+  "launch_wave3.sh",
+  "launch_wave4.sh",
+  "launch_wave5.sh",
+  "launch_wave6.sh"
+ ]
+}

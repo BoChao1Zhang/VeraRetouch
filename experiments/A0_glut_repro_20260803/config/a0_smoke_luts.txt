@@ -1,0 +1,2 @@
+nilut__LUT01	/var/cache/veradata/dcube/nilut/LUT01.cube
+e18__e18_000902	/home/bc/data/datasets/recipes/e18/e18_000902.cube
