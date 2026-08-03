@@ -1,0 +1,27 @@
+{
+  "git_commit": "0e5d04a71b1b8fc1bd7124d888b2755e67f7a333",
+  "seed": 20260803,
+  "size": 512,
+  "n_per_geo_family": 200,
+  "n_semantic": 176,
+  "n_pool": 100,
+  "families": {
+    "semantic": 176,
+    "linear": 200,
+    "radial_ell": 200,
+    "ring": 200,
+    "wedge": 200,
+    "constant": 20
+  },
+  "semantic_class5": {
+    "foliage": 22,
+    "sky": 13,
+    "architecture": 18,
+    "skin": 109,
+    "water": 14
+  },
+  "clip": "openai/clip-vit-large-patch14-336 dense (MaskCLIP v-proj), input 672^2, grid 48^2, guided filter r=32 eps=1e-3",
+  "split": "S-val via tools/data_splits/splits.sqlite3 (SemanticBank default)",
+  "low_conf_excluded": true,
+  "wall_seconds": 350.1
+}
