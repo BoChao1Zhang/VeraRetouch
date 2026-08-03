@@ -1,0 +1,44 @@
+{
+ "builds": [
+  "prod-g1-global25k-20260731",
+  "prod-g2-global25k-20260731",
+  "prod-g3-global25k-20260801",
+  "prod-l1-local17k-20260731",
+  "prod-l2-local17k-20260731",
+  "prod-l3-local17k-20260731",
+  "prod-l4-local17k-20260801"
+ ],
+ "per_pool": {
+  "unsplash": {
+   "val_total": 541,
+   "with_sft": 446,
+   "no_antonym": 0,
+   "no_img": 0,
+   "picked": 100
+  },
+  "awards": {
+   "val_total": 331,
+   "with_sft": 288,
+   "no_antonym": 1,
+   "no_img": 0,
+   "picked": 100
+  },
+  "ppr10k": {
+   "val_total": 208,
+   "with_sft": 175,
+   "no_antonym": 0,
+   "no_img": 0,
+   "picked": 100
+  }
+ },
+ "skipped": {},
+ "total": 300,
+ "conf_dist": {
+  "low": 92,
+  "normal": 208
+ },
+ "task_dist": {
+  "style": 86,
+  "local": 214
+ }
+}

@@ -1,0 +1,3426 @@
+[
+ {
+  "img_id": "src_512ae18c11d552c1",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_512ae18c11d552c1.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_34b648a33309a1a8fd1a7c0bf3627d8f",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.102396,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman kneeling in foreground wearing dark t-shirt and jeans, surrounded by paper bags with names, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_1686_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_1686_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_1d8d0fcbe93652e209feee1118753fe5",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.167145,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in white dress standing near dried corn stalks, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_6863ea42710d6e8e",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_6863ea42710d6e8e.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_d2107077fac3d9db1660d7d9869ffdd4",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.298061,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman wearing white headphones, smiling at camera, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5529_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5529_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_34cc4d9502ae78296d240101f9afd63f",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.119491,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman with curly hair wearing a white blouse and floral skirt, leaning against a window frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_6402_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_6402_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_124340d254265289360b45291fc5a461",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.131507,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in patterned top and purple leggings leaning against a tree, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_1e24cfef9724078a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1e24cfef9724078a.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_63659766ad042bdf64f8bf42086e2df5",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "left",
+  "subject_area": 0.516227,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a dense cluster of bulbous, brownish-orange corals dominating the left side of the frame, with small fish swimming nearby, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the right side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_31659b9fafb07778",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_31659b9fafb07778.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_6b507b2f27aed0c7abffccd7cc7cdd05",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.016126,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the two potted plants with spiky green leaves placed side by side on the pool deck near the window, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_6a73ee66e404548c",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_6a73ee66e404548c.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_28074acaa8415e209860e9f46fe98b5e",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.147549,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the two people standing near a window, one leaning forward in dark clothing and the other in striped pants and a light shirt, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_df4a0c7ff1f6ada2",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_df4a0c7ff1f6ada2.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_7c2730e00007e37c8377a7d41031a667",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.055943,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a horse rearing up on its hind legs in a grassy field with yellow flowers, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7628_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7628_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_2ea9f682981fd6ba25700c14c5539484",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.223414,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in black traditional clothing sitting on bamboo raft in lotus pond, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_11eeb397bbc6aa7a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_11eeb397bbc6aa7a.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_300aae8b1ec4680850bc3426c169b770",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.040925,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the person holding a protest sign with text 'THERE ARE NO JOBS ON A DEAD PLANET', keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_1055_c",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_1055_c.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_7c4054d79d62463943c6ea5294d2e821",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.156461,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman lying on a bed wearing a white dress, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_282453dd99ada340",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_282453dd99ada340.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_ba4e4c5fdc13b1c359869ac3d8b2bbc3",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.272096,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the two distinct piles of broken dark chocolate pieces, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_b04a94dbf52f5afe",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b04a94dbf52f5afe.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_0d552ffebc63b568f11cd1b7e7cc8feb",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "left",
+  "subject_area": 0.091214,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a colorful kingfisher bird perched on a branch, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the right side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5089_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5089_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_039d82468c0077e4bb6bfd7f9e80ee74",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "lower left",
+  "subject_area": 0.134115,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the woman in blue top and white skirt leaning on railing, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper right part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_c7adff432d6f46ec",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c7adff432d6f46ec.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_afa1163b7d70194bcc82a35e2869e648",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.302948,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the German Shepherd dog lying on a rock with its tongue out, positioned in the foreground with a person partially visible behind it, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7260_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7260_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_167b3e451b5a1b5f581c60b2bd5c2d0a",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.103219,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in black swimsuit sitting on rocks by the water, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7859_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7859_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_cc28ab1228a872233f707ae0260bb6fb",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.207032,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in white dress standing in forest, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_b2acc18b4a4b27db",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b2acc18b4a4b27db.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_93cdd72f2d1898416661051e44937d3e",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.208068,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the two men in formal suits standing indoors, one in foreground and one in background, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_0579_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0579_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_8c275ab7b88368674aa6346ddbfa7fdf",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.318045,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in red traditional dress leaning against brick wall, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_4133_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_4133_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_df62b2e6d613b1f43877be3854fe3942",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.023483,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white wedding dress standing on wooden deck, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_8eb2633c4adbd879",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_8eb2633c4adbd879.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_01d7071141aea215142860f3469e4dca",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower right",
+  "subject_area": 0.016419,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the man in a suit standing on a sidewalk, holding his hand to his face, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper left part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_dca178b35f6cd005",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_dca178b35f6cd005.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_6b1dfb63ea3866a96736774929165d2c",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.371539,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a couple embracing in silhouette against the sunset, with the man on the right and the woman on the left, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_3492_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_3492_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_624262114220a25b323fef88e5d45e5b",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.149095,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in leopard print dress sitting on a couch, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_30238676e1a555dd",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_30238676e1a555dd.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_25cbfcdf01ff768855c72bddf64789bc",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.107162,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a wolf walking through green grass with its mouth open, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_d69350964ab4c9d7",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_d69350964ab4c9d7.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_557e1348e10dcf753c51f78b6d1b86f0",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower right",
+  "subject_area": 0.291298,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a single pink flamingo standing in front of dark green foliage, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper left part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_78c2f64e7ab2fec6",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_78c2f64e7ab2fec6.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_7e2ac7656d51571490f60854d8df8f1b",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.069502,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the person standing on a path facing a waterfall, wearing a black puffer jacket and light gray pants, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7566_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7566_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_82fb9e5fb5a83f4399be5a526b8346ec",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.198488,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in black and gold costume holding a crystal ball, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_40d5b6a57b233c52",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_40d5b6a57b233c52.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_22e4f606ed3efb4453d03bbc1cdcac38",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.058233,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the person sitting on a rock in the foreground, wearing a dark jacket and hat, with a snowy landscape and icy water in the background, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_36422dfda3933b94",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_36422dfda3933b94.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_7f9cdb2403b4cb96606bb3f10d4c4d39",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "left",
+  "subject_area": 0.024494,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a small, textured seashell with pinkish-brown tones resting on a light gray surface, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the right side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_0860_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0860_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_906d4848fbf61141e21339a555be346f",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.178014,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman sitting on artificial turf next to a fence, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_73f89c3b75ca0f53",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_73f89c3b75ca0f53.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_bb2bb5352bee64fd89b7aabb80b36564",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.196601,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a lion standing in tall grass, facing forward, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_9f9f56ed1dd50cfd",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_9f9f56ed1dd50cfd.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_1b19b0b392765d8fac6ed20d8b6a22c7",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.150175,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a group of four zebras standing together in a dry grassy field, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_3423d17e489c0a9b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3423d17e489c0a9b.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_97d24f9d89fc21c36c73458e5dc09a3d",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.444733,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a vintage-style terrestrial globe showing Africa and Europe, centered in the frame with warm lighting, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_0960_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0960_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_43cb8a8e0736b6a5d3e1bad739dfa158",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.275242,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the young girl in traditional clothing holding a flute, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_6845_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_6845_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_43267fd2e571b3ac90cdebebd158e87e",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "right",
+  "subject_area": 0.109192,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the woman sitting on rocks wearing glasses and a floral dress, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the left side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_1805303fd1360356",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1805303fd1360356.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_b9021032905db1c2d7146c5a0e2d950e",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.392622,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a person's arm and hand extending from a dark sleeve with raindrops, against a blurred natural background, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_25ab5b9095832dfa",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_25ab5b9095832dfa.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_501e12e0e52b05af131afcafe1d4898f",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.310135,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a single cactus with multiple arms against a black background, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_75e5e43713b9bddb",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_75e5e43713b9bddb.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_172c32049fa71c873b64294a5ef3b7fd",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.593846,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the close-up profile of a person's face, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_2885c0108bcd82cc",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_2885c0108bcd82cc.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_2de7af188bcbc9c0196ef41cdfbf13e5",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.024998,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the lifeguard in orange uniform standing near pool fence, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_252e93d3ec97b043",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_252e93d3ec97b043.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_d0758d7d62c603f5557facda00c5dc29",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.05117,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a person in climbing gear standing on a snowy slope, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_7bf4e43115518af0",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_7bf4e43115518af0.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_0a09c549a150b5f2b4533d200701e1bd",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "left",
+  "subject_area": 0.072672,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a tall, sculpted white rock formation with a smaller boulder at its base, standing prominently in the foreground against a twilight sky, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the right side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_3287_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_3287_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_30634d599c7f812d386935ed906829c8",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.147392,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a couple standing together in a mountainous landscape, with the woman in a blue dress and the man in a yellow suit, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_1b2e4569e770f504",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1b2e4569e770f504.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_68c314d3e8093ea18b0f2d4bd3559572",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.070808,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the A-frame cabin nestled in a forest with wooden deck and steps, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_a06f517c605ffadf",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_a06f517c605ffadf.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_1936d923fcc0f593d5a60fb2fce4380f",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.050619,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the man standing in center of greenhouse-like structure, wearing striped hoodie and jeans, holding small object, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_95440affebc99869",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_95440affebc99869.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_01146776ff3027d7abba2d4d7347f48e",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.126516,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the bald man with tattoos on his arm, wearing swimming goggles and earplugs, resting in a pool, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_1b110ff3adc699c6",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1b110ff3adc699c6.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_4a33520746d182bf170319f703cc0b85",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.087001,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the black convertible car parked on a road in the foreground, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_e95beb14f9cfccb1",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e95beb14f9cfccb1.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_3142b1019d9e2398ff3675b3b36b5af5",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.26,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a single white rose with a bud, centered in the frame against a dark background, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_648a5b1fb0d22d71",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_648a5b1fb0d22d71.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_04a45201655118e776db77dd423640f9",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower right",
+  "subject_area": 0.071609,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the bow of a boat visible in the lower right corner, moving through water with a wake trailing behind, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper left part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_08aef2f575be97b1",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_08aef2f575be97b1.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_117635fa6465b9e5d2f5c75db01684d6",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "right",
+  "subject_area": 0.262785,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the elderly man with headscarf and weathered face, centered in right half of image, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the left side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_c6c901e4652afd90",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c6c901e4652afd90.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_680f0ce72d6a079ccfd491d015d7f672",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.122676,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a cluster of dried flowers in a green vase, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_e09e9dbc167750c6",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e09e9dbc167750c6.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_0691faabc995cc2db1cdd5e4dcf2a371",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.109491,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a glowing blue jellyfish centered in the frame with visible tentacles and bell shape, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8370_b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8370_b.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_397e3c6da3917fd71b1ee37bd4528939",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.156667,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white lingerie and veil sitting on a bench, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_ceed6109eb7b20c5",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_ceed6109eb7b20c5.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_0c82a053b678f0d5980b1a9f79cc17d9",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.006674,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a small boat named 'Eileen E. Moran' floating in the foreground on calm water, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_2593_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_2593_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_473e3b387ab2fe0f84cb6637cc4630e5",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.121559,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white dress standing in tall grass with flowers in her hair, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_819b2fc1fb39a28c",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_819b2fc1fb39a28c.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_5609b6374b535f0261196182bb495722",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.167335,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the two pink and purple jellyfish floating together against a solid blue background, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_1046_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_1046_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_5c37e76f3bb5f182353874f67d249eec",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "right",
+  "subject_area": 0.29213,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the woman with orange eyeshadow peeking from right side of frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the left side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_6019_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_6019_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_68695a7a94b3fc714c76ae3c6e0378b6",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "right",
+  "subject_area": 0.115381,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the woman in traditional attire standing by water with flowing fabric, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the left side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_d40e032c73a0087a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_d40e032c73a0087a.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_096b9c1cdbd5d23601043cbc8c5bc036",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.156199,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in dark jacket and long skirt holding a sword, standing on grass with hedges in background, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8053_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8053_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_6e3df0b0fb22d33d9b12338f0afb4e9b",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.026337,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a man riding a bicycle and a woman walking beside him, both positioned in the center of the road, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_ee3fab51a3da8df5",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_ee3fab51a3da8df5.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_28f28886783089a21ccaf39777c58c1f",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.123125,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the person wearing colorful flowing garments and head covering, standing against a textured wall, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7306_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7306_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_0d0102382353d0960b12067f68579801",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.120792,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman sitting on a yacht deck wearing a hat and white shorts, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_86e77a8e1ea162db",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_86e77a8e1ea162db.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_3e9c8046052a56f5094bab55253eab28",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.285683,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the french bulldog lying down with paws under chin, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_a1e5bc56b47c35ea",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_a1e5bc56b47c35ea.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_19a87456df97da3bcd93c7d63f453384",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.235165,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a white MOGAS gas pump with two fuel nozzles and a digital display, located under an illuminated sign reading 'Diesel Premium 4', keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_1ce0105e4e848921",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1ce0105e4e848921.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_6a184097ea00300a862ee7a8a1fe3951",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.135081,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a bride, groom, and flower girl walking together outdoors, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_93e672babe90efe0",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_93e672babe90efe0.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_277f12181b797f1e22bdce677b55cfbb",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.159757,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a group of chinstrap penguins on a black sand beach entering the ocean waves, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_1599_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_1599_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_3484a8d9f5693af31f5723d7324ba179",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.356106,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the woman with blonde hair and blue eyes, wearing a cream-colored top with ruffled sleeves, centered in the frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8748_b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8748_b.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_41fb6b244e4e87c09dba6426ad664c83",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "right",
+  "subject_area": 0.16071,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a couple standing together, a woman in a light dress and a man in a red vest, embracing near colorful prayer flags, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the left side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_bca53f5c1e13f347",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_bca53f5c1e13f347.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_34b6b7b4cc47b21eac1807846fb8479d",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.061443,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a single translucent ice sphere resting on snow in the foreground, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_5515dd9cd4a53ca8",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_5515dd9cd4a53ca8.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_3909be2925cc843b86be24778f3e4af8",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "lower right",
+  "subject_area": 0.014902,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the two children walking along the shoreline at sunset, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper left part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_225a0cd3296ee6b1",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_225a0cd3296ee6b1.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_75a6f5260df2e1efe997bfa260dcdd99",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.076846,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a person completely covered in a black cloth standing in front of gas pumps, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_547b03c38c66d6e4",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_547b03c38c66d6e4.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_1d52c0966e52109302b16fcd57801473",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.027679,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a cluster of pink flowers in the foreground, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_29c4552375904e10",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_29c4552375904e10.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_2e3956055722280f6129a875aaefca16",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.270275,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman wearing colorful traditional attire and a fur hat, standing against a dark textured background, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_f1455b82d5917056",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_f1455b82d5917056.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_6a2351c9c82373e4393d69bb277cd24f",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.066308,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman standing in a garden holding a hoe and plants, wearing a patterned skirt and headwrap, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_252fd3a25b73995f",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_252fd3a25b73995f.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_770c8d9e5544fe59492670657662c924",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.323635,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the man with wide eyes and open mouth wearing a beige jacket over a light blue shirt, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_f40578c0c902e32b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_f40578c0c902e32b.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_04029a5f8c18a769af9c2f819bf1063b",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.144993,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the two men standing side by side in a rocky, smoky landscape; one wears a pink shirt and headscarf, the other a blue shirt and headscarf, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_039faa7e5a343e43",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_039faa7e5a343e43.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_26df3a2506d42b80add36b373f30d634",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.009019,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a person wearing a blue jacket and dark pants, standing in a snowy forest path, holding a camera, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8369_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8369_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_c2e18462b6898f1677abe23c68d68dcf",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.133488,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in white lingerie and veil kneeling on a table, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_fb07f99945a79464",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_fb07f99945a79464.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_714f007c7a2175e323141c2d22e3d791",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "left",
+  "subject_area": 0.009492,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a red car parked on a cobblestone bridge, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the right side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_c1f3506a3564404d",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c1f3506a3564404d.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_5bbab8e7034931c2c68f127ffe0ae643",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "right",
+  "subject_area": 0.018553,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the person in dark clothing reflected in mirror, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the left side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_60bfbdb22edacff8",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_60bfbdb22edacff8.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_30ead5b187427cd3a47efed876cefc3e",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.187651,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten A large, geometrically patterned building with a glowing, faceted facade, situated in front of a mountain at dusk, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_0948_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0948_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_1aafb135a72b150641077301f3c2c892",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "lower left",
+  "subject_area": 0.231096,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a bride in a white wedding gown and a groom in a black suit playing the violin, seated together on stone steps in a colonnade, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper right part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_a11575765b5359d6",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_a11575765b5359d6.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_86fd7f7d7205587fee84d2e8720699f7",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.188794,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman floating in water with lily pads, wearing a beaded dress, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_2ee06eb1fc1650eb",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_2ee06eb1fc1650eb.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_b50f3bd2892041eae3916b175b10b107",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.218965,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a brown dachshund dog sitting on a black leather chair, wearing a green collar with a tag, looking upward, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_fb2e1b73b03f2cf6",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_fb2e1b73b03f2cf6.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_16e8aa1cec6338ea2f13a071b44f0088",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.113014,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the small fluffy dog lying on a pool table, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_d2882fdf503bea12",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_d2882fdf503bea12.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_94e1bd6e42ca1bdfd6ff3ee04b22417c",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.149162,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a dense cluster of tall, columnar cacti growing along a rocky hillside, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_598822eb9e0246ec",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_598822eb9e0246ec.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_75e0211fe252467fb312a6fbb3897b30",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.012949,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a single illuminated desert shrub in the foreground, lit with purple light against a dark landscape, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_3d260cde07fd09ea",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3d260cde07fd09ea.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_d5543185305ba571ec8d7c0e09f08690",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.119516,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the small fluffy dog wearing a white hoodie, sitting on someone's lap, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_0411_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0411_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_25a48240a7a7d88426e91197db385d51",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.090885,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a couple (man and woman) posing together on steps in front of a yellow building, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_530673148c987ba3",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_530673148c987ba3.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_34787bf0a2085675069ce02e06db9194",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.099874,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a girl with long red hair wearing a red coat and pink skirt, standing in a forest holding a book, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8466_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8466_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_3997736cf218e728344959ef00e45185",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.250887,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white hanfu holding a fan, seated among lotus leaves, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_4e9aa83d93a84d1f",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_4e9aa83d93a84d1f.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_dd04354c7500af80506b46aad26d5aa5",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.028797,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a group of three people (two adults and one child) sitting together on a couch in a polaroid photo, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7222_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7222_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_4286bede27a05b89e2c1ae5d0926b270",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.394259,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in silver lingerie holding a number tag, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_ca5e667bdc615308",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_ca5e667bdc615308.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_12a8b9f9fb068d80ff3e0899dcf869b0",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.140773,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman standing on a tree stump in a forest, wearing a grey sweater and floral skirt, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_3aaadd209272e83d",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3aaadd209272e83d.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_375bcbad07193709c09526d8a63d8d38",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.056125,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a single iceberg floating in calm water with a bird perched on top, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_31635786d9f66c7b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_31635786d9f66c7b.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_5ee15ac92a24bb5eba112c6bcd332d5a",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.031461,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the man standing in driveway wearing dark t-shirt and black pants, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_2e8ac9ff13de9eaa",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_2e8ac9ff13de9eaa.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_1029f0dad07c05ef1a4f4b4354946f6c",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "upper",
+  "subject_area": 0.052057,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a group of flamingos standing in shallow water, aligned horizontally across the middle of the frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the lower part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_60b10693284d9ec2",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_60b10693284d9ec2.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_e66ae9694b604f553a1bfbea4ac46afd",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.318646,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the man in beige trench coat and purple tie standing in front of a small airplane, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_3707_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_3707_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_ca17a079ad1123a4fbad85258592e1a5",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.153009,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in pink dress painting outdoors, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_c8a8e0575c9464fa",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c8a8e0575c9464fa.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_07a4d548afb0d54e68250ffd3d1eb9ea",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.126558,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a dark ceramic amphora and an animal skull resting on a draped fabric surface, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_bb7c51f06192d356",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_bb7c51f06192d356.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_73cf8bb3605871f08fffbb71926fa7e4",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.174869,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a single green fern leaf resting on a tree stump, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_1203faacb3cba050",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1203faacb3cba050.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_20bd4cdf6c6a340062ae5c0bc14566c7",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.165937,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in lace dress smiling, centered in frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_8fb50b056e50afe1",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_8fb50b056e50afe1.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_cc47c8207016b012fce55d8f2d796703",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.012928,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a large, bright orange sun setting near the horizon, partially obscured by dark clouds, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_e569ef9a5561d8b6",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e569ef9a5561d8b6.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_1713248e2acf9152998775c8e48f0cb5",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.045206,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman standing amidst rubble, wearing patterned pants and a t-shirt, holding a plastic bag, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_057eb2077e4f5c1a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_057eb2077e4f5c1a.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_75da045b43668c343b2db5326a1685ce",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.006919,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a glowing lava flow in the foreground, illuminating the surrounding dark volcanic rock, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_1a635c65518a3a82",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1a635c65518a3a82.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_167a46ec177eae6095d8413c00de7ee6",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.127295,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in white dress standing on beach, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_e13c93a5454eefc8",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e13c93a5454eefc8.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_576cfeb43e9ccdd77dba96c58fc986f6",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "left",
+  "subject_area": 0.083438,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the three bare trees in snow-covered landscape, two clustered near center-left and one lower-left corner, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the right side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7093_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7093_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_1a3dfa50bfd6913434788df735f9af82",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.503631,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in black outfit posing against a gray background, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5404_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5404_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_50a1db0ff24fe4bed0d65b9c3b4a6c0e",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.426034,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman wearing camouflage jacket and red bandana sitting on a couch, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7464_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7464_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_0963fe138de7063bd3cb989c28867072",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.21838,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a man and a woman in athletic wear posing together in a gym, with the woman on a dip station and the man standing beside her, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8501_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8501_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_744af1c1e6bf0ad26dd0fde1558942f0",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.131188,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in black dress standing on sidewalk at night, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_b42c68a92561ff02",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b42c68a92561ff02.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_45c06136ac24a5c5155e230514d65bf3",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.092024,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the elderly woman wearing traditional clothing and a red hat, seated at a wooden loom weaving, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_088705ab1e5bb11b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_088705ab1e5bb11b.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_5ef9dc0bc7f4e9fec87088eca508a056",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.42802,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a red fox with orange fur and white markings on its face, looking downward in a grassy field, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_05e55e2ece523298",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_05e55e2ece523298.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_8e9189c618f41c6bf8fe527f79fba7d1",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "left",
+  "subject_area": 0.082796,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the two people standing together in an art gallery, one woman with gray hair wearing a black coat and one man in a navy jacket, both facing away from the camera and looking at artwork on the wall, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the right side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_4092_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_4092_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_17e375be8fd7342cf45d7a65d880d38d",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.052299,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white dress climbing on a railing, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_0b9883296a73e9f7",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_0b9883296a73e9f7.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_be6a68351e3b216a02d1a30e139f5f16",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.064735,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a sequence of eight lunar phases arranged horizontally, including full moon, partial eclipses, and a blood moon, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_3327_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_3327_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_31cd55b6e1be7b1fef4e44a5160d031c",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.117613,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in a colorful dress and platform heels, captured mid-motion with one leg lifted and hair flying, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_23547f0fcb1b7bb1",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_23547f0fcb1b7bb1.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_33a6991dbb6a2351b148767b541419ca",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.010368,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the silhouette of a person walking along the shoreline at sunset, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_6323567d36a72342",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_6323567d36a72342.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_872f69bf93e7b473500afddfd7f6c301",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.084813,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a single yellow-green leaf covered in water droplets, lying on dark pebbles, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_46b0e9a90d385022",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_46b0e9a90d385022.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_60ca866618bb331a52d41d428596ec48",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.040682,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a person sitting on a rocky outcrop, wearing an orange sleeveless shirt and dark pants, with a cloth draped over their shoulder, gazing into the distance against a hazy mountainous backdrop, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_e8370494b64e1426",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e8370494b64e1426.jpg",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_9798a2f31c7a4faffe99f525d8a68ba8",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.059684,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the three white fabric pieces lying on grass in foreground, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_2067_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_2067_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_babc73b7861cee1360dba507f2ae55b3",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.035694,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a bride and groom standing together on rocks by the water, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_0b2a232774b032e7",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_0b2a232774b032e7.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_5e85c447c95a1c9c56cd4875e5c5e3bf",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.026385,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a bride and groom standing together on a wooden deck, facing each other in an intimate pose, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5142_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5142_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_33ddd531593681c1a25f2446d3a57b72",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.24657,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in white dress kneeling beside a bathtub, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_390ba8d6a6eace08",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_390ba8d6a6eace08.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_19d7dcebe5353e8c53a9f0e57030aaa4",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.333227,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a couple embracing in a greenhouse, with the woman in a white lace dress and flower crown in the foreground and the man in a suit and hat behind her, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_562b7ed9fceb7d49",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_562b7ed9fceb7d49.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_1088fd432ab079e2877a26425eebe8bc",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.081788,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the black bird perched on a rock in the foreground, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_1180_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_1180_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_424487a3a589bbe99c06e7453b2511dd",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.27052,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a couple, a man in a white shirt and black pants and a woman in a white dress with a flower crown, holding hands in a field, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5040_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5040_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_a1f55d2b4b3f40d850079243c96c5316",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.115278,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman standing in shallow water holding a vine, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_6226_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_6226_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_cf1c63b75a13b7604d862817717e0c2d",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.177114,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in red shirt posing with hands on cheeks, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_ab703990b00b89c4",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_ab703990b00b89c4.jpg",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_61c9d22cfe8fd22aa98bdefcc926be54",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.081702,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the naked man with blonde hair in a kneeling pose against a wall, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_4cfef91bff604480",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_4cfef91bff604480.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_166e39da471872bdf5dcb9e75cdb30f9",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.098522,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman standing in a casual pose, wearing a black tank top and jeans, holding a glass, positioned near stacked wooden planks and a patterned bench, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_d891d170b448df60",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_d891d170b448df60.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_88874dfc57b45f7ca1ebf4be6c1c69d3",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.141557,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a single harbor seal resting on dark volcanic rocks, facing slightly left with visible whiskers and spotted fur, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_59d3bb8c3de786d0",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_59d3bb8c3de786d0.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_3e2c0aaf04374bae258620ffad0f6209",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "right",
+  "subject_area": 0.121429,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the woman sitting on a rock overlooking a misty body of water, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the left side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_f57f7f7615efbee8",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_f57f7f7615efbee8.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_c49bdfd17b95a3d1d3d2a05434a91571",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.318039,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a colorful building with large 'CARO' signage on its facade, located in the foreground of an amusement park setting, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_854ee56ca36bd493",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_854ee56ca36bd493.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_b50815143241ecf4225633d2d3c04043",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.092684,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a glowing red-orange lava flow cascading down dark, solidified volcanic rock, forming a distinct, coherent natural object with clear visual boundaries, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_b936a35a662a2028",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b936a35a662a2028.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_05053a78ba71dd8a10264f0a75fc3616",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.390876,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the modern building with gray paneling and large windows, viewed from a low angle against a clear blue sky, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_2164_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_2164_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_8b7e0588639e042bf4ebbc0aa971c362",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.155751,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the woman in blue hanfu holding an umbrella, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5439_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5439_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_171a03dbf5aa538f398e1c3aa5ed23b8",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.30304,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in traditional red and white hanfu standing in a grassy field, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7851_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7851_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_284ef1079667026b4ed67f08d37f1935",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.175237,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white lingerie kneeling in a forest holding a lantern, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_8128f123621c4cbf",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_8128f123621c4cbf.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_5aee5a2207c5d5c2639e68724d48c380",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.144278,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the man with tattoos swimming in icy water, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_cdfeca575b282bfd",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_cdfeca575b282bfd.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_c0f1728745f509f89fa0ae156bd11cef",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.076719,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a red fox walking on a wet road, centered in the frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8684_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8684_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_35b5695c0c384d9f7a338a1b39b43524",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.396384,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in black top holding a bottle, illuminated by warm street lighting, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_0815_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0815_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_e7f993746487c7a27ae33a45f2b3a2f3",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.168879,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a bride and groom embracing in the foreground, with the bride wearing a white wedding dress and veil and the groom in a dark suit, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_3ebf17a173217e1b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3ebf17a173217e1b.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_04cbd81f58b81ce15a505385eee78489",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.398005,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a dense cluster of small evergreen plants in the foreground with visible texture and detail, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_5a1dbe796d3b41b9",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_5a1dbe796d3b41b9.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_11a8f19bb047f884cee569e0002f0f8f",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.128578,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the man wearing a hat and trench coat standing in the center of a train car, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_184faa17b2628b5a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_184faa17b2628b5a.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_852bc64f4f5ab042745334724e4ff25a",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.086042,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a fluffy dark tabby cat sitting on a stone ledge, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_69e7f4a73e7fe76e",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_69e7f4a73e7fe76e.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_510ca89090d2190107993dd63ec06e79",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "left",
+  "subject_area": 0.458108,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a group of overlapping palm fronds in the foreground, backlit by sunlight, forming a dense tropical foliage cluster, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the right side of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_3080_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_3080_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_1b236561689c83ba3e921b2639aa9907",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.34479,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in white floral blouse leaning against yellow wall, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_6c438a22b2b2b979",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_6c438a22b2b2b979.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_e25344b050dda86b29ef83d6320d895a",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "upper",
+  "subject_area": 0.113988,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a brown elevated wooden house structure standing on stilts above a pile of snow-covered rubble, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the lower part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_6c8605ceb9c66e3c",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_6c8605ceb9c66e3c.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_a9236d4b271f5e133f3efd0a77ff3de6",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.021503,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the two whales swimming near the surface in icy waters, with one larger whale and a smaller one visible behind it, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_76a6f34281c11bcf",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_76a6f34281c11bcf.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_34d29f8cd6ad8de10c22b556504172e3",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.074539,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a group of red poppy flowers and green buds in a field, with several fully bloomed flowers and multiple unopened buds on slender stems, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_4585f5fe8f6cbe7e",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_4585f5fe8f6cbe7e.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_7c6b0aaa9ed8e382da1c1aff41d1adb2",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.13189,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a cluster of lotus plants with leaves and buds emerging from water, centered in the frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_3391597ba85831c3",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3391597ba85831c3.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_74427fe99c1b01c0705d590a4005050d",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.296158,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in blue dress standing outdoors, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_8d0da6bfb2d7eb45",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_8d0da6bfb2d7eb45.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_21bdb109402e6e9903c3c699b70b0190",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.096111,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a group of large, rounded boulders scattered across a wet beach at sunset, with one prominent boulder in the foreground and others receding into the distance, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_3a99ce523c05288d",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3a99ce523c05288d.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_49265aecb16fab4d997ed7ec58aced2f",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.119008,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the two men in a boat, one in a pink shirt holding dogs and another in a hat behind him, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_3121_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_3121_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_36e354d79d03e424ddb77d868d09cc1f",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.147612,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman with long brown hair wearing a green top, positioned near center of frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_61dca6dc194aa3e0",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_61dca6dc194aa3e0.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_225903652b39c4990258ec4af121284c",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.524051,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the white lace wedding dress with floral embroidery lying on wooden floor, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5603_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5603_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_ea7e08b465bdad70b11faca7db763e87",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.03322,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman sitting on a wooden fence in a park, wearing a white sweater and red plaid skirt, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_98aaf9bb5450a15b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_98aaf9bb5450a15b.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_6c3ccb273c540829f96c913df0c5db2a",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.08345,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman lying on windowsill wearing white dress, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_f68d2e9e6ba05a96",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_f68d2e9e6ba05a96.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_7e32176258abe2327c44438bf92e2d8a",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.379987,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the man with tattoos on arms wearing striped shirt, centered in frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_03db7973efb18acb",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_03db7973efb18acb.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_94d524c5b7acb8c5a6f1cc2148e19652",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.023225,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in brown jacket and striped shirt standing behind hot air balloon fabric, smiling, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_b6debb1de3bd1261",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b6debb1de3bd1261.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_c63343806000c2cebbdc5ff12737571e",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower right",
+  "subject_area": 0.005061,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the two cars on a winding road — one red and one dark-colored — traveling along the curve of the road, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper left part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7669_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7669_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_0d92d0b68fdf50bb1434dde68619883d",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.103189,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a bride and groom embracing in a wedding dress and suit, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_d8f5dc41b0bef9f9",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_d8f5dc41b0bef9f9.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_9144b56b454bb23d7c103e7553c97825",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.12597,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the shirtless man smoking a cigarette in a market alley, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_bad7b0ad1e9e5c60",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_bad7b0ad1e9e5c60.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_2fcf741765dbd2c6751b29cb6110f7e8",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.048785,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the two black bar stools with metal legs positioned under a white counter, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_f1b21a1551357050",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_f1b21a1551357050.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_53cad0f8ce05a274a73ea0979b59108c",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.197373,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the mountaineer in white jacket and orange rope, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_6ea4a42a82234eb2",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_6ea4a42a82234eb2.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_8f930feb877431befe97904b6f3b6d43",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.246006,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten a group of people seated in pews inside a wooden church, attending a ceremony, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_6993_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_6993_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_096dd45a136651352cf5fff378fc49d8",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.025802,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the woman in a floral dress standing on a rock, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_61a87d742f415b8d",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_61a87d742f415b8d.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_0468d8a2ddd840e0e18b74a8192c6334",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.008134,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the two pedestrians crossing the street on the left side of the image, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_72651c945aaa89bb",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_72651c945aaa89bb.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_69dd9cf599bcb868956319bf76491086",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.06351,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a dense field of sunflowers extending across the foreground and midground, with a clear cluster in focus near the center, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_3886d75d18c8c831",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3886d75d18c8c831.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_a3226d1d00755b9c865bd15abee4e427",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.206509,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the green parrot perched among leaves, facing left with visible eye and beak, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_4619740ffe9dc48f",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_4619740ffe9dc48f.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_062a15c4b80449d9eeead1ee1088e409",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.013558,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a single red poppy flower held by a hand, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_1196_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_1196_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_b06e54cf16f1d663b10fd1a54b45b8ad",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.271407,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman wearing a beige hat and white off-shoulder top, positioned near center with white flowers in foreground, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_aaefeca653deff57",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_aaefeca653deff57.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_b81704eb9c110d5cb926312a05f22bd9",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.074206,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the three small glass perfume bottles with gold caps and white labels, arranged in a row on a textured surface, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_df91d60ecd7c2e86",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_df91d60ecd7c2e86.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_37c3eab453c73cc62de3bd3662548432",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.256369,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a group of beach grass tufts growing on a sand dune ridge, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_9d40f0c420120e75",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_9d40f0c420120e75.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_32e2c4ea1bef89b48a16feaa5434aec3",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.034726,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in red patterned dress standing on rocky shore facing the sea, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5261_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5261_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_06d0f903c494484d1e23db41349a467c",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.36286,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white lace outfit sitting on bed, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_2468_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_2468_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_136eb82f84439761162d24a2611a0669",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.029928,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a couple standing together under a palm tree on a beach, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8652_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8652_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_48b28762fe87b6806c19de995652035d",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.09945,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white traditional attire holding a parasol, standing in a field of flowers, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_71f8564fb77caaab",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_71f8564fb77caaab.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_fcbcbbbd3794066a93708873c1246ebd",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.606424,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a striped yellow and black fish in profile view, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_5867cc6282d1a79a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_5867cc6282d1a79a.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_33da62541c792421bb067843f86213c2",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.379369,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman with dark face paint wearing a pink patterned top, centered in the frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_41f7ee8851251cc9",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_41f7ee8851251cc9.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_6812116ee4be82cbf49cebf44c5790e5",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.263754,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a knitted glove holding a crystal ball, centered in the frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_acaba57ceca451fc",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_acaba57ceca451fc.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_8d08164a16d4f5ba93766b9035fdaaea",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.142231,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the blue and green race car on a test rig in a factory, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_4954_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_4954_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_6ae257127e3f014fb7c75df191d06834",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.06625,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in red traditional dress holding an umbrella, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_93e6bcc11f502ed5",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_93e6bcc11f502ed5.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_1a7b2428681320bbdc5328e6293df06c",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.086563,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a bride and groom standing together in a forest, with the groom holding the bride's veil, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_ba48104f69e56f85",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_ba48104f69e56f85.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_231a3989e1dbe48b11775f657023182c",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.17581,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the three people walking toward a building entrance: a woman with red hair in a gray dress and two men in dark suits, one partially visible on the left, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_9708262794031c72",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_9708262794031c72.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_7069043147c8e39291b76a6684dde2e2",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.237961,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman with curly hair and glasses wearing a white shirt, centered against a pink background, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_7ceb134a1528a017",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_7ceb134a1528a017.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_3c07a5e831fa71a3c088223c31e2f6d5",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.142349,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the two icebergs in foggy water, one smaller and isolated to the left, one larger and more massive to the right, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_0896_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0896_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_c7c75a7c8f778de4ffca0223abad9a9c",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.31894,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman with yellow flower in hair standing in field of yellow flowers, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_947f8a64cc261828",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_947f8a64cc261828.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_451e5451e225a9782c06fba4654a89ee",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.051115,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the young man in motion wearing white t-shirt and camouflage pants, captured mid-stride against a beige backdrop, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_8a214e14be583fde",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_8a214e14be583fde.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_b61ca5126ad36bde1cc98c42e1cc5757",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.272732,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in floral dress standing in front of a flower wall, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_ec1c0bdf51da9b5f",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_ec1c0bdf51da9b5f.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_e37cfd688f60a73170ef74931ac42334",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.027916,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the small blue and white bird perched on a branch, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_84893b15ff3b04ba",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_84893b15ff3b04ba.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_473860e1563cbb4c395f0f96182d013f",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.168059,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a Rottweiler puppy wearing a black coat and a white fuzzy hat, sitting on a paved surface next to a backpack, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_8c77a0cc7be10b01",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_8c77a0cc7be10b01.jpg",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_2a0c35727bb717731fe3d75eded84ea4",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.229164,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the large translucent plastic sheet mounted on a pole, billowing in the wind over a desert landscape, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7793_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7793_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_2e11ab1f620b5bfd00551b28aa07e05d",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.163904,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman in white shirt sitting at outdoor table, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_fd893ebf88098f98",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_fd893ebf88098f98.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_63e0f812ce32a831ad3199e4e3716932",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.146268,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in black swimsuit and goggles standing by pool, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_2619_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_2619_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_5b70af1827e0a92de5c93742b6ce9021",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.034784,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a couple standing together under blooming trees, woman in a pink dress and man in a vest and white pants, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_7487_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7487_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_36b967418a7411d227fe01cc0f44b640",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.349727,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in black romper posing against pink background, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_0e6178111d466cfb",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_0e6178111d466cfb.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_217c0a0da7e16e7ec7dbc0270701d87f",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.253107,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a bouquet of flowers including orange lilies and a pale pink chrysanthemum, held in front of a blurred person, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_e42a26725940b013",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e42a26725940b013.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_a3b3dab57cc3ec7ca2645293bc57fc72",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.273977,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman with elaborate blue braided hairstyle and plastic wrap on shoulder, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_c404d1875e8488b5",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c404d1875e8488b5.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_c08521da61ec12498b9db5923f9ab355",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.375689,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the fluffy golden dog wearing white sunglasses lying on tiled floor, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_24f1aa9949502e12",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_24f1aa9949502e12.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_458374f55262ad28b1a982ff030663cb",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.032669,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a city bus with illuminated destination sign reading '16 DOWNTOWN ST PAUL' driving down a snowy street at night, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_b58ac448d00999a2",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b58ac448d00999a2.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_146a7ac1f3a1ed7263cb78a1873abf49",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.230546,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a single bright yellow sunflower with green leaves against a clear blue sky, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_303e8e2c6f8b4c44",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_303e8e2c6f8b4c44.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_0b41d871822043bebcf7e92848375252",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.072669,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in green top and jeans standing in architectural space, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_ab66bfff2833c0b2",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_ab66bfff2833c0b2.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_33897aeaa3913d39513f1c91e0f49eb8",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "lower",
+  "subject_area": 0.038456,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please brighten the orange and white vintage van parked on the roadside, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_dc4a6b6a92cba46a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_dc4a6b6a92cba46a.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_5e5a84cdaa56897d854d395507037a94",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "lower",
+  "subject_area": 0.020736,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken the two white lounge chairs on a brick poolside deck, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_1aa86bece5beff89",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1aa86bece5beff89.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_07cb185cd657ac461829a4542f8f0e55",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.017912,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the shirtless man in black shorts standing in front of a waterfall, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_ee8bc1b271ee2eba",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_ee8bc1b271ee2eba.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_de16ab87ad19c9d09b36bb34f44e5db3",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.089165,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in blue shirt sitting at a table in a workshop, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_2538_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_2538_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l1-local17k-20260731",
+  "sft_id": "sft_3ab70c887d622489ec1fd73c0a03f00a",
+  "winner_confidence": "low",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.129645,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a couple standing together in shallow ocean water, with the man behind the woman embracing her, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_2b1460df3a7fdd33",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_2b1460df3a7fdd33.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "sft_id": "sft_0c0bd6e8cbd3b19501950fa36fb577f3",
+  "winner_confidence": "normal",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.095303,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken the woman in white athletic wear holding a tennis racket, standing near center of frame, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_9ddd89f39726249a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_9ddd89f39726249a.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "sft_id": "sft_14e42fa2041f6294fc838f8eef4cbdce",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.280617,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten a group of people seated and standing around long dining tables in a rustic barn setting, including guests and possibly the wedding party, with some individuals clearly visible in the foreground and m, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "src_7003d5d13917fb20",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_7003d5d13917fb20.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_b0fe163ba2752a222d2546d2fe45ef0e",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "lower right",
+  "subject_area": 0.071405,
+  "region_b_kind": "spatial",
+  "instructions": {
+   "reg_a": "Please darken a red illuminated tent with 'Mountain Hardwear' branding, set against a twilight sky and dark landscape, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the upper left part of the image, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_8693_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_8693_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_5407f95f872f87958c750ea39bc65838",
+  "winner_confidence": "normal",
+  "direction": "brighten",
+  "subject_region": "center",
+  "subject_area": 0.364583,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please brighten the woman with red hair leaning against a tiled wall, keeping the rest of the image unchanged.",
+   "reg_b": "Please brighten the background, keeping the rest of the image unchanged."
+  }
+ },
+ {
+  "img_id": "ppr10k_5657_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5657_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "sft_id": "sft_1f49bb3f1da79cf6934942933b114180",
+  "winner_confidence": "low",
+  "direction": "darken",
+  "subject_region": "center",
+  "subject_area": 0.104645,
+  "region_b_kind": "background",
+  "instructions": {
+   "reg_a": "Please darken a couple sitting together on a yellow bench, with the man wearing a leopard print shirt and the woman in a white top and pink skirt, keeping the rest of the image unchanged.",
+   "reg_b": "Please darken the background, keeping the rest of the image unchanged."
+  }
+ }
+]

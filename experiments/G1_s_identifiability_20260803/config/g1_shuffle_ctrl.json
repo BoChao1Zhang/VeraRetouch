@@ -1,0 +1,602 @@
+[
+ {
+  "img_id": "src_5bc814f3d83803b5",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_5bc814f3d83803b5.jpg",
+  "pool": "unsplash",
+  "build": "prod-g2-global25k-20260731",
+  "donor_img_id": "src_7bf4e43115518af0",
+  "instructions": {
+   "shuf": "Please brighten the large rock formation and the nearby sky, ground, and smaller rocks, while lowering contrast, warming the scene, shifting it toward green, and strongly muting the purple and pink color cast without removing the remaining color."
+  }
+ },
+ {
+  "img_id": "src_7bf4e43115518af0",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_7bf4e43115518af0.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "src_1b2e4569e770f504",
+  "instructions": {
+   "shuf": "Please cool the color treatment around the A-frame cabin and surrounding woodland, mute the yellow leaves, and bring the cabin, trees, foliage, and nearby ground into a more restrained, balanced appearance without making a strong tonal change."
+  }
+ },
+ {
+  "img_id": "src_1b2e4569e770f504",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_1b2e4569e770f504.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "src_b6debb1de3bd1261",
+  "instructions": {
+   "shuf": "Please make the red car in the lower-right portion of the road markedly darker and moderately warmer, while giving its pink details richer color and making its red areas more muted. Keep the adjustment confined to that car so the surrounding road, rocks, and other vehicle are unaffected."
+  }
+ },
+ {
+  "img_id": "src_b6debb1de3bd1261",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b6debb1de3bd1261.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_b2acc18b4a4b27db",
+  "instructions": {
+   "shuf": "Please give the bearded man, the older man, the doorway interior, and the nearby decorative lights a moderately darker, more contrasty treatment, keeping the scene’s existing color character without targeting any particular hue."
+  }
+ },
+ {
+  "img_id": "src_b2acc18b4a4b27db",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b2acc18b4a4b27db.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "donor_img_id": "ppr10k_5089_a",
+  "instructions": {
+   "shuf": "Please give the woman, railing, lakeside trees, and water a bold darker treatment with stronger contrast, richer color, and a distinctly cooler green cast. Make the white skirt noticeably more vivid as well, while applying the same cohesive tonal change to the nearby scene so the subject and surrounding landscape feel visually connected."
+  }
+ },
+ {
+  "img_id": "ppr10k_5089_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5089_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "donor_img_id": "src_c1f3506a3564404d",
+  "instructions": {
+   "shuf": "Please brighten the person reflected in the bathroom mirror and the surrounding mirror, tiled wall, doorway, and sinks, with stronger contrast, warmer light, and a pronounced red-magenta shift. Subdue the green tiles without removing their visible color, and stop the adjustment at the nearby scene elements that move with the reflected person."
+  }
+ },
+ {
+  "img_id": "src_c1f3506a3564404d",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c1f3506a3564404d.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_03db7973efb18acb",
+  "instructions": {
+   "shuf": "Please cool the scene around the laughing woman and the nearby balloon fabric, basket, landing skirt, and vehicles, while strongly muting the vivid warm colors. Subdue the orange fabric and yellow elements so they remain visible but feel less intense. Apply the adjustment through the woman and the surrounding activity, allowing the neighboring background elements to receive the same treatment."
+  }
+ },
+ {
+  "img_id": "src_03db7973efb18acb",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_03db7973efb18acb.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "donor_img_id": "ppr10k_7793_a",
+  "instructions": {
+   "shuf": "Please brighten the woman, her white blouse, the café umbrellas, nearby tables, and the surrounding trees while lowering contrast, enriching the black and grey surfaces, and giving the scene a strongly cooler color treatment so the portrait feels clearer and more luminous."
+  }
+ },
+ {
+  "img_id": "ppr10k_7793_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7793_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "donor_img_id": "ppr10k_5261_a",
+  "instructions": {
+   "shuf": "Please make the woman and the nearby bedding, wallpaper, and window area feel moderately darker and strongly cooler, with a restrained overall tonal treatment. Keep the adjustment cohesive across her face, hair, clothing, and the surrounding room without introducing any distinct colour shift or exaggerated contrast."
+  }
+ },
+ {
+  "img_id": "ppr10k_5261_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5261_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "src_c9dcdff7a2127aac",
+  "instructions": {
+   "shuf": "Please apply the 冷洋红鲜彩 style across the portrait, making the overall scene brighter, warmer, and more richly saturated with a strong magenta-red color cast. Give the black suit a clearly deeper, richer presence while keeping the look polished, vivid, and cohesive throughout the man, his clothing, and the pale textured background."
+  }
+ },
+ {
+  "img_id": "src_c9dcdff7a2127aac",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c9dcdff7a2127aac.png",
+  "pool": "awards",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_72651c945aaa89bb",
+  "instructions": {
+   "shuf": "Please adjust the sunflowers across the central field and the surrounding foliage and distant meadow, making the scene cooler and shifting the color balance away from green toward magenta and red. Give the yellow petals and brown flower centers stronger, richer color while keeping the adjustment focused on the flowers and nearby landscape they occupy."
+  }
+ },
+ {
+  "img_id": "src_72651c945aaa89bb",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_72651c945aaa89bb.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "donor_img_id": "src_cc25b5c537143f52",
+  "instructions": {
+   "shuf": "Apply the 暖调压彩胶片 style across the entire auditorium photograph: make the scene moderately darker with stronger contrast, cool the overall color balance, mute the vivid color substantially, and push the atmosphere toward green while keeping the remaining color present but restrained. Subdue the orange stage illumination and pink lighting on the performers and audience without removing their tonal character."
+  }
+ },
+ {
+  "img_id": "src_cc25b5c537143f52",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_cc25b5c537143f52.png",
+  "pool": "awards",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_3391597ba85831c3",
+  "instructions": {
+   "shuf": "Please make the woman and the surrounding trees noticeably brighter and warmer, bringing more light and warmth into the subject, dress, skin, and nearby background while keeping the adjustment cohesive across that scene content."
+  }
+ },
+ {
+  "img_id": "src_3391597ba85831c3",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3391597ba85831c3.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "donor_img_id": "src_98aaf9bb5450a15b",
+  "instructions": {
+   "shuf": "Please brighten the reclining woman and the nearby curtains, windowsill, and city view, cool the overall color, and strongly subdue the green cast while keeping the scene’s night atmosphere and visible detail intact."
+  }
+ },
+ {
+  "img_id": "src_98aaf9bb5450a15b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_98aaf9bb5450a15b.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "donor_img_id": "ppr10k_0524_a",
+  "instructions": {
+   "shuf": "Please convert this portrait to 冷黑白硬朗: make the contrast boldly stronger, remove the original colors through a stark black-and-white treatment, and give the image a warmer green tonal character. Let the woman's face, hair, pale background, and knitted sweater read as crisp graphic tones, with the garment texture and facial structure clearly separated."
+  }
+ },
+ {
+  "img_id": "ppr10k_0524_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0524_a.png",
+  "pool": "ppr10k",
+  "build": "prod-g2-global25k-20260731",
+  "donor_img_id": "src_4585f5fe8f6cbe7e",
+  "instructions": {
+   "shuf": "Please brighten the lotus plant, its reflections, nearby water, and surrounding background, cool the overall color, and strongly subdue the green leaves and reflected foliage while keeping the scene recognizable and avoiding any unnecessary changes outside those elements."
+  }
+ },
+ {
+  "img_id": "src_4585f5fe8f6cbe7e",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_4585f5fe8f6cbe7e.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "donor_img_id": "src_86e77a8e1ea162db",
+  "instructions": {
+   "shuf": "Please brighten and cool the dog, bedding, nearby wall, and window light, while muting the tan coat and yellowish areas around the dog so the central scene feels less warm and saturated."
+  }
+ },
+ {
+  "img_id": "src_86e77a8e1ea162db",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_86e77a8e1ea162db.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_d73a0b9eb9ef519b",
+  "instructions": {
+   "shuf": "Please apply the 低调褪彩 style across the scene, making the motorcycle, rider, road, mountains, trees, and sky much darker, cooler, and more subdued. Lower the overall contrast for a quieter tonal range, strongly mute the warm yellow and orange color in the landscape and sunlight, and keep those colors present but restrained rather than removing them entirely."
+  }
+ },
+ {
+  "img_id": "src_d73a0b9eb9ef519b",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_d73a0b9eb9ef519b.jpg",
+  "pool": "unsplash",
+  "build": "prod-g2-global25k-20260731",
+  "donor_img_id": "ppr10k_5499_a",
+  "instructions": {
+   "shuf": "Please apply the 冷青橙胶片 style across the shopping street photograph: make the scene strongly brighter with moderately higher contrast, cool the overall color balance, and convert the original colors into a strongly muted near-monochrome film palette. Subdue the man's brown shoes and the brown building surfaces so the whole image feels restrained, cinematic, and cohesive."
+  }
+ },
+ {
+  "img_id": "ppr10k_5499_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5499_a.png",
+  "pool": "ppr10k",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_225a0cd3296ee6b1",
+  "instructions": {
+   "shuf": "Please brighten the cloaked person, soften the contrast across the garment, and cool its overall appearance so the figure reads more clearly against the auto repair shop without changing the surrounding storefront, pavement, or street scene."
+  }
+ },
+ {
+  "img_id": "src_225a0cd3296ee6b1",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_225a0cd3296ee6b1.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_31659b9fafb07778",
+  "instructions": {
+   "shuf": "Please brighten the potted plants by the pool along with the nearby water, deck, railings, and reflections, adding moderate contrast while cooling the light. Strongly subdue the visible grey and yellow tones in these areas without removing their remaining colour, so the scene feels clearer and less warm while still retaining its indoor pool character."
+  }
+ },
+ {
+  "img_id": "src_31659b9fafb07778",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_31659b9fafb07778.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "src_cdfeca575b282bfd",
+  "instructions": {
+   "shuf": "Please brighten the central scene around the fox, make the tonal separation between the fox, wet road, and roadside vegetation much stronger, and enrich the yellow-orange color in the fox’s fur and nearby golden grass. Apply the change to the fox, the road surrounding it, the roadside vegetation, and other neighboring scene elements included with those subjects."
+  }
+ },
+ {
+  "img_id": "src_cdfeca575b282bfd",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_cdfeca575b282bfd.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_b936a35a662a2028",
+  "instructions": {
+   "shuf": "Please adjust the lower building so it reads more clearly in the scene: brighten the facade and shaded architectural details, cool the overall color cast, and mute the yellow tones in the roof trim and sunlit masonry. Keep the treatment confined to the building itself, improving its visibility without extending the change into the surrounding sky."
+  }
+ },
+ {
+  "img_id": "src_b936a35a662a2028",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b936a35a662a2028.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "src_de8b4890d9de2f1e",
+  "instructions": {
+   "shuf": "Please apply the 暖调褪色染彩 style across the aerial cityscape, giving the whole photograph a strongly warmer, greener, richer color treatment with a restrained vintage cast and more expressive dark streets, shadowed buildings, and pale concrete rooftops."
+  }
+ },
+ {
+  "img_id": "src_de8b4890d9de2f1e",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_de8b4890d9de2f1e.jpg",
+  "pool": "unsplash",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_da45ae004878160f",
+  "instructions": {
+   "shuf": "Please give the entire photograph the 冷灰压彩 look: make the leaf and its surrounding darkness moderately deeper, soften the contrast, cool the overall rendering, and push the color balance strongly toward magenta and red. Quiet the green leaf tones and blue-toned shadows so the complete image feels restrained, dusky, and cohesive rather than vivid green-teal."
+  }
+ },
+ {
+  "img_id": "src_da45ae004878160f",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_da45ae004878160f.jpg",
+  "pool": "unsplash",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_61dca6dc194aa3e0",
+  "instructions": {
+   "shuf": "Please make the wedding dress and the nearby wooden floor noticeably brighter, warmer, and more vivid, with stronger contrast that brings out the lace detail and wood grain. Enrich the brown floor tones while giving the whole scene a more luminous, polished photographic appearance, keeping attention on the dress and the surrounding floor."
+  }
+ },
+ {
+  "img_id": "src_61dca6dc194aa3e0",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_61dca6dc194aa3e0.png",
+  "pool": "awards",
+  "build": "prod-l4-local17k-20260801",
+  "donor_img_id": "src_947f8a64cc261828",
+  "instructions": {
+   "shuf": "Please brighten the central studio scene, including the jumping person, peach backdrop, concrete floor, and surrounding aged walls, add moderate contrast, cool the overall color balance strongly, and strongly subdue the orange backdrop and brown clothing and floor tones while keeping those colors visible."
+  }
+ },
+ {
+  "img_id": "src_947f8a64cc261828",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_947f8a64cc261828.png",
+  "pool": "awards",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_30238676e1a555dd",
+  "instructions": {
+   "shuf": "Please brighten the wolf, its fur, the surrounding grass, and the nearby foliage, while giving that scene content stronger contrast, richer color, and a noticeably warmer character. Bring out the yellow and brown tones in the wolf and vegetation so they feel more vivid, with a bold but believable photographic finish."
+  }
+ },
+ {
+  "img_id": "src_30238676e1a555dd",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_30238676e1a555dd.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "ppr10k_7222_a",
+  "instructions": {
+   "shuf": "Please make the woman and the nearby cracked wall, lingerie, hands, and numbered sign substantially darker, with a moderately cooler overall appearance. Keep the tonal adjustment focused on the woman and those surrounding scene elements, while allowing the nearby background to respond as part of the same treatment. Do not introduce a separate colour emphasis; let the existing varied colours remain naturally balanced."
+  }
+ },
+ {
+  "img_id": "ppr10k_7222_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7222_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "ppr10k_7096_a",
+  "instructions": {
+   "shuf": "Please reproduce the 青橙柔和调 look across the portrait by making the woman’s skin and warm facial tones brighter and warmer, easing the harsh tonal separation, enriching the orange warmth in her complexion and lips, and giving the dark hair, lace, and background a softer, more polished overall balance."
+  }
+ },
+ {
+  "img_id": "ppr10k_7096_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7096_a.png",
+  "pool": "ppr10k",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_7edf1a19d05e2e18",
+  "instructions": {
+   "shuf": "Please apply the 冷感极简黑白 style across the entire architectural photograph: make the buildings substantially darker, convert the original blue and purple glass tones into a restrained near-monochrome black-and-white palette so the colours are gone, and give the image a stronger warm tonal character while preserving the crisp graphic structure and clean minimalist mood."
+  }
+ },
+ {
+  "img_id": "src_7edf1a19d05e2e18",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_7edf1a19d05e2e18.png",
+  "pool": "awards",
+  "build": "prod-g2-global25k-20260731",
+  "donor_img_id": "src_2885c0108bcd82cc",
+  "instructions": {
+   "shuf": "Please brighten the person in the orange outfit and the nearby water slides, railings, and pool, while reducing the harsh contrast and cooling the warm cast. Subdue the vivid blue slides and orange structures without removing their color, and apply the same treatment to the surrounding amusement-park details included with them."
+  }
+ },
+ {
+  "img_id": "src_2885c0108bcd82cc",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_2885c0108bcd82cc.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "src_89c58ac8e20a91f2",
+  "instructions": {
+   "shuf": "Please apply the 暖绿胶片暗调 style across the photograph: make the overall scene moderately brighter with stronger contrast, substantially richer colour, and a pronounced warm film character. Enrich the pale fog and road tones, deepen the atmospheric separation, and give the hand, leaf, pavement, and distant city a cohesive cinematic warmth while retaining the image’s recognizable subject and composition."
+  }
+ },
+ {
+  "img_id": "src_89c58ac8e20a91f2",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_89c58ac8e20a91f2.jpg",
+  "pool": "unsplash",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "ppr10k_5603_a",
+  "instructions": {
+   "shuf": "Please adjust the woman in the center so she appears noticeably darker and warmer, with stronger separation between light and shadow. Add richer grey tones to the grey parts of her clothing, while muting the red skirt so it feels less vivid. Keep the changes confined to the woman and her clothing."
+  }
+ },
+ {
+  "img_id": "ppr10k_5603_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_5603_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l4-local17k-20260801",
+  "donor_img_id": "ppr10k_0561_a",
+  "instructions": {
+   "shuf": "Apply the style “暖绿青蓝调” across the whole photograph: make the lotus meadow and the woman’s portrait moderately brighter, strongly richer in color, noticeably warmer, and greener overall. Intensify the natural greens in the leaves and meadow, enrich the pale areas around the fan, and create the vivid cinematic look of the reference while keeping the scene recognizable."
+  }
+ },
+ {
+  "img_id": "ppr10k_0561_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_0561_a.png",
+  "pool": "ppr10k",
+  "build": "prod-g2-global25k-20260731",
+  "donor_img_id": "ppr10k_3966_a",
+  "instructions": {
+   "shuf": "Please apply 冷青压暗胶片 to the couple, table setting, foliage, and distant landscape: make the scene strongly darker and cooler, mute the yellow fruit and green foliage, and create a subdued cinematic film character throughout the image."
+  }
+ },
+ {
+  "img_id": "ppr10k_3966_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_3966_a.png",
+  "pool": "ppr10k",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_e42a26725940b013",
+  "instructions": {
+   "shuf": "Please convert the woman with turquoise braided hair and the transparent garment into a near-monochrome portrait, making her brighter and giving the image much stronger contrast. Remove the original color from her hair, skin, clothing, and the nearby background while retaining the striking portrait detail and extending the tonal treatment into the surrounding scene."
+  }
+ },
+ {
+  "img_id": "src_e42a26725940b013",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e42a26725940b013.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "ppr10k_2978_a",
+  "instructions": {
+   "shuf": "Apply the style 青橙压暗哑彩 across the photograph: make the overall scene strongly darker, bring in a moderately warmer tone, and create a subdued, cinematic palette with muted green foliage while keeping the subject and vintage setting clearly readable."
+  }
+ },
+ {
+  "img_id": "ppr10k_2978_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_2978_a.png",
+  "pool": "ppr10k",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_70d9269678045a71",
+  "instructions": {
+   "shuf": "Apply 暖洋红风格 across the bedroom photograph, converting the stark monochrome scene into a richly saturated, warmly colored image while keeping the moody vintage atmosphere, textured wall, bed linens, furniture, lamp, deep shadows, and dramatic illumination recognizable."
+  }
+ },
+ {
+  "img_id": "src_70d9269678045a71",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_70d9269678045a71.jpg",
+  "pool": "awards",
+  "build": "prod-g3-global25k-20260801",
+  "donor_img_id": "src_819b2fc1fb39a28c",
+  "instructions": {
+   "shuf": "Please brighten the jellyfish and the surrounding water, warm the overall color, shift the cast toward green, and strongly subdue the purple tones while keeping their color visible. Improve the lighting on the jellyfish and nearby water so the animals and their delicate tentacles read more clearly, with no pronounced change to the picture’s contrast."
+  }
+ },
+ {
+  "img_id": "src_819b2fc1fb39a28c",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_819b2fc1fb39a28c.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_b52c3685cce5c232",
+  "instructions": {
+   "shuf": "Please give the whole architectural photograph the 暖灰综合色 style: make the scene moderately darker, strongly warmer and greener, mute the vivid sky and orange facade, and create a restrained aged tonal impression with subdued color overall while allowing the building’s grey metal surfaces to retain some visual richness."
+  }
+ },
+ {
+  "img_id": "src_b52c3685cce5c232",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_b52c3685cce5c232.png",
+  "pool": "awards",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "ppr10k_2577_a",
+  "instructions": {
+   "shuf": "Please apply the 暖青橙暗调 style to the woman in traditional ceremonial clothing and the surrounding temple scene, making the whole photograph strongly darker and warmer with a moody cinematic feel. Use cool cyan presence in the shadowed tones and warm orange character in illuminated areas, while keeping the overall treatment cohesive and restrained rather than introducing a distinct single-color shift."
+  }
+ },
+ {
+  "img_id": "ppr10k_2577_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_2577_a.png",
+  "pool": "ppr10k",
+  "build": "prod-g3-global25k-20260801",
+  "donor_img_id": "src_3a99ce523c05288d",
+  "instructions": {
+   "shuf": "Please darken and cool the scene around the man and dogs, enrich the colors, and give the white coats a clearer, richer presence while carrying the adjustment through the boat, surrounding water, and sky. Keep the treatment cohesive across these visible elements, with the strongest effect associated with the people and dogs and their nearby setting."
+  }
+ },
+ {
+  "img_id": "src_3a99ce523c05288d",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_3a99ce523c05288d.png",
+  "pool": "awards",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "src_e13c93a5454eefc8",
+  "instructions": {
+   "shuf": "Please make the tree beside the snow substantially darker, reduce its contrast, cool its overall color, and strongly subdue the yellow in its branches and foliage while leaving some color visible. Let the tree blend more quietly with the snowy landscape without changing the pond, snow, or any other part of the photograph."
+  }
+ },
+ {
+  "img_id": "src_e13c93a5454eefc8",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e13c93a5454eefc8.jpg",
+  "pool": "unsplash",
+  "build": "prod-l4-local17k-20260801",
+  "donor_img_id": "src_a1e5bc56b47c35ea",
+  "instructions": {
+   "shuf": "Please darken the gas pump, the concrete support, the canopy signage, and the nearby station equipment, adding strong contrast and a moderately warmer nighttime feel. Enrich the neutral grey surfaces while muting the orange signage, pump details, and nearby worker clothing so the fuel station equipment feels more grounded and visually separated from the surrounding darkness."
+  }
+ },
+ {
+  "img_id": "src_a1e5bc56b47c35ea",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_a1e5bc56b47c35ea.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_76a6f34281c11bcf",
+  "instructions": {
+   "shuf": "Please make the flowers, stems, surrounding foliage, and nearby background noticeably darker and more dramatic, with stronger contrast and richer color. Push the greenery toward a deeper, more vivid green and cool the overall color slightly, while giving the red poppies stronger visual presence without changing the surrounding scene beyond this area."
+  }
+ },
+ {
+  "img_id": "src_76a6f34281c11bcf",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_76a6f34281c11bcf.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "donor_img_id": "src_36422dfda3933b94",
+  "instructions": {
+   "shuf": "Please brighten the seashell and the nearby sand, cool the light around them, and mute the shell’s orange tones so the subject reads more clearly without making the surrounding beach feel overly colorful."
+  }
+ },
+ {
+  "img_id": "src_36422dfda3933b94",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_36422dfda3933b94.jpg",
+  "pool": "unsplash",
+  "build": "prod-l3-local17k-20260731",
+  "donor_img_id": "src_721f6a89423b3b3d",
+  "instructions": {
+   "shuf": "Apply the 冷青橙褪色 style across the beach photograph: make the overall scene moderately brighter and cooler, with a faded cinematic balance, while muting the sand and other brown or yellow elements. Keep the look restrained and cohesive, with subdued color separation and the atmospheric cool highlights visible throughout the image."
+  }
+ },
+ {
+  "img_id": "src_721f6a89423b3b3d",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_721f6a89423b3b3d.jpg",
+  "pool": "unsplash",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_782a6067d27dbeb6",
+  "instructions": {
+   "shuf": "Apply the style 暖绿高亮鲜润 across the crocodile eye photograph: make the whole image strongly brighter, noticeably warmer, and richly saturated, while keeping contrast restrained. Bring out the vivid green in the eye and patterned skin, enrich the brown scales and surrounding water, and create a luminous, fresh, polished wildlife close-up without losing the intricate reptile texture."
+  }
+ },
+ {
+  "img_id": "src_782a6067d27dbeb6",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_782a6067d27dbeb6.jpg",
+  "pool": "unsplash",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_c427b300845594b8",
+  "instructions": {
+   "shuf": "Please give the whole street photograph the 暖绿高键柔彩 style: make it strongly brighter and more contrasty, add a moderately warmer and richer overall color treatment, and bring out the grey pavement with fuller color and clearer presence while keeping the pedestrians, pavement texture, and long shadows visually coherent."
+  }
+ },
+ {
+  "img_id": "src_c427b300845594b8",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c427b300845594b8.png",
+  "pool": "awards",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_2e27605a34c49612",
+  "instructions": {
+   "shuf": "Please apply the style 冷绿高键褪色 to the snowy city street scene: make the whole image boldly brighter and distinctly cooler, bring out richer overall colour, and give the dark umbrellas and coat stronger, more vivid colour while retaining the atmospheric snowy street character."
+  }
+ },
+ {
+  "img_id": "src_2e27605a34c49612",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_2e27605a34c49612.jpg",
+  "pool": "unsplash",
+  "build": "prod-g2-global25k-20260731",
+  "donor_img_id": "src_c6c901e4652afd90",
+  "instructions": {
+   "shuf": "Please give the flower arrangement, green vase, tabletop, frames, furniture, and nearby wall decor a strongly warmer, richer look with stronger contrast. Enrich the pale flowers and light furnishings, add more depth to the grey decorative surfaces, and let the treatment fade naturally into the surrounding scene without changing the distant corners."
+  }
+ },
+ {
+  "img_id": "src_c6c901e4652afd90",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_c6c901e4652afd90.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_f1b21a1551357050",
+  "instructions": {
+   "shuf": "Please make the central climber strongly brighter and more contrasty, warm the light on the person, and convert the subject to a near-monochrome treatment so the original colors, including the orange ropes and cool clothing tones, are gone."
+  }
+ },
+ {
+  "img_id": "src_f1b21a1551357050",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_f1b21a1551357050.png",
+  "pool": "awards",
+  "build": "prod-l3-local17k-20260731",
+  "donor_img_id": "src_df4a0c7ff1f6ada2",
+  "instructions": {
+   "shuf": "Please warm the horse and the nearby meadow and trees, shift their overall color character toward a stronger magenta-red feel, and refine the surrounding light balance so the animal stands out naturally without changing the rest of the photograph."
+  }
+ },
+ {
+  "img_id": "src_df4a0c7ff1f6ada2",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_df4a0c7ff1f6ada2.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "ppr10k_7985_a",
+  "instructions": {
+   "shuf": "Apply the 暖调褪色染彩 style across the photograph, using a subdued aged color treatment with stronger tonal separation, a cooler green-leaning cast, and muted orange-red clothing that remains visibly colored rather than disappearing."
+  }
+ },
+ {
+  "img_id": "ppr10k_7985_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7985_a.png",
+  "pool": "ppr10k",
+  "build": "prod-g1-global25k-20260731",
+  "donor_img_id": "src_aaefeca653deff57",
+  "instructions": {
+   "shuf": "Please brighten the perfume bottles and the nearby camera, watering can, tabletop, and wooden backdrop, increase contrast, and strongly cool the overall color balance across those scene elements while keeping the adjustment focused on this central still-life subject."
+  }
+ },
+ {
+  "img_id": "src_aaefeca653deff57",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_aaefeca653deff57.jpg",
+  "pool": "unsplash",
+  "build": "prod-l1-local17k-20260731",
+  "donor_img_id": "src_e16299a5dbd137c6",
+  "instructions": {
+   "shuf": "Convert the portrait and artwork to 冷峻黑白硬调: remove the original colors, make the whole image moderately darker and strongly more contrasty, cool the overall tone, and render the brown and green details as restrained grayscale values with a bold monochrome photographic character."
+  }
+ },
+ {
+  "img_id": "src_e16299a5dbd137c6",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_e16299a5dbd137c6.png",
+  "pool": "awards",
+  "build": "prod-g3-global25k-20260801",
+  "donor_img_id": "src_23547f0fcb1b7bb1",
+  "instructions": {
+   "shuf": "Please give the beach scene a more subdued, cooler treatment, gently darkening the person, the breaking surf, the wet sand, and the nearby water while keeping the image cohesive. Let the tonal adjustment remain restrained, avoid emphasizing any individual color, and make the atmosphere feel quieter without changing the subject or surrounding coastal details."
+  }
+ },
+ {
+  "img_id": "src_23547f0fcb1b7bb1",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/src_23547f0fcb1b7bb1.jpg",
+  "pool": "unsplash",
+  "build": "prod-l2-local17k-20260731",
+  "donor_img_id": "ppr10k_7464_a",
+  "instructions": {
+   "shuf": "Please brighten the two gym-goers, the exercise machine, and the surrounding gym interior, giving the scene stronger contrast and more vivid overall colour while cooling the heavy warm cast. Make the lighting feel bold and clear across the people and nearby equipment, with the surrounding background receiving the same tonal treatment so the subjects remain integrated with the gym setting."
+  }
+ },
+ {
+  "img_id": "ppr10k_7464_a",
+  "img_path": "/var/cache/veradata/g1_srcimg_20260803/ppr10k_7464_a.png",
+  "pool": "ppr10k",
+  "build": "prod-l3-local17k-20260731",
+  "donor_img_id": "ppr10k_1362_a",
+  "instructions": {
+   "shuf": "Please convert the entire photograph to the 冷银黑白 style, removing the original colors and creating a cool silver black-and-white rendering with a restrained green cast. Rework the woman, prayer wheels, temple structures, walkway, sky, and background figures into clear monochrome tones so the image feels cohesive and the visible textures remain legible."
+  }
+ }
+]
