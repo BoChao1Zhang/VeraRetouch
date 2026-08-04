@@ -1,0 +1,111 @@
+# =============================================================================
+# Qwen3-VL-4B-Instruct base SFT -- RESOLVED production config (S0 wave)
+#
+#   spec        : docs/QWEN3_VL_BASE_SFT_SPEC_2026-08-04.md  (sections 2/4/5/6/7/8)
+#   dataset     : /mnt/nfs/bc/data/datasets/sft2seg-20260804
+#   manifest    : terminal_manifest.json
+#                 digest 9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840
+#                 schema q3vl.sft2seg.splits/1   status "complete"
+#   N_effective : 159,215 (train)   eval split V_where: 896
+#   steps/epoch : ceil(159215 / 32) = 4976   (trainer state agrees: max_steps=4976)
+#   protected   : half_epoch_step = round(0.5 * 4976) = 2488 ; full = 4976
+#   seed        : 42 (seed and data_seed)
+#   git commit  : see config/git_commit.txt
+#
+# MAIN-AGENT RULINGS, 2026-08-05 (joint preflight decisions closed):
+#   D-J1 -> LOCAL DISK. output_dir = /home/bc/data/runs/q3vl_base_sft_20260804.
+#           Rationale (measured, PREFLIGHT_JOINT.md section 4.2/4.3): the training
+#           images live on the same NFS mount as the previous output path, and a
+#           checkpoint write saturates that mount for ~9.3 min -- coupling saves
+#           to dataloader reads was judged unacceptable. Local disk holds the
+#           339 GiB peak in 1.5 TB free. The two protected checkpoints
+#           (step 2488 = 0.5 epoch, step 4976 = 1.0 epoch) and the final
+#           deliverable are rsync'd to the NFS durable path
+#           /mnt/nfs/bc/runs/q3vl_base_sft_20260804 after training, by
+#           SYNC_PROTECTED_TO_NFS.sh, which records both sides' paths and
+#           sha256 digests into checkpoint_sync_record.json.
+#   D-J3 -> generation diagnostics stay OFF (gen_diag_samples: 0); the spec 8.3
+#           structural rates are computed offline on the protected checkpoints
+#           after training.
+#
+# This file is byte-identical in every spec-frozen field to
+# q3vl/train/configs/sft_base.yaml, which is the file the launcher actually
+# reads. It is snapshotted here so the delivered run has a self-contained,
+# resolved record of what was launched.
+#
+# NOT STARTED. Launch only on an explicit main-agent instruction after the
+# independent implementation review clears its blockers.
+# =============================================================================
+
+model:
+  model_name_or_path: /home/bc/data/models/Qwen3-VL-4B-Instruct
+  attn_implementation: flash_attention_2   # spec 7.2
+  dtype: bfloat16                          # spec 7.1
+  reinit_special_token_rows: true          # NOTES D-4: padded rows are degenerate
+  special_token_init_seed: 0
+  verify_shards: true                      # spec 2.1 / 9.1
+
+data:
+  train_index: /mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl
+  # Base SFT eval set = V_where (NOTES D-7, still flagged for main-agent
+  # confirmation). T_final / T_lut_unseen must never be pointed at
+  # (METACANVAS 2.2); V_what is deliberately left untouched by Base SFT.
+  eval_index: /mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_where.index.jsonl
+  shard_root: /mnt/nfs/bc/data/datasets/sft2seg-20260804
+  terminal_manifest: /mnt/nfs/bc/data/datasets/sft2seg-20260804/manifest/terminal_manifest.json
+  verify: checksum                         # METACANVAS 2.3
+  max_length: 2048                         # spec 6
+  supervise_eos: true
+  allow_local_assembly: false              # the seven->two rewrite belongs to S0-DATA
+  system_prompt: null
+
+training:
+  # MAIN-AGENT RULING 2026-08-05 on D-J1: LOCAL disk during training, rsync to
+  # the NFS durable path afterwards. See the file header.
+  output_dir: /home/bc/data/runs/q3vl_base_sft_20260804
+  deepspeed: q3vl/train/configs/ds_zero3.json   # spec 7.2 ZeRO-3
+
+  # spec 7.1 -- official Arm B optimiser (frozen; args.py refuses drift)
+  optim: adamw_torch
+  learning_rate: 1.0e-5
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-8
+  warmup_ratio: 0.03
+  lr_scheduler_type: cosine
+  max_grad_norm: 1.0
+  bf16: true
+
+  # spec 7.2 -- global batch 32 = 4 per device x GAS 4 x world_size 2
+  # Measured peak on 2xH100 with the real data: 51.7 GiB / 95.6 GiB per card.
+  # The 2 x GAS8 fallback is NOT needed.
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 4
+  gradient_checkpointing: true
+
+  # spec 8
+  num_train_epochs: 1.0
+  eval_strategy: steps
+  eval_steps: 500
+  save_strategy: steps
+  save_steps: 500
+  save_total_limit: 3          # steps 2488 and 4976 are exempt (trainer.py)
+  metric_for_best_model: eval_loss   # assistant-only, spec 8.3
+  greater_is_better: false
+  load_best_model_at_end: false      # NOTES D-5: bookkeeping only, no auto-selection
+
+  logging_steps: 10
+  log_level: info              # NOTES D-J4 -- checkpoint save/delete must be visible
+  dataloader_num_workers: 4
+  remove_unused_columns: false
+  save_safetensors: true
+  seed: 42
+  data_seed: 42
+  report_to: []
+
+  # diagnostics only -- never enter the optimised loss (spec 4.4)
+  diag_every_n_steps: 50
+  gen_diag_samples: 0          # NOTES D-3: OFF for the production run
+  gen_diag_max_new_tokens: 512

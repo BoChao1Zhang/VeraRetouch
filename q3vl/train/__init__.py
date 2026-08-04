@@ -1,0 +1,6 @@
+"""Qwen3-VL-4B-Instruct Arm B base SFT (docs/QWEN3_VL_BASE_SFT_SPEC_2026-08-04.md)."""
+
+from .constants import (  # noqa: F401
+    COLOR_CLOSE, COLOR_OPEN, GLOBAL_BATCH_SIZE, IGNORE_INDEX, MODEL_MAX_LENGTH,
+    SPECIAL_TOKENS, WHERE_CLOSE, WHERE_OPEN,
+)

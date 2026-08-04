@@ -1,0 +1,17 @@
+{
+  "python_env": "/home/bc/envs/q3vl_sft (venv --system-site-packages over conda env llm_factory)",
+  "python": "3.12.12",
+  "torch": "2.10.0+cu128",
+  "transformers": "4.57.1",
+  "deepspeed": "0.18.2",
+  "flash_attn": "2.8.3",
+  "accelerate": "1.11.0",
+  "gpus": "2x NVIDIA H100 95.1 GiB (driver 570.195.03, CUDA 12.8)",
+  "model_path": "/home/bc/data/models/Qwen3-VL-4B-Instruct",
+  "model_upstream_revision": "ebb281ec70b05090aa6165b016eac8ec08e71b17",
+  "seeds": {
+    "training_seed": 42,
+    "data_seed": 42,
+    "special_token_init_seed": 0
+  }
+}

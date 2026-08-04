@@ -1,0 +1,1791 @@
+{
+  "checks": {
+    "bake_fidelity": {
+      "all_pass": true,
+      "max_abs_diff": 21,
+      "n": 24,
+      "note": "difference is JPEG q95 4:4:4 quantisation only; geometry is exact",
+      "rmse_max": 2.714,
+      "rmse_mean": 1.5041,
+      "size_mismatch": 0,
+      "status": "ok"
+    },
+    "conversion_samples": [
+      {
+        "all_pass": true,
+        "build": "g4",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The overall exposure feels restrained, leaving the bride, white dress, vegetation, and sky less luminous than the airy setting suggests.\nThe photograph has a somewhat warm, subdued color impression that limits the fresh clarity of the bridal scene and surrounding meadow.\nThe brown horned animal and earthy details appear comparatively muted, with limited richness and separation from the surrounding grass.\nBrighten the entire photograph with a clear high-key presentation, giving the bride, dress, meadow, and sky a fresher luminous presence.\nUse the 清透高键自然 style as a global treatment, lifting the overall brightness and cooling the color balance for a clean, airy natural appearance.\nStrengthen the brown tones in the horned animal and related earthy details so they appear richer and more distinct within the brighter scene.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Use the 清透高键自然 style as a global treatment, lifting the overall brightness and cooling the color balance for a clean, airy natural appearance.",
+          "plan_lighting": "Brighten the entire photograph with a clear high-key presentation, giving the bride, dress, meadow, and sky a fresher luminous presence.",
+          "plan_specific_color": "Strengthen the brown tones in the horned animal and related earthy details so they appear richer and more distinct within the brighter scene.",
+          "problem_global_color": "The photograph has a somewhat warm, subdued color impression that limits the fresh clarity of the bridal scene and surrounding meadow.",
+          "problem_lighting": "The overall exposure feels restrained, leaving the bride, white dress, vegetation, and sky less luminous than the airy setting suggests.",
+          "problem_specific_color": "The brown horned animal and earthy details appear comparatively muted, with limited richness and separation from the surrounding grass.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_00088418a3797822744ba762df58b962"
+      },
+      {
+        "all_pass": true,
+        "build": "g2",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The photograph is severely underexposed: the black surroundings overwhelm the frame, and much of the man’s body, clothing, and lower figure disappear into dense shadow.\nThe portrait has a subdued, nearly monochromatic color impression, with limited separation between the subject’s skin, adornments, clothing, and the surrounding darkness.\nNo individual color stands out as requiring a distinct correction; the visible issue is the broadly compressed, dark tonal rendering across the scene.\nBrighten the entire photograph strongly so the man’s face, torso, hands, and clothing become more readable while retaining the scene’s dramatic low-key atmosphere.\nRecreate the 复古平调胶片 look with a cohesive, restrained film palette and gently unified tonal rendering across the image.\nUse a controlled, understated color treatment across the portrait and background, avoiding any isolated color shift or exaggerated color emphasis.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Recreate the 复古平调胶片 look with a cohesive, restrained film palette and gently unified tonal rendering across the image.",
+          "plan_lighting": "Brighten the entire photograph strongly so the man’s face, torso, hands, and clothing become more readable while retaining the scene’s dramatic low-key atmosphere.",
+          "plan_specific_color": "Use a controlled, understated color treatment across the portrait and background, avoiding any isolated color shift or exaggerated color emphasis.",
+          "problem_global_color": "The portrait has a subdued, nearly monochromatic color impression, with limited separation between the subject’s skin, adornments, clothing, and the surrounding darkness.",
+          "problem_lighting": "The photograph is severely underexposed: the black surroundings overwhelm the frame, and much of the man’s body, clothing, and lower figure disappear into dense shadow.",
+          "problem_specific_color": "No individual color stands out as requiring a distinct correction; the visible issue is the broadly compressed, dark tonal rendering across the scene.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_3bf7101b4d11886969b379f8e00433bd"
+      },
+      {
+        "all_pass": true,
+        "build": "g2",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The scene is not bright enough for a high-key film treatment, with the palms and vegetation carrying heavier visual weight and the image lacking an airy luminous feel.\nThe photograph has a comparatively dense, assertive tonal character that does not yet convey the pale, faded atmosphere of 高键褪彩胶片.\nThe colors do not present a clearly defined single-color imbalance, but the overall rendering lacks the softly faded photographic character requested for the scene.\nMake the scene boldly brighter, lifting the sky, palms, shrubs, and fortress into an airy high-key presentation while retaining recognizable detail.\nConvert the whole photograph toward the 高键褪彩胶片 style with a strongly brighter overall rendering and a mixed, gently washed tonal character.\nUse a restrained film-like color treatment across the palms, vegetation, sky, and fortress without introducing a specific color shift.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Convert the whole photograph toward the 高键褪彩胶片 style with a strongly brighter overall rendering and a mixed, gently washed tonal character.",
+          "plan_lighting": "Make the scene boldly brighter, lifting the sky, palms, shrubs, and fortress into an airy high-key presentation while retaining recognizable detail.",
+          "plan_specific_color": "Use a restrained film-like color treatment across the palms, vegetation, sky, and fortress without introducing a specific color shift.",
+          "problem_global_color": "The photograph has a comparatively dense, assertive tonal character that does not yet convey the pale, faded atmosphere of 高键褪彩胶片.",
+          "problem_lighting": "The scene is not bright enough for a high-key film treatment, with the palms and vegetation carrying heavier visual weight and the image lacking an airy luminous feel.",
+          "problem_specific_color": "The colors do not present a clearly defined single-color imbalance, but the overall rendering lacks the softly faded photographic character requested for the scene.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_24667e16c4361724b7d34b35923932ff"
+      },
+      {
+        "all_pass": true,
+        "build": "g2",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The rabbit and meadow are comparatively subdued in brightness, with stronger contrast between the animal, grass, and background than the desired light, softened presentation.\nThe photograph has a warm, strongly green meadow palette with pronounced natural colour and firm tonal separation, making the scene feel less airy and less stylized.\nThe grass is vividly green and the straw is noticeably yellow, while the warm colour balance competes with the rabbit's pale fur and limits the delicate pastel impression.\nLift the entire scene boldly into a pale, high-key treatment while lowering contrast so the rabbit and meadow read with a softer tonal separation.\nCreate a strongly brighter, cooler palette with moderately reduced contrast, strongly subdued colour, and a clear shift toward magenta and red.\nMute the green grass substantially while keeping its colour visible, and subdue the yellow straw tones so they remain present within the cooler magenta-red treatment.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Create a strongly brighter, cooler palette with moderately reduced contrast, strongly subdued colour, and a clear shift toward magenta and red.",
+          "plan_lighting": "Lift the entire scene boldly into a pale, high-key treatment while lowering contrast so the rabbit and meadow read with a softer tonal separation.",
+          "plan_specific_color": "Mute the green grass substantially while keeping its colour visible, and subdue the yellow straw tones so they remain present within the cooler magenta-red treatment.",
+          "problem_global_color": "The photograph has a warm, strongly green meadow palette with pronounced natural colour and firm tonal separation, making the scene feel less airy and less stylized.",
+          "problem_lighting": "The rabbit and meadow are comparatively subdued in brightness, with stronger contrast between the animal, grass, and background than the desired light, softened presentation.",
+          "problem_specific_color": "The grass is vividly green and the straw is noticeably yellow, while the warm colour balance competes with the rabbit's pale fur and limits the delicate pastel impression.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_f6aae35d3cfb400626ad23fcf0ff9c75"
+      },
+      {
+        "all_pass": true,
+        "build": "g2",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The dog is relatively bright and the tonal separation is too gentle, leaving the portrait flatter than a hard-edged, shadow-driven treatment and reducing the drama of the dark setting.\nThe portrait has a cool, restrained appearance with insufficient warmth, while the dog and surroundings do not yet have the bold, cohesive colour character suggested by the intended style.\nThe blue backdrop and bedding are comparatively prominent, while the grey coat appears subdued and lacks the stronger colour presence needed to distinguish its texture and form.\nMake the portrait strongly darker and substantially more contrasty, deepening the dark backdrop and bedding while separating the dog’s form with firmer tonal definition.\nApply 暖调硬朗压影 across the dog portrait by strongly warming the image, muting the overall colour, and giving the grey fur a richer presence without making the palette vivid.\nMute the blue backdrop and bedding so they recede into the darker mood, while making the grey fur more richly coloured and distinct within the warm portrait treatment.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Apply 暖调硬朗压影 across the dog portrait by strongly warming the image, muting the overall colour, and giving the grey fur a richer presence without making the palette vivid.",
+          "plan_lighting": "Make the portrait strongly darker and substantially more contrasty, deepening the dark backdrop and bedding while separating the dog’s form with firmer tonal definition.",
+          "plan_specific_color": "Mute the blue backdrop and bedding so they recede into the darker mood, while making the grey fur more richly coloured and distinct within the warm portrait treatment.",
+          "problem_global_color": "The portrait has a cool, restrained appearance with insufficient warmth, while the dog and surroundings do not yet have the bold, cohesive colour character suggested by the intended style.",
+          "problem_lighting": "The dog is relatively bright and the tonal separation is too gentle, leaving the portrait flatter than a hard-edged, shadow-driven treatment and reducing the drama of the dark setting.",
+          "problem_specific_color": "The blue backdrop and bedding are comparatively prominent, while the grey coat appears subdued and lacks the stronger colour presence needed to distinguish its texture and form.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_57886a6fd706f5fb8ef4a43aae29ebdf"
+      },
+      {
+        "all_pass": true,
+        "build": "g2",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The couple and surrounding street scene are heavily underexposed, with faces, clothing, and background details falling into deep shadow. The available light feels uneven and subdued, making the image lose clarity and visual energy.\nThe overall palette is subdued and lacks enough colour presence for the vivid night-street atmosphere. The scene does not yet have the strongly warm, luminous character associated with the requested style.\nThe brown clothing, railing, and surrounding urban surfaces appear dull and restrained. The yellow clothing and nearby lights are visually intense but need a more controlled, muted quality so they do not compete unevenly with the rest of the scene.\nMake the whole photograph strongly brighter, lifting the couple, street details, and surrounding shadows so the scene reads clearly while retaining its nighttime setting.\nApply a strongly warmer, richer overall treatment across the image, converting the scene toward the 暖品红高键 look with vivid colour presence and luminous warmth.\nEnrich the brown clothing, railing, and urban surfaces so they carry more colour and light, while muting the yellow clothing and nearby yellow illumination for a more balanced warm palette.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Apply a strongly warmer, richer overall treatment across the image, converting the scene toward the 暖品红高键 look with vivid colour presence and luminous warmth.",
+          "plan_lighting": "Make the whole photograph strongly brighter, lifting the couple, street details, and surrounding shadows so the scene reads clearly while retaining its nighttime setting.",
+          "plan_specific_color": "Enrich the brown clothing, railing, and urban surfaces so they carry more colour and light, while muting the yellow clothing and nearby yellow illumination for a more balanced warm palette.",
+          "problem_global_color": "The overall palette is subdued and lacks enough colour presence for the vivid night-street atmosphere. The scene does not yet have the strongly warm, luminous character associated with the requested style.",
+          "problem_lighting": "The couple and surrounding street scene are heavily underexposed, with faces, clothing, and background details falling into deep shadow. The available light feels uneven and subdued, making the image lose clarity and visual energy.",
+          "problem_specific_color": "The brown clothing, railing, and surrounding urban surfaces appear dull and restrained. The yellow clothing and nearby lights are visually intense but need a more controlled, muted quality so they do not compete unevenly with the rest of the scene.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_cf153f513984cfd56bcd1489a10e9937"
+      },
+      {
+        "all_pass": true,
+        "build": "l2",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The horse and the surrounding path and vegetation lose important detail in heavy shadow, making the subject less distinct from its setting.\nThe horse, nearby foliage, and dirt path are too dark and subdued, with a warm cast that weighs down the scene.\nThe green foliage around the horse appears overly vivid and visually dense, competing with the subject and muddying separation from the background.\nOpen the dark tones around the horse, foliage, and path with a bold increase in illumination so their forms and surface detail read more clearly.\nApply a strong brightness and contrast lift to the horse, nearby foliage, and dirt path, with a moderately cooler color balance.\nMute the green foliage around the horse, reducing its visual intensity while keeping the color treatment focused on those plants.",
+        "new_where": "subject: the horse; edit scope: a vertical band through the subject, extending beyond the subject into the background on both sides and running off both edges of the frame",
+        "original_fields": {
+          "plan_global_color": "Apply a strong brightness and contrast lift to the horse, nearby foliage, and dirt path, with a moderately cooler color balance.",
+          "plan_lighting": "Open the dark tones around the horse, foliage, and path with a bold increase in illumination so their forms and surface detail read more clearly.",
+          "plan_specific_color": "Mute the green foliage around the horse, reducing its visual intensity while keeping the color treatment focused on those plants.",
+          "problem_global_color": "The horse, nearby foliage, and dirt path are too dark and subdued, with a warm cast that weighs down the scene.",
+          "problem_lighting": "The horse and the surrounding path and vegetation lose important detail in heavy shadow, making the subject less distinct from its setting.",
+          "problem_specific_color": "The green foliage around the horse appears overly vivid and visually dense, competing with the subject and muddying separation from the background.",
+          "region_scope": "subject: the horse; edit scope: a vertical band through the subject, extending beyond the subject into the background on both sides and running off both edges of the frame"
+        },
+        "sft_id": "sft_a37566047d20ddbe79b21f40b6f10407"
+      },
+      {
+        "all_pass": true,
+        "build": "l2",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The hamster and nearby fabric are quite dim, with subdued fur detail and limited readability against the dark surroundings.\nThe original green, brown, and warm fur colors make the dark scene feel color-led and reduce the quiet tonal focus on the hamster.\nNo isolated color stands out as the sole problem; the hamster, blanket, and nearby background need a unified tonal treatment rather than separate color correction.\nBrighten the hamster and the surrounding blanket and background so fur detail and the subject’s separation from the fabric become more readable.\nConvert the hamster, blanket, and nearby background to a near-monochrome palette, removing the original colors throughout the affected scene.\nTreat the hamster’s fur, the blanket, and the neighboring background together in the monochrome conversion rather than targeting any single named color.",
+        "new_where": "subject: the hamster; edit scope: a radial falloff strongest on the hamster and extending into the neighboring blanket and background, fading beyond the subject while leaving the far corners unchanged",
+        "original_fields": {
+          "plan_global_color": "Convert the hamster, blanket, and nearby background to a near-monochrome palette, removing the original colors throughout the affected scene.",
+          "plan_lighting": "Brighten the hamster and the surrounding blanket and background so fur detail and the subject’s separation from the fabric become more readable.",
+          "plan_specific_color": "Treat the hamster’s fur, the blanket, and the neighboring background together in the monochrome conversion rather than targeting any single named color.",
+          "problem_global_color": "The original green, brown, and warm fur colors make the dark scene feel color-led and reduce the quiet tonal focus on the hamster.",
+          "problem_lighting": "The hamster and nearby fabric are quite dim, with subdued fur detail and limited readability against the dark surroundings.",
+          "problem_specific_color": "No isolated color stands out as the sole problem; the hamster, blanket, and nearby background need a unified tonal treatment rather than separate color correction.",
+          "region_scope": "subject: the hamster; edit scope: a radial falloff strongest on the hamster and extending into the neighboring blanket and background, fading beyond the subject while leaving the far corners unchanged"
+        },
+        "sft_id": "sft_f4f7a3e0ca746228db288607c1e8cc52"
+      },
+      {
+        "all_pass": true,
+        "build": "g1",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The scene is strongly illuminated overall, with the white backdrop and pale clothing dominating the frame and the subject reading as brighter and more polished than a dark film treatment.\nThe portrait has a very bright, clean appearance with an airy commercial feel, while the woman, clothing, chair, and backdrop lack the subdued film character requested.\nThe image presents a broad mixture of skin, dark leather, pale clothing, and neutral fabric without one isolated color problem standing out; the overall color impression needs a unified restrained treatment.\nMake the entire scene strongly darker, bringing down the bright fabric backdrop, pale clothing, chair, skin, and jacket highlights to create a more subdued photographic atmosphere.\nApply the 压暗褪彩胶片 treatment as a cohesive global look, with a strongly darker overall rendering and restrained film tonality across the portrait.\nUse a restrained, cohesive treatment across the woman, her clothing, the chair, and the fabric backdrop without emphasizing any individual color range.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Apply the 压暗褪彩胶片 treatment as a cohesive global look, with a strongly darker overall rendering and restrained film tonality across the portrait.",
+          "plan_lighting": "Make the entire scene strongly darker, bringing down the bright fabric backdrop, pale clothing, chair, skin, and jacket highlights to create a more subdued photographic atmosphere.",
+          "plan_specific_color": "Use a restrained, cohesive treatment across the woman, her clothing, the chair, and the fabric backdrop without emphasizing any individual color range.",
+          "problem_global_color": "The portrait has a very bright, clean appearance with an airy commercial feel, while the woman, clothing, chair, and backdrop lack the subdued film character requested.",
+          "problem_lighting": "The scene is strongly illuminated overall, with the white backdrop and pale clothing dominating the frame and the subject reading as brighter and more polished than a dark film treatment.",
+          "problem_specific_color": "The image presents a broad mixture of skin, dark leather, pale clothing, and neutral fabric without one isolated color problem standing out; the overall color impression needs a unified restrained treatment.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_974ad97e7f7ce7fe2f0b932ba4e670b2"
+      },
+      {
+        "all_pass": true,
+        "build": "g1",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The portrait is somewhat restrained in brightness, with the woman and the surrounding sports court lacking the airy, luminous presentation desired for a soft high-key treatment.\nThe image has a comparatively vivid, colorful appearance, while the overall palette lacks the muted, softly blended warmth and green-leaning character of 暖调高键柔彩.\nThe orange court surface is strongly present and visually assertive, competing with the woman as a dominant color element rather than receding into a gentle, subdued palette.\nApply a strong brightening treatment across the photograph to create an airy high-key look, lifting the woman, court, and pale wall into a luminous presentation.\nRework the whole palette into 暖调高键柔彩 with noticeably more muted color and a strong green-leaning cast, while keeping the overall tonal separation restrained.\nMute the orange court surface clearly so it becomes a softer, less dominant part of the scene and supports the gentle pastel character.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Rework the whole palette into 暖调高键柔彩 with noticeably more muted color and a strong green-leaning cast, while keeping the overall tonal separation restrained.",
+          "plan_lighting": "Apply a strong brightening treatment across the photograph to create an airy high-key look, lifting the woman, court, and pale wall into a luminous presentation.",
+          "plan_specific_color": "Mute the orange court surface clearly so it becomes a softer, less dominant part of the scene and supports the gentle pastel character.",
+          "problem_global_color": "The image has a comparatively vivid, colorful appearance, while the overall palette lacks the muted, softly blended warmth and green-leaning character of 暖调高键柔彩.",
+          "problem_lighting": "The portrait is somewhat restrained in brightness, with the woman and the surrounding sports court lacking the airy, luminous presentation desired for a soft high-key treatment.",
+          "problem_specific_color": "The orange court surface is strongly present and visually assertive, competing with the woman as a dominant color element rather than receding into a gentle, subdued palette.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_5cbdebdb700a72a0027568053712662d"
+      },
+      {
+        "all_pass": true,
+        "build": "g1",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The scene is not bright enough overall, while the tonal separation is too restrained. The woman, vehicle, architecture, pavement, and reflections lack the forceful light-to-dark definition needed for a hard-edged film look.\nThe photograph has a warm, ordinary color impression that does not yet convey a cool, assertive film character. Its tonal structure feels restrained, leaving the scene less bold than the intended style.\nNo single color in the scene stands out as needing an isolated correction. The needed change is a broader palette treatment that shifts the photograph toward a cooler, more decisive cinematic character.\nIncrease brightness across the scene and make the tonal separation strongly more pronounced, giving the woman, vehicle, buildings, pavement, and reflections a bold, crisp photographic presence.\nConvert the photograph toward the 冷青橙硬朗胶片 look with a moderately brighter overall rendering and a strongly cooler color impression, keeping the color treatment mixed without assigning a specific change to any individual hue.\nNo individual color requires a targeted adjustment; shape the palette through the broader cool, high-contrast treatment rather than isolating a particular object or hue.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Convert the photograph toward the 冷青橙硬朗胶片 look with a moderately brighter overall rendering and a strongly cooler color impression, keeping the color treatment mixed without assigning a specific change to any individual hue.",
+          "plan_lighting": "Increase brightness across the scene and make the tonal separation strongly more pronounced, giving the woman, vehicle, buildings, pavement, and reflections a bold, crisp photographic presence.",
+          "plan_specific_color": "No individual color requires a targeted adjustment; shape the palette through the broader cool, high-contrast treatment rather than isolating a particular object or hue.",
+          "problem_global_color": "The photograph has a warm, ordinary color impression that does not yet convey a cool, assertive film character. Its tonal structure feels restrained, leaving the scene less bold than the intended style.",
+          "problem_lighting": "The scene is not bright enough overall, while the tonal separation is too restrained. The woman, vehicle, architecture, pavement, and reflections lack the forceful light-to-dark definition needed for a hard-edged film look.",
+          "problem_specific_color": "No single color in the scene stands out as needing an isolated correction. The needed change is a broader palette treatment that shifts the photograph toward a cooler, more decisive cinematic character.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_ba1f6d66695b15034ddf74bf36be0f1b"
+      },
+      {
+        "all_pass": true,
+        "build": "g1",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The woman and surrounding meadow lack sufficient radiance, leaving important details subdued and the scene less open and luminous than it could be.\nThe photograph is comparatively dim and restrained, with muted color that makes the garden setting and the woman's pale dress feel less lively than the intended bright, colorful style.\nThe green foliage and grass appear comparatively dull, reducing the freshness and visual energy of the outdoor setting around the woman.\nMake the entire scene boldly brighter, opening the woman, dress, foliage, and meadow into a more radiant presentation without adding a directional lighting effect.\nApply the 暖青橙提亮 treatment across the photograph, strongly lifting the overall brightness and moderately enriching the color for a vivid, luminous appearance.\nIntensify the green foliage and grass so they appear clearly richer and more vivid, supporting the fresh青橙 style while integrating with the woman's warm clothing and skin tones.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Apply the 暖青橙提亮 treatment across the photograph, strongly lifting the overall brightness and moderately enriching the color for a vivid, luminous appearance.",
+          "plan_lighting": "Make the entire scene boldly brighter, opening the woman, dress, foliage, and meadow into a more radiant presentation without adding a directional lighting effect.",
+          "plan_specific_color": "Intensify the green foliage and grass so they appear clearly richer and more vivid, supporting the fresh青橙 style while integrating with the woman's warm clothing and skin tones.",
+          "problem_global_color": "The photograph is comparatively dim and restrained, with muted color that makes the garden setting and the woman's pale dress feel less lively than the intended bright, colorful style.",
+          "problem_lighting": "The woman and surrounding meadow lack sufficient radiance, leaving important details subdued and the scene less open and luminous than it could be.",
+          "problem_specific_color": "The green foliage and grass appear comparatively dull, reducing the freshness and visual energy of the outdoor setting around the woman.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_a1ae6a42d21fa3610a74da3cea6da8df"
+      },
+      {
+        "all_pass": true,
+        "build": "g1",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The forest scene is overly bright, especially in the snowy clearing and pale sky, while the darker tree trunks do not yet create a strong, moody tonal atmosphere.\nThe image has a distinctly warm woodland cast, with noticeable natural color throughout the snow, trees, ground, and person. The palette feels more colorful and inviting than the cool, restrained look intended.\nYellow tones in the dry trunks and brown tones in the forest floor are prominent and warm, adding earthy color that competes with the quiet winter atmosphere.\nMake the entire forest scene strongly darker to create a deeper, more cinematic winter mood while retaining readable detail in the trees, snow, and walking figure.\nApply the 冷青橙低饱和 style by cooling the whole image and converting its original colors toward a near-monochrome cool-toned palette. The original colorful appearance should be gone rather than merely softened.\nMute the yellow tones in the tree trunks and the brown tones in the forest floor strongly, folding them into the restrained cool-toned monochrome treatment.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Apply the 冷青橙低饱和 style by cooling the whole image and converting its original colors toward a near-monochrome cool-toned palette. The original colorful appearance should be gone rather than merely softened.",
+          "plan_lighting": "Make the entire forest scene strongly darker to create a deeper, more cinematic winter mood while retaining readable detail in the trees, snow, and walking figure.",
+          "plan_specific_color": "Mute the yellow tones in the tree trunks and the brown tones in the forest floor strongly, folding them into the restrained cool-toned monochrome treatment.",
+          "problem_global_color": "The image has a distinctly warm woodland cast, with noticeable natural color throughout the snow, trees, ground, and person. The palette feels more colorful and inviting than the cool, restrained look intended.",
+          "problem_lighting": "The forest scene is overly bright, especially in the snowy clearing and pale sky, while the darker tree trunks do not yet create a strong, moody tonal atmosphere.",
+          "problem_specific_color": "Yellow tones in the dry trunks and brown tones in the forest floor are prominent and warm, adding earthy color that competes with the quiet winter atmosphere.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_312ae746dee2d0be1ba71bef6f4966ad"
+      },
+      {
+        "all_pass": true,
+        "build": "g1",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The scene is comparatively dark and weighty, especially across the dog’s black coat and the lower grassy foreground, which limits the airy high-key feel.\nThe photograph has a strongly warm, saturated outdoor colour character, with vivid natural hues in the grass and surrounding vegetation competing with the black dog.\nThe grass and small plants carry noticeable green and yellow colour, making the setting feel lively and chromatic rather than pale, restrained, and nearly monochrome.\nRaise the overall brightness boldly to create a high-key appearance, opening the subdued setting while keeping the dog’s form and facial features legible.\nConvert the photograph to the 高调褪彩青绿 look with a strongly brighter, cooler presentation and a near-monochrome palette, removing the original colour character across the scene.\nMute the green grass and yellow plants strongly until the original colours are gone, leaving a restrained near-monochrome tonal treatment throughout the image.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Convert the photograph to the 高调褪彩青绿 look with a strongly brighter, cooler presentation and a near-monochrome palette, removing the original colour character across the scene.",
+          "plan_lighting": "Raise the overall brightness boldly to create a high-key appearance, opening the subdued setting while keeping the dog’s form and facial features legible.",
+          "plan_specific_color": "Mute the green grass and yellow plants strongly until the original colours are gone, leaving a restrained near-monochrome tonal treatment throughout the image.",
+          "problem_global_color": "The photograph has a strongly warm, saturated outdoor colour character, with vivid natural hues in the grass and surrounding vegetation competing with the black dog.",
+          "problem_lighting": "The scene is comparatively dark and weighty, especially across the dog’s black coat and the lower grassy foreground, which limits the airy high-key feel.",
+          "problem_specific_color": "The grass and small plants carry noticeable green and yellow colour, making the setting feel lively and chromatic rather than pale, restrained, and nearly monochrome.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_a4894ced9eb5dc280f3f503eb8d51c95"
+      },
+      {
+        "all_pass": true,
+        "build": "l5",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The woman is not bright enough against the surrounding garden, and the light on her face, dress, and veil lacks sufficient lift.\nThe woman’s rendering feels slightly cool and subdued, which weakens the warmth and presence of the bridal portrait.\nThe color treatment on the woman appears somewhat cool and muted overall, reducing the inviting warmth of her complexion and bridal details.\nMake the woman noticeably brighter while keeping the tonal adjustment controlled and natural across her face, clothing, and floral details.\nWarm the woman’s overall rendering moderately, with a balanced, restrained treatment across her dress, veil, skin, and bouquet.\nApply a moderate warming treatment to the woman’s light and complexion, using a mixed, restrained color balance without isolating any individual hue.",
+        "new_where": "subject: the woman in the wedding dress; edit scope: stays within the woman, including her face, dress, veil, and bouquet",
+        "original_fields": {
+          "plan_global_color": "Warm the woman’s overall rendering moderately, with a balanced, restrained treatment across her dress, veil, skin, and bouquet.",
+          "plan_lighting": "Make the woman noticeably brighter while keeping the tonal adjustment controlled and natural across her face, clothing, and floral details.",
+          "plan_specific_color": "Apply a moderate warming treatment to the woman’s light and complexion, using a mixed, restrained color balance without isolating any individual hue.",
+          "problem_global_color": "The woman’s rendering feels slightly cool and subdued, which weakens the warmth and presence of the bridal portrait.",
+          "problem_lighting": "The woman is not bright enough against the surrounding garden, and the light on her face, dress, and veil lacks sufficient lift.",
+          "problem_specific_color": "The color treatment on the woman appears somewhat cool and muted overall, reducing the inviting warmth of her complexion and bridal details.",
+          "region_scope": "subject: the woman in the wedding dress; edit scope: stays within the woman, including her face, dress, veil, and bouquet"
+        },
+        "sft_id": "sft_b4ea91dece374d2d1d42690304e78f4f"
+      },
+      {
+        "all_pass": true,
+        "build": "l5",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The light across the woman and nearby lobby elements is moderately too strong, reducing the depth of the dim architectural setting.\nThe seated woman, suited man, lobby floor, walls, and doorway carry a somewhat overexposed overall brightness that weakens the atmosphere of the interior.\nNo individual colour stands out as having a distinct, separable problem in this area; the issue is a mixed brightness imbalance across the scene content.\nModerately darken the seated woman and the nearby lobby lighting so the scene feels less exposed while remaining readable.\nApply a restrained exposure reduction to the seated woman, suited man, lobby floor, walls, and doorway, without making unsupported colour changes.\nMake no specific colour adjustment; the visible change is not isolated to any single colour family.",
+        "new_where": "subject: the seated woman, suited man, lobby floor, walls, and doorway; edit scope: a horizontal linear gradient spanning the entire frame, strongest toward the left edge where the subject sits and fading toward the opposite side",
+        "original_fields": {
+          "plan_global_color": "Apply a restrained exposure reduction to the seated woman, suited man, lobby floor, walls, and doorway, without making unsupported colour changes.",
+          "plan_lighting": "Moderately darken the seated woman and the nearby lobby lighting so the scene feels less exposed while remaining readable.",
+          "plan_specific_color": "Make no specific colour adjustment; the visible change is not isolated to any single colour family.",
+          "problem_global_color": "The seated woman, suited man, lobby floor, walls, and doorway carry a somewhat overexposed overall brightness that weakens the atmosphere of the interior.",
+          "problem_lighting": "The light across the woman and nearby lobby elements is moderately too strong, reducing the depth of the dim architectural setting.",
+          "problem_specific_color": "No individual colour stands out as having a distinct, separable problem in this area; the issue is a mixed brightness imbalance across the scene content.",
+          "region_scope": "subject: the seated woman, suited man, lobby floor, walls, and doorway; edit scope: a horizontal linear gradient spanning the entire frame, strongest toward the left edge where the subject sits and fading toward the opposite side"
+        },
+        "sft_id": "sft_7f0c1254bc11e8b23afdb1e6a0db8142"
+      },
+      {
+        "all_pass": true,
+        "build": "l5",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The woman and the fabric surrounding her are lit too brightly, making the foreground dominate the portrait and reducing the moody quality of the setting.\nThe woman, red clothing, parasol, and drapery are overly bright, warm, and vivid, giving the scene a stronger color presence than the dark backdrop supports.\nThe brown tones in the woman, accessories, parasol handle, and drapery are too strong, while the red dress and parasol appear intensely saturated.\nStrongly reduce the illumination on the woman, red dress, parasol, drapery, and adjacent backdrop so the foreground feels more subdued and less dominant.\nApply a bold darker, cooler, greener treatment across the woman, her clothing, the parasol, and nearby drapery, reducing the overall color intensity.\nMute the brown tones in the woman, accessories, parasol handle, and drapery, while also subduing the visible reds in the dress and parasol without removing their color.",
+        "new_where": "subject: the woman, red dress, red parasol, surrounding drapery, and nearby backdrop; edit scope: a vertical linear gradient spanning the entire frame, strongest toward the bottom edge and fading toward the top, extending beyond the subject into the background",
+        "original_fields": {
+          "plan_global_color": "Apply a bold darker, cooler, greener treatment across the woman, her clothing, the parasol, and nearby drapery, reducing the overall color intensity.",
+          "plan_lighting": "Strongly reduce the illumination on the woman, red dress, parasol, drapery, and adjacent backdrop so the foreground feels more subdued and less dominant.",
+          "plan_specific_color": "Mute the brown tones in the woman, accessories, parasol handle, and drapery, while also subduing the visible reds in the dress and parasol without removing their color.",
+          "problem_global_color": "The woman, red clothing, parasol, and drapery are overly bright, warm, and vivid, giving the scene a stronger color presence than the dark backdrop supports.",
+          "problem_lighting": "The woman and the fabric surrounding her are lit too brightly, making the foreground dominate the portrait and reducing the moody quality of the setting.",
+          "problem_specific_color": "The brown tones in the woman, accessories, parasol handle, and drapery are too strong, while the red dress and parasol appear intensely saturated.",
+          "region_scope": "subject: the woman, red dress, red parasol, surrounding drapery, and nearby backdrop; edit scope: a vertical linear gradient spanning the entire frame, strongest toward the bottom edge and fading toward the top, extending beyond the subject into the background"
+        },
+        "sft_id": "sft_2019380033fa012e3979884980310c80"
+      },
+      {
+        "all_pass": true,
+        "build": "l1",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "Tonal separation is weak around the man, pavement, courtyard, and nearby buildings, making some forms blend together in the subdued light.\nThe courtyard scene has a warm cast and lively color intensity that makes the man, pavement, and surrounding architecture feel less restrained.\nThe green foliage and planted courtyard areas look overly vivid and compete with the man for attention.\nIncrease contrast strongly around the man, pavement, courtyard, and nearby buildings to create clearer tonal separation.\nCool the overall color balance and mute the scene’s saturation across the man, pavement, courtyard, and nearby buildings.\nMute the green foliage and planted areas around the man, including the courtyard landscaping.",
+        "new_where": "subject: the man in the courtyard; edit scope: a horizontal gradient spanning the whole frame, strongest at the left edge and fading toward the right edge, extending beyond the subject into the background",
+        "original_fields": {
+          "plan_global_color": "Cool the overall color balance and mute the scene’s saturation across the man, pavement, courtyard, and nearby buildings.",
+          "plan_lighting": "Increase contrast strongly around the man, pavement, courtyard, and nearby buildings to create clearer tonal separation.",
+          "plan_specific_color": "Mute the green foliage and planted areas around the man, including the courtyard landscaping.",
+          "problem_global_color": "The courtyard scene has a warm cast and lively color intensity that makes the man, pavement, and surrounding architecture feel less restrained.",
+          "problem_lighting": "Tonal separation is weak around the man, pavement, courtyard, and nearby buildings, making some forms blend together in the subdued light.",
+          "problem_specific_color": "The green foliage and planted courtyard areas look overly vivid and compete with the man for attention.",
+          "region_scope": "subject: the man in the courtyard; edit scope: a horizontal gradient spanning the whole frame, strongest at the left edge and fading toward the right edge, extending beyond the subject into the background"
+        },
+        "sft_id": "sft_26e664b4a22c7b43dd3b001454ea9a12"
+      },
+      {
+        "all_pass": true,
+        "build": "l6",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The building’s roof, walls, doorway, and surrounding snow do not separate strongly enough in tone, reducing its visual definition.\nThe building has subdued color and limited tonal separation, causing its pale walls and snowy details to blend together.\nThe pale grey surfaces of the building appear dull and restrained, especially across the wall and snow-covered portions.\nRefine the building’s tonal separation so its roof, walls, doorway, and snow-covered edges read more clearly.\nApply a moderately stronger contrast treatment to the building and make its overall color presence more pronounced.\nGive the building’s pale grey wall and snow areas visibly richer color while keeping the adjustment focused on those surfaces.",
+        "new_where": "subject: the building in the center; edit scope: stays within the building itself",
+        "original_fields": {
+          "plan_global_color": "Apply a moderately stronger contrast treatment to the building and make its overall color presence more pronounced.",
+          "plan_lighting": "Refine the building’s tonal separation so its roof, walls, doorway, and snow-covered edges read more clearly.",
+          "plan_specific_color": "Give the building’s pale grey wall and snow areas visibly richer color while keeping the adjustment focused on those surfaces.",
+          "problem_global_color": "The building has subdued color and limited tonal separation, causing its pale walls and snowy details to blend together.",
+          "problem_lighting": "The building’s roof, walls, doorway, and surrounding snow do not separate strongly enough in tone, reducing its visual definition.",
+          "problem_specific_color": "The pale grey surfaces of the building appear dull and restrained, especially across the wall and snow-covered portions.",
+          "region_scope": "subject: the building in the center; edit scope: stays within the building itself"
+        },
+        "sft_id": "sft_18b43ce92e1b08b77d5dd6f0522c7365"
+      },
+      {
+        "all_pass": true,
+        "build": "l4",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The dried arrangement, vase, hat, and nearby wall are a little too bright for the quiet, understated mood of the composition, with the central still life lacking enough visual depth.\nThe dried arrangement, vase, hat, and surrounding wall have a somewhat warm, lively color balance that makes the still life feel less subdued than intended.\nThe colors across the dried flowers, glass vase, hat, and wall do not present one clearly isolated hue problem; the main issue is a broadly lively and warm impression across the scene content.\nDarken the dried arrangement, vase, hat, and nearby wall with a moderate, even reduction in brightness, while keeping the tonal structure restrained and coherent.\nCool the overall palette and moderate the saturation across the dried arrangement, vase, hat, and surrounding wall, giving the still life a quieter, less warm character.\nTreat the dried arrangement, vase, hat, and nearby wall as a mixed-color group rather than targeting any individual hue, reducing overall vividness without isolating particular flowers or objects.",
+        "new_where": "subject: the dried flower arrangement, glass vase, hat, and nearby wall; edit scope: a vertical linear gradient spanning the entire frame, strongest toward the top edge and fading continuously toward the bottom edge",
+        "original_fields": {
+          "plan_global_color": "Cool the overall palette and moderate the saturation across the dried arrangement, vase, hat, and surrounding wall, giving the still life a quieter, less warm character.",
+          "plan_lighting": "Darken the dried arrangement, vase, hat, and nearby wall with a moderate, even reduction in brightness, while keeping the tonal structure restrained and coherent.",
+          "plan_specific_color": "Treat the dried arrangement, vase, hat, and nearby wall as a mixed-color group rather than targeting any individual hue, reducing overall vividness without isolating particular flowers or objects.",
+          "problem_global_color": "The dried arrangement, vase, hat, and surrounding wall have a somewhat warm, lively color balance that makes the still life feel less subdued than intended.",
+          "problem_lighting": "The dried arrangement, vase, hat, and nearby wall are a little too bright for the quiet, understated mood of the composition, with the central still life lacking enough visual depth.",
+          "problem_specific_color": "The colors across the dried flowers, glass vase, hat, and wall do not present one clearly isolated hue problem; the main issue is a broadly lively and warm impression across the scene content.",
+          "region_scope": "subject: the dried flower arrangement, glass vase, hat, and nearby wall; edit scope: a vertical linear gradient spanning the entire frame, strongest toward the top edge and fading continuously toward the bottom edge"
+        },
+        "sft_id": "sft_57f71fc30a95de62dfa5b3d940424d65"
+      },
+      {
+        "all_pass": true,
+        "build": "g3",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The scene is too restrained in brightness and contrast. The pale stone, wooden gate, and foliage do not have the stark luminous separation needed for the 高键柔彩压影 look.\nThe photograph has a comparatively full natural colour range, with a warm, earthy appearance that does not fit a bright near-monochrome treatment. The overall tonal separation is not strong enough for the intended graphic style.\nThe dense green foliage remains distinctly saturated and colourful, competing with the masonry and weathered gate instead of supporting a unified near-monochrome appearance.\nPush the entire photograph toward a strongly brighter, graphic presentation with pronounced separation between pale masonry and dark wood, creating the stark high-key character of 高键柔彩压影.\nUse 高键柔彩压影 across the scene: strongly brighten the image, raise contrast boldly, cool the overall colour treatment moderately, and convert the original colours into a near-monochrome palette.\nMute the green foliage clearly and remove the original colour presence so the vegetation joins the near-monochrome treatment rather than remaining vividly coloured.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Use 高键柔彩压影 across the scene: strongly brighten the image, raise contrast boldly, cool the overall colour treatment moderately, and convert the original colours into a near-monochrome palette.",
+          "plan_lighting": "Push the entire photograph toward a strongly brighter, graphic presentation with pronounced separation between pale masonry and dark wood, creating the stark high-key character of 高键柔彩压影.",
+          "plan_specific_color": "Mute the green foliage clearly and remove the original colour presence so the vegetation joins the near-monochrome treatment rather than remaining vividly coloured.",
+          "problem_global_color": "The photograph has a comparatively full natural colour range, with a warm, earthy appearance that does not fit a bright near-monochrome treatment. The overall tonal separation is not strong enough for the intended graphic style.",
+          "problem_lighting": "The scene is too restrained in brightness and contrast. The pale stone, wooden gate, and foliage do not have the stark luminous separation needed for the 高键柔彩压影 look.",
+          "problem_specific_color": "The dense green foliage remains distinctly saturated and colourful, competing with the masonry and weathered gate instead of supporting a unified near-monochrome appearance.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_cde98457df536fef5d2258a262c125b4"
+      },
+      {
+        "all_pass": true,
+        "build": "g3",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The scene is bright and highly punchy, with strong separation between illuminated rock, shadowed forest, snow, and sky. The broad tonal contrast gives the landscape a vivid daytime presence.\nThe landscape is intensely colorful, with warm earth and rock tones competing against a vivid blue sky. The color balance feels warm and emphatic rather than restrained.\nThe brown rocks and foreground earth are especially saturated and warm, while the blue sky is clear and prominent. These colors dominate the visual impression instead of settling into a muted atmospheric palette.\nDarken the entire landscape boldly and lower contrast so the mountain, forest, rocks, and sky take on a restrained, moody tonal range.\nCreate a strongly cooler, darker 青橙低饱暗调 treatment with a pronounced greenward color balance and strongly muted overall color while leaving the scene recognizable.\nSubdue the brown rock and earth colors and mute the blue sky, keeping both color families visible within the darker, cooler green-leaning treatment.",
+        "new_where": "global adjustment across the entire frame",
+        "original_fields": {
+          "plan_global_color": "Create a strongly cooler, darker 青橙低饱暗调 treatment with a pronounced greenward color balance and strongly muted overall color while leaving the scene recognizable.",
+          "plan_lighting": "Darken the entire landscape boldly and lower contrast so the mountain, forest, rocks, and sky take on a restrained, moody tonal range.",
+          "plan_specific_color": "Subdue the brown rock and earth colors and mute the blue sky, keeping both color families visible within the darker, cooler green-leaning treatment.",
+          "problem_global_color": "The landscape is intensely colorful, with warm earth and rock tones competing against a vivid blue sky. The color balance feels warm and emphatic rather than restrained.",
+          "problem_lighting": "The scene is bright and highly punchy, with strong separation between illuminated rock, shadowed forest, snow, and sky. The broad tonal contrast gives the landscape a vivid daytime presence.",
+          "problem_specific_color": "The brown rocks and foreground earth are especially saturated and warm, while the blue sky is clear and prominent. These colors dominate the visual impression instead of settling into a muted atmospheric palette.",
+          "region_scope": "global adjustment across the entire frame"
+        },
+        "sft_id": "sft_25ef9cef44fccf2ab2465f75ae17ed94"
+      },
+      {
+        "all_pass": true,
+        "build": "l3",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The nest is too dim and lacks sufficient contrast, so the tangled fibers and the egg do not separate clearly from one another.\nThe bird's nest has subdued overall color presence, making its materials feel somewhat flat against the cloth.\nNo individual color in the nest presents a distinct, isolated issue; the main weakness is the overall lack of tonal separation.\nMake the bird's nest moderately brighter and strongly increase contrast to reveal the woven fibers, shadows, and egg separation.\nApply a balanced tonal treatment to the bird's nest without targeting any individual color.\nUse a mixed, restrained color treatment across the nest rather than emphasizing any single color.",
+        "new_where": "subject: the bird's nest in the center; edit scope: stays within the bird's nest",
+        "original_fields": {
+          "plan_global_color": "Apply a balanced tonal treatment to the bird's nest without targeting any individual color.",
+          "plan_lighting": "Make the bird's nest moderately brighter and strongly increase contrast to reveal the woven fibers, shadows, and egg separation.",
+          "plan_specific_color": "Use a mixed, restrained color treatment across the nest rather than emphasizing any single color.",
+          "problem_global_color": "The bird's nest has subdued overall color presence, making its materials feel somewhat flat against the cloth.",
+          "problem_lighting": "The nest is too dim and lacks sufficient contrast, so the tangled fibers and the egg do not separate clearly from one another.",
+          "problem_specific_color": "No individual color in the nest presents a distinct, isolated issue; the main weakness is the overall lack of tonal separation.",
+          "region_scope": "subject: the bird's nest in the center; edit scope: stays within the bird's nest"
+        },
+        "sft_id": "sft_5807790c1e9565b0956407200188e5d4"
+      },
+      {
+        "all_pass": true,
+        "build": "l3",
+        "checks": {
+          "color_is_six_bodies_in_order": true,
+          "instruction_verbatim": true,
+          "no_invented_closing": true,
+          "no_legacy_tag": true,
+          "region_scope_not_in_color": true,
+          "where_equals_region_scope": true
+        },
+        "new_color": "The berries and nearby leaves compete unevenly for visual attention against the darker foliage and bright snow, making the botanical detail feel unsettled.\nThe berries and surrounding foliage have a warm, vivid color presence that draws attention away from the delicate snow and leaf textures.\nThe berries, leaves, and snow contain intertwined colors without one isolated hue standing out as the sole color problem.\nUse color treatment as the primary change for the berries and nearby leaves, avoiding a pronounced tonal shift.\nApply a strong cooling treatment to the berries and neighboring foliage, while moderately muting the overall color presence across that local scene content.\nTreat the berries, leaves, and snow as a mixed-color grouping rather than targeting any single hue.",
+        "new_where": "subject: the cluster of blue berries with surrounding leaves and snow; edit scope: a moderate oval falloff centered on the berries, extending past them into the surrounding scene while leaving the far corners unchanged",
+        "original_fields": {
+          "plan_global_color": "Apply a strong cooling treatment to the berries and neighboring foliage, while moderately muting the overall color presence across that local scene content.",
+          "plan_lighting": "Use color treatment as the primary change for the berries and nearby leaves, avoiding a pronounced tonal shift.",
+          "plan_specific_color": "Treat the berries, leaves, and snow as a mixed-color grouping rather than targeting any single hue.",
+          "problem_global_color": "The berries and surrounding foliage have a warm, vivid color presence that draws attention away from the delicate snow and leaf textures.",
+          "problem_lighting": "The berries and nearby leaves compete unevenly for visual attention against the darker foliage and bright snow, making the botanical detail feel unsettled.",
+          "problem_specific_color": "The berries, leaves, and snow contain intertwined colors without one isolated hue standing out as the sole color problem.",
+          "region_scope": "subject: the cluster of blue berries with surrounding leaves and snow; edit scope: a moderate oval falloff centered on the berries, extending past them into the surrounding scene while leaving the far corners unchanged"
+        },
+        "sft_id": "sft_353d49bbab568594063e3def71bf1782"
+      }
+    ],
+    "conversion_samples_all_pass": true,
+    "image_contract": {
+      "aspect_in": {
+        "max": 3.206896551724138,
+        "mean": 1.4426,
+        "min": 1.0,
+        "n": 162359,
+        "p05": 1.0166666666666666,
+        "p50": 1.5,
+        "p95": 1.5125553914327918
+      },
+      "aspect_rounding_error": {
+        "max": 0.029383886255924172,
+        "mean": 0.0031,
+        "min": 0.0,
+        "n": 162359,
+        "p05": 0.0,
+        "p50": 0.00048828124999997224,
+        "p95": 0.015745148297326986
+      },
+      "exif_orientation_hist": {
+        "1": 161164,
+        "6": 13,
+        "8": 1182
+      },
+      "format_hist": {
+        "JPEG": 96710,
+        "PNG": 65638,
+        "TIFF": 11
+      },
+      "orig_short_side": {
+        "max": 6336,
+        "mean": 1333.181,
+        "min": 256,
+        "n": 162359,
+        "p05": 360,
+        "p50": 1362,
+        "p95": 2854
+      },
+      "out_long_side": {
+        "max": 1632,
+        "mean": 737.3891,
+        "min": 512,
+        "n": 162359,
+        "p05": 512,
+        "p50": 768,
+        "p95": 768
+      },
+      "upscaled": 23045,
+      "violations": {},
+      "vision_token_hist": {
+        "256": 8322,
+        "272": 286,
+        "288": 437,
+        "304": 1021,
+        "320": 14451,
+        "336": 14407,
+        "352": 2410,
+        "368": 1996,
+        "384": 111519,
+        "400": 1378,
+        "416": 1813,
+        "432": 837,
+        "448": 2139,
+        "464": 211,
+        "480": 101,
+        "496": 101,
+        "512": 381,
+        "528": 84,
+        "544": 32,
+        "560": 44,
+        "576": 22,
+        "592": 181,
+        "608": 92,
+        "624": 9,
+        "640": 32,
+        "672": 10,
+        "688": 4,
+        "768": 23,
+        "784": 2,
+        "816": 14
+      },
+      "vision_tokens": {
+        "max": 816.0,
+        "mean": 368.6946,
+        "min": 256.0,
+        "n": 162359,
+        "p05": 256.0,
+        "p50": 384.0,
+        "p95": 384.0
+      }
+    },
+    "indexed_datasets": {
+      "images": {
+        "dataset_id": "indexed_tar_dd61c6d2221573662dfb679dce06c7f4",
+        "members": 162359,
+        "payload_bytes": 23679233711,
+        "shards": 12,
+        "status": "ok"
+      },
+      "records": {
+        "dataset_id": "indexed_tar_a8a17e040b320dc34fa095f582bac0f9",
+        "members": 162359,
+        "payload_bytes": 550209124,
+        "shards": 1,
+        "status": "ok"
+      }
+    },
+    "length_contract": {
+      "filtered_too_long": 0,
+      "histogram_256": {
+        "256": 1773,
+        "512": 158663,
+        "768": 1885,
+        "1024": 38
+      },
+      "max": 1142,
+      "n": 162359,
+      "over_limit_remaining": 0,
+      "p50": 653,
+      "p95": 724,
+      "p99": 773
+    },
+    "length_identity": {
+      "all_pass": true,
+      "equals_training_collator": 16,
+      "failures": [],
+      "n": 16,
+      "piecewise_equals_whole_string": 16,
+      "placeholder_shortcut_exact": 16,
+      "special_token_ids": {
+        "</color>": 151672,
+        "</where>": 151670,
+        "<color>": 151671,
+        "<where>": 151669
+      },
+      "template_overhead_tokens": 12
+    },
+    "lut_isolation": {
+      "n_train_luts": 3149,
+      "n_unseen_luts": 259,
+      "unseen_x_T_final": 0,
+      "unseen_x_V_what": 0,
+      "unseen_x_V_where": 0,
+      "unseen_x_train": 0
+    },
+    "random_access": {
+      "images": {
+        "checked": 400,
+        "index_dir": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits",
+        "pool": 162359,
+        "status": "ok"
+      },
+      "records": {
+        "checked": 400,
+        "index_dir": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits",
+        "pool": 162359,
+        "status": "ok"
+      }
+    },
+    "rejections": {
+      "by_stage": {
+        "image": {
+          "image_format_unsupported": 9
+        },
+        "split": {
+          "dedup_drop": 1699,
+          "lut_reserved_for_T_lut_unseen": 8371,
+          "reserved_lut_in_select_source": 142
+        }
+      },
+      "total": 10221
+    },
+    "resume": {
+      "equal": true,
+      "index_samples": 162359,
+      "manifest_digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840",
+      "per_split": {
+        "T_final": 918,
+        "T_lut_unseen": 433,
+        "V_what": 897,
+        "V_where": 896,
+        "train": 159215
+      },
+      "split_samples": 162359
+    },
+    "split_disjointness": {
+      "authority_after_dedup_applied": {
+        "eval": 3288,
+        "eval_x_dedup": 0,
+        "train": 167593,
+        "train_x_dedup": 0,
+        "train_x_eval": 0
+      },
+      "authority_raw": {
+        "dedup_drop": 1699,
+        "eval": 3320,
+        "eval_x_dedup": 32,
+        "train": 169260,
+        "train_x_dedup": 1667,
+        "train_x_eval": 0
+      },
+      "published": {
+        "T_final": 918,
+        "T_lut_unseen": 433,
+        "V_what": 897,
+        "V_where": 896,
+        "train": 159215
+      },
+      "published_eval_x_authority_train": 0,
+      "published_train_x_authority_eval": 0,
+      "published_x_dedup": 0
+    },
+    "training_loader": {
+      "T_final": {
+        "all_pass": true,
+        "checksum_verified_reads": 36,
+        "examples": [
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_111b9cf76a7ec1da19e40c684cdd3f21",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_28bebcffaf8a9ec74ebc7160e5d2eb34",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_d2c82d46568cf76c16aa28b40f4c50dd",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          }
+        ],
+        "layout": "nested",
+        "n_checked": 12,
+        "n_index": 918,
+        "status": "ok"
+      },
+      "T_lut_unseen": {
+        "all_pass": true,
+        "checksum_verified_reads": 36,
+        "examples": [
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_aab741d88b1a9e7c8413b74cc12c6527",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_daccbecfaa0d31059877dc5f4ee516bc",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_73b1013371bad717a825b6b00d07fb4e",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          }
+        ],
+        "layout": "nested",
+        "n_checked": 12,
+        "n_index": 433,
+        "status": "ok"
+      },
+      "V_what": {
+        "all_pass": true,
+        "checksum_verified_reads": 36,
+        "examples": [
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_fc4faca05e15f3a99c86cf68f3a0f663",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_2b67b1aa7f8dc024f2d6678a54dedf04",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_4480e3f4b2822c304b7ec617be3e879a",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          }
+        ],
+        "layout": "nested",
+        "n_checked": 12,
+        "n_index": 897,
+        "status": "ok"
+      },
+      "V_where": {
+        "all_pass": true,
+        "checksum_verified_reads": 36,
+        "examples": [
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_4decc55fa70639fa7ab9bc32d4c4d582",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_a56a109d930f3ec3f7b8581f2d2e8c8a",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_456e0429a35a8d75a4f3b3deba86609b",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          }
+        ],
+        "layout": "nested",
+        "n_checked": 12,
+        "n_index": 896,
+        "status": "ok"
+      },
+      "train": {
+        "all_pass": true,
+        "checksum_verified_reads": 36,
+        "examples": [
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_63fef3ffa0b87317d1886be035f39f49",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_f9bfd0633d5004baa0852df63da6100b",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          },
+          {
+            "color_matches_record": true,
+            "geometry_reproduces": true,
+            "no_legacy_tag": true,
+            "sample_id": "sft_e555f86444c9adce06998ca1af6013cc",
+            "size_matches_plan": true,
+            "where_matches_record": true
+          }
+        ],
+        "layout": "nested",
+        "n_checked": 12,
+        "n_index": 159215,
+        "status": "ok"
+      }
+    }
+  },
+  "counts": {
+    "T_final": 918,
+    "T_lut_unseen": 433,
+    "V_what": 897,
+    "V_where": 896,
+    "train": 159215
+  },
+  "datasets": {
+    "images": {
+      "dataset_id": "indexed_tar_dd61c6d2221573662dfb679dce06c7f4",
+      "manifest_sha256": "70b270803ea02fb36a24790d49e9d4472bdde10df4dd9c9a059db2048795b702",
+      "member_count": 162359,
+      "payload_bytes": 23679233711,
+      "root": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/images",
+      "sample_count": 162359,
+      "schema_version": 2,
+      "shard_count": 12,
+      "shards": [
+        {
+          "index_sha256": "c18a98e5e17a1b40ffcbae483c79aaf649d402272875e3fdae87c679cde4a4bf",
+          "member_count": 14750,
+          "shard_id": "shard-00000",
+          "tar_bytes": 2147409920,
+          "tar_sha256": "e94a14d6afed782d7aeff9fb07f7cc1bbc9878847580ffc3ef801d827631acfd"
+        },
+        {
+          "index_sha256": "c04f42616bbb110182baed70f7b49a5e2947f3a4fba29aaeebc3368745e4ce89",
+          "member_count": 14764,
+          "shard_id": "shard-00001",
+          "tar_bytes": 2147420160,
+          "tar_sha256": "cf629621b8427da4fc036f988b5ab62ac74db4b47ae5b6a4e7ed3e6f70d334f9"
+        },
+        {
+          "index_sha256": "9a66de420e9294a7495c25fdb21693e921a69d585fdf7b7d2e0103b04361912d",
+          "member_count": 14696,
+          "shard_id": "shard-00002",
+          "tar_bytes": 2147389440,
+          "tar_sha256": "74ba3404d92111d497e1189a12bc761c6ff16c37e050778205879ee527dddffd"
+        },
+        {
+          "index_sha256": "5b1b5f74700197234cac1c5a7d950d880f6700e2219839c9e22b99d8978df4e9",
+          "member_count": 14589,
+          "shard_id": "shard-00003",
+          "tar_bytes": 2147471360,
+          "tar_sha256": "e36d711f43417106a013afa5cb2f8f80e2b21c92c4af4689f07fb9e808cf88b7"
+        },
+        {
+          "index_sha256": "19c67bc51bef46a58347719652e76a55bf99618a74aea10ddad07c3680492243",
+          "member_count": 14605,
+          "shard_id": "shard-00004",
+          "tar_bytes": 2147399680,
+          "tar_sha256": "b4dffffedecef07296e34850b0745ff99f8233f8ac981707a8e95c84ffe4ebf7"
+        },
+        {
+          "index_sha256": "6132f42a431239a5a4d7cceef9a955394ef9c678e4cc0553639a3f68bfd21ddf",
+          "member_count": 14533,
+          "shard_id": "shard-00005",
+          "tar_bytes": 2147358720,
+          "tar_sha256": "52fad08ad2377222c7246921fa9a95ccb1abfede0fc434cbe207b89aed0a9114"
+        },
+        {
+          "index_sha256": "139c9b359bff74bae61108ec3e410424bceb790d4403a5d7e2aa074ad8020b0d",
+          "member_count": 14659,
+          "shard_id": "shard-00006",
+          "tar_bytes": 2147328000,
+          "tar_sha256": "be8a6ce965dfaaa5039697c5309c1a4bb9d6dc312ee328a568b3cc7041243263"
+        },
+        {
+          "index_sha256": "ac89bca92d6fff6d404e054e5b085525d9347db30262365ffccf8648f4f4d68a",
+          "member_count": 14680,
+          "shard_id": "shard-00007",
+          "tar_bytes": 2147358720,
+          "tar_sha256": "ee6b5722d069a008d5f429772c2e1454381699d4ee91b758b37e93b919330002"
+        },
+        {
+          "index_sha256": "177575f3d48a83f195e53911d8b7c7f95b19544659d0f4dd8e913dd71e2670e0",
+          "member_count": 14543,
+          "shard_id": "shard-00008",
+          "tar_bytes": 2147481600,
+          "tar_sha256": "d996cd4e664260fdfb31ed1a1dea55425b3e329b4f8639f3057694d34f7ba99d"
+        },
+        {
+          "index_sha256": "fbe2975b01063980f912315f945c012cafd6d0e18075348c2b48e739bb15dd70",
+          "member_count": 14736,
+          "shard_id": "shard-00009",
+          "tar_bytes": 2147399680,
+          "tar_sha256": "6ee3dc657d77e60f7d469459c4f84450da321cdec86e7d4d2a167c895a95a4cb"
+        },
+        {
+          "index_sha256": "400ee5c13117d70d576e7e13b9bf4bd9273bfa7deb8664c1dee7c6acbc133c5a",
+          "member_count": 14572,
+          "shard_id": "shard-00010",
+          "tar_bytes": 2147358720,
+          "tar_sha256": "69f72042075b8e1a694b36199951ba761bab359abf107f6b7bdc09d9fc7574f7"
+        },
+        {
+          "index_sha256": "bf8de0a44a0f641e2a028253208eaba8eb53479ba6417160e4a9f5d18ffc088c",
+          "member_count": 1232,
+          "shard_id": "shard-00011",
+          "tar_bytes": 182548480,
+          "tar_sha256": "ca4793982086a837fbcafaf6beead2be96cdded5dde15d2ea3f1bc95535a3897"
+        }
+      ]
+    },
+    "records": {
+      "dataset_id": "indexed_tar_a8a17e040b320dc34fa095f582bac0f9",
+      "manifest_sha256": "e75235967384f2b5cde1cca5e5bec2122adad8ac37fea39edacf2458fc87baa6",
+      "member_count": 162359,
+      "payload_bytes": 550209124,
+      "root": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/records",
+      "sample_count": 162359,
+      "schema_version": 2,
+      "shard_count": 1,
+      "shards": [
+        {
+          "index_sha256": "dda37e8581e5d94f0c022fe8a132ed9850af4395e1d9fa3da86d544334abc358",
+          "member_count": 162359,
+          "shard_id": "shard-00000",
+          "tar_bytes": 673710080,
+          "tar_sha256": "e84b23a822480619cad046e199951ab5a5182600747d667a52c360ea93b1609e"
+        }
+      ]
+    }
+  },
+  "distributions": {
+    "T_final": {
+      "out_h": {
+        "max": 896,
+        "mean": 615.95,
+        "min": 512,
+        "p50": 512,
+        "p95": 768
+      },
+      "out_w": {
+        "max": 1056,
+        "mean": 639.02,
+        "min": 512,
+        "p50": 512,
+        "p95": 832
+      },
+      "total_tokens": {
+        "max": 888,
+        "mean": 650.71,
+        "min": 492,
+        "p50": 655,
+        "p95": 722
+      },
+      "vision_tokens": {
+        "max": 528,
+        "mean": 371.49,
+        "min": 256,
+        "p50": 384,
+        "p95": 416
+      }
+    },
+    "T_lut_unseen": {
+      "out_h": {
+        "max": 896,
+        "mean": 619.23,
+        "min": 512,
+        "p50": 512,
+        "p95": 768
+      },
+      "out_w": {
+        "max": 1056,
+        "mean": 633.94,
+        "min": 512,
+        "p50": 512,
+        "p95": 832
+      },
+      "total_tokens": {
+        "max": 808,
+        "mean": 650.86,
+        "min": 501,
+        "p50": 652,
+        "p95": 737
+      },
+      "vision_tokens": {
+        "max": 528,
+        "mean": 370.59,
+        "min": 256,
+        "p50": 384,
+        "p95": 416
+      }
+    },
+    "V_what": {
+      "out_h": {
+        "max": 768,
+        "mean": 621.56,
+        "min": 512,
+        "p50": 512,
+        "p95": 768
+      },
+      "out_w": {
+        "max": 1536,
+        "mean": 632.79,
+        "min": 512,
+        "p50": 512,
+        "p95": 768
+      },
+      "total_tokens": {
+        "max": 1069,
+        "mean": 651.91,
+        "min": 468,
+        "p50": 654,
+        "p95": 722
+      },
+      "vision_tokens": {
+        "max": 768,
+        "mean": 371.18,
+        "min": 256,
+        "p50": 384,
+        "p95": 384
+      }
+    },
+    "V_where": {
+      "out_h": {
+        "max": 896,
+        "mean": 594.57,
+        "min": 512,
+        "p50": 512,
+        "p95": 768
+      },
+      "out_w": {
+        "max": 928,
+        "mean": 658.0,
+        "min": 512,
+        "p50": 768,
+        "p95": 768
+      },
+      "total_tokens": {
+        "max": 806,
+        "mean": 653.44,
+        "min": 483,
+        "p50": 657,
+        "p95": 730
+      },
+      "vision_tokens": {
+        "max": 464,
+        "mean": 370.29,
+        "min": 256,
+        "p50": 384,
+        "p95": 384
+      }
+    },
+    "train": {
+      "out_h": {
+        "max": 1536,
+        "mean": 605.75,
+        "min": 512,
+        "p50": 512,
+        "p95": 768
+      },
+      "out_w": {
+        "max": 1632,
+        "mean": 643.55,
+        "min": 512,
+        "p50": 672,
+        "p95": 768
+      },
+      "total_tokens": {
+        "max": 1142,
+        "mean": 648.97,
+        "min": 435,
+        "p50": 653,
+        "p95": 724
+      },
+      "vision_tokens": {
+        "max": 816,
+        "mean": 368.65,
+        "min": 256,
+        "p50": 384,
+        "p95": 384
+      }
+    }
+  },
+  "eval_group_counts": {
+    "V_what": 163,
+    "V_where": 162,
+    "test": 212,
+    "total": 537
+  },
+  "manifest_digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840",
+  "n_effective": 159215,
+  "per_split_build": {
+    "T_final": {
+      "g1": 117,
+      "g2": 119,
+      "g3": 135,
+      "g4": 123,
+      "l1": 78,
+      "l2": 66,
+      "l3": 74,
+      "l4": 65,
+      "l5": 60,
+      "l6": 81
+    },
+    "T_lut_unseen": {
+      "g1": 62,
+      "g2": 51,
+      "g3": 71,
+      "g4": 51,
+      "l1": 35,
+      "l2": 36,
+      "l3": 23,
+      "l4": 29,
+      "l5": 38,
+      "l6": 37
+    },
+    "V_what": {
+      "g1": 134,
+      "g2": 118,
+      "g3": 134,
+      "g4": 103,
+      "l1": 61,
+      "l2": 68,
+      "l3": 61,
+      "l4": 74,
+      "l5": 69,
+      "l6": 75
+    },
+    "V_where": {
+      "g1": 126,
+      "g2": 107,
+      "g3": 145,
+      "g4": 118,
+      "l1": 75,
+      "l2": 57,
+      "l3": 53,
+      "l4": 71,
+      "l5": 75,
+      "l6": 69
+    },
+    "train": {
+      "g1": 21188,
+      "g2": 20805,
+      "g3": 21040,
+      "g4": 20638,
+      "l1": 12975,
+      "l2": 11866,
+      "l3": 12676,
+      "l4": 12625,
+      "l5": 12792,
+      "l6": 12610
+    }
+  },
+  "per_split_task_type": {
+    "T_final": {
+      "local": 424,
+      "style": 494
+    },
+    "T_lut_unseen": {
+      "local": 198,
+      "style": 235
+    },
+    "V_what": {
+      "local": 408,
+      "style": 489
+    },
+    "V_where": {
+      "local": 400,
+      "style": 496
+    },
+    "train": {
+      "local": 75544,
+      "style": 83671
+    }
+  },
+  "per_split_winner_confidence": {
+    "T_final": {
+      "low": 385,
+      "normal": 533
+    },
+    "T_lut_unseen": {
+      "low": 181,
+      "normal": 252
+    },
+    "V_what": {
+      "low": 330,
+      "normal": 567
+    },
+    "V_where": {
+      "low": 381,
+      "normal": 515
+    },
+    "train": {
+      "low": 65281,
+      "normal": 93934
+    }
+  },
+  "reserve": {
+    "budget_fraction": 0.05,
+    "eval_gain": 575,
+    "lut_ids": [
+      "rcp_00654f9ed41b5af9",
+      "rcp_00da1d2aafd96b46",
+      "rcp_0236dd6b620ec1ff",
+      "rcp_02be1175eab93d07",
+      "rcp_054f14ee8be0cbc6",
+      "rcp_06fa732bf04d5bd2",
+      "rcp_073bb0b6159593f0",
+      "rcp_0769a5c1fdea18c0",
+      "rcp_083dc4d6d7bf4710",
+      "rcp_0960f78d058338db",
+      "rcp_0b31b76c4288a332",
+      "rcp_0cae2c8d80a39f40",
+      "rcp_0dea50a3cfa0344f",
+      "rcp_0e534ae2c4af8895",
+      "rcp_0ebdc379c52ba145",
+      "rcp_0f536edd150d0376",
+      "rcp_0f84fa95cddd7139",
+      "rcp_0fde07ca5629ef0c",
+      "rcp_10db6397a5fa669b",
+      "rcp_12383b39f0beab45",
+      "rcp_127a424d97ea52bb",
+      "rcp_1287a325f7a9b5eb",
+      "rcp_12d9f2d837ee64c4",
+      "rcp_144af3de0d685cbb",
+      "rcp_1462fee770035311",
+      "rcp_18e94749b74b0134",
+      "rcp_1a0b151dd864db44",
+      "rcp_1a16b27f736be13e",
+      "rcp_1ac940de49d4a541",
+      "rcp_1b1073444b0728fb",
+      "rcp_1b187ac6a4b2c629",
+      "rcp_1b7e30788ad505e9",
+      "rcp_1bbf87603efd92e6",
+      "rcp_1c1c28ad43fc77be",
+      "rcp_1cafbe65bf64afb6",
+      "rcp_1cc52a7059c0ea98",
+      "rcp_1e0f1e3fb3301761",
+      "rcp_1e48736f9e8e888a",
+      "rcp_1e8103f648a08ed2",
+      "rcp_1e9c06f2b4fe0d7a",
+      "rcp_1ea1ecbe41b85cfd",
+      "rcp_1ee65a991cdab83a",
+      "rcp_1fb007f5ddb62d3c",
+      "rcp_208ad2892d4a45aa",
+      "rcp_21c85df79b1b4b82",
+      "rcp_23451db35cd15e87",
+      "rcp_23820e248d66dc2b",
+      "rcp_23b2fd5cba02d94e",
+      "rcp_251321573d53f3e9",
+      "rcp_2770e48aa13f0f60",
+      "rcp_277ad8bb60834f42",
+      "rcp_2854a8bdb54c77a6",
+      "rcp_28907aaab77fa322",
+      "rcp_290925079193318c",
+      "rcp_29600b40ec305ef2",
+      "rcp_29604a23ef00e8e2",
+      "rcp_2d380db278c5618e",
+      "rcp_2da37014ef94df3f",
+      "rcp_2df0cef06bcd0442",
+      "rcp_2f511419ff5b7b6d",
+      "rcp_3056ee3f1175077e",
+      "rcp_3111b3af955084f7",
+      "rcp_31563debc263a9b1",
+      "rcp_32cbb627ee3dc196",
+      "rcp_333be02c2a470e2e",
+      "rcp_3342e10dbd3f71b4",
+      "rcp_35be33076f914868",
+      "rcp_36547185ec42a244",
+      "rcp_36ed7ef689dc0ee8",
+      "rcp_37e333ddf7d9ca4c",
+      "rcp_3a501fef452410fd",
+      "rcp_3a7652eca1809840",
+      "rcp_3caa8bbcd7ae3b95",
+      "rcp_3cb8513f9cc25890",
+      "rcp_3cd8ad3b13527f9d",
+      "rcp_3d2e14aac17b4b8a",
+      "rcp_3d2eeac3769feddd",
+      "rcp_3e137df5a9666785",
+      "rcp_4042ca5f32e588e7",
+      "rcp_40519a1bbeb070f5",
+      "rcp_4266fdefd6be0eb1",
+      "rcp_43c60e2245d112bf",
+      "rcp_443e160dea701e2d",
+      "rcp_44c0ab550a58bcdb",
+      "rcp_453ae6944e8ccbda",
+      "rcp_45ae842c8d29fa94",
+      "rcp_46e21d50eeebeec1",
+      "rcp_48b809fe1309bcc5",
+      "rcp_48cee66855887450",
+      "rcp_49786c50c907b36e",
+      "rcp_4a35b571fb78ad6a",
+      "rcp_4ade78689206eb9d",
+      "rcp_4d27bab1a0351b3d",
+      "rcp_4d4cbfca8a3c762b",
+      "rcp_4ea438e854875cd2",
+      "rcp_4f08088ad1d16236",
+      "rcp_501a42aedaa55d6f",
+      "rcp_516c5543d9e22c89",
+      "rcp_518eaadd7b15540b",
+      "rcp_53ea1ea1c65593c2",
+      "rcp_551e59db1f6aee49",
+      "rcp_56709584da2d6241",
+      "rcp_583df8e7bdb20b98",
+      "rcp_5b380260e88160b8",
+      "rcp_5f8f068a38e944a1",
+      "rcp_60aebd298fb13b73",
+      "rcp_6486098a2fa1442c",
+      "rcp_664e61331f13b703",
+      "rcp_67feb8664aadaf56",
+      "rcp_683c1426f0d144f1",
+      "rcp_687f0b8ec39706ec",
+      "rcp_6a3dee76167a9f82",
+      "rcp_6bf779424de36055",
+      "rcp_6c4f133b36524448",
+      "rcp_6cf4bf45cafb9bb6",
+      "rcp_6d99f30945535f04",
+      "rcp_6db5ff89bb6e9548",
+      "rcp_6e732056226e2139",
+      "rcp_6ecbae5129fe42b6",
+      "rcp_6f8e15b75bcf771a",
+      "rcp_7122eb6ec880df69",
+      "rcp_724c64a012c201d2",
+      "rcp_7251fb21ee2a0605",
+      "rcp_72606e3d866c19a8",
+      "rcp_726d20f5cebcc413",
+      "rcp_734d8f2f16d86f0c",
+      "rcp_742a8854088c1a10",
+      "rcp_747a92a089530a8c",
+      "rcp_74f463cfff586eed",
+      "rcp_76bce4ea006ccd28",
+      "rcp_774c2ee936b8ddda",
+      "rcp_77bec7ea9bee423e",
+      "rcp_78164389204921d8",
+      "rcp_7887ffc0cf8b8a45",
+      "rcp_794538911edef49b",
+      "rcp_7b5c961336dd15dc",
+      "rcp_7d0ff7d1141398ac",
+      "rcp_7d32ccd7851502b6",
+      "rcp_7da3d09df84147c2",
+      "rcp_8158b0a63adce441",
+      "rcp_81cedf37663a8ce2",
+      "rcp_82c68c02426bbc6d",
+      "rcp_83878a918db39e79",
+      "rcp_83ab28433b02c53c",
+      "rcp_840a693c2a177b23",
+      "rcp_849313ea500bb989",
+      "rcp_85539e2c6a62afd5",
+      "rcp_8572222ca4d31d88",
+      "rcp_858a018632ce4d99",
+      "rcp_85a9ec2c6bb82556",
+      "rcp_8642cdf001014cd5",
+      "rcp_86fed4efb9fbace2",
+      "rcp_8729c757fbce1cac",
+      "rcp_88b3a73c6d745752",
+      "rcp_897ad5f62e664f87",
+      "rcp_8984c90169245a0b",
+      "rcp_89b7b8e1037f4aa9",
+      "rcp_8a111282841fe77f",
+      "rcp_8a500a1389d20922",
+      "rcp_8b9056157790f1ad",
+      "rcp_8c54378a01a6d17e",
+      "rcp_8c6b5ee5d7e64c05",
+      "rcp_8da67f360dc6d6c5",
+      "rcp_8e86d9edcfd65402",
+      "rcp_8ee161d8c6a28444",
+      "rcp_8f0a91898c940e90",
+      "rcp_8f57cc508ca9f3c2",
+      "rcp_9001fab0cecd337b",
+      "rcp_92358c8bacaa2197",
+      "rcp_92c5e4fc452d3988",
+      "rcp_968acb1f8cd0450c",
+      "rcp_96cd9a6c3a17f737",
+      "rcp_98258cb426016a50",
+      "rcp_9864c5435e9783c0",
+      "rcp_986f17a6bd3ee882",
+      "rcp_989bf48ca9856a1c",
+      "rcp_99165be4261ba2ca",
+      "rcp_994025b4ccb5e181",
+      "rcp_9adf41ab6b9c53fb",
+      "rcp_9d3b0d6d545992b1",
+      "rcp_9d783d9dabc10abc",
+      "rcp_9e0666e586aa1dfc",
+      "rcp_9e1121ae87c71c9c",
+      "rcp_9f361087aef4a5e5",
+      "rcp_9f66e30ee191c412",
+      "rcp_a019c985363ebb2c",
+      "rcp_a094618a992a6e9d",
+      "rcp_a20b849c04da04f9",
+      "rcp_a29d602257f76ddc",
+      "rcp_a31f37d2c939c2be",
+      "rcp_a6380e169609800c",
+      "rcp_a7985a6f3279d701",
+      "rcp_a9991058dcdf0871",
+      "rcp_aa2237a961d0fef8",
+      "rcp_aa413d2a97122563",
+      "rcp_ae4c6ab59367a151",
+      "rcp_ae81028aae53f885",
+      "rcp_af2f81ca99378066",
+      "rcp_afc12d639939c445",
+      "rcp_b09d530b79c656f6",
+      "rcp_b0fa48eb4bd87495",
+      "rcp_b0fea5b5c214c906",
+      "rcp_b10b260415f7abf9",
+      "rcp_b115af5973a8e150",
+      "rcp_b1d31a356c714a0d",
+      "rcp_b1fbe988453624e7",
+      "rcp_b24c66c6f738d9d2",
+      "rcp_b2b86952d2a6eeb6",
+      "rcp_b36f7babe9a42e8d",
+      "rcp_b3ea60ba00bddf04",
+      "rcp_b444e5fd7e4fe414",
+      "rcp_b47a17e9861f75f1",
+      "rcp_b482c23ca5f1f128",
+      "rcp_b5f6a79b1d680b52",
+      "rcp_b64fb3446b13f599",
+      "rcp_b710e65bd2445d7a",
+      "rcp_b78d49f00d3baff3",
+      "rcp_b79dfcb38d2c01a2",
+      "rcp_b80ee5720052a704",
+      "rcp_b9aedd855e29ca5c",
+      "rcp_bba01cdd9b10df7a",
+      "rcp_bd1670e892f9d9d0",
+      "rcp_bdc50ada581c2429",
+      "rcp_bea2c14f9fa3490d",
+      "rcp_befdce5cc366afa9",
+      "rcp_bf1b3162313a8e05",
+      "rcp_bf39d5c2eca4d0c3",
+      "rcp_bf6155c9e658d939",
+      "rcp_c011d9bc15497ffd",
+      "rcp_c17e61ec808aca58",
+      "rcp_c2fd3ecc0e60ce11",
+      "rcp_c36bdbfb76db28d1",
+      "rcp_c5858083bfa3fc0e",
+      "rcp_c6df8c02e25bfa7a",
+      "rcp_c970697b05885d4c",
+      "rcp_ca16ad8d1116b18f",
+      "rcp_cddaefc7d892a5c6",
+      "rcp_ce6851f9f9c51697",
+      "rcp_cedf993d0f89f642",
+      "rcp_d00b6247ae7ec15b",
+      "rcp_d02aae123a2986b3",
+      "rcp_d05250d250e8c766",
+      "rcp_d200857a1004554c",
+      "rcp_d2769ffd3b99819a",
+      "rcp_d27813a8441d197f",
+      "rcp_d396b344dfa0ef1d",
+      "rcp_d553800d5e738ebb",
+      "rcp_d61e95cb0e719432",
+      "rcp_d6cc9f80c9c707fc",
+      "rcp_d78a6cd8e002499a",
+      "rcp_d85dc270b53f71f9",
+      "rcp_d8e9a43aa2a6465b",
+      "rcp_d9e3ffb855d71f67",
+      "rcp_daace5cf0b968e47",
+      "rcp_dbdad8ba7a85d55a",
+      "rcp_dcea5cebeb6672f9",
+      "rcp_dd4250a75293eaa4",
+      "rcp_dec958aa96fba9da",
+      "rcp_e04ab6c93b6db2c3",
+      "rcp_e0d9f075059826d0",
+      "rcp_e25b861b5191dc83",
+      "rcp_e3e40989ca818165",
+      "rcp_e506681003d11719",
+      "rcp_e50c61ebffabf058",
+      "rcp_e941b612c19483f9",
+      "rcp_e99dbb9d9a9e2e7d",
+      "rcp_e9a00cab3b9d3d79",
+      "rcp_ea9301ecf313798c",
+      "rcp_eb177844f24839c3",
+      "rcp_eb90766de887ef75",
+      "rcp_ed7d0b4df215563b",
+      "rcp_ee395a05376d8ce1",
+      "rcp_ee5a13f93f9f1467",
+      "rcp_ee8ebd341b41daf0",
+      "rcp_efb9f664de2d3a59",
+      "rcp_f01ec8af9e619c05",
+      "rcp_f0858f68b690c953",
+      "rcp_f0ce50e3a8fe4ade",
+      "rcp_f20ed45029432970",
+      "rcp_f239ee5519a163ef",
+      "rcp_f25c423b3244f93f",
+      "rcp_f4d007fe8503cc8d",
+      "rcp_f53d7040b04edefd",
+      "rcp_f5cbbb3579c76fe1",
+      "rcp_f644bba4187e74de",
+      "rcp_f6ec41fbc9301a7d",
+      "rcp_f79ee3759a1e5557",
+      "rcp_f8d1ab2ccd9e71f5",
+      "rcp_f9cbd5cc899e009b",
+      "rcp_faa526bf6ee6bdf4",
+      "rcp_fae5d648d6fd581e",
+      "rcp_fbb00f069af0b7ca",
+      "rcp_fd348f0e44fdfadd",
+      "rcp_fd519445200ccfbc",
+      "rcp_ff304e0d89064b1e",
+      "rcp_ffdb46a9b6562f1f"
+    ],
+    "n_luts": 296,
+    "per_major": [
+      {
+        "eval_pool": 393,
+        "eval_reserved": 34,
+        "luts_reserved": 6,
+        "major": "青橙暗调",
+        "target": 83.7,
+        "train_removed": 985
+      },
+      {
+        "eval_pool": 365,
+        "eval_reserved": 52,
+        "luts_reserved": 18,
+        "major": "黑白去色",
+        "target": 77.8,
+        "train_removed": 918
+      },
+      {
+        "eval_pool": 342,
+        "eval_reserved": 38,
+        "luts_reserved": 11,
+        "major": "暖调高亮",
+        "target": 72.9,
+        "train_removed": 840
+      },
+      {
+        "eval_pool": 332,
+        "eval_reserved": 101,
+        "luts_reserved": 79,
+        "major": "低饱褪彩",
+        "target": 70.7,
+        "train_removed": 792
+      },
+      {
+        "eval_pool": 326,
+        "eval_reserved": 83,
+        "luts_reserved": 49,
+        "major": "暖调复古",
+        "target": 69.4,
+        "train_removed": 781
+      },
+      {
+        "eval_pool": 313,
+        "eval_reserved": 60,
+        "luts_reserved": 29,
+        "major": "青绿胶片",
+        "target": 66.7,
+        "train_removed": 798
+      },
+      {
+        "eval_pool": 313,
+        "eval_reserved": 40,
+        "luts_reserved": 10,
+        "major": "黄绿暖调",
+        "target": 66.7,
+        "train_removed": 774
+      },
+      {
+        "eval_pool": 312,
+        "eval_reserved": 25,
+        "luts_reserved": 6,
+        "major": "青蓝清冷",
+        "target": 66.5,
+        "train_removed": 770
+      },
+      {
+        "eval_pool": 303,
+        "eval_reserved": 45,
+        "luts_reserved": 23,
+        "major": "品红冷调",
+        "target": 64.5,
+        "train_removed": 761
+      },
+      {
+        "eval_pool": 287,
+        "eval_reserved": 97,
+        "luts_reserved": 65,
+        "major": "复古胶片",
+        "target": 61.1,
+        "train_removed": 952
+      }
+    ],
+    "train_fraction": 0.049950473189884596,
+    "train_removed": 8371
+  },
+  "splits": {
+    "T_final": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/T_final_sft_ids.txt",
+      "ids_sha256": "a7c36cf8c32d55f1a747c1df88c1e8534d758b46ef357e24debe1a3cd58ab540",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/T_final.index.jsonl",
+      "index_sha256": "4a088fede2bd5f09a68aea36f60e7f2bc1bd9faad48aac628d17b37ed9ac55e2",
+      "n": 918
+    },
+    "T_lut_unseen": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/T_lut_unseen_sft_ids.txt",
+      "ids_sha256": "b84f351fdea5946fd6dc99b9418def9158c41207061ba75eb57ce340e7f238ac",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/T_lut_unseen.index.jsonl",
+      "index_sha256": "a0889103d66e46c3536e0bf6c8907e67c03b9817186b6b8d8414bcd167bf3cc8",
+      "n": 433
+    },
+    "V_what": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_what_sft_ids.txt",
+      "ids_sha256": "c4e47a1a9d5644f8e0620c6b92ba04cc91097ae78d1a533425f3ba68574ec3e5",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_what.index.jsonl",
+      "index_sha256": "6cfe87ab77352589147005a42bf9f2fa424bdb773a051700713b92cad5215400",
+      "n": 897
+    },
+    "V_where": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_where_sft_ids.txt",
+      "ids_sha256": "f5cc151564066c369c0b4c07195b2a51f68cff61ebeced3eb4482c342df3291c",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_where.index.jsonl",
+      "index_sha256": "b99d77456651bf345ed4690cae1134568c496d7e5da0945c5a072c944398d3e5",
+      "n": 896
+    },
+    "train": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train_sft_ids.txt",
+      "ids_sha256": "67ead49eb58c1733eab0040042937dd6211b445d1986ccfbe7b992f667a47212",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl",
+      "index_sha256": "8e577e8078873d4255d968dcfc5163b48fd694ad103f1483a91fda58f64a9d66",
+      "n": 159215
+    }
+  }
+}

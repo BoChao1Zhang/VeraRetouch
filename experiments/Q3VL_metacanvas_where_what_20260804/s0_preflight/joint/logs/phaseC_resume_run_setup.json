@@ -1,0 +1,328 @@
+{
+  "batch_plan": {
+    "spec_violations": [
+      "eval_steps: spec 500, config 6",
+      "save_steps: spec 500, config 6",
+      "save_total_limit: spec 3, config 1"
+    ],
+    "effective_global_batch": 32,
+    "per_device_train_batch_size": 4,
+    "gradient_accumulation_steps": 4,
+    "world_size": 2
+  },
+  "special_token_ids": {
+    "<where>": 151669,
+    "</where>": 151670,
+    "<color>": 151671,
+    "</color>": 151672
+  },
+  "embeddings": {
+    "tokenizer_len": 151673,
+    "embedding_rows_before": 151936,
+    "zero3_partitioned": true,
+    "tie_word_embeddings": true,
+    "resize_action": "kept",
+    "embedding_rows_after": 151936,
+    "reinit": {
+      "ref_rows": 151669,
+      "mean_row_l2": 0.3362230658531189,
+      "ref_mean_row_l2": 1.0807218551635742,
+      "per_dim_std_mean": 0.02054288052022457,
+      "noise_scale": 0.001,
+      "rows": [
+        151669,
+        151670,
+        151671,
+        151672
+      ],
+      "min_pairwise_distance": 0.0016162680694833398
+    },
+    "tied_ok": true
+  },
+  "freeze": {
+    "total_params": 4437815808,
+    "trainable_params": 4131573248,
+    "frozen_params": 306242560,
+    "trainable_ratio": 0.9309925032382056,
+    "trainable_groups": {
+      "model.visual.merger.norm.weight": {
+        "tensors": 1,
+        "params": 1024
+      },
+      "model.visual.merger.norm.bias": {
+        "tensors": 1,
+        "params": 1024
+      },
+      "model.visual.merger.linear_fc1.weight": {
+        "tensors": 1,
+        "params": 16777216
+      },
+      "model.visual.merger.linear_fc1.bias": {
+        "tensors": 1,
+        "params": 4096
+      },
+      "model.visual.merger.linear_fc2.weight": {
+        "tensors": 1,
+        "params": 10485760
+      },
+      "model.visual.merger.linear_fc2.bias": {
+        "tensors": 1,
+        "params": 2560
+      },
+      "model.visual.deepstack_merger_list.{i}.norm.weight": {
+        "tensors": 3,
+        "params": 12288
+      },
+      "model.visual.deepstack_merger_list.{i}.norm.bias": {
+        "tensors": 3,
+        "params": 12288
+      },
+      "model.visual.deepstack_merger_list.{i}.linear_fc1.weight": {
+        "tensors": 3,
+        "params": 50331648
+      },
+      "model.visual.deepstack_merger_list.{i}.linear_fc1.bias": {
+        "tensors": 3,
+        "params": 12288
+      },
+      "model.visual.deepstack_merger_list.{i}.linear_fc2.weight": {
+        "tensors": 3,
+        "params": 31457280
+      },
+      "model.visual.deepstack_merger_list.{i}.linear_fc2.bias": {
+        "tensors": 3,
+        "params": 7680
+      },
+      "model.language_model.embed_tokens.weight": {
+        "tensors": 1,
+        "params": 388956160
+      },
+      "model.language_model.layers.{i}.self_attn.q_proj.weight": {
+        "tensors": 36,
+        "params": 377487360
+      },
+      "model.language_model.layers.{i}.self_attn.k_proj.weight": {
+        "tensors": 36,
+        "params": 94371840
+      },
+      "model.language_model.layers.{i}.self_attn.v_proj.weight": {
+        "tensors": 36,
+        "params": 94371840
+      },
+      "model.language_model.layers.{i}.self_attn.o_proj.weight": {
+        "tensors": 36,
+        "params": 377487360
+      },
+      "model.language_model.layers.{i}.self_attn.q_norm.weight": {
+        "tensors": 36,
+        "params": 4608
+      },
+      "model.language_model.layers.{i}.self_attn.k_norm.weight": {
+        "tensors": 36,
+        "params": 4608
+      },
+      "model.language_model.layers.{i}.mlp.gate_proj.weight": {
+        "tensors": 36,
+        "params": 896532480
+      },
+      "model.language_model.layers.{i}.mlp.up_proj.weight": {
+        "tensors": 36,
+        "params": 896532480
+      },
+      "model.language_model.layers.{i}.mlp.down_proj.weight": {
+        "tensors": 36,
+        "params": 896532480
+      },
+      "model.language_model.layers.{i}.input_layernorm.weight": {
+        "tensors": 36,
+        "params": 92160
+      },
+      "model.language_model.layers.{i}.post_attention_layernorm.weight": {
+        "tensors": 36,
+        "params": 92160
+      },
+      "model.language_model.norm.weight": {
+        "tensors": 1,
+        "params": 2560
+      }
+    },
+    "frozen_groups": {
+      "model.visual.patch_embed.proj.weight": {
+        "tensors": 1,
+        "params": 1572864
+      },
+      "model.visual.patch_embed.proj.bias": {
+        "tensors": 1,
+        "params": 1024
+      },
+      "model.visual.pos_embed.weight": {
+        "tensors": 1,
+        "params": 2359296
+      },
+      "model.visual.blocks.{i}.norm1.weight": {
+        "tensors": 24,
+        "params": 24576
+      },
+      "model.visual.blocks.{i}.norm1.bias": {
+        "tensors": 24,
+        "params": 24576
+      },
+      "model.visual.blocks.{i}.norm2.weight": {
+        "tensors": 24,
+        "params": 24576
+      },
+      "model.visual.blocks.{i}.norm2.bias": {
+        "tensors": 24,
+        "params": 24576
+      },
+      "model.visual.blocks.{i}.attn.qkv.weight": {
+        "tensors": 24,
+        "params": 75497472
+      },
+      "model.visual.blocks.{i}.attn.qkv.bias": {
+        "tensors": 24,
+        "params": 73728
+      },
+      "model.visual.blocks.{i}.attn.proj.weight": {
+        "tensors": 24,
+        "params": 25165824
+      },
+      "model.visual.blocks.{i}.attn.proj.bias": {
+        "tensors": 24,
+        "params": 24576
+      },
+      "model.visual.blocks.{i}.mlp.linear_fc1.weight": {
+        "tensors": 24,
+        "params": 100663296
+      },
+      "model.visual.blocks.{i}.mlp.linear_fc1.bias": {
+        "tensors": 24,
+        "params": 98304
+      },
+      "model.visual.blocks.{i}.mlp.linear_fc2.weight": {
+        "tensors": 24,
+        "params": 100663296
+      },
+      "model.visual.blocks.{i}.mlp.linear_fc2.bias": {
+        "tensors": 24,
+        "params": 24576
+      }
+    },
+    "subtree_counts": {
+      "vision_blocks": {
+        "params": 302309376,
+        "tensors": 288,
+        "trainable_params": 0,
+        "frozen_params": 302309376
+      },
+      "vision_patch_embed": {
+        "params": 1573888,
+        "tensors": 2,
+        "trainable_params": 0,
+        "frozen_params": 1573888
+      },
+      "vision_pos_embed": {
+        "params": 2359296,
+        "tensors": 1,
+        "trainable_params": 0,
+        "frozen_params": 2359296
+      },
+      "vision_merger": {
+        "params": 27271680,
+        "tensors": 6,
+        "trainable_params": 27271680,
+        "frozen_params": 0
+      },
+      "vision_deepstack_mergers": {
+        "params": 81833472,
+        "tensors": 18,
+        "trainable_params": 81833472,
+        "frozen_params": 0
+      },
+      "language_embed_tokens": {
+        "params": 388956160,
+        "tensors": 1,
+        "trainable_params": 388956160,
+        "frozen_params": 0
+      },
+      "language_layers": {
+        "params": 3633509376,
+        "tensors": 396,
+        "trainable_params": 3633509376,
+        "frozen_params": 0
+      },
+      "language_norm": {
+        "params": 2560,
+        "tensors": 1,
+        "trainable_params": 2560,
+        "frozen_params": 0
+      },
+      "lm_head": {
+        "params": 0,
+        "tensors": 0,
+        "trainable_params": 0,
+        "frozen_params": 0
+      }
+    },
+    "n_trainable_tensors": 422,
+    "n_frozen_tensors": 291
+  },
+  "manifest": {
+    "path": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/manifest/terminal_manifest.json",
+    "schema_version": "q3vl.sft2seg.splits/1",
+    "digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840",
+    "top_level_keys": [
+      "audit",
+      "counts",
+      "created_at",
+      "datasets",
+      "digest",
+      "distributions",
+      "eval_group_counts",
+      "model_dir",
+      "model_max_length",
+      "n_effective",
+      "producer",
+      "reserve",
+      "schema_version",
+      "source_builds",
+      "split_authority",
+      "splits",
+      "status"
+    ],
+    "n_effective_train": 159215,
+    "n_eval": 896,
+    "expected_steps_per_epoch": 4976,
+    "train_index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl",
+    "index_layout": "nested"
+  },
+  "architecture": {
+    "architectures": [
+      "Qwen3VLForConditionalGeneration"
+    ],
+    "vision": {
+      "depth": 24,
+      "hidden_size": 1024,
+      "patch_size": 16,
+      "spatial_merge_size": 2,
+      "deepstack_visual_indexes": [
+        5,
+        11,
+        17
+      ],
+      "out_hidden_size": 2560
+    },
+    "text": {
+      "num_hidden_layers": 36,
+      "hidden_size": 2560,
+      "vocab_size": 151936,
+      "tie_word_embeddings": true
+    },
+    "tie_word_embeddings": true,
+    "config_transformers_version": "4.57.0.dev0"
+  },
+  "versions": {
+    "transformers": "4.57.1",
+    "torch": "2.10.0+cu128"
+  }
+}

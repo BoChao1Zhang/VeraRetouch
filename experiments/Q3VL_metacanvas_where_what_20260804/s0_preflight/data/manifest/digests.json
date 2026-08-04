@@ -1,0 +1,157 @@
+{
+  "datasets": {
+    "images": {
+      "dataset_id": "indexed_tar_dd61c6d2221573662dfb679dce06c7f4",
+      "manifest_sha256": "70b270803ea02fb36a24790d49e9d4472bdde10df4dd9c9a059db2048795b702",
+      "member_count": 162359,
+      "payload_bytes": 23679233711,
+      "root": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/images",
+      "sample_count": 162359,
+      "schema_version": 2,
+      "shard_count": 12,
+      "shards": [
+        {
+          "index_sha256": "c18a98e5e17a1b40ffcbae483c79aaf649d402272875e3fdae87c679cde4a4bf",
+          "member_count": 14750,
+          "shard_id": "shard-00000",
+          "tar_bytes": 2147409920,
+          "tar_sha256": "e94a14d6afed782d7aeff9fb07f7cc1bbc9878847580ffc3ef801d827631acfd"
+        },
+        {
+          "index_sha256": "c04f42616bbb110182baed70f7b49a5e2947f3a4fba29aaeebc3368745e4ce89",
+          "member_count": 14764,
+          "shard_id": "shard-00001",
+          "tar_bytes": 2147420160,
+          "tar_sha256": "cf629621b8427da4fc036f988b5ab62ac74db4b47ae5b6a4e7ed3e6f70d334f9"
+        },
+        {
+          "index_sha256": "9a66de420e9294a7495c25fdb21693e921a69d585fdf7b7d2e0103b04361912d",
+          "member_count": 14696,
+          "shard_id": "shard-00002",
+          "tar_bytes": 2147389440,
+          "tar_sha256": "74ba3404d92111d497e1189a12bc761c6ff16c37e050778205879ee527dddffd"
+        },
+        {
+          "index_sha256": "5b1b5f74700197234cac1c5a7d950d880f6700e2219839c9e22b99d8978df4e9",
+          "member_count": 14589,
+          "shard_id": "shard-00003",
+          "tar_bytes": 2147471360,
+          "tar_sha256": "e36d711f43417106a013afa5cb2f8f80e2b21c92c4af4689f07fb9e808cf88b7"
+        },
+        {
+          "index_sha256": "19c67bc51bef46a58347719652e76a55bf99618a74aea10ddad07c3680492243",
+          "member_count": 14605,
+          "shard_id": "shard-00004",
+          "tar_bytes": 2147399680,
+          "tar_sha256": "b4dffffedecef07296e34850b0745ff99f8233f8ac981707a8e95c84ffe4ebf7"
+        },
+        {
+          "index_sha256": "6132f42a431239a5a4d7cceef9a955394ef9c678e4cc0553639a3f68bfd21ddf",
+          "member_count": 14533,
+          "shard_id": "shard-00005",
+          "tar_bytes": 2147358720,
+          "tar_sha256": "52fad08ad2377222c7246921fa9a95ccb1abfede0fc434cbe207b89aed0a9114"
+        },
+        {
+          "index_sha256": "139c9b359bff74bae61108ec3e410424bceb790d4403a5d7e2aa074ad8020b0d",
+          "member_count": 14659,
+          "shard_id": "shard-00006",
+          "tar_bytes": 2147328000,
+          "tar_sha256": "be8a6ce965dfaaa5039697c5309c1a4bb9d6dc312ee328a568b3cc7041243263"
+        },
+        {
+          "index_sha256": "ac89bca92d6fff6d404e054e5b085525d9347db30262365ffccf8648f4f4d68a",
+          "member_count": 14680,
+          "shard_id": "shard-00007",
+          "tar_bytes": 2147358720,
+          "tar_sha256": "ee6b5722d069a008d5f429772c2e1454381699d4ee91b758b37e93b919330002"
+        },
+        {
+          "index_sha256": "177575f3d48a83f195e53911d8b7c7f95b19544659d0f4dd8e913dd71e2670e0",
+          "member_count": 14543,
+          "shard_id": "shard-00008",
+          "tar_bytes": 2147481600,
+          "tar_sha256": "d996cd4e664260fdfb31ed1a1dea55425b3e329b4f8639f3057694d34f7ba99d"
+        },
+        {
+          "index_sha256": "fbe2975b01063980f912315f945c012cafd6d0e18075348c2b48e739bb15dd70",
+          "member_count": 14736,
+          "shard_id": "shard-00009",
+          "tar_bytes": 2147399680,
+          "tar_sha256": "6ee3dc657d77e60f7d469459c4f84450da321cdec86e7d4d2a167c895a95a4cb"
+        },
+        {
+          "index_sha256": "400ee5c13117d70d576e7e13b9bf4bd9273bfa7deb8664c1dee7c6acbc133c5a",
+          "member_count": 14572,
+          "shard_id": "shard-00010",
+          "tar_bytes": 2147358720,
+          "tar_sha256": "69f72042075b8e1a694b36199951ba761bab359abf107f6b7bdc09d9fc7574f7"
+        },
+        {
+          "index_sha256": "bf8de0a44a0f641e2a028253208eaba8eb53479ba6417160e4a9f5d18ffc088c",
+          "member_count": 1232,
+          "shard_id": "shard-00011",
+          "tar_bytes": 182548480,
+          "tar_sha256": "ca4793982086a837fbcafaf6beead2be96cdded5dde15d2ea3f1bc95535a3897"
+        }
+      ]
+    },
+    "records": {
+      "dataset_id": "indexed_tar_a8a17e040b320dc34fa095f582bac0f9",
+      "manifest_sha256": "e75235967384f2b5cde1cca5e5bec2122adad8ac37fea39edacf2458fc87baa6",
+      "member_count": 162359,
+      "payload_bytes": 550209124,
+      "root": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/records",
+      "sample_count": 162359,
+      "schema_version": 2,
+      "shard_count": 1,
+      "shards": [
+        {
+          "index_sha256": "dda37e8581e5d94f0c022fe8a132ed9850af4395e1d9fa3da86d544334abc358",
+          "member_count": 162359,
+          "shard_id": "shard-00000",
+          "tar_bytes": 673710080,
+          "tar_sha256": "e84b23a822480619cad046e199951ab5a5182600747d667a52c360ea93b1609e"
+        }
+      ]
+    }
+  },
+  "splits": {
+    "T_final": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/T_final_sft_ids.txt",
+      "ids_sha256": "a7c36cf8c32d55f1a747c1df88c1e8534d758b46ef357e24debe1a3cd58ab540",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/T_final.index.jsonl",
+      "index_sha256": "4a088fede2bd5f09a68aea36f60e7f2bc1bd9faad48aac628d17b37ed9ac55e2",
+      "n": 918
+    },
+    "T_lut_unseen": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/T_lut_unseen_sft_ids.txt",
+      "ids_sha256": "b84f351fdea5946fd6dc99b9418def9158c41207061ba75eb57ce340e7f238ac",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/T_lut_unseen.index.jsonl",
+      "index_sha256": "a0889103d66e46c3536e0bf6c8907e67c03b9817186b6b8d8414bcd167bf3cc8",
+      "n": 433
+    },
+    "V_what": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_what_sft_ids.txt",
+      "ids_sha256": "c4e47a1a9d5644f8e0620c6b92ba04cc91097ae78d1a533425f3ba68574ec3e5",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_what.index.jsonl",
+      "index_sha256": "6cfe87ab77352589147005a42bf9f2fa424bdb773a051700713b92cad5215400",
+      "n": 897
+    },
+    "V_where": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_where_sft_ids.txt",
+      "ids_sha256": "f5cc151564066c369c0b4c07195b2a51f68cff61ebeced3eb4482c342df3291c",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_where.index.jsonl",
+      "index_sha256": "b99d77456651bf345ed4690cae1134568c496d7e5da0945c5a072c944398d3e5",
+      "n": 896
+    },
+    "train": {
+      "ids": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train_sft_ids.txt",
+      "ids_sha256": "67ead49eb58c1733eab0040042937dd6211b445d1986ccfbe7b992f667a47212",
+      "index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl",
+      "index_sha256": "8e577e8078873d4255d968dcfc5163b48fd694ad103f1483a91fda58f64a9d66",
+      "n": 159215
+    }
+  },
+  "terminal_manifest_sha256": "3c04ef294d008e03229e120ce720379cd94971c51f2e3c425e8112b9ba3cd0db"
+}

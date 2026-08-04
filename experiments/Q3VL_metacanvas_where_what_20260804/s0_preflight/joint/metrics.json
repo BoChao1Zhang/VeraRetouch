@@ -1,0 +1,390 @@
+{
+  "task": "S0-JOINT base SFT joint preflight",
+  "date": "2026-08-05",
+  "spec": "docs/QWEN3_VL_BASE_SFT_SPEC_2026-08-04.md sections 7/8/9",
+  "overall": "PASS",
+  "production_training_started": true,
+  "dataset": {
+    "root": "/mnt/nfs/bc/data/datasets/sft2seg-20260804",
+    "manifest_digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840",
+    "manifest_schema_version": "q3vl.sft2seg.splits/1",
+    "n_effective_train": 159215,
+    "eval_split": "V_where",
+    "n_eval": 896
+  },
+  "step_math": {
+    "steps_per_epoch_from_manifest": 4976,
+    "steps_per_epoch_from_trainer_state": 4976,
+    "half_epoch_step": 2488,
+    "full_epoch_step": 4976,
+    "formula": "ceil(159215/32)=4976 ; round(0.5*4976)=2488",
+    "agree": true,
+    "spec_estimates_2645_5290_used": false
+  },
+  "item1_smoke_2gpu_zero3": {
+    "phaseA_config": "production sft_base.yaml verbatim, only output_dir redirected",
+    "phaseA_steps_run": 74,
+    "phaseA_stopped_by": "explicit kill; ps -p verified exit on launcher and both ranks",
+    "seconds_per_optimizer_step": 5.078,
+    "measurement_window": "steps 10..74 (64 steps)",
+    "per_step_delta_seconds": {
+      "min": 4,
+      "median": 5,
+      "max": 7,
+      "note": "tqdm 1 s resolution"
+    },
+    "effective_global_batch": 32,
+    "batch_combo": "4 per device x GAS 4 x world 2",
+    "spec_violations_phaseA": [],
+    "peak_memory_mib": {
+      "gpu0": 52973,
+      "gpu1": 52355,
+      "capacity_mib": 97871,
+      "utilisation_fraction": 0.5413
+    },
+    "gpu_util_percent": {
+      "gpu0": 83,
+      "gpu1": 81
+    },
+    "interconnect": "PXB (PCIe switch, no NVLink)",
+    "oom_fallback_2x8_needed": false,
+    "loss_steps_10_to_70": [
+      3.4211,
+      3.1362,
+      2.6362,
+      2.0339,
+      1.6522,
+      1.4589,
+      1.3721
+    ],
+    "grad_norm_steps_10_to_70": [
+      33.217242237307595,
+      13.271141590640147,
+      7.667176194667638,
+      4.631852927937727,
+      3.6639621014528476,
+      3.273319451459203,
+      3.2439233656501876
+    ],
+    "all_finite": true,
+    "monotonically_decreasing": true,
+    "status": "PASS"
+  },
+  "item1_eval_on_V_where": {
+    "evals": [
+      {
+        "phase": "B",
+        "step": 4,
+        "eval_loss": 2.5979745388031006,
+        "eval_seg_assistant_loss": 2.600783755523054,
+        "runtime_s": 56.3285,
+        "samples_per_s": 15.907
+      },
+      {
+        "phase": "B",
+        "step": 8,
+        "eval_loss": 2.1702332496643066,
+        "eval_seg_assistant_loss": 2.1757313447656164,
+        "runtime_s": 52.0869,
+        "samples_per_s": 17.202
+      },
+      {
+        "phase": "C",
+        "step": 6,
+        "eval_loss": 2.2815146446228027,
+        "runtime_s": 50.8147,
+        "samples_per_s": 17.633
+      }
+    ],
+    "supervised_tokens_per_eval": {
+      "where": 10134,
+      "color": 83207,
+      "eos": 896,
+      "total": 94237
+    },
+    "eval_loss_vs_segment_loss_delta": 0.0028,
+    "delta_explanation": "HF averages per-batch losses; the segment accumulator is token-weighted. Both are assistant-only; not a masking difference.",
+    "status": "PASS"
+  },
+  "item1_checkpoint_protection": {
+    "trigger_condition": "save_total_limit=1 + metric_for_best_model=eval_loss (arms transformers/trainer.py:2840, the path that bypasses _rotate_checkpoints)",
+    "protected_steps": [
+      4,
+      8
+    ],
+    "checkpoints_written": [
+      2,
+      4,
+      6,
+      8
+    ],
+    "checkpoints_surviving": [
+      4,
+      8
+    ],
+    "checkpoints_deleted": [
+      2,
+      6
+    ],
+    "best_model_checkpoint_step": 8,
+    "best_metric": 2.1702332496643066,
+    "sidecar_present_on_protected": true,
+    "sidecar_carries": [
+      "manifest digest",
+      "n_effective",
+      "special_token_ids",
+      "freeze_report",
+      "protected_steps",
+      "milestone"
+    ],
+    "spec_8_2_companions_present": [
+      "tokenizer",
+      "processor/preprocessor_config",
+      "special_tokens_map",
+      "added_tokens",
+      "chat_template",
+      "config",
+      "trainer_state",
+      "scheduler",
+      "rng_state x2"
+    ],
+    "status": "PASS"
+  },
+  "item1_resume": {
+    "resumed_from": "phaseB/checkpoint-4 (a protected milestone)",
+    "restored_global_step": 4,
+    "dataloader_batches_skipped": 16,
+    "batches_skipped_expected": 16,
+    "batches_skipped_note": "4 steps x GAS 4 x 1 micro-batch per rank",
+    "checkpoint_restore_seconds": 545,
+    "restore_throughput_mb_s": 108.4,
+    "eval_loss_after_resume": 2.2815146446228027,
+    "consistency_check": "between phaseB step4 (2.598) and step8 (2.170) -> optimizer/model state was restored, not re-initialised",
+    "status": "PASS"
+  },
+  "item2_generation_pipeline": {
+    "mode": "single GPU, no DeepSpeed, base (un-finetuned) model",
+    "code_exercised": "Qwen3VLSFTTrainer.generation_diagnostics (the shipped function object)",
+    "n_samples": 3,
+    "max_new_tokens": 128,
+    "seconds_total": 23.25,
+    "seconds_per_sample": [
+      6.6,
+      6.66,
+      6.64
+    ],
+    "peak_memory_gib": 8.46,
+    "prompt_tokens": [
+      448,
+      390,
+      461
+    ],
+    "pipeline_ran": true,
+    "structural_rates": {
+      "tag_completeness": 0.0,
+      "order_accuracy": 0.0,
+      "where_nonempty_rate": 0.0,
+      "color_nonempty_rate": 0.0,
+      "legacy_tag_leak_rate": 0.0,
+      "duplicate_where_rate": 0.0,
+      "duplicate_color_rate": 0.0
+    },
+    "zero_rates_expected": true,
+    "zero_rates_reason": "base model has never seen the four special tokens; task card states generation quality is out of scope",
+    "production_gen_diag_samples": 0,
+    "production_generation_diagnostics_disabled": true,
+    "use_cache_false_note": "load_model sets config.use_cache=False for training; generation therefore runs without a KV cache",
+    "status": "PASS"
+  },
+  "item3_runtime_plan": {
+    "checkpoint_bytes": 59084057355,
+    "checkpoint_gib": 55.03,
+    "checkpoint_files": 26,
+    "checkpoint_breakdown_bytes": {
+      "consolidated_bf16_model_safetensors": 8875719328,
+      "zero3_optim_states_rank0": 24789447623,
+      "zero3_optim_states_rank1": 24789447623,
+      "zero3_model_states_rank0": 306703929,
+      "zero3_model_states_rank1": 306703865,
+      "tokenizer_processor_and_metadata_approx": 15900000
+    },
+    "write_throughput_mb_s": {
+      "nfs_dd_1stream": 104,
+      "nfs_dd_2stream_aggregate": 103,
+      "nfs_measured_from_checkpoint": 106.4,
+      "local_home_dd_1stream": 185,
+      "local_home_dd_odirect": 222
+    },
+    "checkpoint_write_seconds_measured": [
+      556.9,
+      553.6
+    ],
+    "n_saves_in_production": 11,
+    "save_points": [
+      500,
+      1000,
+      1500,
+      2000,
+      2488,
+      2500,
+      3000,
+      3500,
+      4000,
+      4500,
+      4976
+    ],
+    "capacity": {
+      "peak_resident_checkpoints": 6,
+      "peak_resident_gib": 338.4,
+      "total_written_gib": 613.6,
+      "nfs_free_tb": 23,
+      "local_free_tb": 1.5,
+      "nfs_headroom_ok": true,
+      "local_headroom_ok": true
+    },
+    "wall_clock_projection_seconds": {
+      "compute": 25268,
+      "evals": 584,
+      "checkpoints_nfs": 6215,
+      "checkpoints_local": 3571,
+      "startup": 120,
+      "final_save_nfs": 84,
+      "final_save_local": 49,
+      "total_nfs": 32271,
+      "total_local": 29592
+    },
+    "wall_clock_projection_hours": {
+      "total_nfs": 8.96,
+      "total_local": 8.22
+    },
+    "checkpoint_share_of_wall_clock_nfs": 0.193,
+    "nfs_contention_note": "training images (23.68 GB) live on the same NFS mount; during a checkpoint write, `du`/`ls` on that mount blocked >60 s, so the 9.0 h NFS projection is a lower bound",
+    "paths": {
+      "output_dir": "/mnt/nfs/bc/runs/q3vl_base_sft_20260804",
+      "train_log": "<output_dir>/train.log",
+      "job_marker": "<output_dir>/job.marker",
+      "run_setup": "<output_dir>/run_setup.json",
+      "data_root": "/mnt/nfs/bc/data/datasets/sft2seg-20260804",
+      "local_scratch_used_by_training": null,
+      "local_scratch_note": "shards are read in place with os.pread; nothing is unpacked locally"
+    },
+    "status": "PASS"
+  },
+  "item4_resolved_config": {
+    "resolved_yaml": "experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/config/sft_base_resolved.yaml",
+    "launch_script": "experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/config/START_PRODUCTION_TRAINING.sh",
+    "launch_script_executed": false,
+    "seed": 42,
+    "data_seed": 42,
+    "status": "PASS"
+  },
+  "item5_defects": [
+    {
+      "id": "F-1",
+      "kind": "crash",
+      "file": "q3vl/train/tokens.py",
+      "summary": "CPU-generator noise multiplied by a CUDA std -> both ranks died in setup_model under ZeRO-3",
+      "fixed": true,
+      "regression_tests": [
+        "test_mean_init_rows_on_cuda_weight",
+        "test_mean_init_rows_is_device_independent"
+      ]
+    },
+    {
+      "id": "F-2",
+      "kind": "silent",
+      "file": "q3vl/train/freeze.py, q3vl/train/tokens.py",
+      "summary": "param.numel()==0 under zero.Init made every spec 9.2/9.3 count 0 while all 'must be 0' assertions still passed; emb.weight.shape[0]==0 would have triggered a resize shrinking the vocab 151936 -> 151680",
+      "fixed": true,
+      "regression_tests": [
+        "test_full_numel_uses_ds_numel",
+        "test_full_numel_plain_parameter",
+        "test_vacuous_report_is_rejected",
+        "test_apply_freeze_counts_partitioned_params",
+        "test_prepare_embeddings_does_not_resize_a_partitioned_matrix"
+      ]
+    },
+    {
+      "id": "F-3",
+      "kind": "observability",
+      "file": "q3vl/train/configs/sft_base.yaml",
+      "summary": "log_level defaulted to passive, so 'Saving model checkpoint' and 'Deleting older checkpoint' (both logger.info) never reached the log",
+      "fixed": true,
+      "fix": "log_level: info (not a FROZEN_HPARAMS field)",
+      "verified_in": "phaseC_resume log"
+    }
+  ],
+  "unit_tests": {
+    "before": 68,
+    "after": 75,
+    "command": "PYTHONPATH=. /home/bc/envs/q3vl_sft/bin/python -m pytest q3vl/train/tests -q"
+  },
+  "open_decisions": [],
+  "blockers": [],
+  "gpu_clean_after_task": {
+    "gpu0_mib": 0,
+    "gpu1_mib": 0,
+    "compute_apps": 0
+  },
+  "smoke_leftovers": {
+    "path": "/mnt/nfs/bc/runs/q3vl_smoke_joint_20260805",
+    "deleted": true,
+    "deleted_at": "2026-08-05",
+    "note": "small artefacts (job.marker / run_setup.json / trainer_state.json for all three phases) preserved into the deliverable logs/ first"
+  },
+  "main_agent_rulings_20260805": {
+    "D-J1": {
+      "ruling": "local disk during training",
+      "output_dir": "/home/bc/data/runs/q3vl_base_sft_20260804",
+      "nfs_durable_dir": "/mnt/nfs/bc/runs/q3vl_base_sft_20260804",
+      "sync_script": "experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/config/SYNC_PROTECTED_TO_NFS.sh",
+      "sync_record": "experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/checkpoint_sync_record.json",
+      "artefacts_to_publish": [
+        "checkpoint-2488",
+        "checkpoint-4976",
+        "final model + trainer state"
+      ]
+    },
+    "D-J3": {
+      "ruling": "generation diagnostics stay off",
+      "gen_diag_samples": 0,
+      "spec_8_3_rates": "computed offline on protected checkpoints after training"
+    }
+  },
+  "production_run": {
+    "authorised_by": "main agent, 2026-08-05, after implementation-review blockers cleared",
+    "launcher_pid": 3395099,
+    "rank_pids": [
+      3395226,
+      3395227
+    ],
+    "liveness_verified_with": "ps -p (never pgrep)",
+    "log": "/home/bc/data/runs/q3vl_base_sft_20260804/train.log",
+    "job_marker": "/home/bc/data/runs/q3vl_base_sft_20260804/job.marker",
+    "launch_script": "experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/config/START_PRODUCTION_TRAINING.sh",
+    "started_at": "2026-08-05T03:32:43+08:00",
+    "train_loop_begin": "2026-08-05T03:32:52+08:00",
+    "eta_estimate": "2026-08-05T11:29:21+08:00",
+    "eta_uncertainty_minutes": 15,
+    "steps_per_epoch": 4976,
+    "protected_steps": [
+      2488,
+      4976
+    ],
+    "first_measurements": {
+      "seconds_per_step": 4.9,
+      "step10": {
+        "loss": 3.421,
+        "grad_norm": 33.15318314686856,
+        "learning_rate": 6.000000000000001e-07
+      },
+      "step20": {
+        "loss": 3.136,
+        "grad_norm": 13.272671671413255,
+        "learning_rate": 1.2666666666666669e-06
+      }
+    },
+    "reproducibility_check": "step10/step20 loss matches Phase A (same seed 42): 3.4211 / 3.1362",
+    "monitoring_owner": "main agent"
+  }
+}
