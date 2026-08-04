@@ -156,8 +156,10 @@ def _cband_raw(mu: float, hw: float, dtype, device) -> dict[str, torch.Tensor]:
 
 def build_starts(
     phi: torch.Tensor, target: torch.Tensor, readout: str, cfg: FitConfig
-) -> list[dict[str, torch.Tensor]]:
-    """Informed + random starts.  Deterministic in ``cfg.seed``."""
+) -> tuple[list[dict[str, torch.Tensor]], int]:
+    """Informed + random starts.  Deterministic in ``cfg.seed``.
+
+    Returns ``(starts, n_informed_dropped)``."""
     dtype, device = phi.dtype, phi.device
     phi_np = phi.detach().double().cpu().numpy()
     t_np = target.detach().double().cpu().numpy()
@@ -169,12 +171,23 @@ def build_starts(
     # (rank-deficient, or carrying a NaN from a broken upstream stage) makes
     # LAPACK's lstsq raise, and losing the whole multi-start fit to that would
     # turn a recoverable sample into a hard crash.  Random starts always remain.
+    # N-21: `_radial_start` does *not* raise on a NaN phi -- it returns NaNs --
+    # so the finiteness check below is what actually catches that case, and the
+    # dropped-start count is surfaced as a flag rather than only as `n_starts`
+    # quietly falling from 18 to 16.
+    n_informed_dropped = 0
     for maker in (lambda: _lsq_start(phi_np, t_np), lambda: _radial_start(phi_np, t_np)):
         try:
             seed = maker()
         except (np.linalg.LinAlgError, ValueError, FloatingPointError):
             seed = None
-        if seed is not None:
+        if seed is not None and not (
+            np.isfinite(seed[0]) and np.isfinite(seed[1]) and np.all(np.isfinite(seed[2]))
+        ):
+            seed = None
+        if seed is None:
+            n_informed_dropped += 1
+        else:
             seeds.append(seed)
     for _ in range(cfg.n_random):
         seeds.append((0.0, 1.0, rng.normal(size=D)))
@@ -208,7 +221,7 @@ def build_starts(
             starts.append(st)
         else:
             raise ValueError(f"unknown readout {readout!r}")
-    return starts
+    return starts, n_informed_dropped
 
 
 # --- fit --------------------------------------------------------------------
@@ -309,7 +322,7 @@ def fit_latent(
     phi = phi.detach().to(dtype)
     target = target.detach().to(dtype).clamp(0.0, 1.0)
 
-    starts = build_starts(phi, target, readout, cfg)
+    starts, n_informed_dropped = build_starts(phi, target, readout, cfg)
     best: dict[str, Any] | None = None
     start_losses: list[float] = []
     n_failed = 0
@@ -352,12 +365,14 @@ def fit_latent(
                 or (abs(cand["loss"] - best["loss"]) <= 1e-4 and cand["alpha"] < best["alpha"])):
             best = cand
 
+    base_flags = ["informed_start_unavailable"] if n_informed_dropped else []
     if best is None:
         # No zero-vector substitute: protocol 10.2 forbids it, and a fabricated
         # latent would go on to produce a constant mask and a real gradient.
         return FitResult(
             latent=None, readout=readout, loss=float("inf"), status="rejected",
-            reject_reason="all_starts_failed", start_losses=start_losses,
+            reject_reason="all_starts_failed", flags=base_flags,
+            start_losses=start_losses,
             n_starts=len(starts), n_failed_starts=n_failed, objective=cfg.objective,
             seed=cfg.seed,
         )
@@ -372,7 +387,7 @@ def fit_latent(
     metrics = mask_metrics(m, target)
     metrics["loss_recheck"] = float(objective_value(cfg.objective, m, target))
 
-    flags: list[str] = []
+    flags: list[str] = list(base_flags)
     if best["alpha"] < cfg.reject_alpha:
         flags.append("alpha_collapsed")
     if metrics["pred_std"] < 1e-6:

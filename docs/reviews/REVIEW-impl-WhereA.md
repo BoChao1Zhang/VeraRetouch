@@ -1,5 +1,8 @@
 # REVIEW-impl-WhereA：Stage-Where-A basis calibration 实现审阅
 
+> **本文档有两节判决。初审（2026-08-05 早）判 6 BLOCKER；聚焦复审（2026-08-05 晚，见文末
+> 《复审》节）确认 6 项全部关闭，新发现 1 项 BLOCKER（B-7）。当前有效判决以《复审》节为准。**
+
 > 审阅人：独立实现审阅 subagent（与实现者无共享上下文）
 > 日期：2026-08-05
 > 规格权威：`docs/METACANVAS_WHERE_WHAT_FINAL_EXPERIMENT_PROTOCOL_2026-08-04.md` §2.3 / §3 / §4 / §5.5 / §10.2 / §14
@@ -423,3 +426,226 @@ PIL 模式、宽高比、以及 `corr(|I_tar−I_in|, mask)` 上与 `normal` **�
 > `python indep_mask_check.py V_where 24 5` / `python indep_mask_check.py train 24 4001`。
 > B-4 的两组数字由 `q3vl.where.upsample.guided_upsample` 与 `q3vl.where.readout.apply_readout`
 > 在 float64 下直接算出，未改动任何代码。
+
+---
+---
+
+# 复审（2026-08-05 晚）：针对 6 个 BLOCKER 修复的聚焦审阅
+
+> 范围：只审修复 diff 与其单测，不重审全量。仍然只读、未使用 GPU
+> （Base SFT 仍在跑，PID 3395226/3395227，各占 54 GB，checkpoint 已到 1500）。
+> 被审快照：commit `a2c2427` + `basis.py` / `tests/test_fpre.py` 两处未提交改动。
+> 交付物侧：`NOTES.md` 新增《四之二 逐项回应》与 D10、`PREFLIGHT_WHERE_A_PENDING.md` 增 S0/S5/S6、
+> `preflight_where_a_cpu_dryrun.json` 已重跑归档。
+
+## 复审判决
+
+**原 6 个 BLOCKER 全部关闭（6/6 pass）。新增 BLOCKER 1 个：B-7（`r*(z)` 网格 121 ≠ 协议 §5.5 的 257）。**
+
+**准许进入 S2（GPU preflight）与 S4（四臂正式校准）。**
+B-7 落在 `make_oracle_latents.py`，该作业在 **S5**（S4 之后）才跑，因此不阻塞 S2/S4，
+但**必须在 S5 之前清掉**，否则 Where-B 的 `L_curve` 接口与协议不符。
+另有 3 项"S4 前应做"的廉价整改（N-19 / N-18 / N-20），见下。
+
+我独立复跑的证据：
+- `pytest q3vl/where/tests -q` → **134 passed / 52.6 s**（原 97）；
+- `python -m q3vl.where.preflight --skip-model` → 2 PASS；
+- `python -m q3vl.where.preflight --device cpu --dtype float32 --limit 3`（输出写我的 scratchpad，
+  未覆盖交付物）→ **WA-P6a / P4c / P4a / P4d / P5 / P4e / P6b 全 PASS，P4b SKIP**（checkpoint-2488 尚未产出）。
+
+---
+
+## 一、逐 BLOCKER 复核
+
+### B-1 · 被拒拟合不再驱动梯度、不再进天花板 —— **PASS**
+
+- `oracle.py:236` `latent: Latent | None`；`oracle.py:355-361` `all_starts_failed` 分支**返回 `latent=None`**，
+  零向量构造已删除。`oracle.py:242-245` `usable = (status == "ok" and latent is not None)` 是唯一闸门。
+- **我 grep 了全部生产消费方，没有一个绕过 `usable`**：
+  `calibrate.py:245`（step）、`calibrate.py:339`（evaluate）、
+  `scripts/make_oracle_latents.py:127`、`scripts/sweep_upsample.py:88`
+  ——四处都是 `if not fit.usable: ... continue` 之后才第一次触碰 `.latent`。
+  `preflight.py:409` 另有 `lat = row.get("latent"); if lat is None: continue`。
+  `latent=None` 这个设计本身是对的：**任何忘记检查的消费方会在第一次使用时炸掉，而不是安静地拿常数掩膜训 B**。
+- 天花板侧：`calibrate.py:339-343` 被拒样本 `continue`，不进 `per[r]`；
+  改为分别报 `n_ok / n_rejected / reject_reasons / fit_success_rate`。
+  §5.6 的"相对逐图 oracle ≥85%"分母不再被污染。
+- 单测覆盖：全拒时 `grad_norm is None` 且 B 逐位不变、被拒不进 ceiling、`usable` 语义。
+
+### B-2 · rejection report 流式落盘 —— **PASS**
+
+- `calibrate.py:229-266`：`step()` 返回 `fit_rows`，含**全部非 `ok` 行** + `sample_every` 每 N 步一条
+  健康样本行（有对照基线，是比我要求的更好的做法）；行里带 `sample_id / step / build / winner_confidence /
+  reject_reason / flags / n_starts / n_failed_starts`。
+- `run_calibration.py:140-155`：`fit_rejections.jsonl` 与 `steps.jsonl` 同时打开，逐 batch 写、按 `log_every` flush
+  ——是流式而非结尾一次性 dump，长任务中途被杀也留得住证据。
+- `calibrate.py:426-437` `rejection_summary()` 进 `state()`（即每个 `projector_step*.pt`）与 `schedule.json`。
+
+### B-3 · 调度按 eligible 步数建 + 终局断言 —— **PASS（一处残留风险，见 N-19）**
+
+- `pipeline.py:187-211` `count_eligible()` 跑的是**真正的 `eligibility()`**（只读 record，不碰图像/模型），
+  并返回 `skipped_reasons` 直方图与 `by_winner_confidence`；结果缓存在 `eligible_count.json`。
+- `run_calibration.py:111-113` `total_steps = ceil(min(n_eligible, train_limit)/batch)`；
+  `_batched` 会吐最后一个不满批，与 `ceil` 一致。
+- `run_calibration.py:171-177` 跑完断言 `cal.step_count == total_steps`，不等即 `SystemExit` 并提示删缓存重数；
+  `schedule.json` 落 `planned/actual/warmup/n_seen/final_lr`。
+- 单测同时钉住反面：用未过滤数会复现"结尾 LR 停在峰值 30%+"。
+
+### B-4 · 高分辨率通路进生产 + 两个静默失效封堵 —— **PASS（一处门槛缺失，见 N-20）**
+
+四件事都做了，且我逐条独立复算：
+
+1. **通路不再是死代码**：`WhereASample.mask_hi/guide_hi`（`calibrate.py:96-118`，半供即报错）、
+   `WhereADataSource(attach_hi=...)`、`evaluate()` 调 `evaluate_latent(...)` 走真实 guided upsample，
+   `run_calibration.py:182` 在评测前置 `source.attach_hi = True`。
+2. **域声明 + clamp 前统计**：`config.py:54-62` 明写 producer/consumer 两侧的域；
+   `upsample.py:126-138` 先算 `raw_min/raw_max/frac_below/frac_above/frac_out_of_domain`，**再** clamp。
+   clamp 是 `UpsampleConfig` 上的**整臂常量**（`clamp_domain` + `domain`），不是逐图 —— 未触红线。
+3. **CBand12 改 logsumexp**。我用 float64 独立扫了 σ：
+
+   | σ | `max abs(eps 形 − logsumexp 形)`，z∈[−3,3] |
+   |---:|---:|
+   | 0.025（下界） | **9.78e-1** |
+   | 0.050 | 4.33e-3 |
+   | 0.100 | 8.98e-8 |
+   | 0.150 / 0.200 / 0.300 | ≤ 5.9e-9 |
+
+   即"良态区数值等价"的说法**在 σ ≳ 0.10 成立**，而在 σ ≤ 0.05（拟合完全可以走到的区间）
+   两者是不同的函数 —— 这正是修复的着力点。塌陷探针复算：
+   `eps` 形在 z ∈ {0.0, 3.3, 4.0, ±6.6} 处恒为 0（尽管所有 `c_i = 0.982`），
+   `logsumexp` 形全部返回 0.982014。mirror 恒等式在 logsumexp 下仍精确（最大误差 **4.44e-16**）。
+   `softmax(log_o − 0.5((z−μ)/σ)²)` 确实是 `g_i/Σg_j` 的稳定求值，`logsigmoid` 避免了 `o` 下溢产生 `−inf`；
+   `m = Σ c_i·resp_i` 是 `c` 的凸组合，因此恒在 (min c, max c) ⊂ (0,1)。**数学等价性成立。**
+4. **防 revert 的 pin 测试是真的双向**：`test_eps_form_collapses_to_zero_at_the_sigma_lower_bound`
+   钉死旧式的塌陷数字（删掉 `"eps"` 模式即失败），`test_logsumexp_is_the_default`
+   钉死默认值（切回 `"eps"` 即失败）。两个方向都拦得住。
+
+**真实数据上第一次有了交付分辨率的数字**（我复跑的 CPU preflight，n=3；归档的 n=4 版本数字一致）：
+
+| readout | headline_low 中位 | headline_hi 中位 | low→hi 中位落差 | clamp 前 s raw | 越域像素 |
+|---|---:|---:|---:|---|---:|
+| band | 0.8399 | 0.8222 | **0.0177** | **[−4.577, +2.569]** | 最大 **0.542%** |
+| cband12 | 0.8612 | 0.7874 | **0.0738** | [−0.455, +2.306] | 0% |
+
+这组数直接印证了初审 B-4 的判断：**低分辨率天花板比交付分辨率高 1.8–7.4 个 IoU 点**，
+band 的 `s` 确实被 guided filter 推到 −4.58。现在 `headline_hi` 与 `headline_low` 并排出报表，
+`s_domain` 进 `per_readout`，`WA-P4e` 进 preflight，`sweep_upsample.py` 成为 D5 的定档作业。
+
+### B-5 · train split oracle latent —— **接口两点 PASS、z 网格 FAIL（→ B-7）**
+
+- `make_oracle_latents.py:89-94`：`B.npy` 不存在即 `SystemExit`，错误信息写明"必须在 S4 冻结 B 之后跑，
+  绝不能对着未校准 basis 拟 latent"。**拒绝逻辑正确**，且默认路径指向 `BASIS_DIR/<arm>/B.npy`，
+  报告里另存 `basis_sha256_of_npy`，可事后核对用的是哪一版 B。
+- 输出走 §2.3 shards（`pack_oracle` + `verify_published(n_random=64)`），目标已存在即硬报错。
+- `run_where_a.sh` 增 `oracle-latents` 步，顺序写成 `... -> calibrate x4 -> oracle-latents` ✓。
+- **但 z 网格不对**，见 B-7。
+
+### B-6 · 包络定理论证 —— **PASS（缺运行期护栏，见 N-18）**
+
+`config.py:135-136` `FIT_OBJECTIVE = CALIB_OBJECTIVE = "soft_iou_minmax"`；
+`calibrate.py:17-26` 的 docstring 重写得准确：明确写出"该论证**只**在 `CalibConfig.objective` 同时驱动内外层时成立"，
+并把"若两层用不同 `f`/`g`，被丢掉的 `(dg/dλ)(dλ*/dB)` 是 O(1)"作为反面写进注释。
+`config.py:127-134` 记录了这次改判的理由。表述正确，不再有"目标不同 + 包络定理保证正确"并存的矛盾。
+
+### 附带项 · `build_starts` 的 LinAlgError 降级 —— **PASS，但有两处安静边缘（→ N-21）**
+
+我实测了这条新路径：
+
+- `np.linalg.lstsq` 遇 NaN **确实抛 `LinAlgError`**（`** On entry to DLASCL ...` 只是 LAPACK 在抛之前打到 stderr 的噪声，
+  不是"静默返回 NaN"）—— 所以 try/except 是真起作用的，不是装饰。
+- 端到端：NaN 污染的 `phi` 走 `fit_latent` → `n_starts` 由 18 掉到 16、
+  最终 `status=rejected / reason=all_starts_failed / usable=False`。**降级路径通向一条被记录的拒绝，不是一个坏 latent。**
+- 秩亏 `phi` 不抛（lstsq 取最小范数解），行为正常。
+
+两处安静边缘见 N-21。
+
+---
+
+## 二、新增 BLOCKER
+
+### B-7 · `r*(z)` 的 z 网格是 121 点，协议 §5.5 写的是 257 点
+
+**文件行号**：`q3vl/where/scripts/make_oracle_latents.py:58`
+```python
+CURVE_Z = np.linspace(CBAND_MU_LO, CBAND_MU_HI, 121)
+```
+**规格条文**：协议 L305 —— `L_curve = mean_z |R(z;rho_pred) - r*(z)|, z=linspace(-3,3,257)`。
+
+`NOTES.md` 的回应表（B-5 行）也明写"固定 **121** 点 z 网格"，说明这是有意选的数，不是笔误 —— 但协议把
+257 写死了。脚本自己的 docstring 说这份采样是"让 Where-B 的 `L_curve` 不需要 readout 代码，直接做向量差"，
+也就是**要被直接消费**的；121 点的向量喂不进 257 点的 `L_curve`，Where-B 只能二选一：
+插值（把误差引进一个监督目标）或偏离 §5.5。
+
+修法一行：`121 → 257`。载荷里 `rho_raw` 仍在，所以没有信息损失，纯粹是接口口径。
+
+**顺带**：`curve_of` 用的是默认的 `logsumexp` 归一化（D10），但发布载荷里**没有 `cband_normalization` 字段**。
+Where-B 必须用同一约定重算 `R(z;rho_pred)`，否则 `L_curve` 两侧不是同一个函数。请把该字段写进
+`oracle.json` 与 `report`（见 N-25）。
+
+---
+
+## 三、复审新增 NIT
+
+| # | 位置 | 问题与建议 |
+|---|---|---|
+| N-18 | `q3vl/where/calibrate.py:161-170` | B-6 目前**只靠两个模块常量恰好相等**加一个"只验默认值"的单测（`test_calibrate.py:311-317`）维持。`CalibConfig(objective=...)` / `fit_cfg=FitConfig(objective=...)` 是公开入参，四个脚本都在显式构造它们。建议在 `Calibrator.__init__` 加运行期断言 `cfg.objective == cfg.inner_fit.objective`，并在 `fit_sample` 里校验传入的 `fit_cfg.objective`。**S4 前做，改动 3 行。** |
+| N-19 | `q3vl/where/pipeline.py:104-116` vs `pipeline.py:187-211` | `count_eligible()` 只跑 `eligibility()`，而 `prepare()` 还会因 **aspect_mismatch**（N-4 的修复引入）再丢样本；`resolver.resolve/load` 的异常至今**未被 try/except**（`extract_maskviews.py:83-86` 是包了的）。后果：75,544 个样本里只要有 1 个对不上，B-3 的终局断言就在**整整一个 GPU epoch 跑完之后**才 `SystemExit`（`projector_final.pt` 已存，评测与发布阶段全丢）；一个读不出的 `.cgt.png` 更是直接 traceback 打断 epoch。建议：(a) `prepare()` 把 mask IO 异常也转成 `self.rejections` 记录；(b) 终局断言改成"缺口能被 `source.rejections` 逐条解释就记 warning + 落 `schedule.json`，解释不了才 `SystemExit`"。**S4 前做。** |
+| N-20 | `q3vl/where/preflight.py:390-395`、`scripts/sweep_upsample.py:127-130` | `WA-P4e` 只在**关掉 clamp** 时才因越域判 fail；默认配置下 `frac_out_of_domain` 与 `median_drop_low_to_hi` 只报不判，检查在默认配置下**永远不会 fail**。`sweep_upsample` 的 `best = max(..., hi_soft_iou median)` 同样完全忽略越域比例，可能选出"IoU 好但大量像素被 clamp"的配置。建议：S2 的 sweep 里预注册两个阈值（`frac_out_of_domain` 中位数上界、`hi−low` 落差下界），把选择改成字典序（先过阈值再比 IoU），并让 `WA-P4e` 对阈值判 fail。**S2 期间定档。** |
+| N-21 | `q3vl/where/oracle.py:167-176, 189-194` | informed 起点被降级时**没有 flag**，只有 `n_starts` 从 18 变 16 这一个整数暴露它；若 `phi` 只是轻度退化（informed 失败但随机起点成功），fit 会以 `status="ok"` 正常返回，`flag_counts` 里什么都没有。另外 `_radial_start` 在 NaN `phi` 上**不抛异常**，会返回 `(nan, nan, u)`，`_s_stats` 的有限性兜底只护住 `mu/sd`，`w0/alpha` 仍是 NaN，最终以"起点失败"计数收场。建议：起点构造后统一做有限性检查，丢弃时追加 `flags.append("informed_start_unavailable")`，这样 `rejection_summary().flag_counts` 能聚合。 |
+| N-22 | `NOTES.md` §3.3 vs `preflight_where_a_cpu_dryrun.json` | N-9 已基本修好（相干性 0.01733/0.00745、design cond 27.9/95.7、phi cond 8.57e4/1.18e5、min α 0.187、8/8 latent、band raw [−4.577,+2.569] 0.542% 我逐字段核对**全部对上**）。**但新加的吞吐字段又复发同一问题**：NOTES 写"1.697 s/拟合 → 40.3 / 71.2 CPU-小时每臂"，归档 JSON 写 `s_per_fit: 1.889`、`projected_hours_per_arm_42752: 44.87`、`_75544: 79.29`。请以 JSON 为准改 NOTES。 |
+| N-23 | `NOTES.md` §3.3 | headline 那两行的 p10/median/p90 是在 **n=2** 上算的（4 个样本里只有 2 个 `normal`；JSON 的 `summarize` 带 `n` 字段，NOTES 没写）。最近秩约定下 k=2 时 median==p10，容易被误读成"稳定"。请把 n 标出来。 |
+| N-24 | `scripts/make_oracle_latents.py:99, 111, 123` | 脚本第 99 行 `projector.requires_grad_(False)`，但第 111 行 `Calibrator.__init__` 对 BA-3 又 `requires_grad_(True)` 并建了一个**永远不会被 step 的 AdamW**；`cal.phi_for(sample)` 在 `no_grad` 之外，每个样本都建一次计算图。B 事实上不会被改（从不调用 `cal.step()`），但脚本 docstring 的"`B` ... never touched"应当被**强制**而不是靠约定：加 `assert cal.optimizer is None or not cal.trains_projector` 之类的护栏，或把 `phi_for` 包进 `torch.no_grad()`。 |
+| N-25 | `scripts/make_oracle_latents.py:144-148` | 发布的 `oracle.json` 载荷缺 `cband_normalization` 字段（D10）。`r*(z)` 是在 `logsumexp` 约定下采的，Where-B 必须用同一约定算 `R(z;rho_pred)`。请写进载荷与 `report`。 |
+| N-26 | `tests/test_readout.py:178-191` | 等价性单测只在 `sig_raw ≈ 2.0`（σ 接近上界）上验。我实测**分界在 σ ≈ 0.10**（σ=0.05 已差 4.3e-3）。建议把 σ=0.10 这个边界点加进用例，这样将来动 `CBAND_SIG_LO/HI` 会被立刻发现。 |
+| N-27 | `scripts/sweep_upsample.py:66-76` | 默认用**未校准的 seeded B** 拟 latent 来定 D5。作为 S2 的前置门可以接受，但 BA-3 校准完之后 `s` 场的形状会变，建议 S4 结束时用 `--basis .../BA-3-Joint/B.npy` 复跑一次确认推荐值仍成立，再把 `GUIDED_PARAMS_PROVISIONAL` 翻成 `False`。 |
+
+## 四、初审 nit 的关闭情况
+
+N-1（docstring 公式）、N-2（batch 轴绕过，已加断言 + 单测）、N-3（`MaskViewStore` 让 maskview shard 有了消费方）、
+N-4（两条链路对 aspect 不符统一为丢弃）、N-5a/b（`n_tokens` 删除；驱动器 `try/except BaseException` + `flush()`，
+单测 `test_driver_writes_json_even_when_a_check_explodes` 覆盖）、N-6（新增 `WA-P4d`，见下）、N-7/N-8（口径已写进
+NOTES 与 JSON）、N-9（数字重新对齐，除 N-22）、N-10、N-11（`percentiles()` 单一实现 + 单测）、N-12（硬报错）、
+N-13（流式）、N-14（豁免写进 S6）、N-15（吞吐进 `WA-P5.throughput`）、N-16（D5 先例作废 + `GUIDED_PARAMS_PROVISIONAL`）
+—— **全部关闭**。
+
+**N-6 值得单独说**：新增的 `WA-P4d-position-encoding`（`preflight.py:267-308`）不是代理指标，
+而是把 `pos_embed.weight` 的双线性插值**独立重算一遍**，再经 `unshuffle_to_grid` 与
+`visual.fast_pos_embed_interpolate(grid_thw)` 的真实输出逐元素比。我对照了 transformers 4.57.1 的
+`fast_pos_embed_interpolate` 源码：HF 用 `linspace(0, n-1, h)` + `int()` 截断 + `clip(max=n-1)` 的双线性权重，
+之后 `.view(t, h//m, m, w//m, m, -1).permute(0,1,3,2,4,5)`。preflight 的重算与前半段是同一套数学（这部分算再推导），
+**但后半段的 merge-order 置换是真正独立的**：它拿一个空间结构已知的信号（位置格）把
+`unshuffle_to_grid` 是不是 HF 置换的精确逆给钉死了。实测 `max_rel_error = 1.85e-7`。这正是 §14 项 4"位置编码"要的东西。
+
+## 五、D1 落地确认
+
+`config.py:156-164`：
+```python
+EXCLUDE_WINNER_CONFIDENCE_LOW = False       # training population
+HEADLINE_WINNER_CONFIDENCE = ("normal",)    # reporting population
+```
+- 训练含 low ✓（`run_calibration.py` 的开关由 `--include-low` 反转成 `--exclude-low`，默认即含）；
+- headline 只 normal ✓（`Calibrator.evaluate(headline_confidence=...)` → `headline_low` / `headline_hi`
+  只取该层，`by_winner_confidence_low_res` / `_hi_res` 另出分层）；
+- low 单独分层 ✓（另有 `run_calibration.py` 的 `strata.winner_confidence`）；
+- 注释里写明"该放宽只对 Where-A 生效，不得流进 Where-B / What 的评测 GT" ✓ —— 与我在初审第十节提的约束一致。
+
+**确认落地。**
+
+## 六、更新后的放行条件
+
+| 阶段 | 状态 |
+|---|---|
+| **S1** maskviews 打包 | **放行**（D1 已定；N-3/N-4 已闭环）。仍须等 Base SFT 结束 |
+| **S2** GPU preflight + D5 sweep | **放行**。必交：`WA-P4b` 必须 PASS（非 SKIP）；GPU 侧内层拟合吞吐；N-20 的两个阈值预注册 |
+| **S4** 四臂正式校准 | **放行**。开跑前建议先做 N-18、N-19 两处（合计十余行，避免一整个 epoch 白跑） |
+| **S5** train oracle latents | **不放行，直到 B-7 关闭**（`CURVE_Z` 121 → 257，并补 `cband_normalization` 字段） |
+
+## 七、复审判决行
+
+**原 BLOCKER 6 项全部关闭；新增 BLOCKER 1 项（B-7，仅阻塞 S5）；新增 NIT 10 项。
+准许进入 S2 GPU preflight 与 S4 正式校准；S5 须先清 B-7。**
+
+> 复审的独立复算：`pytest q3vl/where/tests -q` → 134 passed；
+> `q3vl.where.preflight --skip-model` 与 `--device cpu --dtype float32 --limit 3`
+> （`--out` 指向 scratchpad，未覆盖交付物）→ 7 PASS / 2 SKIP；
+> σ 扫描与塌陷探针、`build_starts` 的 LinAlgError 端到端探针均在 float64 下直接调用被审函数，未改动任何代码。

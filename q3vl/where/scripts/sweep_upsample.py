@@ -36,7 +36,8 @@ import torch
 
 from q3vl.where.calibrate import Calibrator, percentiles
 from q3vl.where.config import (
-    CalibConfig, FitConfig, MODEL_DIR, PhiConfig, REPORT_DIR, UpsampleConfig,
+    CalibConfig, FitConfig, MODEL_DIR, PhiConfig, REPORT_DIR, S_OOD_FRAC_MAX,
+    UpsampleConfig,
 )
 from q3vl.where.fpre import load_vision_tower
 from q3vl.where.oracle import evaluate_latent
@@ -121,23 +122,48 @@ def main() -> int:
             })
             print(json.dumps(results[-1]), flush=True)
 
-    best = max(results, key=lambda r: (
-        (r["hi_soft_iou"]["band"].get("median", 0) +
-         r["hi_soft_iou"]["cband12"].get("median", 0)) / 2))
+    # N-20: lexicographic selection, not "best IoU regardless".  A setting whose
+    # upsample throws a large share of pixels outside the declared s domain buys
+    # its IoU with clamping, so it is disqualified before IoU is even compared.
+    def mean_hi(r) -> float:
+        return ((r["hi_soft_iou"]["band"].get("median", 0.0) +
+                 r["hi_soft_iou"]["cband12"].get("median", 0.0)) / 2)
+
+    gate = S_OOD_FRAC_MAX
+    admissible = [r for r in results
+                  if r["frac_out_of_domain"].get("median", 1.0) <= gate]
+    if admissible:
+        best = max(admissible, key=mean_hi)
+        selection = "passed_domain_gate_then_max_hi_soft_iou"
+    else:
+        # nothing qualifies: recommend the least-clamped setting and say so
+        # loudly rather than quietly returning the best IoU.
+        best = min(results, key=lambda r: r["frac_out_of_domain"].get("median", 1.0))
+        selection = "NO_SETTING_PASSED_THE_DOMAIN_GATE_min_out_of_domain_fallback"
     out = {
         "env": _env(), "n_latents": len(cached), "limit": args.limit,
         "basis": args.basis or "seeded_orthogonal_uncalibrated",
         "elapsed_s": round(time.time() - t0, 1),
         "grid": {"radius_low": list(RADII), "eps": list(EPSILONS)},
+        "gate": {"frac_out_of_domain_median_max": gate, "provisional": True,
+                 "n_admissible": len(admissible), "n_evaluated": len(results)},
+        "selection_rule": selection,
         "results": results,
         "recommended": {k: best[k] for k in ("radius_low", "eps")},
+        "recommended_stats": {"frac_out_of_domain_median":
+                              best["frac_out_of_domain"].get("median"),
+                              "mean_hi_soft_iou_median": mean_hi(best)},
         "note": "write the recommendation into config.py and set "
-                "GUIDED_PARAMS_PROVISIONAL = False",
+                "GUIDED_PARAMS_PROVISIONAL = False; re-run with "
+                "--basis .../BA-3-Joint/B.npy after S4 to confirm it still holds "
+                "(REVIEW-impl-WhereA N-27)",
     }
     path = Path(args.out) if args.out else REPORT_DIR / "d5_upsample_sweep.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(out, indent=2))
-    print(json.dumps({"recommended": out["recommended"], "wrote": str(path)}, indent=2))
+    print(json.dumps({"recommended": out["recommended"],
+                      "selection_rule": selection,
+                      "gate": out["gate"], "wrote": str(path)}, indent=2))
     source.close()
     return 0
 

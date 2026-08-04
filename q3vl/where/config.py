@@ -87,6 +87,14 @@ CBAND_EPS = 1e-9                        # E2 precedent; only used by the "eps" m
 # an o_i that underflows to 0.0 cannot produce -inf/NaN either.
 CBAND_NORMALIZATION = "logsumexp"       # "logsumexp" | "eps" (legacy, for comparison)
 
+# --- protocol 5.5: the z grid L_curve is evaluated on ------------------------
+# "L_curve = mean_z |R(z; rho_pred) - r*(z)|,  z = linspace(-3, 3, 257)".
+# The published oracle latents carry r*(z) sampled on exactly this grid, so
+# Where-B can take a plain vector difference; any other length would force it to
+# either interpolate (injecting error into a supervision target) or deviate from
+# 5.5.  Not a tunable.
+CURVE_Z_N = 257
+
 # --- protocol 4.2: guided upsample -----------------------------------------
 # DECISION (D5): neither radius nor eps is pinned by the protocol.  radius is
 # expressed on the *low-res* grid so it is resolution independent.
@@ -98,6 +106,15 @@ CBAND_NORMALIZATION = "logsumexp"       # "logsumexp" | "eps" (legacy, for compa
 GUIDED_RADIUS_LOW = 2
 GUIDED_EPS = 1e-3
 GUIDED_PARAMS_PROVISIONAL = True        # flipped to False when S2 fixes D5
+# PRE-REGISTERED (provisional, REVIEW-impl-WhereA N-20): the median per-sample
+# fraction of pixels the guided upsample pushes outside `S_DOMAIN` before the
+# clamp.  Above this, the clamp stops being a boundary repair and starts being
+# the thing that decides the mask, so `WA-P4e` fails and the D5 sweep rejects
+# the setting -- selection is lexicographic (threshold first, soft-IoU second),
+# never "best IoU regardless of how much got clamped".
+S_OOD_FRAC_MAX = 0.01
+# CPU measurement on 4 real V_where samples: band median 0.049%, max 0.542%;
+# cband12 0%.  Re-fix the threshold from the S2 sweep together with D5.
 
 # --- protocol 10.2: Where-A optimisation -----------------------------------
 PROJECTOR_LR = 1.0e-4

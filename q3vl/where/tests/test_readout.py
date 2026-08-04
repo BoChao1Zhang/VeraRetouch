@@ -175,20 +175,42 @@ def test_unknown_readout_rejected():
 
 # --- REVIEW-impl-WhereA B-4: the CBand12 denominator collapse ---------------
 
-def test_cband_logsumexp_matches_the_eps_formula_where_it_is_well_conditioned():
-    """The two evaluations are the same formula; only the underflow regime differs."""
+@pytest.mark.parametrize("sigma", [0.30, 0.20, 0.10])
+def test_cband_logsumexp_matches_the_eps_formula_where_it_is_well_conditioned(sigma):
+    """The two evaluations are the same formula; only the underflow regime differs.
+
+    sigma=0.10 is the boundary: measured, the two forms start to separate just
+    below it (sigma=0.05 already differs by 4.3e-3), so this case is what will
+    catch a future change to CBAND_SIG_LO/HI (REVIEW-impl-WhereA N-26).
+    """
     z = torch.linspace(-3, 3, 241, dtype=DT)
     g = torch.Generator().manual_seed(11)
+    sig_raw0 = inv_bounded_sigmoid(sigma, CBAND_SIG_LO, CBAND_SIG_HI)
     for _ in range(10):
         raw = {
-            # sigma well above the lower bound -> denominator nowhere near eps
-            "sig_raw": torch.full((CBAND_M,), 2.0, dtype=DT) + 0.1 * torch.randn(CBAND_M, generator=g, dtype=DT),
+            "sig_raw": torch.full((CBAND_M,), sig_raw0, dtype=DT),
             "o_raw": torch.randn(CBAND_M, generator=g, dtype=DT),
             "c_raw": torch.randn(CBAND_M, generator=g, dtype=DT),
         }
         a = apply_readout("cband12", z, raw, normalization="eps")
         b = apply_readout("cband12", z, raw, normalization="logsumexp")
-        assert torch.allclose(a, b, atol=1e-9), float((a - b).abs().max())
+        assert torch.allclose(a, b, atol=1e-9), (sigma, float((a - b).abs().max()))
+
+
+def test_the_two_forms_separate_below_the_boundary():
+    """Pins the direction of the divergence: it is the eps form that collapses,
+    and it starts doing so around sigma ~ 0.10.  If this ever stops holding, the
+    equivalence test above has become vacuous."""
+    z = torch.linspace(-3, 3, 241, dtype=DT)
+    raw = {
+        "sig_raw": torch.full((CBAND_M,), inv_bounded_sigmoid(0.05, CBAND_SIG_LO, CBAND_SIG_HI), dtype=DT),
+        "o_raw": torch.zeros(CBAND_M, dtype=DT),
+        "c_raw": torch.full((CBAND_M,), 4.0, dtype=DT),
+    }
+    a = apply_readout("cband12", z, raw, normalization="eps")
+    b = apply_readout("cband12", z, raw, normalization="logsumexp")
+    assert float((a - b).abs().max()) > 1e-3
+    assert float(a.min()) < float(b.min()), "the eps form is the one that drops"
 
 
 def test_eps_form_collapses_to_zero_at_the_sigma_lower_bound():

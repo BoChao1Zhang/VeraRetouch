@@ -2,7 +2,7 @@
 
     w_dir     = normalize(w_raw)
     alpha     = softplus(alpha_raw)
-    s_low(p)  = 3 * tanh((w0 + <phi_dir(p), w_dir>) * alpha / 3)
+    s_low(p)  = 3 * tanh((w0 + alpha * <phi_dir(p), w_dir>) / 3)
 
 The protocol also fixes the sign of ``w_dir`` -- "the coefficient with the
 largest absolute value is positive" -- to kill the ``w -> -w`` non-identifiability.

@@ -139,6 +139,7 @@ def main() -> int:
     log_path = run_dir / "steps.jsonl"
     rej_path = run_dir / "fit_rejections.jsonl"
     n_seen = 0
+    rej_before = len(source.rejections)
     with log_path.open("a") as log, rej_path.open("a") as rej:
         stream = (p.sample for p in source.iter_split("train", limit=args.train_limit))
         for batch in _batched(stream, args.batch_size):
@@ -157,24 +158,42 @@ def main() -> int:
                 torch.save(cal.state(), run_dir / f"projector_step{cal.step_count}.pt")
     torch.save(cal.state(), run_dir / "projector_final.pt")
 
-    # B-3: the schedule must have actually finished.  A mismatch means the
-    # eligible count and the iterator disagree -- loud, not silent.
+    # B-3: the schedule must have actually finished.  N-19: a gap that the
+    # data source can explain sample-by-sample (a mask that would not read, an
+    # aspect mismatch) is a warning with the evidence written down -- refusing to
+    # continue *after* a whole GPU epoch would throw away the epoch as well.
+    # A gap nothing accounts for is still fatal.
+    late_drops = source.rejections[rej_before:]
+    gap = n_planned - n_seen
+    explained = len(late_drops)
     schedule = {
         "planned_total_steps": total_steps, "actual_steps": cal.step_count,
         "warmup_steps": cal.warmup_steps, "n_planned_samples": n_planned,
-        "n_seen_samples": n_seen, "final_lr": cal.optimizer.param_groups[0]["lr"]
-        if cal.optimizer else 0.0,
+        "n_seen_samples": n_seen, "sample_gap": gap,
+        "late_drops": explained,
+        "late_drop_reasons": {r: sum(1 for d in late_drops if d["reason"] == r)
+                              for r in {d["reason"] for d in late_drops}},
+        "late_drop_examples": late_drops[:20],
+        "gap_explained": gap == explained,
+        "final_lr": cal.optimizer.param_groups[0]["lr"] if cal.optimizer else 0.0,
         "rejections": cal.rejection_summary(),
     }
     (run_dir / "schedule.json").write_text(json.dumps(schedule, indent=2))
-    print(json.dumps(schedule, indent=2), flush=True)
-    if cal.step_count != total_steps:
+    print(json.dumps({k: v for k, v in schedule.items()
+                      if k != "late_drop_examples"}, indent=2), flush=True)
+    if gap != explained:
         raise SystemExit(
-            f"schedule mismatch: planned {total_steps} steps from "
-            f"{n_planned} eligible samples but ran {cal.step_count} over {n_seen} "
-            f"samples. The cosine never finished; the arms are not comparable. "
+            f"schedule mismatch: planned {total_steps} steps from {n_planned} "
+            f"eligible samples but ran {cal.step_count} over {n_seen} samples; "
+            f"{gap} missing and only {explained} explained by source.rejections. "
+            f"The cosine never finished and the shortfall is unaccounted for. "
             f"Delete {count_path} and re-count."
         )
+    if gap:
+        print(f"WARNING: {gap} sample(s) dropped after the eligibility count "
+              f"({schedule['late_drop_reasons']}); the schedule ran "
+              f"{cal.step_count}/{total_steps} steps, final lr "
+              f"{schedule['final_lr']:.3e}. See schedule.json.", flush=True)
 
     # --- refit with B frozen, on the selection set (protocol 4.4) ----------
     # attach_hi: the ceiling that goes in the report is measured at delivery

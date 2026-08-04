@@ -324,8 +324,13 @@ def test_percentile_convention_is_pinned():
     assert p["p10"] == 10.0 and p["median"] == 50.0 and p["p90"] == 90.0
     assert p["min"] == 1.0 and p["max"] == 100.0 and p["mean"] == 50.5
     assert percentiles([]) == {}
-    assert percentiles([7.0]) == {"mean": 7.0, "p10": 7.0, "median": 7.0,
+    assert p["n"] == 100
+    assert percentiles([7.0]) == {"n": 1, "mean": 7.0, "p10": 7.0, "median": 7.0,
                                   "p90": 7.0, "min": 7.0, "max": 7.0}
+    # k=2: nearest-rank makes p10 == median; `n` is what stops that reading as
+    # a tight distribution (N-23)
+    two = percentiles([1.0, 9.0])
+    assert two["n"] == 2 and two["p10"] == two["median"] == 1.0
     # nearest-rank, spelled out: idx = clip(ceil(q*k) - 1, 0, k-1) on the sorted
     # array.  (Nearest-rank p10/p90 are order statistics, not reflections of one
     # another; the point of pinning it is that the 5.6 gate reads the same number
@@ -376,3 +381,69 @@ def test_calibrator_exposes_the_schedule_it_was_built_with():
     st = cal.state()
     assert st["total_steps"] == 100 and st["warmup_steps"] == 3
     assert "rejections" in st
+
+
+# --- 复审 N-18 / N-20 / N-21 / N-24 ----------------------------------------
+
+def test_mismatched_objectives_are_refused_at_construction():
+    """N-18: two module constants that happen to agree is not a guarantee --
+    `CalibConfig(objective=...)` is a public argument four scripts construct."""
+    bad = CalibConfig(arm="BA-1-Band", objective="mse",
+                      inner_fit=FitConfig(objective="soft_iou_minmax"))
+    with pytest.raises(ValueError, match="inner/outer objective mismatch"):
+        Calibrator(bad)
+    bad2 = CalibConfig(arm="BA-1-Band", objective="soft_iou_minmax",
+                       inner_fit=FitConfig(objective="mse"))
+    with pytest.raises(ValueError, match="inner/outer objective mismatch"):
+        Calibrator(bad2)
+    # matching pair is fine, whichever functional it is
+    Calibrator(CalibConfig(arm="BA-1-Band", objective="mse",
+                           inner_fit=FitConfig(objective="mse")))
+
+
+def test_fit_sample_rejects_an_off_objective_fit_cfg():
+    """The other way in: an explicit fit_cfg passed at call time."""
+    cal = Calibrator(_cfg("BA-1-Band"))
+    s = _mock_sample(0)
+    parts = cal.phi_for(s)
+    with pytest.raises(ValueError, match="must minimise the same"):
+        cal.fit_sample(s, parts.phi_dir, "band",
+                       fit_cfg=FitConfig(objective="mse", n_random=1, max_iter=5))
+
+
+def test_freeze_projector_makes_b_untouchable():
+    """N-24: the oracle-latent job's 'B is never touched' must be structural."""
+    cal = Calibrator(_cfg("BA-3-Joint"), total_steps=2)
+    assert cal.optimizer is not None and cal.trains_projector
+    cal.freeze_projector()
+    assert cal.optimizer is None and cal.scheduler is None
+    assert not cal.trains_projector
+    assert not any(p.requires_grad for p in cal.projector.parameters())
+    before = cal.projector.digest()
+    out = cal.step([_mock_sample(0)])
+    assert out["grad_norm"] is None
+    assert cal.projector.digest() == before
+
+
+def test_domain_report_carries_per_sample_percentiles():
+    """N-20: the pre-registered gate is on the *median* over samples, so the
+    distribution has to be there, not just a max."""
+    cal = Calibrator(_cfg("BA-1-Band"))
+    report = cal.evaluate([_mock_hi(i) for i in range(3)])
+    dom = report["per_readout"]["band"]["s_domain"]
+    assert set(dom["frac_out_of_domain"]) >= {"median", "p90", "mean", "max"}
+    assert dom["frac_out_of_domain"]["n"] == 3
+    assert dom["frac_out_of_domain"]["max"] == pytest.approx(dom["max_frac_out_of_domain"])
+
+
+def test_headline_summaries_carry_their_sample_count():
+    """N-23: p10==median at k=2 reads as 'tight' unless n is right there."""
+    cal = Calibrator(_cfg("BA-1-Band"))
+    samples = []
+    for i in range(3):
+        s = _mock_sample(i)
+        s.meta["winner_confidence"] = "normal" if i == 0 else "low"
+        samples.append(s)
+    band = cal.evaluate(samples)["per_readout"]["band"]
+    assert band["headline_low"]["n"] == 1
+    assert band["all_ok_low"]["n"] == 3

@@ -1,6 +1,8 @@
 # Where-A · 待执行清单（GPU / 重 IO）
 
-生成 2026-08-05，**审阅后修订**（`docs/reviews/REVIEW-impl-WhereA.md` 判 6 个 BLOCKER，已全部修复）。
+生成 2026-08-05，**两轮审阅后修订**：初审 6 个 BLOCKER 已全部关闭（复审确认 6/6），
+复审新增 B-7（`r*(z)` 网格 121 → 257）与 10 项 nit，本轮一并清完。
+**当前放行状态：S2 / S4 已准入；B-7 关闭后 S5 亦解锁。**
 **以下每一项都未执行。** 阻塞原因：两张 H100 被 Base SFT 占用（rank PID 3395226 / 3395227），
 全量 mask 作业与训练读写同一套 NFS build 树与本地盘。
 
@@ -77,9 +79,9 @@ bash q3vl/where/scripts/run_where_a.sh preflight
 | `WA-P4a-fpre-geometry` | 14.4 | 形状 `(H/16·W/16, 1024)`；网格宽高比 == 图像宽高比；正确 unshuffle 的空间相干性 > 朴素 reshape | PASS，相干性 **0.01733 vs 0.00745**，grid 32×48 ← 512×768 |
 | `WA-P4d-position-encoding` | 14.4「位置编码」 | **直接**核对：独立复算 `pos_embed.weight` 的双线性插值，与 `fast_pos_embed_interpolate` + unshuffle 逐元素比 | PASS，最大相对误差 **1.85e-7**（审阅 N-6：原来只有相干性这个间接代理） |
 | `WA-P4c-upsample-order` | 14.4 | 多通道抛 `ChannelOrderError`；**batch 轴折叠也抛**；常数场被保持 | PASS |
-| `WA-P4e-highres-path` | 14.4 + 4.2 | **真实**高分辨率通路：一次 guided upsample → 交付分辨率 soft-IoU、low→hi 落差、s 域越界比例 | PASS（详见下方 B-4 实测） |
+| `WA-P4e-highres-path` | 14.4 + 4.2 | **真实**高分辨率通路：一次 guided upsample → 交付分辨率 soft-IoU、low→hi 落差；**对预注册门槛 `frac_out_of_domain` 中位 ≤ 1% 判 fail** | PASS（详见下方 B-4 实测；两个 readout 中位均为 0） |
 | `WA-P4b-fpre-sft-invariance` | 本仓库推论 | SFT checkpoint 的 `patch_embed`/`pos_embed`/24 blocks 与 base **逐位相同** | **SKIP —— checkpoint 还不存在；S2 时必须变成 PASS** |
-| `WA-P5-basis-conditioning` | 14.5 | 残差化后最大相关 < 1e-4；phi Gram cond < 1e10；oracle 拟合成功率 ≥ 90% | PASS：相关 **7.6e-7**；design Gram cond 中位 27.9；phi Gram cond 中位 **8.6e4**；成功率 100%/100% |
+| `WA-P5-basis-conditioning` | 14.5 | 残差化后最大相关 < 1e-4；phi Gram cond < 1e10；oracle 拟合成功率 ≥ 90% | PASS：相关 **7.60e-7**；design Gram cond 中位 27.9；phi Gram cond 中位 **8.57e4**；成功率 100%/100%（headline n=2） |
 | `WA-P6a-readout-bounds` | 14.6 | raw=±1e6 下 `h>0`、`k∈[1,40]`、`σ∈[0.025,0.30]`、`o,c∈(0,1)`；μ 网格固定对称；`m(z)∈[0,1]` | PASS |
 | `WA-P6b-latent-invariants` | 14.6 | 每个 latent：符号规则、`‖w_dir‖=1`、`α>0`、readout 在界内 | PASS：8/8 规范，范数误差 **1.7e-13**，min α **0.187** |
 
@@ -96,8 +98,8 @@ bash q3vl/where/scripts/run_where_a.sh preflight
 | 项 | band | cband12 |
 |---|---|---|
 | 上采样后 s 的**原始**取值域（clamp 前） | **[−4.577, +2.569]** | [−0.455, +2.306] |
-| 越出 `S_DOMAIN = (−3, 3)` 的像素比例 | 最大 **0.542%**，均值 0.140% | 0 |
-| low → hi 的 soft-IoU 落差（中位） | **0.0177** | **0.0738** |
+| 越出 `S_DOMAIN = (−3, 3)` 的像素比例（n=4 样本） | 中位 0.000、p90 **0.542%**、均值 0.140% | 全 0 |
+| low → hi 的 soft-IoU 落差（中位，headline n=2） | **0.0177** | **0.0738** |
 
 处置（CLAUDE.md《s 缓存消费契约》：消费方必须声明期望域并断言生数据住在里面）：
 1. **生产方声明**：`S_DOMAIN = (−3, 3)`，因为 `s_low = 3·tanh(q/3)` 结构上就落在开区间内；
@@ -107,7 +109,12 @@ bash q3vl/where/scripts/run_where_a.sh preflight
 3. **处理**：`UpsampleConfig.clamp_domain=True`，把越界值 clamp 回 `[−3, 3]`。选 clamp 而不是
    `3·tanh(s/3)` 重压：后者会把域内的值也整体压缩（s=2.9 → 2.24），而越界纯粹是 guided filter
    的仿射外插产物，clamp 恰好是"回到生产方自己的不变量"。**是整臂常量，不是逐图归一化**（红线）。
-4. **CBand12 分母塌陷**：`Σ c_i g_i/(Σ g_i + eps)` 在 σ 取下界 0.025 时，两中心正中与端点外
+4. **预注册门槛（N-20）**：`S_OOD_FRAC_MAX = 0.01` —— 每样本越域比例的**中位数**上界。
+   `WA-P4e` 越过即判 fail（默认配置下这个检查现在**真的会失败**，不再只在关掉 clamp 时才失败）；
+   `sweep_upsample` 的选择是**字典序**：先过门槛，再比交付分辨率 soft-IoU；全不合格时推荐越域
+   最小者并把 `selection_rule` 标成 `NO_SETTING_PASSED_THE_DOMAIN_GATE_...`。门槛本身
+   **provisional**，S2 扫参时与 D5 一起定档。
+5. **CBand12 分母塌陷**：`Σ c_i g_i/(Σ g_i + eps)` 在 σ 取下界 0.025 时，两中心正中与端点外
    `Σ g_i ≈ 6e-27 < eps=1e-9`，`m` 恒等于 **0**。已改为 `logsumexp`（同一公式的 `eps→0` 极限，
    用 `softmax(log g_i)` 稳定求值）：良态区与原式差 <1e-9（单测断言），端点外返回最近基元的 `c_i`
    而不是塌成 0。原式保留为 `normalization="eps"` 供对照，单测**同时钉住旧式的塌陷数字**，
@@ -122,14 +129,16 @@ bash q3vl/where/scripts/run_where_a.sh sweep-upsample
 ```
 
 `radius_low ∈ {1,2,4}` × `eps ∈ {1e-4,1e-3,1e-2}`，在 24 个真实 V_where 样本上报交付分辨率
-soft-IoU、low→hi 落差、越域比例。定档后写回 `config.py` 并把 `GUIDED_PARAMS_PROVISIONAL` 置 `False`。
+soft-IoU、low→hi 落差、越域比例。**选择是字典序：先过 `S_OOD_FRAC_MAX` 门槛，再比 IoU。**
+定档后写回 `config.py` 并把 `GUIDED_PARAMS_PROVISIONAL` 置 `False`
+（**N-27**：翻标记前须用 `--basis .../BA-3-Joint/B.npy` 在校准后的 B 上复跑一次确认推荐值仍成立）。
 **当前 `radius_low=2, eps=1e-3` 是临时值**：它们来自 E2 的**全分辨率逐通道** `r=32` 用法
 （`experiments/E2_basis_fit_20260803/prep_data.py:149`），正是 §4.2 现在禁止的顺序，先例不可迁移。
 
 **(b) 内层 L-BFGS 吞吐 —— 已内建进 `WA-P5` 的 `throughput` 字段（审阅 N-15）**
 
-CPU 实测（1 核，float64，`n_random=3, max_iter=80`，1536 点）：**1.697 s / 拟合**，
-外推 **40.3 CPU-小时/臂**（42,752 × 2 readout）或 **71.2 CPU-小时/臂**（75,544，即 D1 裁定后的口径）。
+CPU 实测（1 核，float64，`n_random=3, max_iter=80`，1536 点，8 次）：**1.816 s / 拟合**，
+外推 **43.1 CPU-小时/臂**（42,752 × 2 readout）或 **76.2 CPU-小时/臂**（75,544，即 D1 裁定后的口径）。
 **GPU 数字必须在 S2 现测**（同一字段会自动填 `device: cuda`）：它是 §11 排期唯一还没有实测支撑的量，
 也直接决定 D3 是否需要改用离线 latent 表。
 
@@ -153,6 +162,10 @@ bash q3vl/where/scripts/run_where_a.sh calibrate BA-3-Joint     # 预注册主�
   warmup 会变成实际步数的 5.3%（协议要 3%）、cosine 只走到 55% → 结尾 LR 停在峰值的 41.8%，
   四个臂在**互不相同且从未退火完成**的调度下停机，归因比较直接失效。
   `schedule.json` 落盘 `planned/actual/warmup/final_lr`。
+- **坏样本不再拖垮整个 epoch**（N-19）：`prepare()` 把 mask IO 异常记成 `rejections`（`reason=mask_io`）
+  而不是 traceback；`count_eligible` 是**上界**，终局断言改成"缺口能被 `source.rejections`
+  逐条解释 → warning + 落 `schedule.json`，解释不了才 `SystemExit`"。一个读不出的
+  `.cgt.png` 现在只值一个样本，不值一个 GPU-day。
 - **rejection report 逐样本落盘**（B-2）：`fit_rejections.jsonl`，每个非 `ok` 拟合一行
   （`sample_id / readout / status / reject_reason / flags / loss / build / winner_confidence`），
   外加每 200 步一行健康样本作基线；`projector_final.pt` 里带整轮 `rejection_summary()`。
@@ -189,7 +202,12 @@ Where-B 一开工就会卡住，而补做等于把 Where-A 最贵的一步（全
 - 产物：`/mnt/nfs/bc/data/datasets/where_a-20260805/oracle/BA-3-Joint/train/`（§2.3 indexed shards），
   每样本 `<sample_id>.oracle.json` 含两个 readout 的规范化 `w*, ρ*`、fit report、low/hi 指标，
   以及 `r*(z)` 在固定 121 点 z 网格上的采样（Where-B 的 `L_curve` 直接做向量差，不必再引 readout 代码）。
-- 墙钟：**待 S2 的 GPU 吞吐实测**。CPU 外推 71.2 小时（75,544 × 2 readout × 1.697 s）——
+- **z 网格 = 协议 §5.5 的 `linspace(-3, 3, 257)`**（B-7；曾误用 121 点，会逼 Where-B 在监督目标上做插值），
+  且载荷与 report 都声明 `cband_normalization = "logsumexp"` —— Where-B 必须用同一约定重算
+  `R(z;ρ_pred)`，否则 `L_curve` 两侧不是同一个函数（N-25）。
+- `B` 在本作业里是**强制**冻结的：`Calibrator.freeze_projector()` + 断言无 optimizer/无 requires_grad，
+  `phi_for` 包在 `no_grad` 里，收尾比对 `B` 的 digest 未变（N-24）。
+- 墙钟：**待 S2 的 GPU 吞吐实测**。CPU 外推 76.2 小时（75,544 × 2 readout × 1.816 s）——
   这个数如果在 GPU 上没有大幅下降，就必须回头重裁 D3。
 
 ---
@@ -201,8 +219,11 @@ Where-B 一开工就会卡住，而补做等于把 Where-A 最贵的一步（全
       `fit_rejections.jsonl` 现在直接给出失败样本 id，不必再去猜）
 - [ ] `config/`：配置快照 + seed + git commit + 环境（`preflight_where_a.json` 的 `env` 段可直接用）
 - [ ] `metrics.json`：机器可读汇总
-- [ ] REPORT.md「设置」节写清：D1/D2/D3 裁定、D5 定档值、s 域 clamp 的显式声明与越界比例、
-      CBand12 归一化方式，以及 §2.3 对 basis 元数据走裸文件的**显式豁免**（审阅 N-14）
+- [ ] REPORT.md「设置」节写清：D1/D2/D3 裁定、D5 定档值与 `S_OOD_FRAC_MAX` 门槛、s 域 clamp 的
+      显式声明与越界比例、CBand12 归一化方式（`logsumexp`，Where-B 须同约定）、`r*(z)` 的 257 点
+      z 网格，以及 §2.3 对 basis 元数据走裸文件的**显式豁免**（审阅 N-14）
+- [ ] N-27：用校准后的 `BA-3-Joint/B.npy` 复跑一次 `sweep-upsample`，确认 D5 推荐值仍成立，
+      再把 `GUIDED_PARAMS_PROVISIONAL` 翻成 `False`
 - [ ] 任何"Where-A 天花板 = 0.9x soft-IoU"的说法必须标注是 low 还是 hi 分辨率档
       （审阅 §十：B-4 关闭前不能只报低分辨率数）
 
@@ -212,7 +233,7 @@ Where-B 一开工就会卡住，而补做等于把 Where-A 最贵的一步（全
 
 | 项 | 命令 | 结果 |
 |---|---|---|
-| CPU 单测 | `$PY -m pytest q3vl/where/tests -q` | **147 passed / 44 s** |
+| CPU 单测 | `$PY -m pytest q3vl/where/tests -q` | **142 passed / 48 s**（初审前 97 → 一审后 134 → 复审后 142）；连同既有 `q3vl/tests` 共 **173 passed** |
 | 数据源抽样验证（450 样本） | `$PY -m q3vl.where.scripts.validate_masks --split V_where --limit 200 --pixel-check 80`；`--split train --limit 250 --pixel-check 60 --include-low` | 定位/读取/宽高比 100%；`corr(|I_tar−I_in|, mask)` 中位 0.787 / 0.783 |
 | 数据无关 preflight | `$PY -m q3vl.where.preflight --skip-model` | 2 项 PASS，其余 SKIP |
-| CPU 真实数据 preflight | `$PY -m q3vl.where.preflight --device cpu --dtype float32 --limit 4` | **7 项 PASS**，1 项 SKIP（checkpoint 未生成）；归档于 `preflight_where_a_cpu_dryrun.json` |
+| CPU 真实数据 preflight | `$PY -m q3vl.where.preflight --device cpu --dtype float32 --limit 4` | **7 项 PASS**，1 项 SKIP（checkpoint 未生成）；归档于 `preflight_where_a_cpu_dryrun.json`（NOTES §3.3 的每个数都取自这一份） |

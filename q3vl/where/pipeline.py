@@ -105,8 +105,19 @@ class WhereADataSource:
                     f"!= F_pre grid {(grid_h, grid_w)}"
                 )
         else:
-            mask_ref = self.resolver.resolve(record)
-            mask = self.resolver.load(mask_ref)
+            # N-19: a single unreadable .cgt.png used to raise straight through
+            # and kill the epoch.  One bad sample out of 75,544 must cost one
+            # sample, not a GPU-day -- and it must be *recorded*, so the
+            # end-of-epoch count can be reconciled instead of merely failing.
+            try:
+                mask_ref = self.resolver.resolve(record)
+                mask = self.resolver.load(mask_ref)
+            except Exception as exc:                   # noqa: BLE001
+                self.rejections.append({
+                    "sample_id": record.get("sample_id"), "reason": "mask_io",
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
+                return None
             ac = aspect_check(record, mask)
             if not ac["ok"]:
                 # same rule as the packing job: an aspect mismatch is a dropped
@@ -185,11 +196,16 @@ class WhereADataSource:
                 break
 
     def count_eligible(self, split: str, local_only: bool = True) -> dict[str, Any]:
-        """Exact ``eligibility()``-filtered sample count for a split.
+        """``eligibility()``-filtered sample count for a split -- an **upper
+        bound** on the samples the epoch will actually see.
 
-        Reads records only -- no images, no model -- and is what the LR schedule
-        must be built from (REVIEW-impl-WhereA B-3).  Also returns the reason
-        histogram so a surprising count can be explained instead of guessed at.
+        Reads records only (no images, no model) and is what the LR schedule is
+        built from (REVIEW-impl-WhereA B-3).  ``prepare()`` can still drop a
+        sample afterwards for a reason only visible once the mask is read
+        (``aspect_mismatch``, ``mask_io``); those land in ``self.rejections`` and
+        the driver reconciles the gap against them rather than failing blind
+        (N-19).  The reason histogram is returned so a surprising count can be
+        explained instead of guessed at.
         """
         index = ShardIndex.load(split_index_path(split))
         n_eligible = 0
@@ -207,6 +223,8 @@ class WhereADataSource:
             else:
                 reasons[reason] = reasons.get(reason, 0) + 1
         return {"split": split, "n_eligible": n_eligible,
+                "is_upper_bound": True,
+                "late_drop_reasons": ["aspect_mismatch", "mask_io"],
                 "exclude_low": self.exclude_low,
                 "skipped_reasons": reasons, "by_winner_confidence": by_conf}
 

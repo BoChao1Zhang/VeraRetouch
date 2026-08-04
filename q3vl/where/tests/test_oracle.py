@@ -221,3 +221,29 @@ def test_evaluate_latent_reports_the_s_domain():
     assert "hi_minus_low_soft_iou" in out
     assert abs(out["s_hi_range"][0]) <= 3.0 + 1e-12
     assert abs(out["s_hi_range"][1]) <= 3.0 + 1e-12
+
+
+# --- 复审 N-21: informed starts degrade loudly ------------------------------
+
+def test_dropped_informed_starts_raise_a_flag():
+    """A mildly degenerate phi loses the lsq/radial starts but still fits from
+    the random ones; without a flag the only trace is n_starts quietly dropping
+    from 18 to 16 (REVIEW-impl-WhereA N-21)."""
+    from q3vl.where.oracle import build_starts
+
+    phi, _, _ = _phi(gh=8, gw=8, seed=30)
+    target = torch.rand(phi.shape[0], dtype=DT)
+    starts, dropped = build_starts(phi, target, "band", FitConfig(seed=0, n_random=3))
+    assert dropped == 0 and len(starts) == 12
+
+    bad = phi.clone()
+    bad[0, 0] = float("nan")
+    starts_bad, dropped_bad = build_starts(bad, target, "band", FitConfig(seed=0, n_random=3))
+    assert dropped_bad == 2, "both lsq and radial should be unusable on a NaN phi"
+    assert len(starts_bad) == 8, "the random starts must survive"
+    for st in starts_bad:
+        for v in st.values():
+            assert bool(torch.isfinite(v).all()), "a non-finite start must be dropped, not used"
+
+    res = fit_latent(bad, target, "band", FitConfig(seed=0, n_random=3, max_iter=10))
+    assert "informed_start_unavailable" in res.flags

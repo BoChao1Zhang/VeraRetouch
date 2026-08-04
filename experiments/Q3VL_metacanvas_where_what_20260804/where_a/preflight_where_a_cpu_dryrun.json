@@ -4,7 +4,7 @@
   "n_fail": 0,
   "n_skip": 2,
   "env": {
-    "git_commit": "bc888fe147af76f2f8ef0299c85de856b9cd4adf",
+    "git_commit": "a2c24274881bfac9d6f4a6d87160acd662ff2ac6",
     "python": "3.12.12",
     "torch": "2.10.0+cu128",
     "cuda_available": true,
@@ -88,7 +88,7 @@
           128,
           192
         ],
-        "constant_preserved_max_err": 8.459899447643693e-14
+        "constant_preserved_max_err": 7.394085344003543e-14
       }
     },
     {
@@ -220,7 +220,10 @@
             "n_ok": 4,
             "n_rejected": 0,
             "reject_reasons": {},
+            "headline_n_low": 2,
+            "headline_n_hi": 2,
             "headline_low_soft_iou": {
+              "n": 2,
               "mean": 0.9025569429562328,
               "p10": 0.839913308777634,
               "median": 0.839913308777634,
@@ -229,6 +232,7 @@
               "max": 0.9652005771348316
             },
             "headline_hi_soft_iou": {
+              "n": 2,
               "mean": 0.8910288158740352,
               "p10": 0.8221936940807534,
               "median": 0.8221936940807534,
@@ -242,7 +246,10 @@
             "n_ok": 4,
             "n_rejected": 0,
             "reject_reasons": {},
+            "headline_n_low": 2,
+            "headline_n_hi": 2,
             "headline_low_soft_iou": {
+              "n": 2,
               "mean": 0.9173585583504089,
               "p10": 0.8612147491795238,
               "median": 0.8612147491795238,
@@ -251,6 +258,7 @@
               "max": 0.9735023675212939
             },
             "headline_hi_soft_iou": {
+              "n": 2,
               "mean": 0.8783282416855127,
               "p10": 0.7873749498172109,
               "median": 0.7873749498172109,
@@ -263,8 +271,8 @@
         "throughput": {
           "device": "cpu",
           "n_fits": 8,
-          "elapsed_s": 13.57,
-          "s_per_fit": 1.697,
+          "elapsed_s": 14.53,
+          "s_per_fit": 1.816,
           "fit_cfg": {
             "objective": "soft_iou_minmax",
             "max_iter": 80,
@@ -278,8 +286,8 @@
             "reject_alpha": 1e-06,
             "seed": 0
           },
-          "projected_hours_per_arm_42752": 40.3,
-          "projected_hours_per_arm_75544": 71.21
+          "projected_hours_per_arm_42752": 43.13,
+          "projected_hours_per_arm_75544": 76.21
         }
       }
     },
@@ -299,9 +307,18 @@
           ],
           "provisional": true
         },
+        "gate": {
+          "frac_out_of_domain_median_max": 0.01,
+          "provisional": true
+        },
+        "headline_n": {
+          "band": 2,
+          "cband12": 2
+        },
         "per_readout": {
           "band": {
             "headline_low": {
+              "n": 2,
               "mean": 0.9025569429562328,
               "p10": 0.839913308777634,
               "median": 0.839913308777634,
@@ -310,6 +327,7 @@
               "max": 0.9652005771348316
             },
             "headline_hi": {
+              "n": 2,
               "mean": 0.8910288158740352,
               "p10": 0.8221936940807534,
               "median": 0.8221936940807534,
@@ -318,6 +336,15 @@
               "max": 0.959863937667317
             },
             "s_domain": {
+              "frac_out_of_domain": {
+                "n": 4,
+                "mean": 0.0014006296793619792,
+                "p10": 0.0,
+                "median": 0.0,
+                "p90": 0.00542449951171875,
+                "min": 0.0,
+                "max": 0.00542449951171875
+              },
               "max_frac_out_of_domain": 0.00542449951171875,
               "mean_frac_out_of_domain": 0.0014006296793619792,
               "raw_min": -4.576778394987327,
@@ -328,6 +355,7 @@
           },
           "cband12": {
             "headline_low": {
+              "n": 2,
               "mean": 0.9173585583504089,
               "p10": 0.8612147491795238,
               "median": 0.8612147491795238,
@@ -336,6 +364,7 @@
               "max": 0.9735023675212939
             },
             "headline_hi": {
+              "n": 2,
               "mean": 0.8783282416855127,
               "p10": 0.7873749498172109,
               "median": 0.7873749498172109,
@@ -344,6 +373,15 @@
               "max": 0.9692815335538144
             },
             "s_domain": {
+              "frac_out_of_domain": {
+                "n": 4,
+                "mean": 0.0,
+                "p10": 0.0,
+                "median": 0.0,
+                "p90": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              },
               "max_frac_out_of_domain": 0.0,
               "mean_frac_out_of_domain": 0.0,
               "raw_min": -0.45537996628442434,

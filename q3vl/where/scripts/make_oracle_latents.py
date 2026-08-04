@@ -42,8 +42,8 @@ import torch
 from q3vl.where.basis import Latent
 from q3vl.where.calibrate import Calibrator, percentiles
 from q3vl.where.config import (
-    ARMS, BASIS_DIR, CBAND_MU_HI, CBAND_MU_LO, MODEL_DIR, ORACLE_DIR, REPORT_DIR,
-    CalibConfig, FitConfig, PhiConfig, UpsampleConfig,
+    ARMS, BASIS_DIR, CBAND_NORMALIZATION, CURVE_Z_N, MODEL_DIR, ORACLE_DIR,
+    REPORT_DIR, S_DOMAIN, CalibConfig, FitConfig, PhiConfig, UpsampleConfig,
 )
 from q3vl.where.fpre import fpre_facts, load_vision_tower
 from q3vl.where.oracle import evaluate_latent
@@ -53,12 +53,19 @@ from q3vl.where.preflight import _env
 from q3vl.where.projector import BasisProjector
 from q3vl.where.readout import apply_readout
 
-# r*(z) is sampled on this fixed grid so Where-B's L_curve is a plain vector
-# difference; the grid spans the full s domain including both end centres.
-CURVE_Z = np.linspace(CBAND_MU_LO, CBAND_MU_HI, 121)
+# Protocol 5.5 pins the grid: `z = linspace(-3, 3, 257)`.  Where-B consumes r*(z)
+# as a vector, so any other length forces it to interpolate (error injected into
+# a supervision target) or to deviate from 5.5 (REVIEW-impl-WhereA B-7).
+CURVE_Z = np.linspace(S_DOMAIN[0], S_DOMAIN[1], CURVE_Z_N)
 
 
 def curve_of(latent: Latent) -> list[float]:
+    """r*(z) under the *declared* CBand normalisation.
+
+    The convention is published alongside the samples: Where-B must recompute
+    ``R(z; rho_pred)`` the same way, or the two sides of ``L_curve`` are not the
+    same function (REVIEW-impl-WhereA N-25 / D10).
+    """
     z = torch.tensor(CURVE_Z, dtype=torch.float64)
     with torch.no_grad():
         return apply_readout(latent.readout, z, latent.rho).tolist()
@@ -109,6 +116,13 @@ def main() -> int:
 
     cfg = CalibConfig(arm=args.arm, phi=PhiConfig(), upsample=UpsampleConfig())
     cal = Calibrator(cfg, projector=projector, device=args.device)
+    # N-24: "B is never touched" must be enforced, not merely intended.  This
+    # job never calls cal.step(), but the Calibrator would happily have built an
+    # optimiser for an arm with readouts; freeze it for real and prove it.
+    cal.freeze_projector()
+    assert cal.optimizer is None and not cal.trains_projector
+    assert not any(p.requires_grad for p in cal.projector.parameters())
+    b_digest_before = cal.projector.digest()
     fit_cfg = FitConfig(n_random=6, max_iter=120)      # full multi-start, protocol 4.4
 
     stats = {r: [] for r in ("band", "cband12")}
@@ -120,7 +134,8 @@ def main() -> int:
         nonlocal n_done
         for j, prepared in enumerate(source.iter_split(args.split, limit=args.limit)):
             sample = prepared.sample
-            parts = cal.phi_for(sample)
+            with torch.no_grad():           # no graph: B is frozen (N-24)
+                parts = cal.phi_for(sample)
             fits: dict[str, dict] = {}
             for r in ("band", "cband12"):
                 fit = cal.fit_sample(sample, parts.phi_dir, r, fit_cfg=fit_cfg, seed_offset=j)
@@ -143,9 +158,11 @@ def main() -> int:
                 stats[r].append(ev["low"]["soft_iou_minmax"])
                 d = fit.to_dict()
                 d["eval"] = ev
-                # r*(z) on the fixed grid: protocol 5.5's L_curve reads this
+                # r*(z) on protocol 5.5's own grid, plus the convention it was
+                # sampled under -- Where-B must use the same one (N-25)
                 d["curve_z"] = CURVE_Z.tolist()
                 d["curve"] = curve_of(fit.latent)
+                d["cband_normalization"] = CBAND_NORMALIZATION
                 fits[r] = d
             if not fits:
                 continue
@@ -167,8 +184,15 @@ def main() -> int:
         "manifest": {k: manifest[k] for k in
                      ("dataset_id", "sample_count", "member_count", "shard_count", "status")},
         "verify": verify_published(out_root, n_random=64),
-        "curve_z_grid": {"lo": CBAND_MU_LO, "hi": CBAND_MU_HI, "n": len(CURVE_Z)},
+        # the two conventions Where-B must match to make L_curve well defined
+        "curve_z_grid": {"lo": S_DOMAIN[0], "hi": S_DOMAIN[1], "n": len(CURVE_Z),
+                         "source": "protocol 5.5: z = linspace(-3, 3, 257)"},
+        "cband_normalization": CBAND_NORMALIZATION,
+        "b_digest": b_digest_before,
+        "b_unchanged": cal.projector.digest() == b_digest_before,
     }
+    if not report["b_unchanged"]:
+        raise SystemExit("B changed during latent generation; it must be frozen")
     rep_dir = REPORT_DIR / "oracle_latents"
     rep_dir.mkdir(parents=True, exist_ok=True)
     (rep_dir / f"{args.arm}_{args.split}.report.json").write_text(json.dumps(report, indent=2))

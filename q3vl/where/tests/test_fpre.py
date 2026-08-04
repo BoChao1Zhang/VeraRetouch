@@ -69,7 +69,6 @@ def test_unshuffle_matches_the_real_processor():
     patch = int(ip.patch_size)
     assert int(ip.merge_size) == SPATIAL_MERGE
     gh, gw = 8, 12
-    H, W = gh * patch, gw * patch
 
     codes = np.arange(gh * gw, dtype=np.float64).reshape(gh, gw)
     img = np.repeat(np.repeat(codes, patch, axis=0), patch, axis=1)

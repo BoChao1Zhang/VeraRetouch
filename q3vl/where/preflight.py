@@ -35,7 +35,7 @@ import torch
 from .basis import sign_index
 from .calibrate import Calibrator
 from .config import (
-    CBAND_M, FPRE_DIM, MODEL_DIR, REPORT_DIR, SFT_CHECKPOINTS,
+    CBAND_M, FPRE_DIM, MODEL_DIR, REPORT_DIR, S_OOD_FRAC_MAX, SFT_CHECKPOINTS,
     CalibConfig, FitConfig,
 )
 from .fpre import (
@@ -346,6 +346,11 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
         "fit": {r: {"success_rate": v["fit_success_rate"],
                     "n_ok": v["n_ok"], "n_rejected": v["n_rejected"],
                     "reject_reasons": v["reject_reasons"],
+                    # N-23: the headline percentiles are over the `normal`
+                    # stratum only, which is usually a fraction of n_ok --
+                    # report the count next to them so k=2 cannot read as "tight"
+                    "headline_n_low": v["headline_low"].get("n"),
+                    "headline_n_hi": v["headline_hi"].get("n"),
                     "headline_low_soft_iou": v["headline_low"].get("soft_iou_minmax"),
                     "headline_hi_soft_iou": v["headline_hi"].get("soft_iou_minmax")}
                 for r, v in report["per_readout"].items()},
@@ -373,8 +378,16 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
                "; ".join(bad5))
 
     # --- B-4: the delivered-resolution path, on real data --------------------
-    hi_detail: dict[str, Any] = {"n_with_hi": report["n_with_hi_res"],
-                                 "upsample": report["upsample"], "per_readout": {}}
+    hi_detail: dict[str, Any] = {
+        "n_with_hi": report["n_with_hi_res"],
+        "upsample": report["upsample"],
+        # N-20: pre-registered, so the check can actually fail in the default
+        # configuration instead of only when clamping is switched off.
+        "gate": {"frac_out_of_domain_median_max": S_OOD_FRAC_MAX,
+                 "provisional": True},
+        "headline_n": {r: v["headline_hi"].get("n") for r, v in report["per_readout"].items()},
+        "per_readout": {},
+    }
     bad_hi: list[str] = []
     if report["n_with_hi_res"] == 0:
         bad_hi.append("no sample carried mask_hi/guide_hi: the high-resolution "
@@ -389,7 +402,15 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
         if dom.get("raw_max") is None:
             continue
         # the domain assertion the CLAUDE.md s-cache contract demands: state the
-        # expected domain, then show what the raw data actually did.
+        # expected domain, then show what the raw data actually did -- and gate
+        # on it, clamped or not.  Past the gate the clamp is no longer repairing
+        # a boundary, it is deciding the mask.
+        ood_median = (dom.get("frac_out_of_domain") or {}).get("median")
+        if ood_median is not None and ood_median > S_OOD_FRAC_MAX:
+            bad_hi.append(
+                f"{r}: {ood_median:.2%} of pixels (median over samples) leave the "
+                f"declared s domain, above the pre-registered {S_OOD_FRAC_MAX:.0%}"
+            )
         if not dom.get("clamped") and (dom["raw_max"] > 3.0 or dom["raw_min"] < -3.0):
             bad_hi.append(
                 f"{r}: guided upsample left the declared s domain "

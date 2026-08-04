@@ -68,7 +68,10 @@ def percentiles(xs: Sequence[float]) -> dict[str, float]:
     def q(p: float) -> float:
         return xs[min(k - 1, max(0, math.ceil(p * k) - 1))]
 
-    return {"mean": sum(xs) / k, "p10": q(0.10), "median": q(0.50),
+    # ``n`` travels with the percentiles on purpose: at k=2 the nearest-rank
+    # p10 equals the median, which reads as "tight" unless the count is right
+    # next to it (REVIEW-impl-WhereA N-23).
+    return {"n": k, "mean": sum(xs) / k, "p10": q(0.10), "median": q(0.50),
             "p90": q(0.90), "min": xs[0], "max": xs[-1]}
 
 
@@ -150,6 +153,20 @@ class Calibrator:
         total_steps: int | None = None,
         device: str = "cpu",
     ):
+        # B-6 / N-18: the envelope-theorem argument for the fixed-latent
+        # gradient holds only when both levels minimise the same functional.
+        # Two module constants that happen to agree is not a guarantee --
+        # `CalibConfig(objective=...)` and `FitConfig(objective=...)` are public
+        # arguments that four scripts construct explicitly -- so it is checked
+        # here, at the one place every path goes through.
+        if cfg.objective != cfg.inner_fit.objective:
+            raise ValueError(
+                f"inner/outer objective mismatch: inner L-BFGS minimises "
+                f"{cfg.inner_fit.objective!r} while the AdamW step on B uses "
+                f"{cfg.objective!r}. With different objectives the dropped implicit "
+                f"term (dg/dlatent)(dlatent*/dB) is O(1), so the gradient belongs to "
+                f"no well-defined bilevel problem (REVIEW-impl-WhereA B-6)."
+            )
         self.cfg = cfg
         self.readouts = arm_readouts(cfg.arm)
         self.device = device
@@ -190,11 +207,26 @@ class Calibrator:
         fit_cfg=None, seed_offset: int = 0,
     ) -> FitResult:
         cfg = fit_cfg or self.cfg.inner_fit
+        if cfg.objective != self.cfg.objective:
+            raise ValueError(
+                f"fit_cfg.objective={cfg.objective!r} != calibration objective "
+                f"{self.cfg.objective!r}; the two levels must minimise the same "
+                f"functional (REVIEW-impl-WhereA B-6/N-18)"
+            )
         cfg = type(cfg)(**{**cfg.__dict__, "seed": cfg.seed + seed_offset})
         return fit_latent(
             phi_dir.detach().double(), sample.mask_low.to(self.device).double(),
             readout, cfg,
         )
+
+    def freeze_projector(self) -> None:
+        """Make "B is never touched" structural: drop the optimiser/scheduler and
+        clear ``requires_grad``.  Used by the oracle-latent job, which loads an
+        already-calibrated ``B`` (REVIEW-impl-WhereA N-24)."""
+        self.trains_projector = False
+        self.projector.requires_grad_(False)
+        self.optimizer = None
+        self.scheduler = None
 
     def _tally(self, fit: FitResult) -> None:
         self.n_fits += 1
@@ -410,6 +442,10 @@ class Calibrator:
                 "reject_reasons": rejected_reasons[r],
                 "fit_success_rate": 1.0 - n_rejected[r] / max(1, n),
                 "s_domain": {
+                    # per-sample distribution, so the pre-registered gate can be
+                    # applied to the median rather than to an outlier (N-20)
+                    "frac_out_of_domain": percentiles(
+                        [d["frac_out_of_domain"] for d in dom]),
                     "max_frac_out_of_domain": max((d["frac_out_of_domain"] for d in dom), default=None),
                     "mean_frac_out_of_domain": (
                         sum(d["frac_out_of_domain"] for d in dom) / len(dom) if dom else None),
