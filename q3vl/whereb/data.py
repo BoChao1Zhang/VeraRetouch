@@ -458,6 +458,11 @@ class BatchBuilder:
             "guide_hi": guide.to(self.device),
             "grid_h": sample.grid_h, "grid_w": sample.grid_w,
             "mask_hi": sample.mask_target_hi().to(self.device),
+            # amendment A-5: the grid-level / centre-prior criteria live on the
+            # F_pre grid, so the GT is projected there once, here.
+            "mask_low": area_resize(
+                sample.mask_target_hi()[None, None],
+                (sample.grid_h, sample.grid_w))[0, 0].to(self.device),
             "is_global": sample.is_global,
             "meta": dict(sample.meta),
         }

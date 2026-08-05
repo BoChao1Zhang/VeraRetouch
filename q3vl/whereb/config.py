@@ -187,23 +187,45 @@ SAVE_STEPS = 500
 NO_DECAY_ON_BIAS_NORM = True
 SEED = 20260804
 
-# --- protocol 5.6: gates ---------------------------------------------------
-# (metric key, comparison, threshold).  Evaluated on V_where, generated context.
+# --- protocol 5.6 + amendment A-5: gates ------------------------------------
+# A-5 (2026-08-05, user red line in CLAUDE.md) revises the CRITERIA only:
+#   - the `AUC_target >= 0.80` row is DELETED.  AUC is banned campaign-wide as a
+#     spatial-field criterion: a fixed "the main subject" phrase scored 0.907
+#     against AUC_target 0.523; a zero-parameter centre prior scored 0.836 and
+#     beat all six RO-9c readouts; and MCQ-L's three conditions moved AUC by
+#     0.003 while soft-IoU moved by 0.10 and PSNR_in by 2.2 dB.
+#   - the "3px boundary F1 / oracle" row becomes GRID-level boundary F1.  The
+#     pixel-level 3px version mostly measures boundary *length*: a random top-k
+#     field scores 0.0394 on it against a centre prior's 0.0327.
+#   - a CENTRE-PRIOR BASELINE column is added, on the same support and the same
+#     matched-area top-k rule, with a paired delta and a p-value.  Any claim that
+#     the field located the subject has to clear this, not just clear zero.
+# The §5.5 LOSS IS UNTOUCHED (protocol 9.5/10.4 forbid changing a loss after the
+# fact); `boundary_f1_loss` keeps its pixel-level 3px form.  A-5 moves criteria.
 GATES: tuple[tuple[str, str, float], ...] = (
     ("local_soft_iou_median", ">=", 0.75),
     ("soft_iou_vs_oracle_ratio", ">=", 0.85),
     ("local_soft_iou_p10", ">=", 0.55),
-    ("auc_target", ">=", 0.80),
-    ("boundary_f1_vs_oracle_ratio", ">=", 0.75),
+    ("grid_boundary_f1_vs_oracle_ratio", ">=", 0.75),
+    ("center_prior_delta_hard_iou", ">", 0.0),
+    ("center_prior_delta_hard_iou_p", "<=", 0.05),
     ("instruction_shuffle_iou_drop", ">=", 0.20),
     ("s_std_ratio_median", ">=", 0.60),
     ("global_soft_iou", ">=", 0.98),
     ("gt_generated_iou_gap", "<=", 0.05),
 )
+#: thresholding rule for every spatial field, no exceptions (red line)
+TOPK_RULE = "match_gt_area"
+#: tolerance for the grid-level boundary F1, in GRID CELLS (not pixels)
+GRID_BOUNDARY_TOL_CELLS = 1
+#: the three negative controls instruction-conditionality must carry (A-5).
+#: `shuffled` is the protocol 5.4 control; the other two are added by A-5 and
+#: are produced by the same swap machinery with a different replacement text.
+INSTRUCTION_NEGATIVE_CONTROLS = ("shuffled", "irrelevant_words", "fixed_phrase")
 # lexicographic order; ``True`` = larger is better
 SELECTION_ORDER: tuple[tuple[str, bool], ...] = (
     ("local_soft_iou_median", True),
-    ("boundary_f1", True),
+    ("grid_boundary_f1", True),
     ("local_soft_iou_p10", True),
     ("n_trainable_params", False),
     ("peak_memory_gib", False),

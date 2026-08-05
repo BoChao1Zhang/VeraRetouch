@@ -13,7 +13,7 @@ import json
 import pytest
 import torch
 
-from q3vl.whereb.config import ConnectorConfig, TrainConfig, arm_config
+from q3vl.whereb.config import GATES, ConnectorConfig, TrainConfig, arm_config
 from q3vl.whereb.context import ShuffleIndex
 from q3vl.whereb.evaluate import evaluate_arm, evaluate_context, strata_report
 from q3vl.whereb.model import WhereBModel
@@ -113,32 +113,33 @@ def test_evaluate_arm_reports_four_contexts_and_the_gate_board(tmp_path):
     assert m["main_context"] == "generated"
     assert "gt_generated_iou_gap" in m and "instruction_shuffle_iou_drop" in m
     assert "null_context_gap" in m
-    assert m["gate"]["n_gates"] == 9
+    assert m["gate"]["n_gates"] == len(GATES)
     # ruling D-B1 addendum: the attribution note travels with every board
     att = m["attribution"]
     assert "local_soft_iou_median" in att["directly_optimised"]
-    assert "auc_target" in att["not_optimised"]
-    assert "boundary_f1" in att["weakly_optimised"]
+    assert "center_prior_delta_hard_iou" in att["not_optimised"]
+    assert "grid_boundary_f1" in att["weakly_optimised"]
+    assert not any("auc" in k.lower() for k in att["not_optimised"])
     # ... and the ready-to-paste REPORT.md section ships next to metrics.json
     section = (tmp_path / "ATTRIBUTION.md").read_text()
     assert "不是独立检验" in section
     assert "PRIMARY attribution" in section
-    for key in ("auc_target", "instruction_shuffle_iou_drop", "null_context_gap",
-                "boundary_f1", "local_soft_iou_median"):
+    for key in ("center_prior_delta_hard_iou", "instruction_shuffle_iou_drop",
+                "null_context_gap", "grid_boundary_f1", "local_soft_iou_median"):
         assert f"`{key}`" in section
     assert m["arm"] == cfg.arm
     lines = (tmp_path / "per_sample.jsonl").read_text().strip().split("\n")
     assert len(lines) >= 6 * 3
     assert json.loads(lines[0])["sample_id"].startswith("sft_")
     saved = json.loads((tmp_path / "metrics.json").read_text())
-    assert saved["gate"]["n_gates"] == 9
+    assert saved["gate"]["n_gates"] == len(GATES)
 
 
 def test_strata_report_groups_by_every_requested_key():
     rows = [
-        {"soft_iou": 0.8, "boundary_f1": 0.7, "auc_target": 0.9, "render_mode": "local",
+        {"soft_iou": 0.8, "grid_boundary_f1": 0.7, "render_mode": "local",
          "upscaled": True, "winner_confidence": "normal", "build": "l1"},
-        {"soft_iou": 0.6, "boundary_f1": 0.5, "auc_target": 0.8, "render_mode": "local",
+        {"soft_iou": 0.6, "grid_boundary_f1": 0.5, "render_mode": "local",
          "upscaled": False, "winner_confidence": "low", "build": "l2"},
     ]
     rep = strata_report(rows)

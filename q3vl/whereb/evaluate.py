@@ -83,12 +83,19 @@ def evaluate_context(
                 guide_hi=tgt["guide_hi"].float(), up_cfg=arm_cfg.upsample,
                 require_dtype=torch.float32,
             )
-            m_or = None
+            m_or = grid_or = None
             if with_oracle and tgt.get("has_oracle"):
-                m_or = _oracle_mask(builder, tgt, arm_cfg)
+                m_or, grid_or = _oracle_mask(builder, tgt, arm_cfg)
+            # amendment A-5: the grid-level and centre-prior columns are computed
+            # on the F_pre grid, where the matched-area top-k rule makes two
+            # fields comparable (both own exactly k cells).
+            gh, gw = tgt["grid_h"], tgt["grid_w"]
             met = sample_metrics(
                 f["m_hi"].reshape(tgt["mask_hi"].shape), tgt["mask_hi"].float(),
                 s_pred=f["s_low"], s_star=tgt.get("s_star"), m_oracle=m_or,
+                grid_pred=f["m_low"].reshape(gh, gw),
+                grid_gt=tgt["mask_low"].reshape(gh, gw).float(),
+                grid_oracle=(grid_or.reshape(gh, gw) if grid_or is not None else None),
             )
             ctx = batch.contexts[j]
             met.update({
@@ -124,7 +131,7 @@ def evaluate_context(
 def _oracle_mask(builder: BatchBuilder, tgt: dict[str, Any], arm_cfg: ArmConfig):
     lat = builder.oracle.latent(tgt["sample_id"], arm_cfg.readout)
     if lat is None:
-        return None
+        return None, None
     params = {"w0": lat.w0, "w_raw": lat.w_raw, "alpha_raw": lat.alpha_raw,
               **{k: v for k, v in lat.rho.items()}}
     params = {k: v.to(tgt["phi_dir"].device).float() for k, v in params.items()}
@@ -133,7 +140,7 @@ def _oracle_mask(builder: BatchBuilder, tgt: dict[str, Any], arm_cfg: ArmConfig)
         guide_hi=tgt["guide_hi"].float(), up_cfg=arm_cfg.upsample,
         require_dtype=torch.float32,
     )
-    return f["m_hi"].reshape(tgt["mask_hi"].shape)
+    return f["m_hi"].reshape(tgt["mask_hi"].shape), f["m_low"]
 
 
 def strata_report(rows: Sequence[dict[str, Any]], keys: Sequence[str] = STRATA_KEYS

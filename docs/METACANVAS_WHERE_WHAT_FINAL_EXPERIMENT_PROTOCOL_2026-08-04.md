@@ -322,13 +322,18 @@ L_where = L_mask + 0.25 L_s + 0.25 L_curve + 0.05 L_dir
 
 在 `V_where` 的 generated-context 主榜上，候选必须同时满足：
 
+> **本表已由 amendment A-5（§17.2，2026-08-05）修订**：删除 `AUC_target` 行、
+> 「3px boundary F1」改为 **grid 级** boundary F1、新增中心先验基线的配对 Δ 与 p 值两行。
+> 下表为**修订后**的现行判据；§5.5 的 loss 一个字未动。
+
 | 指标 | Gate |
 |---|---:|
 | local `.cgt` median soft-IoU | `>= 0.75` |
 | 相对逐图 oracle 的 soft-IoU | `>= 85%` |
 | local soft-IoU p10 | `>= 0.55` |
-| `AUC_target` | `>= 0.80` |
-| 3px boundary F1 / oracle boundary F1 | `>= 75%` |
+| **grid 级** boundary F1 / oracle | `>= 75%` |
+| **中心先验配对 Δ(hard-IoU)** | `> 0` |
+| **该 Δ 的配对 p 值** | `<= 0.05` |
 | instruction shuffle 后 IoU 降幅 | `>= 0.20` |
 | `std(s_pred) / std(s*)` 中位数 | `>= 0.60` |
 | global mask soft-IoU | `>= 0.98` |
@@ -337,7 +342,7 @@ L_where = L_mask + 0.25 L_s + 0.25 L_curve + 0.05 L_dir
 通过 gate 后按以下顺序选择唯一冻结 Where checkpoint：
 
 1. generated-context local median soft-IoU；
-2. 3px boundary F1；
+2. **grid 级** boundary F1（A-5）；
 3. p10 soft-IoU；
 4. 参数量、峰值显存与延迟。
 
@@ -955,3 +960,61 @@ C^2 = 2 * ( N * sum_i ||u_i||^2 - || sum_i u_i ||^2 ) / ( N * (N-1) )
 **token 边界**。`<color>` 段边界 = **384**。实测依据：跨五个 split 抽样 3,745 条 record 的 `tokens.color`，min 108 / p50 178 / p95 246 / p99 285 / **max 324**；384 = max + 两个标签 + 约 18% 余量（与 Where-B 的 96 对 measured max 79 同样的余量）。teacher 侧超界**报错**而非截断——边界是对语料的断言，不是截断路径。
 
 **科学问题的影响**：本 amendment **恢复**（而非改变）§0 与 §15 问题 3/4/5 的可回答性——它们本就要求 generated 语境下的数字。§7.4/§7.5 的每样本参数量、§9.5 的七个权重、§12.1 的 gate 阈值、§12.4 的字典序五键、§8 的 12 臂矩阵均**不变**。
+
+
+---
+
+## 17.2 Amendment A-5：判据侧对齐 2026-08-05 用户红线（2026-08-05）
+
+**依据**：`CLAUDE.md` 2026-08-05 新增两节红线——「AUC 全实验禁用」与「空间场可视化纪律」。
+本 amendment **只动判据/gate/报告列与可视化**，**§5.5 的 loss 一个字不动**
+（§9.5/§10.4 明文禁止事后改 loss；红线针对的是判据，不是优化目标）。
+
+### 删了什么
+
+1. **§5.6 的 `AUC_target >= 0.80` 行整行删除**，且新实验**不再产出**该指标
+   （`q3vl/whereb/metrics.py` 里 `auc_target()` 已删除，非保留不用）。
+   三次被误导的机制各不相同，所以不是「小心用」能解决的：
+   - 对全体样本相同的一句 `"the main subject"` 拿到 AUC 0.907，而 `AUC_target` 只有 0.523（RO-X1）；
+   - 零参数中心先验场 AUC **0.836**，跑赢 RO-9c 全部 6 个 attention 读出（0.695–0.784）；
+   - MCQ-L 三档条件消融 AUC 为 0.9469/0.9499/0.9481（真实指令甚至最低），
+     而同批 checkpoint 的 soft-IoU 是 0.605/0.508/0.509、PSNR_in 差 2.2 dB。
+2. **像素级 3px boundary F1 不再作判据**：同支撑同 k 的随机 top-k 在该列得 **0.0394**，
+   高于中心先验的 **0.0327**——它主要在测边界**长度**，越碎越占便宜。
+
+### 换成了什么
+
+§5.6 判据表改为红线规定的三列（缺一不可），全部在 `F_pre` 网格上、
+阈值化**统一为「匹配 GT 面积的 top-k」**（禁逐场调阈值）：
+
+| 列 | 说明 |
+|---|---|
+| soft-IoU / hard-IoU | 覆盖对不对 |
+| **grid 级** boundary F1 | 形状跟不跟。网格上两个场各占恰好 `k` 格，没有「边界长度」可薅 |
+| **中心先验基线** | 零参数 `-到画幅中心距离`，**同支撑、同 top-k 规则**。任何「场找到了主体」的主张必须出示**配对 Δ 与 p 值**（bootstrap，2000 次重采样） |
+
+**指令条件性**改用配对差分框架，不得用任何 AUC 变体代替：
+同图相反指令的配对差分 + 三条负控制 `shuffled` / `irrelevant_words` / `fixed_phrase`
+（§5.4 原有的 `shuffled` 保留并并入此框架，gate 行不变）。
+
+### loss 不变（明确声明）
+
+`L_mask = (1 − softIoU) + 0.25·balanced_BCE + 0.10·boundary_F1_loss_3px` **原样保留**，
+其中 `boundary_F1_loss_3px` 仍是**像素级、3px 容差**的那一个。
+判据用 grid 级、loss 用像素级，二者**故意不同**且必须在 REPORT 里写清：
+这恰好让判据列不再是被直接优化的量（归因价值反而更高）。
+
+### 可视化纪律（落码，`q3vl/whereb/viz.py`）
+
+- **禁逐图 min-max 着色**：`color_scale(mode="per_image_minmax")` 直接抛
+  `PerImageMinMaxError`，不是给个警告了事（一个键之遥的默认值不算禁用）。
+  依据：RO-9c 的 pad 格占 16×16 中约 5.3 格、吃掉 53–74% 注意力质量、93% 源 argmax 落在 pad 里。
+- **色标只取有效格**；pad 格显式画白或打叉（`pad_style`），不许静默填补。
+- **叠回原图用严格逆映射** `grid_to_img`（整数边界，最近邻整数倍展开），**禁直接 resize**。
+- **着色归着色、算数归算数**：`FieldRender.raw_stats` 来自未归一化原始场，
+  与色标端点分开返回；`viz.py` 不返回任何判据数字。
+
+### 不受影响的部分
+
+§5.5 loss、§5.1–5.4 的结构与 context 定义、§10.3 优化配置、§5.3 的 8 臂矩阵、
+§5.6 的字典序选择规则（第 2 键由「3px boundary F1」改为「grid 级 boundary F1」）均不变。

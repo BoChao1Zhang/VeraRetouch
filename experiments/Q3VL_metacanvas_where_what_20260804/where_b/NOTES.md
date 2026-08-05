@@ -552,3 +552,84 @@ make_oracle_latents --split V_where --limit 2 --device cpu
 （`test_stores.py` / `test_gencontext.py` 在模块级 import shardio，而 pytest 进程会先经
 包链装进 torch）。对测试而言唯一干净的解是仓库根 `conftest.py` 里一行 `import sqlite3`，
 那会同时影响 Where-A 与 Stage-What 的套件，属于跨包决定，未擅自改。
+
+---
+
+## 十一、amendment A-5：判据侧对齐 2026-08-05 用户红线
+
+日期：2026-08-05 ｜ 依据：`CLAUDE.md` 新增两节红线（「AUC 全实验禁用」「空间场可视化纪律」）
+协议：新增 §17.2，§5.6 表加脚注并就地修订 ｜ **§5.5 的 loss 一个字未动**
+
+### 11.1 修订清单
+
+| # | 改动 | 位置 |
+|---|---|---|
+| 1 | **删除 `AUC_target >= 0.80` gate 行**，且 `auc_target()` **函数整个删掉**（不是留着不用——红线写"新实验不得再产出该指标"） | `config.GATES`、`metrics.py` |
+| 2 | 「3px boundary F1 / oracle」→ **grid 级** boundary F1 / oracle（`grid_boundary_f1_vs_oracle_ratio`） | `config.GATES`、`metrics.grid_boundary_f1` |
+| 3 | 新增**中心先验基线列** + 两条 gate：`center_prior_delta_hard_iou > 0`、其配对 p 值 `<= 0.05` | `config.GATES`、`metrics.center_prior_field/paired_delta` |
+| 4 | 阈值化统一为**匹配 GT 面积的 top-k**（`TOPK_RULE="match_gt_area"`），禁逐场调阈值 | `metrics.topk_mask/gt_area_k` |
+| 5 | 指令条件性三条负控制登记为常量 `INSTRUCTION_NEGATIVE_CONTROLS = (shuffled, irrelevant_words, fixed_phrase)`；`shuffled` gate 行保留并入该框架 | `config.py` |
+| 6 | 字典序第 2 键 `boundary_f1` → `grid_boundary_f1` | `config.SELECTION_ORDER` |
+| 7 | 归因说明块（随每份 `metrics.json` + `ATTRIBUTION.md` 落盘）去 AUC、加中心先验列 | `metrics.ATTRIBUTION_NOTE` |
+| 8 | 可视化纪律落码：新模块 `viz.py` | 见 11.3 |
+| 9 | 协议 §17.2 amendment 文本 + §5.6 脚注 | 协议文档 |
+
+**顺带修掉一个真 bug**：`evaluate_gates` 原来只认 `>=` / `<=` 两种算子，其余一律走 `>=` 分支。
+A-5 引入了严格 `>`（中心先验的 margin 必须**真正为正**，不能只是不为负），
+不修的话「恰好等于中心先验」会**通过**那条专门用来抓它的 gate。现在显式派发并拒绝未知算子。
+
+### 11.2 判别力回归：为什么必须换掉像素级 3px
+
+在**真实分辨率**（F_pre 网格 32×48 → spec-5 512×768，即 A-5 实际改变的那两个尺度）上实测，
+GT 为**偏心**主体（居中 GT 会让中心先验天然正确，不是有效构造），四个候选场同 `k`：
+
+| 场 | 周长(格) | 像素级 3px BF1 | **grid BF1** | hard-IoU |
+|---|---:|---:|---:|---:|
+| good（对的主体，偏 1 格） | 36 | **0.0220** | **1.0000** | 0.6807 |
+| half（部分正确） | 26 | **0.5827** | 0.6452 | 0.5000 |
+| random（散点，3× 周长） | 100 | 0.0134 | 0.0357 | 0.0050 |
+| center_prior（零参数） | 44 | 0.0000 | 0.0000 | 0.0000 |
+
+**机制比红线原文更狠**：512×768 上 3px 容差 = **0.19 个网格格**。
+一个只偏 1 格（= 16 px）的**优秀**场，整条边界都落在容差外，只拿 0.0220；
+而一个**部分错误**的场因为边界恰好压在 GT 边界上，拿 0.5827 —— **26 倍于优秀场**。
+同时 good 相对 random 的区分度：像素级只有 **1.6×**，grid 级 **28×**。
+
+红线引用的 0.0394 vs 0.0327 是同一机制在其设定下的表现（随机 top-k 高于中心先验）；
+本仓库的构造复现了同向失败（random 0.0134 > prior 0.0000）。
+
+**同时必须说清的边界**：boundary F1 单独一列**无法**区分「紧凑但位置错」与「散点噪声」
+（displaced 与 prior 都是 0.0000）。这正是红线要求**三列缺一不可**的原因——
+覆盖看 hard-IoU、形状看 grid BF1、"是不是零信息"看中心先验列。单看任何一列都会被骗。
+
+### 11.3 可视化纪律（`q3vl/whereb/viz.py`，11 条单测）
+
+- `color_scale(mode="per_image_minmax")` **直接抛 `PerImageMinMaxError`**——不是给警告。
+  一个键之遥的默认值不算禁用。依据：RO-9c pad 格占 16×16 中约 5.3 格、
+  吃掉 53–74% 注意力质量、93% 源 argmax 落在 pad 里，min-max 的分母被 pad 支配。
+  单测实证：同一个场，带 mask 的色标上界 0.4，不带 mask 是 9.0。
+- 色标只取有效格；pad 格 `pad_style="white"|"hatch"` **显式画出**，不许静默填补。
+- `grid_to_img` 给整数边界 + 最近邻整数倍展开（**严格逆映射**），非整数倍直接报错；
+  单测断言热格恰好占满自己的像素块、不向邻块渗透。
+- `FieldRender.raw_stats` 来自**未归一化**原始场，与色标端点分开返回；
+  有一条单测断言 `viz.py` **不返回任何判据数字**（键里不许出现 iou/f1/auc/gate/score）。
+
+### 11.4 单测
+
+新增 `test_a5_criteria.py` **26 条** + `test_viz.py` **11 条**；
+迁移 `test_metrics.py` / `test_config.py` / `test_evaluate_and_trainer.py` / `conftest.py`
+到 A-5 口径（gate 表 9→10 行、grid 列、mock target 增 `mask_low`）。
+`q3vl/whereb` 全套 **268 → 279 passed**。
+
+其中三条是本 amendment 的核心保障：
+`test_the_auc_producer_is_deleted_not_merely_unused`、
+`test_pixel_3px_boundary_f1_cannot_reward_a_near_perfect_field`（钉住上表的 good/half 反转）、
+`test_the_loss_is_untouched_by_a5`（断言 `L_mask` 三个权重、3px 容差、
+`mask_loss` 源码里**不出现** `grid_boundary_f1` —— 防止有人"顺手把 loss 也改了"）。
+
+### 11.5 loss 不变（再次明确）
+
+`L_mask = (1 − softIoU) + 0.25·balanced_BCE + 0.10·boundary_F1_loss_3px` 原样保留，
+其中 boundary 项仍是**像素级 3px**。判据用 grid 级、loss 用像素级，**故意不同**：
+协议 §9.5/§10.4 禁止事后改 loss，而这个差异反而让判据列不再是被直接优化的量，归因价值更高
+（已写进 `ATTRIBUTION_NOTE` 的 `weakly_optimised` 项）。

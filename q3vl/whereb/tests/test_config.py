@@ -60,22 +60,20 @@ def test_optimisation_is_protocol_10_3():
     assert C.EVAL_STEPS == C.SAVE_STEPS == 500
 
 
-def test_gates_are_the_protocol_5_6_table():
-    got = {k: (op, thr) for k, op, thr in C.GATES}
-    assert got == {
-        "local_soft_iou_median": (">=", 0.75),
-        "soft_iou_vs_oracle_ratio": (">=", 0.85),
-        "local_soft_iou_p10": (">=", 0.55),
-        "auc_target": (">=", 0.80),
-        "boundary_f1_vs_oracle_ratio": (">=", 0.75),
-        "instruction_shuffle_iou_drop": (">=", 0.20),
-        "s_std_ratio_median": (">=", 0.60),
-        "global_soft_iou": (">=", 0.98),
-        "gt_generated_iou_gap": ("<=", 0.05),
-    }
-    assert len(C.GATES) == 9
+def test_gates_are_the_amendment_a5_table():
+    """Protocol 5.6 as revised by amendment A-5 (2026-08-05 red lines).
+
+    The full table is asserted in test_a5_criteria.py; this pins the two things
+    A-5 is about, so a drift here fails in the config test too.
+    """
+    keys = [k for k, _, _ in C.GATES]
+    assert not any("auc" in k.lower() for k in keys), keys
+    assert "grid_boundary_f1_vs_oracle_ratio" in keys
+    assert "center_prior_delta_hard_iou" in keys
+    assert "center_prior_delta_hard_iou_p" in keys
+    assert len(C.GATES) == 10
     first = [k for k, _ in C.SELECTION_ORDER][:3]
-    assert first == ["local_soft_iou_median", "boundary_f1", "local_soft_iou_p10"]
+    assert first == ["local_soft_iou_median", "grid_boundary_f1", "local_soft_iou_p10"]
 
 
 def test_grad_accum_keeps_effective_batch_32():

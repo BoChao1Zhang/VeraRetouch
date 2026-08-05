@@ -145,6 +145,11 @@ def mock_batch(samples: list[MockSample], readout: str, modes: list[str] | None 
         tgt: dict[str, Any] = {
             "sample_id": s.sample_id, "phi_dir": s.phi_dir, "guide_hi": s.guide_hi,
             "grid_h": s.grid_h, "grid_w": s.grid_w, "mask_hi": s.mask_hi,
+            # amendment A-5: the grid-level / centre-prior columns need the GT
+            # projected onto the F_pre grid
+            "mask_low": torch.nn.functional.interpolate(
+                s.mask_hi[None, None], size=(s.grid_h, s.grid_w),
+                mode="area")[0, 0],
             "is_global": s.is_global, "meta": {"render_mode":
                                                "global" if s.is_global else "local"},
             "has_oracle": False,

@@ -7,7 +7,10 @@ import torch
 from q3vl.whereb.config import GATE_FAILED_TAG
 from q3vl.whereb.metrics import (
     arm_metrics,
-    auc_target,
+    center_prior_field,
+    grid_boundary_f1,
+    hard_iou,
+    topk_mask,
     boundary_f1,
     evaluate_gates,
     lexicographic_best,
@@ -20,8 +23,9 @@ PASSING = {
     "local_soft_iou_median": 0.80,
     "soft_iou_vs_oracle_ratio": 0.90,
     "local_soft_iou_p10": 0.60,
-    "auc_target": 0.85,
-    "boundary_f1_vs_oracle_ratio": 0.80,
+    "grid_boundary_f1_vs_oracle_ratio": 0.80,
+    "center_prior_delta_hard_iou": 0.22,
+    "center_prior_delta_hard_iou_p": 0.01,
     "instruction_shuffle_iou_drop": 0.25,
     "s_std_ratio_median": 0.70,
     "global_soft_iou": 0.99,
@@ -35,18 +39,6 @@ def test_percentile_endpoints():
     assert percentile(xs, 1.0) == 5.0
     assert percentile(xs, 0.5) == 3.0
     assert percentile([], 0.5) is None
-
-
-def test_auc_is_one_for_a_perfect_ranking_and_half_for_a_constant():
-    t = torch.tensor([1.0, 1.0, 0.0, 0.0])
-    assert abs(auc_target(torch.tensor([0.9, 0.8, 0.2, 0.1]), t) - 1.0) < 1e-9
-    assert abs(auc_target(torch.tensor([0.1, 0.2, 0.8, 0.9]), t) - 0.0) < 1e-9
-    assert abs(auc_target(torch.full((4,), 0.5), t) - 0.5) < 1e-9
-
-
-def test_auc_is_undefined_for_a_global_mask():
-    assert auc_target(torch.rand(16), torch.ones(16)) is None
-    assert auc_target(torch.rand(16), torch.zeros(16)) is None
 
 
 def test_boundary_f1_metric_is_one_for_an_exact_match():
@@ -65,18 +57,20 @@ def test_sample_metrics_reports_the_oracle_ratio_inputs():
     assert abs(met["soft_iou"] - 1.0) < 1e-5
     assert abs(met["oracle_soft_iou"] - 1.0) < 1e-5
     assert "s_std_ratio" in met
+    assert "auc_target" not in met          # amendment A-5
 
 
 def test_summarise_splits_local_and_global():
     rows = [
-        {"soft_iou": 0.8, "boundary_f1": 0.7, "auc_target": 0.9,
-         "render_mode": "local", "oracle_soft_iou": 0.9, "oracle_boundary_f1": 0.8,
+        {"soft_iou": 0.8, "grid_boundary_f1": 0.7,          "render_mode": "local", "oracle_soft_iou": 0.9,
+         "grid_boundary_f1": 0.7, "grid_hard_iou": 0.6,
+         "center_prior_hard_iou": 0.3, "center_prior_boundary_f1": 0.2,
          "s_std_ratio": 0.7},
-        {"soft_iou": 0.6, "boundary_f1": 0.5, "auc_target": 0.85,
-         "render_mode": "local", "oracle_soft_iou": 0.9, "oracle_boundary_f1": 0.8,
+        {"soft_iou": 0.6, "grid_boundary_f1": 0.5,          "render_mode": "local", "oracle_soft_iou": 0.9,
+         "grid_boundary_f1": 0.5, "grid_hard_iou": 0.4,
+         "center_prior_hard_iou": 0.3, "center_prior_boundary_f1": 0.2,
          "s_std_ratio": 0.5},
-        {"soft_iou": 0.99, "boundary_f1": 1.0, "auc_target": None,
-         "render_mode": "global"},
+        {"soft_iou": 0.99, "grid_boundary_f1": 1.0, "render_mode": "global"},
     ]
     s = summarise(rows)
     assert s["n_local"] == 2 and s["n_global"] == 1
@@ -100,9 +94,9 @@ def test_arm_metrics_derives_the_two_cross_context_gates():
     assert set(m["per_context"]) == set(per)
 
 
-def test_all_nine_gates_pass_on_a_passing_board():
+def test_all_gates_pass_on_a_passing_board():
     g = evaluate_gates(PASSING)
-    assert g["passed"] and g["n_passed"] == g["n_gates"] == 9
+    assert g["passed"] and g["n_passed"] == g["n_gates"] == len(PASSING)
     assert g["tag"] is None
 
 
@@ -115,10 +109,11 @@ def test_a_single_failure_fails_the_board_and_tags_it():
 
 
 def test_a_missing_metric_is_a_failure_not_a_pass():
-    partial = {k: v for k, v in PASSING.items() if k != "auc_target"}
+    partial = {k: v for k, v in PASSING.items() if k != "grid_boundary_f1_vs_oracle_ratio"}
     g = evaluate_gates(partial)
     assert not g["passed"]
-    assert next(r for r in g["rows"] if r["metric"] == "auc_target")["reason"] == "missing"
+    assert next(r for r in g["rows"]
+                if r["metric"] == "grid_boundary_f1_vs_oracle_ratio")["reason"] == "missing"
 
 
 def test_boundary_values_are_inclusive():
@@ -128,11 +123,11 @@ def test_boundary_values_are_inclusive():
 
 def test_lexicographic_selection_follows_the_protocol_order():
     cands = [
-        dict(PASSING, arm="W01", local_soft_iou_median=0.80, boundary_f1=0.60,
+        dict(PASSING, arm="W01", local_soft_iou_median=0.80, grid_boundary_f1=0.60,
              local_soft_iou_p10=0.60, n_trainable_params=10),
-        dict(PASSING, arm="W02", local_soft_iou_median=0.80, boundary_f1=0.70,
+        dict(PASSING, arm="W02", local_soft_iou_median=0.80, grid_boundary_f1=0.70,
              local_soft_iou_p10=0.55, n_trainable_params=20),
-        dict(PASSING, arm="W03", local_soft_iou_median=0.79, boundary_f1=0.99,
+        dict(PASSING, arm="W03", local_soft_iou_median=0.79, grid_boundary_f1=0.99,
              local_soft_iou_p10=0.70, n_trainable_params=5),
     ]
     best = lexicographic_best(cands)
@@ -142,14 +137,14 @@ def test_lexicographic_selection_follows_the_protocol_order():
 
 
 def test_parameter_count_breaks_a_full_tie():
-    a = dict(PASSING, arm="A", boundary_f1=0.7, n_trainable_params=100)
-    b = dict(PASSING, arm="B", boundary_f1=0.7, n_trainable_params=50)
+    a = dict(PASSING, arm="A", grid_boundary_f1=0.7, n_trainable_params=100)
+    b = dict(PASSING, arm="B", grid_boundary_f1=0.7, n_trainable_params=50)
     assert lexicographic_best([a, b])["best"]["arm"] == "B"
 
 
 def test_gate_failure_still_selects_but_tags_the_winner():
-    cands = [dict(PASSING, arm="W01", local_soft_iou_median=0.40, boundary_f1=0.3),
-             dict(PASSING, arm="W02", local_soft_iou_median=0.30, boundary_f1=0.3)]
+    cands = [dict(PASSING, arm="W01", local_soft_iou_median=0.40, grid_boundary_f1=0.3),
+             dict(PASSING, arm="W02", local_soft_iou_median=0.30, grid_boundary_f1=0.3)]
     out = lexicographic_best(cands)
     assert out["best"]["arm"] == "W01"
     assert out["tag"] == GATE_FAILED_TAG
