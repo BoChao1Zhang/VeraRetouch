@@ -22,7 +22,7 @@ from typing import Any, Callable, Iterable, Sequence
 
 import torch
 
-from .config import ArmConfig, STRATA_KEYS
+from .config import PAIRED_AREA_RATIO_RANGE, ArmConfig, STRATA_KEYS
 from .context import CONTEXT_MODES, SHUFFLED
 from .data import BatchBuilder, WhereBDataset
 from .fields import predict_fields
@@ -30,10 +30,12 @@ from .metrics import (
     arm_metrics,
     attribution_section,
     antonym_invariance,
+    center_prior_field,
     evaluate_gates,
     gt_area_k,
     hard_iou,
     instruction_paired_delta,
+    paired_delta,
     sample_metrics,
     topk_mask,
     summarise,
@@ -142,14 +144,10 @@ def evaluate_context(
     return rows, summary
 
 
-def _instruction_paired(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    """Same-image paired difference (amendment A-5).
-
-    For every sample, score its own field against its own GT and against the GT
-    of a partner sample from the SAME image with a different region.  Holding the
-    image fixed cancels salience and the centre prior; what is left is whether
-    the field followed the instruction.
-    """
+def _paired_rows(fields: dict[str, dict[str, Any]], *, use_prior: bool
+                 ) -> list[dict[str, Any]]:
+    """Cross-score every same-image pair, either with the real field or with the
+    zero-parameter centre prior (which is the calibration column, F-B1)."""
     by_img: dict[str, list[str]] = {}
     for sid, f in fields.items():
         by_img.setdefault(str(f["source_image_id"]), []).append(sid)
@@ -165,15 +163,88 @@ def _instruction_paired(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
             if torch.equal(a["grid_gt"] > 0.5, b["grid_gt"] > 0.5):
                 continue                       # same target region: no contrast
             k = gt_area_k(a["grid_gt"])
-            pred_bin = topk_mask(a["grid_pred"], k)
+            k_b = gt_area_k(b["grid_gt"])
+            if k == 0 or k_b == 0:
+                continue
+            field = (center_prior_field(*a["grid_gt"].shape[-2:],
+                                        dtype=a["grid_pred"].dtype)
+                     if use_prior else a["grid_pred"])
+            pred_bin = topk_mask(field, k)
             rows.append({
                 "sample_id": sid, "source_image_id": img, "partner": partner,
                 "self_iou": hard_iou(pred_bin, a["grid_gt"]),
                 "cross_iou": hard_iou(pred_bin, b["grid_gt"]),
+                "area_ratio": k / k_b,
             })
-    out = instruction_paired_delta(rows)
-    out["n_pairs_scored"] = len(rows)
-    return out
+    return rows
+
+
+def _instruction_paired(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Same-image paired difference, **calibrated against the centre prior**.
+
+    The raw difference is confounded by GT area (review blocker F-B1).  The
+    prediction is binarised to ``k = |GT_A|`` cells, so
+
+        IoU(pred_k, GT_B) <= |GT_A| / |GT_B|
+
+    and whenever the partner's region is larger the cross score is mechanically
+    capped, making ``self - cross`` positive for free.  Measured by the reviewer
+    on a zero-information centre-prior field: +0.0000 at equal area, +0.1343 at
+    36-vs-324, and **+0.7590** on a concentric pair whose two GTs share a centre
+    and differ only in area.
+
+    So the same cross-scoring pipeline is run a second time with the field
+    replaced by the centre prior, and the reported headline is the **calibrated**
+    difference ``delta_field - delta_prior``: whatever the area effect gives the
+    real field, it gives the zero-parameter baseline too, and subtracting cancels
+    it.  The area-balanced subset (``|GT_A|/|GT_B|`` within
+    :data:`PAIRED_AREA_RATIO_RANGE`) is reported alongside as a second, more
+    conservative view.
+    """
+    lo, hi = PAIRED_AREA_RATIO_RANGE
+    field_rows = _paired_rows(fields, use_prior=False)
+    prior_rows = _paired_rows(fields, use_prior=True)
+
+    def diffs(rows):
+        return [r["self_iou"] - r["cross_iou"] for r in rows]
+
+    def block(f_rows, p_rows) -> dict[str, Any]:
+        if not f_rows:
+            return {"n_pairs": 0, "delta": None, "delta_center_prior": None,
+                    "calibrated_delta": None, "p_value": None}
+        raw = instruction_paired_delta(f_rows)
+        prior = instruction_paired_delta(p_rows)
+        cal = paired_delta(diffs(f_rows), diffs(p_rows))
+        return {
+            "n_pairs": len(f_rows),
+            "delta": raw["delta"], "p_value": raw["p_value"],
+            "delta_center_prior": prior["delta"],
+            # the headline: what the field earns OVER the zero-parameter baseline
+            "calibrated_delta": cal["delta"],
+            "calibrated_p_value": cal["p_value"],
+            "calibrated_ci95": cal["ci95"],
+            "n_groups": raw.get("n_groups"),
+        }
+
+    keep = [i for i, r in enumerate(field_rows) if lo <= r["area_ratio"] <= hi]
+    ratios = sorted(r["area_ratio"] for r in field_rows)
+    return {
+        "all_pairs": block(field_rows, prior_rows),
+        "area_balanced": block([field_rows[i] for i in keep],
+                               [prior_rows[i] for i in keep]),
+        "area_ratio_range": list(PAIRED_AREA_RATIO_RANGE),
+        "area_ratio_observed": (
+            {"min": ratios[0], "p50": ratios[len(ratios) // 2], "max": ratios[-1]}
+            if ratios else None),
+        "n_pairs_area_balanced": len(keep),
+        "n_pairs_total": len(field_rows),
+        "note": (
+            "report `calibrated_delta` (field minus centre prior); the raw "
+            "`delta` is area-confounded and a zero-information field can reach "
+            "+0.76 on a concentric pair (review F-B1). Reported column, not a "
+            "gate (F-B2)."
+        ),
+    }
 
 
 def _oracle_mask(builder: BatchBuilder, tgt: dict[str, Any], arm_cfg: ArmConfig):

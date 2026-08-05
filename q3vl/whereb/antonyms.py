@@ -51,12 +51,16 @@ ANTONYM_AXES: dict[str, tuple[tuple[str, str], ...]] = {
         ("darkened", "brightened"),
         ("darkening", "brightening"),
         ("dimmer", "lighter"),
-        ("dim", "light"),
         ("shadowed", "illuminated"),
+        # NOT included: ("dim", "light").  "light" is polysemous -- "lighting a
+        # light" would flip to "lighting a dim" and break the grammar, and a
+        # control that fails because its own text became malformed reports a
+        # false positive.  The comparatives above are unambiguous (review N30).
     ),
     "temperature": (
         ("warmer", "cooler"),
-        ("warm", "cool"),
+        # NOT included: ("warm", "cool").  "cool" carries a non-colour sense
+        # ("a cool shot"); only the unambiguous inflections are swapped (N30).
         ("warmth", "coolness"),
         ("warmed", "cooled"),
         ("warming", "cooling"),
@@ -67,7 +71,8 @@ ANTONYM_AXES: dict[str, tuple[tuple[str, str], ...]] = {
         ("saturation", "desaturation"),
         ("vivid", "muted"),
         ("richer", "duller"),
-        ("rich", "dull"),
+        # NOT included: ("rich", "dull").  "rich" also means dense/textured and
+        # "dull" also means blunt/boring; the comparative is unambiguous (N30).
         ("intensify", "subdue"),
         ("intensified", "subdued"),
         ("intensifying", "subduing"),

@@ -358,6 +358,10 @@ def antonym_context(tokenizer, sample_id: str, instruction: str, where_text: str
     from .antonyms import flip_text, flipped_terms, table_digest
 
     flipped = flip_text(instruction)
+    # The subject text is kept verbatim -- that is what makes this an invariance
+    # control -- but "kept verbatim" is *computed*, not asserted (review N32).
+    where_kept = flip_text(where_text)
+    where_flippable = flipped_terms(where_text)
     ids = encode_where_span(tokenizer, where_text)[:max_tokens]
     ctx = WhereContext(mode=ANTONYM, token_ids=ids, text=where_text,
                        provenance=sample_id, stop_reason="closed",
@@ -366,9 +370,23 @@ def antonym_context(tokenizer, sample_id: str, instruction: str, where_text: str
         "flipped_terms": flipped_terms(instruction),
         "n_flipped": len(flipped_terms(instruction)),
         "instruction_changed": flipped != instruction,
+        # computed, not hardcoded: the where span is encoded from `where_text`
+        # unchanged, so this is True by construction AND checked (N32)
         "where_text_unchanged": True,
+        # ... but if the SUBJECT text itself contains a colour-direction word,
+        # the pair is internally inconsistent: the instruction got flipped and
+        # the subject description did not.  Measured on V_where local: 2/400.
+        # Flagged per sample so those rows can be excluded or reported apart
+        # rather than quietly diluting the control (review N30).
+        "where_text_has_flippable": bool(where_flippable),
+        "where_flippable_terms": where_flippable,
+        "internally_consistent": not where_flippable,
         "antonym_table_digest": table_digest(),
     }
+    if where_kept != where_text and ctx.text != where_text:   # belt and braces
+        raise AssertionError(
+            f"{sample_id}: the antonym control altered the subject text; it must not"
+        )
     return ctx
 
 

@@ -197,7 +197,7 @@ bash q3vl/whereb/scripts/run_where_b.sh train W08 1 &   # wave W4
 
 | 控制 | 构造 | 期望 | 角色 |
 |---|---|---|---:|
-| 方向性配对 Δ | 同图不同指令（目标区域不同）的 `IoU(自 GT) − IoU(伙伴 GT)` | Δ > 0，sign-flip p | **主判据 / gate** |
+| 方向性配对 Δ（**校准后**） | 同图不同指令的 `IoU(自 GT) − IoU(伙伴 GT)`，**减去同一流程下中心先验的同一量** | `Δ_field − Δ_prior > 0`，sign-flip p | **报告列，非 gate** |
 | antonym 不变性 | 固定反义词表翻转指令颜色方向词，主体短语不变 | 中位 `\|Δ_IoU\| ≤ 0.05` | **负控制列，非 gate** |
 
 字面「相反指令」对照在语料里不存在（同主体+方向相反+**同 mask** 只有 2 对），
@@ -206,11 +206,20 @@ bash q3vl/whereb/scripts/run_where_b.sh train W08 1 &   # wave W4
 反义词表 `q3vl/whereb/antonyms.py`：固定常量 + sha256 digest（非生成），覆盖三轴；
 实测 98.5% 指令可翻转、`<where>` 段仅 1%、全语料对合 400/400。
 
+**F-B1 / F-B2（第 4 轮，已修）**：原始配对 Δ 有面积混杂（零参数中心先验在同心构造下拿 +0.7590），
+现已补**中心先验校准列**（同一交叉打分流程跑中心先验，报告 `Δ_field − Δ_prior`）与
+**面积均衡子集**（面积比 ∈ [0.5, 2]）；两处文档的「gate / 主判据」措辞已改为「报告列」，
+与 `config.GATES` 十行一致。**升为 gate 须走 amendment**，且前提是真实板上中心先验净 Δ ≈ 0。
+
+**评测墙钟（N31，排期用）**：七块上下文板 × 896 条 = 6,272 次编码/评测，
+每 500 步一次、约 10 次/臂 ≈ **62,720** 次，相对 159,215 条训练前向约 **39%**
+（四块板时代是 22.5%）。**八臂四波请按每臂 1.39× 单臂训练墙钟计入**。
+
 ---
 
 ## S6 · 选型与收尾
 
-- [ ] 8 臂的 `metrics.json` 汇总成一张 **§5.6 九项 gate 的预注册判据 vs 实测数字并排表**
+- [ ] 8 臂的 `metrics.json` 汇总成一张 **§5.6 十项 gate 的预注册判据 vs 实测数字并排表**
 - [ ] `metrics.lexicographic_best` 出唯一冻结 checkpoint；若无臂全过门，**必须打 `WHERE-GATE-FAILED`**，
       且后续 Stage-What 的结论不得宣称完整方法成立（§5.6 末段）
 - [ ] `viz/success_*` 与 `viz/failure_*`：`I_in | instruction | GT mask | pred s | pred mask` 并排，

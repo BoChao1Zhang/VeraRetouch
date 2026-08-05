@@ -219,6 +219,12 @@ GATES: tuple[tuple[str, str, float], ...] = (
 #: gate: an invariance stated as a hard gate would punish a tie-break as harshly
 #: as genuinely reading colour-direction words.
 ANTONYM_INVARIANCE_MAX = 0.05
+#: Area-ratio window for the "area balanced" view of the directional paired
+#: difference (review blocker F-B1).  Binarising the prediction to |GT_A| cells
+#: caps IoU(pred, GT_B) at |GT_A|/|GT_B|, so a lopsided pair yields a positive
+#: difference for free; the primary defence is the centre-prior calibration
+#: column, this window is the second, more conservative view.
+PAIRED_AREA_RATIO_RANGE = (0.5, 2.0)
 #: thresholding rule for every spatial field, no exceptions (red line)
 TOPK_RULE = "match_gt_area"
 #: tolerance for the grid-level boundary F1, in GRID CELLS (not pixels)

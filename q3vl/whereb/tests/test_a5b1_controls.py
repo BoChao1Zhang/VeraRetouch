@@ -176,3 +176,39 @@ def test_attribution_section_renders_the_blind_spots():
     sec = M.attribution_section({"arm": "W01", "main_context": "generated"})
     assert "盲区" in sec or "blind spot" in sec.lower()
     assert "fixed_phrase" in sec
+
+
+# --- N28: every negative-control board gets a named delta column ------------
+
+def test_every_negative_control_board_has_a_derived_delta_column():
+    """The red line's usage -- 'scores the same under fixed_phrase as under the
+    real instruction => reading salience' -- has to be a computed column, not
+    something the report author works out by hand from two boards (review N28)."""
+    per = {
+        "generated": {"local_soft_iou_median": 0.80},
+        "gt": {"local_soft_iou_median": 0.82},
+        "null": {"local_soft_iou_median": 0.40},
+        "shuffled": {"local_soft_iou_median": 0.55},
+        "irrelevant_words": {"local_soft_iou_median": 0.45},
+        "fixed_phrase": {"local_soft_iou_median": 0.50},
+        "antonym": {"local_soft_iou_median": 0.79},
+    }
+    d = M.context_deltas(per)
+    assert d["null_context_gap"] == pytest.approx(0.40)
+    assert d["instruction_shuffle_iou_drop"] == pytest.approx(0.25)
+    assert d["irrelevant_words_iou_drop"] == pytest.approx(0.35)
+    assert d["fixed_phrase_iou_drop"] == pytest.approx(0.30)
+    assert d["antonym_iou_drop"] == pytest.approx(0.01)
+    # the binding number: a field must lose on ALL THREE negative controls
+    assert d["min_negative_control_drop"] == pytest.approx(0.25)
+
+
+def test_min_negative_control_drop_is_the_weakest_control_not_the_average():
+    per = {"generated": {"local_soft_iou_median": 0.80},
+           "shuffled": {"local_soft_iou_median": 0.20},
+           "irrelevant_words": {"local_soft_iou_median": 0.20},
+           "fixed_phrase": {"local_soft_iou_median": 0.79}}   # salience leak
+    d = M.context_deltas(per)
+    assert d["min_negative_control_drop"] == pytest.approx(0.01), (
+        "a field that survives fixed_phrase must not be rescued by the other two"
+    )

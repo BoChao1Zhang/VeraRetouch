@@ -570,18 +570,38 @@ def attribution_section(metrics: Mapping[str, Any]) -> str:
 
 def context_deltas(per_context: Mapping[str, Mapping[str, Any]],
                    main_context: str = "generated") -> dict[str, Any]:
-    """The causal-control deltas: main - null and main - shuffled."""
+    """Named delta columns for every negative-control board (review N28).
+
+    The red line's usage is "a field that scores the same under ``fixed_phrase``
+    as under the real instruction is reading image salience".  That comparison
+    has to be a **computed column**, not something the report author works out by
+    hand from two boards -- which is what `irrelevant_words` and `fixed_phrase`
+    were reduced to before this.
+    """
     main = per_context.get(main_context, {})
     out: dict[str, Any] = {}
     base = main.get("local_soft_iou_median")
-    for other, name in (("null", "null_context_gap"),
-                        ("shuffled", "instruction_shuffle_iou_drop")):
+    #: control board -> the name of its drop column
+    controls = {
+        "null": "null_context_gap",
+        "shuffled": "instruction_shuffle_iou_drop",
+        "irrelevant_words": "irrelevant_words_iou_drop",
+        "fixed_phrase": "fixed_phrase_iou_drop",
+        "antonym": "antonym_iou_drop",
+    }
+    for other, name in controls.items():
         v = per_context.get(other, {}).get("local_soft_iou_median")
         if base is not None and v is not None:
             out[name] = float(base) - float(v)
     gt = per_context.get("gt", {}).get("local_soft_iou_median")
     if base is not None and gt is not None:
         out["gt_generated_iou_gap"] = abs(float(gt) - float(base))
+    # the smallest drop across the three negative controls is the binding one:
+    # a field only demonstrates instruction dependence if it loses on ALL of them
+    drops = [out[controls[c]] for c in ("shuffled", "irrelevant_words", "fixed_phrase")
+             if controls[c] in out]
+    if drops:
+        out["min_negative_control_drop"] = min(drops)
     return out
 
 
