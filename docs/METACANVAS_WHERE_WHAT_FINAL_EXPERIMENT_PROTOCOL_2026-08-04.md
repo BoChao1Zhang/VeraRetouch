@@ -1090,3 +1090,58 @@ criteria 路径的 AST 扫描里不得出现 `"prod"`。
 
 §5.5 loss、§5.1–5.4 的结构与 context 定义、§10.3 优化配置、§5.3 的 8 臂矩阵、
 §5.6 的字典序选择规则（第 2 键由「3px boundary F1」改为「grid 级 boundary F1」）均不变。
+
+---
+
+## Amendment A-WhereA-1（2026-08-06，Where-A 结果审阅 R1/R3）
+
+以下三条是 Where-A 交付后对 §4.4 / §5.6 的**口径标注**，不改动任何判据数值，只把此前
+留白、导致读者可能各自解释的地方钉死。
+
+### A1 · §4.4 验收段：四臂的比较在哪个分辨率档上读
+
+Where-A 的天花板有两个分辨率档，必须逐行标注，不得混用：
+
+- **low 档** = `F_pre` 网格（`H/16 × W/16`），是 oracle L-BFGS **实际拟合**的那一层；
+- **hi 档** = 交付分辨率（`out_h × out_w`），经**一次** guided upsample 后的掩膜。
+
+§4.4 的四臂归因表与本轮 REPORT 的判据表**一律读 hi 档**（那是下游真正消费的掩膜），
+low 档并列给出以显示上采样的落差。实测两档差异不可忽略：单活跃基元样本的低→高落差
+中位 +0.0123、p90 +0.0478，因此"Where-A 天花板 = 0.97"这句话**必须带分辨率档**。
+
+### A2 · §5.6 gate：分母的来源、分辨率档与随载荷发布的字段
+
+`相对逐图 oracle 的 soft-IoU ≥ 85%` 与 `std(s_pred)/std(s*) 中位 ≥ 0.60` 两条 gate 的
+**分母来自 Where-A 发布的 oracle latent shard**，不由 Where-B 自行重算：
+
+| gate 分量 | 分母字段 | 分辨率档 | 发布位置 |
+|---|---|---|---|
+| soft-IoU 比值 | `fits.<readout>.eval.low.soft_iou_minmax` | **low**（拟合层） | `oracle/<arm>/s5/<split>` |
+| soft-IoU 比值（交付档） | `fits.<readout>.eval.hi.soft_iou_minmax` | **hi** | 同上（eval split 才有） |
+| `std(s*)` | `fits.<readout>.eval.s_low_stats.std` | **low** | 同上 |
+| `r*(z)` | `fits.<readout>.curve`，网格 `curve_z` | — | 同上 |
+
+每个 stats 块自带 `tier` 字段（`low_res_fpre_grid` / `delivery_res_after_guided_upsample`），
+消费方必须读它而不是靠约定。`train` split 只发布 low 档（gate 分母只需要它）；
+四个 eval split 两档都发布。
+
+### A3 · CBand12 归一化约定必须两侧一致
+
+协议 §4.3 的 `m = Σ c_i g_i /(Σ g_i + eps)` 在 σ 接近下界时会因分母下溢而**恒等于 0**
+（实测：σ=0.025、两中心正中时 `Σ g_i ≈ 6e-27 < eps`）。Where-A 采用该式的 `eps → 0` 极限，
+以 `softmax(log g_i)` 稳定求值，记为 `cband_normalization = "logsumexp"`，良态区与原式差 <1e-9。
+
+**该字段随每个样本的 oracle latent 一同发布**。Where-B 计算 `L_curve` 时必须用同一约定
+重算 `R(z; ρ_pred)`，否则 `L_curve` 两侧不是同一个函数。
+
+σ 顶到下界的实测口径（V_where n=400，避免被单一数字误导）：
+- 按**全部 12 个基元**统计：**9.8%** 的样本至少有一个 σ 在下界；
+- 按**活跃基元**（`c > 0.5`，真正进入 `m(z)` 的）统计：**2.8%**，均值占比 2.0%。
+
+不活跃基元的 σ 不影响 `m(z)`，因此风险口径是 **2.8%**。两个数都记录在案。
+
+### A4 · D5 guided upsample 参数已定档
+
+`radius_low = 1, eps = 1e-2`，由校准后的 `BA-3-Joint` B 在 100 个 V_where 样本（200 latent）
+上复扫确认，选择规则为**字典序：先过越域 gate（每样本越域比例中位 ≤ 1%），再比 hi 档 p10**
+（用 p10 而非均值，因为该参数的作用正是保护尾部）。`GUIDED_PARAMS_PROVISIONAL = False`。

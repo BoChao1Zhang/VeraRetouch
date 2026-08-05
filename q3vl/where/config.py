@@ -109,10 +109,15 @@ CURVE_Z_N = 257
 # 0.9586) with an out-of-domain median of 0.
 GUIDED_RADIUS_LOW = 1
 GUIDED_EPS = 1e-2
-# Still provisional per N-27: the sweep ran against the *uncalibrated* seeded B,
-# and the s field changes shape once BA-3-Joint calibrates B.  Re-run the sweep
-# with `--basis .../BA-3-Joint/B.npy` after S4 and only then flip this to False.
-GUIDED_PARAMS_PROVISIONAL = True
+# FINAL (R5, 2026-08-06).  N-27's condition is met: the sweep was re-run against
+# the *calibrated* BA-3-Joint B on 100 V_where samples (200 latents), ranking on
+# the hi-tier **p10** after the domain gate rather than on a mean -- the mean
+# would happily trade away the upsample-collapse tail the result review isolated.
+# (radius_low=1, eps=1e-2) wins again: worst-readout hi p10 0.8192, out-of-domain
+# median 0, all 9 settings admissible.  The choice is stable across calibration,
+# so it is no longer provisional.
+GUIDED_PARAMS_PROVISIONAL = False
+GUIDED_PARAMS_EVIDENCE = "d5_upsample_sweep_calibrated.json"
 # PRE-REGISTERED (provisional, REVIEW-impl-WhereA N-20): the median per-sample
 # fraction of pixels the guided upsample pushes outside `S_DOMAIN` before the
 # clamp.  Above this, the clamp stops being a boundary repair and starts being

@@ -1,0 +1,128 @@
+[
+  {
+    "sample_id": "sft_1d863dc5430143027a0d8e1afc82b74a",
+    "kind": "failure",
+    "file": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_a/viz/failure_cband12_sft_1d863dc5430143027a0d8e1afc82b74a.png",
+    "low": 0.8529329480128575,
+    "hi": 0.5012112435518253,
+    "drop": 0.3517217044610321,
+    "s_domain": {
+      "domain": [
+        -3.0,
+        3.0
+      ],
+      "raw_min": -0.4981199219412837,
+      "raw_max": 2.901425018560827,
+      "frac_below": 0.0,
+      "frac_above": 0.0,
+      "clamped": true,
+      "frac_out_of_domain": 0.0
+    },
+    "s_low_std": 0.9419313669204712
+  },
+  {
+    "sample_id": "sft_4fd87f21a7528d3c0d9dfaf4ae8961de",
+    "kind": "failure",
+    "file": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_a/viz/failure_cband12_sft_4fd87f21a7528d3c0d9dfaf4ae8961de.png",
+    "low": 0.664755035796444,
+    "hi": 0.28529651598982897,
+    "drop": 0.37945851980661505,
+    "s_domain": {
+      "domain": [
+        -3.0,
+        3.0
+      ],
+      "raw_min": -0.019707089324867255,
+      "raw_max": 2.9827156827682693,
+      "frac_below": 0.0,
+      "frac_above": 0.0,
+      "clamped": true,
+      "frac_out_of_domain": 0.0
+    },
+    "s_low_std": 0.6914294362068176
+  },
+  {
+    "sample_id": "sft_716e30a289fa2ea6ed72478bfb4338c9",
+    "kind": "success",
+    "file": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_a/viz/success_cband12_sft_716e30a289fa2ea6ed72478bfb4338c9.png",
+    "low": 0.9947488731152221,
+    "hi": 0.9955789116377842,
+    "drop": -0.0008300385225621376,
+    "s_domain": {
+      "domain": [
+        -3.0,
+        3.0
+      ],
+      "raw_min": -0.37744486894410484,
+      "raw_max": 1.7869186240138129,
+      "frac_below": 0.0,
+      "frac_above": 0.0,
+      "clamped": true,
+      "frac_out_of_domain": 0.0
+    },
+    "s_low_std": 0.5848314166069031
+  },
+  {
+    "sample_id": "sft_7f84b060183aaf48f819fcc23a5cd10a",
+    "kind": "success",
+    "file": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_a/viz/success_cband12_sft_7f84b060183aaf48f819fcc23a5cd10a.png",
+    "low": 0.9937952859989493,
+    "hi": 0.9932880651674922,
+    "drop": 0.0005072208314570448,
+    "s_domain": {
+      "domain": [
+        -3.0,
+        3.0
+      ],
+      "raw_min": -0.852036374134026,
+      "raw_max": 1.4817908659603636,
+      "frac_below": 0.0,
+      "frac_above": 0.0,
+      "clamped": true,
+      "frac_out_of_domain": 0.0
+    },
+    "s_low_std": 0.6370116472244263
+  },
+  {
+    "sample_id": "sft_93405aeda54854ce0bb792972560f735",
+    "kind": "success",
+    "file": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_a/viz/success_cband12_sft_93405aeda54854ce0bb792972560f735.png",
+    "low": 0.9939022179113377,
+    "hi": 0.9935431366533958,
+    "drop": 0.0003590812579419289,
+    "s_domain": {
+      "domain": [
+        -3.0,
+        3.0
+      ],
+      "raw_min": -1.3449258894027447,
+      "raw_max": -0.2621287476824885,
+      "frac_below": 0.0,
+      "frac_above": 0.0,
+      "clamped": true,
+      "frac_out_of_domain": 0.0
+    },
+    "s_low_std": 0.27941495180130005
+  },
+  {
+    "sample_id": "sft_b78fab3865c76bb0cb40dd60d6faf9f2",
+    "kind": "failure",
+    "file": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_a/viz/failure_cband12_sft_b78fab3865c76bb0cb40dd60d6faf9f2.png",
+    "low": 0.8239956948139255,
+    "hi": 0.4402474365080705,
+    "drop": 0.383748258305855,
+    "s_domain": {
+      "domain": [
+        -3.0,
+        3.0
+      ],
+      "raw_min": -1.2679081027522585,
+      "raw_max": 1.7014666843498383,
+      "frac_below": 0.0,
+      "frac_above": 0.0,
+      "clamped": true,
+      "frac_out_of_domain": 0.0
+    },
+    "s_low_std": 0.6028655171394348
+  }
+]

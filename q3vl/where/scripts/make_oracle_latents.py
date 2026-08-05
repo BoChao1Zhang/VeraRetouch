@@ -73,10 +73,17 @@ def curve_of(latent: Latent) -> list[float]:
     The convention is published alongside the samples: Where-B must recompute
     ``R(z; rho_pred)`` the same way, or the two sides of ``L_curve`` are not the
     same function (REVIEW-impl-WhereA N-25 / D10).
+
+    Evaluated on CPU in float64 regardless of where the latent currently lives.
+    The fit runs on CPU but the latent is moved to the calibrator's device for
+    the evaluation, so a curve built from a bare ``torch.tensor(CURVE_Z)`` mixed
+    devices and raised -- caught on the first S5 split, 20 s in.  This is a
+    serialisation artifact: CPU float64 is its canonical form.
     """
     z = torch.tensor(CURVE_Z, dtype=torch.float64)
+    rho = {k: v.detach().double().cpu() for k, v in latent.rho.items()}
     with torch.no_grad():
-        return apply_readout(latent.readout, z, latent.rho).tolist()
+        return apply_readout(latent.readout, z, rho).tolist()
 
 
 def main() -> int:
@@ -96,6 +103,8 @@ def main() -> int:
     ap.add_argument("--log-every", type=int, default=200)
     ap.add_argument("--workers", type=int, default=32,
                     help="CPU fit-pool workers (0 = serial); D12")
+    ap.add_argument("--chunk", type=int, default=32,
+                    help="samples per pool dispatch (tasks are per-sample)")
     ap.add_argument("--prefetch", type=int, default=64,
                     help="samples prepared ahead of the fits (0 = off)")
     ap.add_argument("--out-root", default=None)
@@ -146,49 +155,74 @@ def main() -> int:
     t0 = time.time()
 
     def rows():
+        """Chunked, pool-backed.  The first S5 attempt built the pool and then
+        fitted through `cal.fit_sample`, i.e. one fit at a time in-process: at
+        ~2.5 s per full-config fit that is ~100 h for train's 151,088 fits.  The
+        fits go through `run_fits` like the calibration loop's do; seed_offset is
+        still the global sample index, so the numbers are unchanged."""
         nonlocal n_done
         stream = source.iter_split(args.split, limit=args.limit)
         if args.prefetch:
             stream = prefetch(stream, depth=args.prefetch)
-        for j, prepared in enumerate(stream):
-            sample = prepared.sample
-            with torch.no_grad():           # no graph: B is frozen (N-24)
-                parts = cal.phi_for(sample)
-            fits: dict[str, dict] = {}
-            for r in ("band", "cband12"):
-                fit = cal.fit_sample(sample, parts.phi_dir, r, fit_cfg=fit_cfg, seed_offset=j)
-                if not fit.usable:
-                    rejections.append(fit.rejection_row(
-                        sample_id=sample.sample_id, build=sample.meta.get("build"),
-                        winner_confidence=sample.meta.get("winner_confidence")))
+        j = -1
+        for group in cal._chunks((p.sample for p in stream), args.chunk):
+            parts_by_id = {}
+            for sample in group:
+                with torch.no_grad():       # no graph: B is frozen (N-24)
+                    parts_by_id[sample.sample_id] = cal.phi_for(sample)
+            cal._phi_cache = parts_by_id
+            base = j + 1
+            tasks = []
+            for k, sample in enumerate(group):
+                tasks.extend(cal.fit_tasks([sample], ("band", "cband12"),
+                                           fit_cfg=fit_cfg, step=0))
+                tasks[-1].seed_offset = base + k
+            group_fits = cal.run_fits(tasks, pool)
+            cal._phi_cache = {}
+
+            for sample in group:
+                j += 1
+                parts = parts_by_id[sample.sample_id]
+                fits: dict[str, dict] = {}
+                for r in ("band", "cband12"):
+                    fit = group_fits[sample.sample_id][r]
+                    if not fit.usable:
+                        rejections.append(fit.rejection_row(
+                            sample_id=sample.sample_id, build=sample.meta.get("build"),
+                            winner_confidence=sample.meta.get("winner_confidence")))
+                        continue
+                    if fit.latent is not None:
+                        fit.latent = fit.latent.to(cal.device)
+                    with torch.no_grad():
+                        ev = evaluate_latent(
+                            parts.phi_dir.double(), fit.latent,
+                            sample.mask_low.to(cal.device).double(),
+                            sample.grid_h, sample.grid_w,
+                            guide_hi=(sample.guide_hi.to(cal.device).double()
+                                      if sample.has_hi else None),
+                            target_hi=(sample.mask_hi.to(cal.device).double()
+                                       if sample.has_hi else None),
+                            up_cfg=cfg.upsample,
+                        )
+                    stats[r].append(ev["low"]["soft_iou_minmax"])
+                    d = fit.to_dict()
+                    d["eval"] = ev
+                    # r*(z) on protocol 5.5's own grid, plus the convention it was
+                    # sampled under -- Where-B must use the same one (N-25)
+                    d["curve_z"] = CURVE_Z.tolist()
+                    d["curve"] = curve_of(fit.latent)
+                    d["cband_normalization"] = CBAND_NORMALIZATION
+                    fits[r] = d
+                if not fits:
                     continue
-                with torch.no_grad():
-                    ev = evaluate_latent(
-                        parts.phi_dir.double(), fit.latent,
-                        sample.mask_low.to(cal.device).double(),
-                        sample.grid_h, sample.grid_w,
-                        guide_hi=(sample.guide_hi.to(cal.device).double()
-                                  if sample.has_hi else None),
-                        target_hi=(sample.mask_hi.to(cal.device).double()
-                                   if sample.has_hi else None),
-                        up_cfg=cfg.upsample,
-                    )
-                stats[r].append(ev["low"]["soft_iou_minmax"])
-                d = fit.to_dict()
-                d["eval"] = ev
-                # r*(z) on protocol 5.5's own grid, plus the convention it was
-                # sampled under -- Where-B must use the same one (N-25)
-                d["curve_z"] = CURVE_Z.tolist()
-                d["curve"] = curve_of(fit.latent)
-                d["cband_normalization"] = CBAND_NORMALIZATION
-                fits[r] = d
-            if not fits:
-                continue
-            n_done += 1
-            if n_done % args.log_every == 0:
-                print(json.dumps({"n": n_done, "elapsed_s": round(time.time() - t0, 1),
-                                  "n_rejected": len(rejections)}), flush=True)
-            yield sample.sample_id, fits, sample.meta
+                n_done += 1
+                if n_done % args.log_every == 0:
+                    rate = (time.time() - t0) / max(1, n_done)
+                    print(json.dumps({
+                        "n": n_done, "elapsed_s": round(time.time() - t0, 1),
+                        "s_per_sample": round(rate, 3),
+                        "n_rejected": len(rejections)}), flush=True)
+                yield sample.sample_id, fits, sample.meta
 
     manifest = pack_oracle(rows(), out_root,
                            source_label=f"where_a.oracle/{args.arm}/{args.split}")

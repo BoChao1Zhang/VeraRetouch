@@ -444,6 +444,18 @@ def evaluate_latent(
         m_low, s = mask_from_latent(phi, latent)
         out: dict[str, Any] = {"low": mask_metrics(m_low, target_low),
                                "s_low_range": [float(s.min()), float(s.max())],
+                               # protocol 5.6 gates on std(s_pred)/std(s*): the
+                               # denominator is this, per image, on the grid the
+                               # fit ran on.  Range alone cannot supply it, and a
+                               # consumer that has to re-derive s* needs the VLM
+                               # forward -- so it ships with the latent.
+                               "s_low_stats": {
+                                   "std": float(s.std(unbiased=False)),
+                                   "mean": float(s.mean()),
+                                   "min": float(s.min()), "max": float(s.max()),
+                                   "n": int(s.numel()),
+                                   "tier": "low_res_fpre_grid",
+                               },
                                "readout_bounds": bounds_report(latent.readout, latent.rho)}
         if guide_hi is not None and target_hi is not None:
             s_hi, _, domain = combine_then_upsample(
@@ -452,6 +464,12 @@ def evaluate_latent(
             m_hi = apply_readout(latent.readout, s_hi.squeeze(0).squeeze(0).reshape(-1), latent.rho)
             out["hi"] = mask_metrics(m_hi, target_hi.reshape(-1))
             out["s_domain"] = domain
+            sh = s_hi.reshape(-1)
+            out["s_hi_stats"] = {
+                "std": float(sh.std(unbiased=False)), "mean": float(sh.mean()),
+                "min": float(sh.min()), "max": float(sh.max()),
+                "n": int(sh.numel()), "tier": "delivery_res_after_guided_upsample",
+            }
             out["hi_minus_low_soft_iou"] = (
                 out["hi"]["soft_iou_minmax"] - out["low"]["soft_iou_minmax"]
             )

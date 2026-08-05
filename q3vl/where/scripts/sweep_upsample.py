@@ -39,6 +39,7 @@ from q3vl.where.config import (
     CalibConfig, FitConfig, MODEL_DIR, PhiConfig, REPORT_DIR, S_OOD_FRAC_MAX,
     UpsampleConfig,
 )
+from q3vl.where.fitpool import FitPool, pin_single_thread
 from q3vl.where.fpre import load_vision_tower
 from q3vl.where.oracle import evaluate_latent
 from q3vl.where.pipeline import WhereADataSource
@@ -57,6 +58,8 @@ def main() -> int:
     ap.add_argument("--checkpoint", default=None)
     ap.add_argument("--arm", default="BA-3-Joint")
     ap.add_argument("--basis", default=None, help="B.npy; default = uncalibrated seeded B")
+    ap.add_argument("--workers", type=int, default=8,
+                    help="CPU fit-pool workers; keep low when S5 is running")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -76,18 +79,40 @@ def main() -> int:
             projector.weight.copy_(torch.from_numpy(np.load(args.basis)))
     cal = Calibrator(CalibConfig(arm=args.arm, phi=PhiConfig()),
                      projector=projector, device=args.device)
+    if projector is not None:
+        cal.freeze_projector()          # the sweep never trains B
     fit_cfg = FitConfig(n_random=4, max_iter=100)
+    pin_single_thread()
+    pool = FitPool(n_workers=args.workers or None)
+    pool.warmup()
 
     # fit once per sample, then re-use the same latents for every (r, eps):
     # the sweep is about the upsample, not about the fit.
     cached = []
-    for j, prepared in enumerate(source.iter_split("V_where", limit=args.limit)):
-        s = prepared.sample
-        parts = cal.phi_for(s)
-        for r in ("band", "cband12"):
-            fit = cal.fit_sample(s, parts.phi_dir, r, fit_cfg=fit_cfg, seed_offset=j)
-            if fit.usable:
-                cached.append((s, parts.phi_dir.double().detach(), r, fit.latent))
+    j = -1
+    for group in cal._chunks((p.sample for p in
+                              source.iter_split("V_where", limit=args.limit)), 16):
+        parts_by_id = {}
+        for smp in group:
+            with torch.no_grad():
+                parts_by_id[smp.sample_id] = cal.phi_for(smp)
+        cal._phi_cache = parts_by_id
+        base = j + 1
+        tasks = []
+        for k, smp in enumerate(group):
+            tasks.extend(cal.fit_tasks([smp], ("band", "cband12"),
+                                       fit_cfg=fit_cfg, step=0))
+            tasks[-1].seed_offset = base + k
+        group_fits = cal.run_fits(tasks, pool)
+        cal._phi_cache = {}
+        for smp in group:
+            j += 1
+            parts = parts_by_id[smp.sample_id]
+            for r in ("band", "cband12"):
+                fit = group_fits[smp.sample_id][r]
+                if fit.usable:
+                    cached.append((smp, parts.phi_dir.double().detach(), r,
+                                   fit.latent.to(cal.device)))
     if not cached:
         raise SystemExit("no usable fit; cannot sweep")
 
@@ -125,6 +150,14 @@ def main() -> int:
     # N-20: lexicographic selection, not "best IoU regardless".  A setting whose
     # upsample throws a large share of pixels outside the declared s domain buys
     # its IoU with clamping, so it is disqualified before IoU is even compared.
+    # R5: rank on the hi-tier **p10**, not the mean/median.  The parameter is
+    # being chosen to protect the worst masks -- the upsample-collapse samples
+    # the result review isolated (0.85 -> 0.44) live in the lower tail, and a
+    # mean happily trades them away for a better centre.
+    def tail_hi(r) -> float:
+        return min(r["hi_soft_iou"]["band"].get("p10", 0.0),
+                   r["hi_soft_iou"]["cband12"].get("p10", 0.0))
+
     def mean_hi(r) -> float:
         return ((r["hi_soft_iou"]["band"].get("median", 0.0) +
                  r["hi_soft_iou"]["cband12"].get("median", 0.0)) / 2)
@@ -133,8 +166,8 @@ def main() -> int:
     admissible = [r for r in results
                   if r["frac_out_of_domain"].get("median", 1.0) <= gate]
     if admissible:
-        best = max(admissible, key=mean_hi)
-        selection = "passed_domain_gate_then_max_hi_soft_iou"
+        best = max(admissible, key=tail_hi)
+        selection = "passed_domain_gate_then_max_hi_soft_iou_p10"
     else:
         # nothing qualifies: recommend the least-clamped setting and say so
         # loudly rather than quietly returning the best IoU.
@@ -152,7 +185,15 @@ def main() -> int:
         "recommended": {k: best[k] for k in ("radius_low", "eps")},
         "recommended_stats": {"frac_out_of_domain_median":
                               best["frac_out_of_domain"].get("median"),
+                              "worst_readout_hi_p10": tail_hi(best),
                               "mean_hi_soft_iou_median": mean_hi(best)},
+        "ranking": sorted(
+            [{"radius_low": r["radius_low"], "eps": r["eps"],
+              "hi_p10_worst_readout": tail_hi(r),
+              "hi_median_mean": mean_hi(r),
+              "ood_median": r["frac_out_of_domain"].get("median"),
+              "admissible": r in admissible} for r in results],
+            key=lambda d: -d["hi_p10_worst_readout"]),
         "note": "write the recommendation into config.py and set "
                 "GUIDED_PARAMS_PROVISIONAL = False; re-run with "
                 "--basis .../BA-3-Joint/B.npy after S4 to confirm it still holds "
@@ -160,7 +201,9 @@ def main() -> int:
     }
     path = Path(args.out) if args.out else REPORT_DIR / "d5_upsample_sweep.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    out["pool"] = pool.facts()
     path.write_text(json.dumps(out, indent=2))
+    pool.close()
     print(json.dumps({"recommended": out["recommended"],
                       "selection_rule": selection,
                       "gate": out["gate"], "wrote": str(path)}, indent=2))

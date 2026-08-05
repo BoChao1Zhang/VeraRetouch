@@ -209,3 +209,48 @@ def test_self_check_on_empty_readouts_would_be_vacuous():
     assert rep["checked"] is True and rep["losses"] == {}, (
         "an empty-readout self-check passes without testing anything -- which is "
         "exactly what BA-0 was doing at launch")
+
+
+def test_curve_of_is_device_independent():
+    """The S5 job moves each latent to the calibrator's device for evaluation, so
+    a curve built from a bare `torch.tensor(CURVE_Z)` mixes devices and raises --
+    which is exactly what happened on the first S5 split.  r*(z) is a
+    serialisation artifact: CPU float64 is its canonical form."""
+    import inspect
+
+    from q3vl.where.scripts import make_oracle_latents as job
+
+    src = inspect.getsource(job.curve_of)
+    assert ".cpu()" in src, "the readout params must be pulled to CPU"
+    assert ".double()" in src, "and evaluated in float64"
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="no GPU free")
+def test_curve_of_accepts_a_latent_on_the_gpu():
+    g = torch.Generator().manual_seed(1)
+    rho = {k: (torch.randn(s, generator=g, dtype=DT) if s else
+               torch.randn((), generator=g, dtype=DT))
+           for k, s in param_shapes("band").items()}
+    lat = Latent("band", torch.zeros((), dtype=DT), torch.zeros((), dtype=DT),
+                 torch.randn(71, generator=g, dtype=DT), rho)
+    on_cpu = curve_of(lat)
+    on_gpu = curve_of(lat.to("cuda"))
+    assert len(on_gpu) == 257
+    assert np.allclose(np.asarray(on_cpu), np.asarray(on_gpu), atol=1e-12)
+
+
+def test_s5_fits_go_through_the_pool_not_one_at_a_time():
+    """The first S5 launch created the pool and then fitted through
+    `cal.fit_sample`, one fit at a time in-process: ~2.5 s per full-config fit
+    x 151,088 fits for train is ~100 h.  The fits must go through `run_fits`,
+    the same seam the calibration loop uses."""
+    import inspect
+
+    from q3vl.where.scripts import make_oracle_latents as job
+
+    src = inspect.getsource(job.main)
+    assert "cal.run_fits(tasks, pool)" in src, "S5 must dispatch through the pool"
+    assert "cal.fit_sample(" not in src, "no per-fit serial path may remain"
+    assert "cal._chunks(" in src, "and it must be chunked, not one sample per dispatch"
+    # the seed must still be the global sample index, or the numbers move
+    assert "tasks[-1].seed_offset = base + k" in src
