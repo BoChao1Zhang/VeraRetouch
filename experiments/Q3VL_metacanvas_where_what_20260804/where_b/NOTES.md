@@ -887,3 +887,48 @@ soft-IoU 的**积形式** `sum(p·g) / sum(p+g−p·g)` 实测（B-1）：
 看到「相对 oracle 差一点」先确认到底是哪一行在卡，别误判成 oracle 天花板的问题。
 
 单测：`test_soft_iou_form.py` 14 条；`q3vl/whereb` **330 → 344 passed**。
+
+---
+
+## 十五、单活跃基元脆弱性分层（Where-A 失败分析的连带风险，只加报告列）
+
+日期：2026-08-06 ｜ 触发：Where-A 结果审阅 + 失败分析 ｜ 裁定：**不改 loss/gate/训练，只加报告列**
+
+### 15.1 风险
+
+Where-A 实测：**单活跃基元**（`c > 0.5` 的 primitive 数 = 1）的拟合在 guided upsample 的
+**hi 档**有系统性脆弱：
+
+| 项 | 值 |
+|---|---|
+| 占样本比例 | **30.8%** |
+| hi-vs-low drop 中位（单基元） | **+0.012** |
+| hi-vs-low drop 中位（≥3 基元） | **+0.006** |
+| 三个崩塌案例 | **全部**是单基元窄带外推 |
+
+Where-B **预测同一个 ρ**，因此可能继承该脆弱性。若不分层，30.8% 的脆弱样本会被
+另外 69.2% 稀释掉，hi 档的总平均看不出问题。
+
+### 15.2 落地（纯报告侧）
+
+- `metrics.active_primitive_count(readout, rho)`：对 **CBand12** 数 `c > 0.5` 的基元
+  （`c = sigmoid(c_raw)`，阈值常量 `ACTIVE_PRIMITIVE_ON_THRESHOLD = 0.5`）；
+  **R-Band 返回 `None`** —— 单带通天然只有一个基元，报 `1` 是误导性数字而不是测量，
+  分层标 **`n/a`**。
+- `active_primitive_bucket`：`n/a` / `1` / `2` / `>=3`，与 Where-A 的分层口径一致。
+- 新增逐样本列 **`hi_lo_soft_iou_drop = grid_soft_iou − soft_iou`** —— 正是 Where-A
+  测的那个量（hi 比 low 差时为正），这样两阶段的数字可以直接对照；
+  `summarise` 出 `hi_lo_soft_iou_drop_median`。
+- `EXTRA_STRATA_KEYS = ("active_primitive_bucket",)`：与 `STRATA_KEYS`（从 record 的 meta 读）
+  分开，因为这一层是**逐样本算出来的**而不是数据自带的；`strata_report` 默认把两者并起来，
+  于是**七块上下文板的 hi 档指标自动按该层分列**。
+- `ATTRIBUTION_NOTE["known_blind_spots"]["single_active_primitive_fragility"]`：
+  记入风险、四个数字与出处（Where-A REVIEW-result + 失败分析），并写明
+  「reported only — no loss, gate or training change」。随每份 `metrics.json` / `ATTRIBUTION.md` 落盘。
+
+### 15.3 未改动（裁定边界，单测钉住）
+
+`GATES` 十行不含 primitive 项、`SELECTION_ORDER` 不含、`losses.py` 全文无 `primitive`、
+`L_mask` 三个权重不变 —— `test_the_stratum_changes_no_gate_and_no_loss` 逐条断言。
+
+单测：`test_active_primitives.py` **21 条**；`q3vl/whereb` **344 → 365 passed**。

@@ -42,6 +42,7 @@ import torch
 from .config import (
     GATES,
     GATE_FAILED_TAG,
+    ACTIVE_PRIMITIVE_ON_THRESHOLD,
     ANTONYM_INVARIANCE_MAX,
     GRID_BOUNDARY_TOL_CELLS,
     SOFT_IOU_KIND,
@@ -52,6 +53,7 @@ from .losses import _EPS, boundary_map, soft_iou
 __all__ = ["percentile", "soft_iou_value", "boundary_f1", "topk_mask",
            "gt_area_k", "center_prior_field", "hard_iou", "grid_boundary_f1",
            "paired_delta", "instruction_paired_delta", "antonym_invariance",
+           "active_primitive_count", "active_primitive_bucket",
            "sample_metrics", "summarise", "arm_metrics",
            "evaluate_gates", "lexicographic_best", "ATTRIBUTION_NOTE",
            "attribution_section", "context_deltas"]
@@ -146,6 +148,38 @@ def center_prior_field(grid_h: int, grid_w: int, *, device=None,
 
     X, Y = norm_coords(grid_h, grid_w, device=device, dtype=dtype)
     return -torch.sqrt(X ** 2 + Y ** 2)
+
+
+def active_primitive_count(readout: str, rho: Mapping[str, Any]) -> int | None:
+    """How many CBand12 primitives are actually switched on (``c > 0.5``).
+
+    Where-A's failure analysis found a systematic fragility in the guided
+    upsample's hi tier for **single-active-primitive** fits: 30.8% of samples,
+    median hi-vs-low drop **+0.012** against **+0.006** for fits with >= 3
+    primitives, and all three collapse cases were single-primitive narrow-band
+    extrapolations.  Where-B can inherit it, because it predicts the same rho.
+
+    ``None`` for ``R-Band``: a single learnable band-pass has exactly one
+    primitive by construction, so the count carries no information and is
+    reported as ``n/a`` rather than as a misleading ``1``.
+    """
+    if readout != "cband12":
+        return None
+    from q3vl.where.readout import cband_params
+
+    c = cband_params({k: torch.as_tensor(v) for k, v in rho.items()})["c"]
+    return int((c > ACTIVE_PRIMITIVE_ON_THRESHOLD).sum())
+
+
+def active_primitive_bucket(count: int | None) -> str:
+    """``"n/a"`` | ``"1"`` | ``"2"`` | ``">=3"`` -- the reporting strata."""
+    if count is None:
+        return "n/a"
+    if count <= 1:
+        return "1"
+    if count == 2:
+        return "2"
+    return ">=3"
 
 
 def hard_iou(pred_mask: torch.Tensor, gt_mask: torch.Tensor) -> float:
@@ -377,6 +411,9 @@ def sample_metrics(
             "center_prior_hard_iou": hard_iou(prior_bin, gt_bin),
             "center_prior_boundary_f1": grid_boundary_f1(prior_bin, gt_bin),
         })
+        # Where-A's fragility is measured as the hi-vs-low degradation, so the
+        # same quantity is reported here and stratified by primitive count.
+        out["hi_lo_soft_iou_drop"] = out["grid_soft_iou"] - out["soft_iou"]
         if grid_oracle is not None:
             og = topk_mask(grid_oracle.reshape(grid_gt.shape), k)
             out["oracle_grid_hard_iou"] = hard_iou(og, gt_bin)
@@ -407,6 +444,7 @@ def summarise(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     bratio = [float(r["grid_boundary_f1"]) / float(r["oracle_grid_boundary_f1"])
               for r in rows if is_local(r) and r.get("oracle_grid_boundary_f1")]
     sratio = pick("s_std_ratio", is_local)
+    hilo = pick("hi_lo_soft_iou_drop", is_local)
 
     # paired against the centre prior, on the samples that have both
     local_rows = [r for r in rows if is_local(r)
@@ -429,6 +467,7 @@ def summarise(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "soft_iou_vs_oracle_ratio": percentile(ratio, 0.5),
         "grid_boundary_f1_vs_oracle_ratio": percentile(bratio, 0.5),
         "s_std_ratio_median": percentile(sratio, 0.5),
+        "hi_lo_soft_iou_drop_median": percentile(hilo, 0.5),
         # --- the mandatory centre-prior column (amendment A-5) --------------
         "center_prior_hard_iou": percentile(
             pick("center_prior_hard_iou", is_local), 0.5),
@@ -500,6 +539,17 @@ ATTRIBUTION_NOTE: dict[str, Any] = {
             "scattered noise scores 0.0357. The coverage column (hard-IoU) and "
             "the centre-prior column are what close that gap -- no single column "
             "is a criterion, which is why the red line demands all three."
+        ),
+        "single_active_primitive_fragility": (
+            "KNOWN RISK, inherited from Where-A (REVIEW-result + failure "
+            "analysis): fits with exactly one active CBand12 primitive (c > 0.5) "
+            "are systematically fragile in the guided upsample's hi tier -- "
+            "30.8% of samples, median hi-vs-low drop +0.012 vs +0.006 at >= 3 "
+            "primitives, and all three collapse cases were single-primitive "
+            "narrow-band extrapolations. Hi-tier columns are therefore "
+            "stratified by active primitive count (1 / 2 / >=3); R-Band is n/a "
+            "since one band-pass is one primitive by construction. Reported "
+            "only -- no loss, gate or training change (main-agent ruling)."
         ),
         "antonym_invariance": (
             "small |delta| is the PASS here, not a large one -- this control is "

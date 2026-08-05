@@ -13,7 +13,14 @@ import json
 import pytest
 import torch
 
-from q3vl.whereb.config import GATES, ConnectorConfig, TrainConfig, arm_config
+from q3vl.whereb.config import (
+    EXTRA_STRATA_KEYS,
+    GATES,
+    STRATA_KEYS,
+    ConnectorConfig,
+    TrainConfig,
+    arm_config,
+)
 from q3vl.whereb.context import CONTEXT_MODES, ShuffleIndex
 from q3vl.whereb.evaluate import evaluate_arm, evaluate_context, strata_report
 from q3vl.whereb.model import WhereBModel
@@ -143,7 +150,9 @@ def test_strata_report_groups_by_every_requested_key():
          "upscaled": False, "winner_confidence": "low", "build": "l2"},
     ]
     rep = strata_report(rows)
-    assert set(rep) == {"upscaled", "winner_confidence", "build", "render_mode"}
+    # STRATA_KEYS (from the record's meta) + EXTRA_STRATA_KEYS (computed per
+    # sample; currently the Where-A active-primitive fragility stratum)
+    assert set(rep) == set(STRATA_KEYS) | set(EXTRA_STRATA_KEYS)
     assert set(rep["winner_confidence"]) == {"normal", "low"}
     assert rep["upscaled"]["True"]["n"] == 1
 

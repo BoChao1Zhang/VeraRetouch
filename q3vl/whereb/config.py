@@ -236,6 +236,11 @@ ANTONYM_INVARIANCE_MAX = 0.05
 #: difference for free; the primary defence is the centre-prior calibration
 #: column, this window is the second, more conservative view.
 PAIRED_AREA_RATIO_RANGE = (0.5, 2.0)
+#: A CBand12 primitive counts as "on" when its payload c exceeds this.
+ACTIVE_PRIMITIVE_ON_THRESHOLD = 0.5
+#: Strata that are computed per sample rather than read from the record's meta.
+#: Added for the Where-A single-active-primitive fragility (reported, not gated).
+EXTRA_STRATA_KEYS = ("active_primitive_bucket",)
 #: thresholding rule for every spatial field, no exceptions (red line)
 TOPK_RULE = "match_gt_area"
 #: tolerance for the grid-level boundary F1, in GRID CELLS (not pixels)

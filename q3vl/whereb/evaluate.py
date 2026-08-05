@@ -22,7 +22,12 @@ from typing import Any, Callable, Iterable, Sequence
 
 import torch
 
-from .config import PAIRED_AREA_RATIO_RANGE, ArmConfig, STRATA_KEYS
+from .config import (
+    EXTRA_STRATA_KEYS,
+    PAIRED_AREA_RATIO_RANGE,
+    STRATA_KEYS,
+    ArmConfig,
+)
 from .context import CONTEXT_MODES, SHUFFLED
 from .data import BatchBuilder, WhereBDataset
 from .fields import predict_fields
@@ -262,7 +267,8 @@ def _oracle_mask(builder: BatchBuilder, tgt: dict[str, Any], arm_cfg: ArmConfig)
     return f["m_hi"].reshape(tgt["mask_hi"].shape), f["m_low"]
 
 
-def strata_report(rows: Sequence[dict[str, Any]], keys: Sequence[str] = STRATA_KEYS
+def strata_report(rows: Sequence[dict[str, Any]],
+                  keys: Sequence[str] = STRATA_KEYS + EXTRA_STRATA_KEYS,
                   ) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key in keys:
