@@ -1,0 +1,203 @@
+repo=/home/bc/VeraRetouch
+python=/home/bc/envs/q3vl_sft/bin/python
+
+PASS  partition n=159215 k=8 interleave: exhaustive+disjoint  -- sizes=[19902, 19902, 19902, 19902, 19902, 19902, 19902, 19901]
+PASS  partition n=159215 k=8 interleave: balanced  -- sizes=[19902, 19902, 19902, 19902, 19902, 19902, 19902, 19901]
+PASS  partition n=159215 k=8 contiguous: exhaustive+disjoint  -- sizes=[19901, 19902, 19902, 19902, 19902, 19902, 19902, 19902]
+PASS  partition n=159215 k=8 contiguous: balanced  -- sizes=[19901, 19902, 19902, 19902, 19902, 19902, 19902, 19902]
+PASS  partition n=896 k=2 interleave: exhaustive+disjoint  -- sizes=[448, 448]
+PASS  partition n=896 k=2 interleave: balanced  -- sizes=[448, 448]
+PASS  partition n=896 k=2 contiguous: exhaustive+disjoint  -- sizes=[448, 448]
+PASS  partition n=896 k=2 contiguous: balanced  -- sizes=[448, 448]
+PASS  partition n=897 k=8 interleave: exhaustive+disjoint  -- sizes=[113, 112, 112, 112, 112, 112, 112, 112]
+PASS  partition n=897 k=8 interleave: balanced  -- sizes=[113, 112, 112, 112, 112, 112, 112, 112]
+PASS  partition n=897 k=8 contiguous: exhaustive+disjoint  -- sizes=[112, 112, 112, 112, 112, 112, 112, 113]
+PASS  partition n=897 k=8 contiguous: balanced  -- sizes=[112, 112, 112, 112, 112, 112, 112, 113]
+PASS  partition n=10 k=3 interleave: exhaustive+disjoint  -- sizes=[4, 3, 3]
+PASS  partition n=10 k=3 interleave: balanced  -- sizes=[4, 3, 3]
+PASS  partition n=10 k=3 contiguous: exhaustive+disjoint  -- sizes=[3, 3, 4]
+PASS  partition n=10 k=3 contiguous: balanced  -- sizes=[3, 3, 4]
+PASS  partition n=5 k=8 interleave: exhaustive+disjoint  -- sizes=[1, 1, 1, 1, 1, 0, 0, 0]
+PASS  partition n=5 k=8 interleave: balanced  -- sizes=[1, 1, 1, 1, 1, 0, 0, 0]
+PASS  partition n=5 k=8 contiguous: exhaustive+disjoint  -- sizes=[0, 1, 0, 1, 1, 0, 1, 1]
+PASS  partition n=5 k=8 contiguous: balanced  -- sizes=[0, 1, 0, 1, 1, 0, 1, 1]
+PASS  partition n=1 k=1 interleave: exhaustive+disjoint  -- sizes=[1]
+PASS  partition n=1 k=1 interleave: balanced  -- sizes=[1]
+PASS  partition n=1 k=1 contiguous: exhaustive+disjoint  -- sizes=[1]
+PASS  partition n=1 k=1 contiguous: balanced  -- sizes=[1]
+PASS  partition rejects shard 0 of 0
+PASS  partition rejects shard index == num_shards
+PASS  partition rejects negative shard
+PASS  partition rejects unknown mode
+PASS  shard_tag zero-pads  -- shard03of08
+PASS  inner argv suffixes out-root  -- ['--split', 'train', '--out-root', '/o/shard03of08', '--report-dir', '/r/shard03of08', '--checkpoint', '/c', '--batch-size', '64']
+PASS  inner argv suffixes report-dir  -- ['--split', 'train', '--out-root', '/o/shard03of08', '--report-dir', '/r/shard03of08', '--checkpoint', '/c', '--batch-size', '64']
+PASS  inner argv keeps passthrough
+PASS  inner argv rejects --out-root
+PASS  inner argv rejects --report-dir=/x
+PASS  inner argv rejects --split
+PASS  eight shards -> eight distinct out-roots  -- ['/o/shard00of08', '/o/shard01of08', '/o/shard02of08', '/o/shard03of08', '/o/shard04of08', '/o/shard05of08', '/o/shard06of08', '/o/shard07of08']
+PASS  genctx_shard.py --help
+PASS  merge_genctx.py --help
+PASS  producer --help
+PASS  producer exposes no shard flag (why this wrapper exists)
+PASS  --plan-only prints the plan without torch  -- rc=0 0.0s {
+  "shard": 1,
+  "num_shards": 8,
+  "shard_mode": "interleave",
+  "tag": "shard01of08",
+  "inner_argv": [
+    "--split",
+    "train",
+    "--out-root",
+    "/o
+PASS  genctx_dual.sh without a checkpoint exits 2  -- rc=2
+PASS  V_where opens through the sanctioned factory  -- n=896
+PASS  two shard roots published side by side
+PASS  merge exits 0  -- _rate": 1.0
+  },
+  "compat_symlinks": [
+    {
+      "link": "/tmp/genctx_dryrun_xpsv903d/genwhere/V_where/two_segment",
+      "target": "../V_where",
+      "status": "created"
+    },
+    {
+      "link": "/tmp/genctx_dryrun_xpsv903d/genwhere/V_where/forced_color",
+      "target": "../V_where-forced_color",
+      "status": "skipped_target_missing"
+    }
+  ],
+  "merge_seconds": 0.4,
+  "git_commit": "80a507892f1c5675da277b4a21ebe4815566cd8f",
+  "merged_at": "2026-08-05T11:56:14+0800"
+}
+MERGE-OK V_where -> /tmp/genctx_dryrun_xpsv903d/genwhere/V_where  report=/tmp/genctx_dryrun_xpsv903d/report.json
+
+PASS  merge prints MERGE-OK  -- 80a507892f1c5675da277b4a21ebe4815566cd8f",
+  "merged_at": "2026-08-05T11:56:14+0800"
+}
+MERGE-OK V_where -> /tmp/genctx_dryrun_xpsv903d/genwhere/V_where  report=/tmp/genctx_dryrun_xpsv903d/report.json
+
+PASS  Where-B GenContextStore reads every sample back  -- 896/896
+PASS  merged manifest is complete
+PASS  merge report records exact coverage  -- 896
+PASS  merge report pins one checkpoint  -- /ckpt-4976
+PASS  merged summary carries both segments  -- {'n': 896, 'modes': ['two_segment'], 'schema_versions': ['q3vl.where_b.genwhere/2'], 'format_failure_rate': 0.0, 'truncation_rate': 0.0, 'starts_with_where_open_rate': 1.0, 'stop_reasons': {'closed': 
+PASS  compat symlink two_segment exists  -- /tmp/genctx_dryrun_xpsv903d/genwhere/V_where/two_segment
+PASS  compat symlink resolves to the published root
+PASS  Stage-What ColorGenContextStore covers the split through the symlink  -- {'n_requested': 896, 'n_present': 896, 'mode': 'two_segment', 'root': '/tmp/genctx_dryrun_xpsv903d/genwhere/V_where/two_segment', 'coverage': 1.0, 'probe': {'sample_id': 'sft_00680d96738cd6077be81308b
+PASS  Stage-What reads color ids
+PASS  forced_color merge exits 0  -- ",
+      "target": "../V_where",
+      "status": "ok_already"
+    },
+    {
+      "link": "/tmp/genctx_dryrun_xpsv903d/genwhere/V_where/forced_color",
+      "target": "../V_where-forced_color",
+      "status": "created"
+    }
+  ],
+  "merge_seconds": 0.4,
+  "git_commit": "80a507892f1c5675da277b4a21ebe4815566cd8f",
+  "merged_at": "2026-08-05T11:56:17+0800"
+}
+MERGE-OK V_where-forced_color -> /tmp/genctx_dryrun_xpsv903d/genwhere/V_where-forced_color  report=/tmp/genctx_dryrun_xpsv903d/report_fc.json
+
+PASS  compat symlink forced_color created inside the two_segment root  -- /tmp/genctx_dryrun_xpsv903d/genwhere/V_where/forced_color
+PASS  forced_color store refuses to be read as two_segment
+PASS  forced_color store covers the split
+PASS  the two modes are separate roots
+PASS  merge refuses an existing output root  -- /tmp/genctx_dryrun_xpsv903d/genwhere/V_where already exists. Publication is atomic; move the old directory aside (do NOT delete it) before merging again.
+
+PASS  merge refuses a missing shard  -- v903d/_shards/two_segment/V_where/shard00of04/V_where is not a published indexed-tar dataset (no manifest.json). Publication is atomic, so a missing manifest means the producing job has not finished.
+
+PASS  merge refuses shards that are not the planned slice  -- 5ddee5655b5e2f60e334423c07ca', 'sft_0116bd2d61059b9ca7c8d4e316bbba2f'] extra=['sft_865b929289838a2fc2645b126159b67b', 'sft_870a1f20c40e55536e2aea197d6a94ab', 'sft_879e61196a0980bdeac378ebe2519ddc']). Re-check --shard / --num-shards / --shard-mode of that job.
+
+PASS  merge refuses a split generated by two checkpoints  -- ", "n": 448}
+{"shard_ok": "shard01of02", "n": 448}
+shard01of02/sft_006ce47e32c1c5f0007e325afb32b0c1: records come from more than one checkpoint ['/ckpt-2488', '/ckpt-4976']; a split generated half by one model and half by another is not a usable context cache
+
+PASS  the rejected merge published nothing
+PASS  merge refuses records whose mode is not the requested one  -- sk_source": null, "n_samples": 896}}
+{"shard_ok": "shard00of02", "n": 448}
+{"shard_ok": "shard01of02", "n": 448}
+shard00of02/sft_00680d96738cd6077be81308b15e19b3: mode 'forced_color' != 'two_segment'
+
+PASS  --check-only validates without publishing  -- alse, "mask_source": null, "n_samples": 896}}
+{"shard_ok": "shard00of02", "n": 448}
+{"shard_ok": "shard01of02", "n": 448}
+{
+  "check_only": true,
+  "shards": 2,
+  "n_samples": 896,
+  "seconds": 0.2
+}
+
+PASS  driver DRY_RUN exits 0  -- ng anyway
+[2026-08-05T11:56:39+08:00] PROBE-OK genctx_dual ready: interpreter, checkpoint, V_where V_what train indexes, free GPUs, stage root
+[2026-08-05T11:56:39+08:00] PLAN: 12 shard jobs over 2 card(s)
+[2026-08-05T11:56:39+08:00]   GPU 0 <- V_where:0:2 V_what:0:2 train:0:8 train:2:8 train:4:8 train:6:8
+[2026-08-05T11:56:39+08:00]   GPU 1 <- V_where:1:2 V_what:1:2 train:1:8 train:3:8 train:5:8 train:7:8
+[2026-08-05T11:56:39+08:00] DRY_RUN=1 -- plan printed, no process started, no GPU touched
+
+PASS  driver refuses to start a process in DRY_RUN  -- ain:6:8
+[2026-08-05T11:56:39+08:00]   GPU 1 <- V_where:1:2 V_what:1:2 train:1:8 train:3:8 train:5:8 train:7:8
+[2026-08-05T11:56:39+08:00] DRY_RUN=1 -- plan printed, no process started, no GPU touched
+
+PASS  driver plans 12 shard jobs (2+2+8) over 2 cards  -- ['[2026-08-05T11:56:39+08:00] PLAN: 12 shard jobs over 2 card(s)']
+PASS  driver counts the real split sizes  -- ['[2026-08-05T11:56:39+08:00] split train: 159215 samples, 8 shards, final -> /tmp/genctx_dryrun_xpsv903d/genwhere_driver/train']
+PASS  driver puts the small splits first on both cards  -- ['[2026-08-05T11:56:39+08:00]   GPU 0 <- V_where:0:2 V_what:0:2 train:0:8 train:2:8 train:4:8 train:6:8', '[2026-08-05T11:56:39+08:00]   GPU 1 <- V_where:1:2 V_what:1:2 train:1:8 train:3:8 train:5:8 train:7:8']
+PASS  driver prints PROBE-OK before planning
+PASS  driver refuses to start on a card that is not free  -- :40+08:00] GPU 0: 9927 MiB in use
+[2026-08-05T11:56:40+08:00] GPU 0 is busy (9927 MiB >= 0); refusing to start (FORCE_BUSY_GPU=1 overrides)
+[2026-08-05T11:56:40+08:00] PROBE FAILED -- nothing started
+
+PASS  driver warns but still plans when DRY_RUN meets a busy card  -- ain:6:8
+[2026-08-05T11:56:40+08:00]   GPU 1 <- V_where:1:2 V_what:1:2 train:1:8 train:3:8 train:5:8 train:7:8
+[2026-08-05T11:56:40+08:00] DRY_RUN=1 -- plan printed, no process started, no GPU touched
+
+PASS  driver drops an already-published split  -- terpreter, checkpoint, V_what train indexes, free GPUs, stage root
+[2026-08-05T11:56:40+08:00] PLAN: 10 shard jobs over 2 card(s)
+[2026-08-05T11:56:40+08:00]   GPU 0 <- V_what:0:2 train:0:8 train:2:8 train:4:8 train:6:8
+[2026-08-05T11:56:40+08:00]   GPU 1 <- V_what:1:2 train:1:8 train:3:8 train:5:8 train:7:8
+[2026-08-05T11:56:40+08:00] DRY_RUN=1 -- plan printed, no process started, no GPU touched
+
+PASS  driver stops on a final root that is not a complete publication  -- 26-08-05T11:56:40+08:00] FINAL ROOT EXISTS BUT IS NOT A COMPLETE PUBLICATION: /tmp/genctx_dryrun_xpsv903d/genwhere_driver/V_where
+[2026-08-05T11:56:40+08:00]   move it aside (do NOT delete -- CLAUDE.md long-job discipline) before rerunning
+[2026-08-05T11:56:40+08:00] PROBE FAILED -- nothing started
+
+PASS  driver skips shards that are already complete  -- o_segment_V_where_shard01of02: already complete (448 samples) -- skipped
+[2026-08-05T11:56:40+08:00] [gpu1] worker done rc=0
+[2026-08-05T11:56:41+08:00] [gpu0] two_segment_V_where_shard00of02: already complete (448 samples) -- skipped
+[2026-08-05T11:56:41+08:00] [gpu0] worker done rc=0
+[2026-08-05T11:56:41+08:00] all workers finished; worst worker rc=0
+[2026-08-05T11:56:41+08:00] DRIVER EXIT rc=0
+
+PASS  driver refuses a calibration leftover masquerading as a done shard  -- V_where_shard01of02: complete but holds 128 samples, not 448
+[2026-08-05T11:56:41+08:00] [gpu0] worker done rc=0
+[2026-08-05T11:56:41+08:00]   (a LIMIT= calibration run publishes to these same paths -- move it aside, do not delete)
+[2026-08-05T11:56:41+08:00] [gpu1] worker done rc=90
+[2026-08-05T11:56:41+08:00] all workers finished; worst worker rc=90
+[2026-08-05T11:56:41+08:00] DRIVER EXIT rc=90
+
+PASS  driver runs a shard job and writes its marker  -- 591924 (setup JSON after 0s)
+[2026-08-05T11:56:53+08:00] [gpu0] two_segment_V_where_shard00of02: END rc=0
+[2026-08-05T11:56:53+08:00] [gpu0] worker done rc=0
+[2026-08-05T11:56:53+08:00] [gpu1] two_segment_V_where_shard01of02: END rc=0
+[2026-08-05T11:56:53+08:00] [gpu1] worker done rc=0
+[2026-08-05T11:56:53+08:00] all workers finished; worst worker rc=0
+[2026-08-05T11:56:53+08:00] DRIVER EXIT rc=0
+
+PASS  the recorded PID is the worker process, not a wrapper subshell  -- marker pid=1591919 process $$=1591919
+PASS  the shard job records its exit code
+PASS  the marker names checkpoint / batch / out_root
+PASS  forced_color wrapper flips the mode and the split list  -- [2026-08-05T11:56:53+08:00] DRIVER START pid=1592130 host=h3c
+[2026-08-05T11:56:53+08:00] MODE=forced_color SPLITS='V_what train' GPUS='0 1' batch=64 max_new=512
+[2026-08-05T11:56:53+08:00] checkpoint=/tmp/genctx_dryrun_xpsv903d/fake_ckpt
+[2026-08-05T11:56:53+08:00] checkpoint weight shards: 1
+[2026-08-05T11:56:53+08:00] split V_what: 897 samples, 2 shards, final -> /tmp/genctx_dryrun_xpsv903d/gen
+PASS  forced_color plans 10 shard jobs  -- ['[2026-08-05T11:56:54+08:00] PLAN: 10 shard jobs over 2 card(s)']
+
+85/85 checks passed
+exit_code=0

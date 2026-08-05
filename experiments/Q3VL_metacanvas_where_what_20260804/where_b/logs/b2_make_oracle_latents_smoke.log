@@ -1,0 +1,76 @@
+{
+  "split": "V_where",
+  "arm": "BA-3-Joint",
+  "env": {
+    "git_commit": "bc888fe147af76f2f8ef0299c85de856b9cd4adf",
+    "python": "3.12.12",
+    "torch": "2.10.0+cu128",
+    "cuda_available": true
+  },
+  "basis": {
+    "shape": [
+      64,
+      1024
+    ],
+    "digest": "603708fdd1b94e33446490395a66f4d4da979aa9da3d45befa3a13a6ecd3a1bf",
+    "source": "/tmp/claude-1001/-home-bc-VeraRetouch/d043d364-f271-480e-a652-5fd22c453053/scratchpad/b2_proof/basis/BA-3-Joint/B.npy",
+    "arm": "BA-3-Joint",
+    "basis_json_sha256": "d599fa733da699eb0d8641a55791c9ada714ff90000fbcdbd4e8adc4312a6bd1"
+  },
+  "n_samples": 4,
+  "dataset": {
+    "split": "V_where",
+    "need_mask": true,
+    "mask_source": "live_mask_resolver",
+    "maskview_unavailable": "FileNotFoundError: /mnt/nfs/bc/data/datasets/where_a-20260805/maskviews/V_where is not a published indexed-tar dataset (no manifest.json). Publication is atomic, so a missing manifest means the producing job has not finished.",
+    "n_samples": 4
+  },
+  "fit": {
+    "objective": "soft_iou_minmax",
+    "max_iter": 20,
+    "n_random": 1,
+    "tol_grad": 1e-09,
+    "tol_change": 1e-11,
+    "history_size": 20,
+    "line_search_fn": "strong_wolfe",
+    "dtype": "float64",
+    "reject_loss": 0.9,
+    "reject_alpha": 1e-06,
+    "seed": 0
+  },
+  "readouts": [
+    "band",
+    "cband12"
+  ],
+  "seed": 0,
+  "out_root": "/tmp/claude-1001/-home-bc-VeraRetouch/d043d364-f271-480e-a652-5fd22c453053/scratchpad/b2_proof/oracle_run2"
+}
+{
+  "n_ok": {
+    "band": 4,
+    "cband12": 4
+  },
+  "n_rejected": {},
+  "elapsed_s": 9.8,
+  "manifest": {
+    "status": "complete",
+    "member_count": 4,
+    "sample_count": 4,
+    "shard_count": 1
+  },
+  "verify": {
+    "root": "/tmp/claude-1001/-home-bc-VeraRetouch/d043d364-f271-480e-a652-5fd22c453053/scratchpad/b2_proof/oracle_run2",
+    "status": "complete",
+    "member_count": 4,
+    "sample_count": 4,
+    "shard_count": 1,
+    "index_rows": 4,
+    "n_random_checked": 4,
+    "checksum_failures": [],
+    "ok": true
+  },
+  "ok_rate": {
+    "band": 1.0,
+    "cband12": 1.0
+  }
+}

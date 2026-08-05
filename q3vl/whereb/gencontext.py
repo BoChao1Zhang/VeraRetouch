@@ -125,6 +125,7 @@ def build_record(
     color_max_tokens: int = COLOR_CONTEXT_MAX_TOKENS,
     max_new_tokens: int = GEN_MAX_NEW_TOKENS,
     forced_prefix_ids: Sequence[int] = (),
+    batch_size: int | None = None,
 ) -> dict[str, Any]:
     """One schema-v2 record.  v1 fields keep their v1 names *and* meanings."""
     if mode not in GENCTX_MODES:
@@ -195,6 +196,13 @@ def build_record(
             "where_max_tokens": where_max_tokens,
             "color_max_tokens": color_max_tokens,
             "do_sample": False,
+            # Greedy decoding is deterministic *given the batch shape*: bf16 GEMMs
+            # reduce in a different order at different batch sizes, which flips
+            # top-1/top-2 ties that sit within one bf16 ulp.  Reproducing this
+            # artifact bit-for-bit therefore needs the same batch layout, so the
+            # layout is recorded here rather than left implicit.  See
+            # where_b/diag/DIAGNOSIS_BATCH_CONSISTENCY.md for the measurement.
+            "batch_size": batch_size,
             "close_id": tags.where_close,                    # v1 name
             "open_id": tags.where_open,                      # v1 name
             "eos_id": tags.eos,
@@ -240,6 +248,7 @@ def generate_records(
                 sample_id=s.sample_id, image=s.image,
                 prompt_ids=enc["input_ids"][:enc["n_prompt_tokens"]],
             ))
+        chunk_items = items
         gens = vlm.generate_where(items, max_new_tokens=max_new_tokens,
                                   eos_token_id=tags.eos, prefix_ids=prefix)
         for s, ids in zip(samples, gens):
@@ -247,7 +256,7 @@ def generate_records(
                 s, ids, tags, tokenizer, split=dataset.split, checkpoint=checkpoint,
                 mode=mode, where_max_tokens=max_context_tokens,
                 color_max_tokens=color_max_tokens, max_new_tokens=max_new_tokens,
-                forced_prefix_ids=prefix,
+                forced_prefix_ids=prefix, batch_size=len(chunk_items),
             )
         done += len(samples)
         if progress_every and done % progress_every < batch_size:

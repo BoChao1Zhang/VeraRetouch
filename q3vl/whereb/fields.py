@@ -41,7 +41,6 @@ from q3vl.where.phi import (
     geo5_grid,
     range_channels,
     residualize,
-    standardize,
     standardize_live,
 )
 from q3vl.where.readout import apply_readout
@@ -129,8 +128,16 @@ def phi_dir_fast(
     geo5 = geo5_grid(grid_h, grid_w, device=device, dtype=dtype, coord_mode=cfg.coord_mode)
     L, S = range_channels(img_low.to(dtype), luma=cfg.luma, saturation=cfg.saturation)
     if cfg.standardize_range:
-        L = standardize(L.unsqueeze(1), cfg.std_eps).squeeze(1)
-        S = standardize(S.unsqueeze(1), cfg.std_eps).squeeze(1)
+        # Mirrors q3vl.where.phi.build_phi_dir exactly (Where-A changed this on
+        # 2026-08-05): a range channel with no variation -- a greyscale photo
+        # makes HSV saturation identically 0, and 3.3-3.8% of the local pool is
+        # greyscale -- is zeroed rather than having its round-off amplified by
+        # 1/(0 + eps) into a unit-variance "feature".
+        # test_phi_fast_matches_where_a_bit_for_bit is what caught the drift.
+        rng = torch.stack([L, S], dim=1)
+        rng_z, _live = standardize_live(rng, rng.detach().std(dim=0, unbiased=False),
+                                        cfg.std_eps)
+        L, S = rng_z[:, 0], rng_z[:, 1]
     A = design_block(geo5, L, S)
     if A.shape[1] != RESID_BLOCK_DIM:
         raise AssertionError(f"design block is {A.shape[1]} wide, expected {RESID_BLOCK_DIM}")

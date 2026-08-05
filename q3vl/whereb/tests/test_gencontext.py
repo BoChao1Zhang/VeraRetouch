@@ -322,3 +322,24 @@ def test_budget_constants_cover_the_measured_corpus():
     # tokens.where + tokens.color: max 332, plus four tags
     assert GEN_MAX_NEW_TOKENS >= 332 + 4
     assert GEN_MAX_NEW_TOKENS > WHERE_CONTEXT_MAX_TOKENS + COLOR_CONTEXT_MAX_TOKENS - 100
+
+
+# --- batch-shape provenance (genctx diagnosis, 2026-08-05) ------------------
+
+def test_record_declares_the_batch_size_it_was_produced_under(tokenizer, tags):
+    """Greedy is deterministic *given the batch shape*, not absolutely.
+
+    Measured on checkpoint-4976: at every batch-vs-B=1 divergence the top-1 and
+    top-2 logits are 0 or one bf16 ulp (0.125) apart, and the batching
+    perturbation is also ~1 ulp, so the two configurations round a genuine tie
+    differently.  Reproducing a shard bit-for-bit therefore needs the same batch
+    layout, which is only knowable if the record says what it was.
+    """
+    rec = build_record(_sample(), _gen(tokenizer), tags, tokenizer,
+                       split="V_where", checkpoint="c", batch_size=64)
+    assert rec["gen"]["batch_size"] == 64
+    # and it stays optional, so a v1-shaped caller still works
+    rec2 = build_record(_sample(), _gen(tokenizer), tags, tokenizer,
+                        split="V_where", checkpoint="c")
+    assert rec2["gen"]["batch_size"] is None
+    assert "batch_size" in rec2["gen"]
