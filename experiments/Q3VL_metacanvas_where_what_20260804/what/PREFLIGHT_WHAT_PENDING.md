@@ -139,7 +139,7 @@ guard 反而会让 import 本身失败。
 
 Stage-What 的全部 12 臂代码、§9 全配方 loss（含 amendment A-2 的 `d_func` 口径与 A-3 的统一 natural 采样）、
 33³ 烘焙与四面体回读、以及协议 §14 的项 8b/9/12/13/14 preflight 均已实现并在 CPU 上通过
-（**12/12** preflight、**226 个单测**、T01/T08 mock 闭环 loss 单调下降）。
+（**12/12** preflight、**229 个单测**、T01/T08 mock 闭环 loss 单调下降且每步 50/50 teacher/generated）。
 REVIEW-impl-What 的 **6 个初审 BLOCKER 与复审新增的 NF-1 全部清零**，各配回归测试。
 **未启动任何训练，未占用 GPU，未执行任何重 IO 作业。** 进入正式训练还差：Where-B 定档一个冻结 checkpoint、
 两卡释放后跑完 `WT-G1`–`WT-G8`、`WT-J1`/`WT-J2` 两个数据派生物作业，以及 **`WT-J10`（WB-IMPL 的 `genwhere/2`

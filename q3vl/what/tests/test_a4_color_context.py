@@ -507,14 +507,21 @@ def test_the_producer_and_the_consumer_share_one_vocabulary():
 
 def test_the_consumer_reads_the_fields_the_producer_writes():
     """The record shape, pinned against the producer's own payload builder."""
-    import inspect
+    # Both sides are read as *text*.  Importing either one pulls in
+    # ``q3vl.data.shardio`` -> ``sqlite3``, which cannot load after torch in this
+    # environment (see R6); and a contract about which field names appear in a
+    # payload does not need the modules to be importable to be checkable.
+    import q3vl.whereb as wb_pkg
+    import q3vl.what as what_pkg
 
-    from q3vl.whereb import gencontext as wb_gen
-    from q3vl.what.stores import REQUIRED_FIELDS
+    producer = (Path(wb_pkg.__file__).parent / "gencontext.py").read_text()
+    consumer = (Path(what_pkg.__file__).parent / "stores.py").read_text()
 
-    src = inspect.getsource(wb_gen)
-    for field in REQUIRED_FIELDS:
-        assert f'"{field}"' in src, f"producer does not emit {field!r}"
+    required = ("sample_id", "schema_version", "mode", "color_ids")
+    assert f"REQUIRED_FIELDS = {required}".replace("'", '"') in \
+        consumer.replace("'", '"'), "the consumer's REQUIRED_FIELDS moved"
+    for field in required:
+        assert f'"{field}"' in producer, f"producer does not emit {field!r}"
     for optional in ("color_text", "color_stop_reason", "color_format_failure",
                      "color_truncated"):
-        assert f'"{optional}"' in src, optional
+        assert f'"{optional}"' in producer, optional

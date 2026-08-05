@@ -138,6 +138,71 @@ sigmoid 上界 0.50），进而影响单个 Gaussian 能覆盖多大的颜色区
 （`I_in` area-downsample 到同网格、`m_pred` 用低分辨率 readout `m_low`）；§9.1 的 natural 查询色在**全分辨率**上按
 guided-upsample 的 `m_hi` 采。两处用途不同，差别写进 `POOL_SPACE` 常量而不是含糊过去。
 
+### D-W9（已裁定，协议 amendment A-2）`L_style_dist` 的 `d_func` 口径
+
+**问题**（REVIEW-impl-What B-3）：初版把协议字面的 `d_func(T_i,T_j)` 换成了 `‖ẑ_gt_i − ẑ_gt_j‖`（L2 归一化后的 SRHT 码距离），
+且**未列入待决策清单**。因为 `z_gt = L2Norm(SRHT(u − mean))` 丢掉 `u` 的幅度，同一 look 的强度变体之间目标距离为 0；叠加
+`L_style_cos` 也只管方向，结果是 `L_what` 里**没有任何一项监督 `z_style` 的编辑幅度**。本仓库语料是 Lightroom preset，
+强度变体是常见的。§9.5 禁止事后改 loss，所以必须在第一个臂起跑前定。
+
+**主 agent 裁定**：恢复协议字面，`d_func(T_i,T_j) = ‖u(T_i) − u(T_j)‖₂ / C`，`d_style = ‖ẑ_style_i − ẑ_style_j‖`，
+`C` 是 **train LUT 集上预计算的固定整体常量**，与 `mean_train_u` 在同一次遍历中算出并随之发布，**禁逐 batch 归一**。
+
+**实现**：`losses.pairwise_d_func` / `loss_style_dist(z_style, u_gt, C)`；targets 携带原始 `u_gt`（14739 维，
+micro-batch 4 时 236 KB）；`C` 的闭式使一次遍历就能精确覆盖全部 `N(N−1)/2` 对，无需抽样：
+
+```
+C² = 2 ( N·Σᵢ‖uᵢ‖² − ‖Σᵢuᵢ‖² ) / ( N(N−1) )
+```
+
+`srht.pairwise_rms` 实现该式；`make_zgt_center.py` 在算 `mean_train_u` 的同一趟里累加 `Σu` 与 `Σ‖u‖²` 并把
+`d_func_scale` 写进 `zgt_center.npz`。builder 与 trainer 都在 `C ≤ 0` 时**拒绝启动**（`compute_batch` 的
+`d_func_scale` 是必填 keyword，无默认值可退回逐 batch）。mock 集上实测 `C = 35.21`；接入后 `L_style_dist`
+在 24 步 mock 里从 0.518 降到 0.084（T01），即该项确实在被优化。
+
+### D-W10（已裁定，协议 amendment A-3）12 臂统一的 natural 采样 mask
+
+**问题**（REVIEW-impl-What B-5）：见上面 D-W4 的行文修正——`where_source="none"` 的 C01/C02 当时在 loss 侧退回了全图采样，
+是一处未声明的第二处差别。
+
+**主 agent 裁定**：§9.1 的 `m_pred` 是**监督侧冻结量**，与 `T_gt` 同性质，不是模型输入。12 臂（含 C01–C04）的 loss 查询点
+natural 半区**一律**用同一个冻结 Where checkpoint 的 `m_pred` 加权；`where_source` 只影响模型输入侧。
+
+**实现**：`WhatBatchBuilder.build` 对每个臂都跑冻结 Where（`_frozen_where`），再由 `_model_signals` 决定其输出是否进模型。
+`where_prefix=False` 的 C01/C02 因此多一次**较短的**监督前向（`prompt + <where>`，无 color body）——12 臂里 2 个臂付一次额外
+前向，代价换来的是 12 臂优化同一个 loss。每条 target 与 per-sample 记录写 `natural_weighting`（`frozen_m_pred` /
+`global_uniform`，后者只用于 global 样本），使该性质可被审计；local 样本拿不到冻结 mask 时**直接报错**，不静默退回全图。
+已加回归测试：六个代表臂（T01/T04/C01/C02/C03/C04）对同一批样本产生**逐位相同的查询点**。
+
+### D-W11（已裁定，协议 amendment A-4）Stage-What 的 `<color>` context
+
+**问题**（REVIEW-impl-What 复审 NF-1，**审阅者自承是初审漏掉的**）：初版实现的 `color_ids` / `where_ids` 全部来自 record 的
+**GT** 文本，即训练与评测 100% teacher-forced，且**此决策从未写进本节**——违反「属于决策的写入待决策节，不许静默拍板」。
+§0 的「最终网络只接收 `I_in + instruction`」因此在 Stage-What 的任何交付数字里都没被检验过；§15 问题 3/4/5 的答案全部
+条件在 GT 推理文本上；且跑完再改只能重训 12 臂。
+
+**主 agent 裁定**：采纳审阅者选项 (a)，与 Where-B §5.4 对齐。四点：
+
+1. **训练 50/50**：每个 micro-batch 固定一半 teacher（GT `<color>` hidden）、一半 generated（Base SFT 自回归生成的
+   `<color>` hidden，由 token ids 重放）。generated 缺闭合标签**不回退 GT**。
+2. **评测分报**：GT 与 generated 两种 context 分开报告，每个 checkpoint 每 context 一行，永不混成均值。
+3. **generated 主榜**：`V_what` 选择读 generated-context 榜；teacher 榜并列，两者之差是「对 GT 推理文本的依赖程度」。
+4. **控制臂 forced prefix**：`C01`/`C02` 的 generated context 必须由「无 `<where>` prompt + `<color>` forced prefix」
+   生成，否则 where 推理会经 token ids 回流到严格 no-where 控制臂。生成模式由 `where_prefix` **推导**，非硬编码列表。
+
+**实现**：新增 `q3vl/what/context.py`（`ColorContext` / `gt_color_context` / `generated_color_context`，复用 Where-B 的
+`BalancedContextSampler` 与 `FormatStats` 以保证两阶段口径一致）与 `q3vl/what/stores.py`（`ColorGenContextStore`）。
+**无 GT 回退是结构性的**：`generated_color_context` 的签名里根本没有 GT 文本这个入参（preflight `WT-P7` 对**签名**做断言，
+不是读实现体）。
+
+**上游依赖与接口对齐**：generated context 由 Where-B 的生成作业产出（WB-IMPL 已提交 `dc6944c`，schema
+`q3vl.where_b.genwhere/2` = v1 只增不改 + `<color>` 段 + `mode`）。**三个共享量由本包 import 而非重声明**——
+`COLOR_CONTEXT_MAX_TOKENS`(384)、`GENCTX_MODES`、`SCHEMA_GENCTX` 全部来自 `q3vl.whereb.config`，并在 import 处断言
+mode 词表一致（producer 用 `two_segment` / `forced_color`；本包保留可读的 `GENCTX_MODE_WITH_WHERE` /
+`GENCTX_MODE_FORCED_COLOR` 作**标识符**，值取 producer 的）。边界 384 是两侧**各自独立**测出的同一个数
+（本包据 3745 条抽样：min 108 / p50 178 / p95 246 / p99 285 / max 324，+两标签 +18% 余量）。teacher 侧超界**报错**
+而非截断；全语料校验列为 `WT-J9`。消费侧逐条断言：缺字段、schema 非 v2、`mode` 不匹配、覆盖不全，四种都硬停。
+
 ### D-W8 未在协议中固定、已按惯例取值的次要常量
 
 Color connector 深度 6（与 §5.1 的 Where connector 同型，只去掉 `F_pre` cross-attn）｜ Charbonnier ε=1e-3 ｜
@@ -237,9 +302,14 @@ float32 而非 float16：`.cube` 是 6 位小数，§12.1 的 bake gate 是 1e-4
 
 ## 八、测试清单
 
-`q3vl/what/tests/`，共 **226 个测试**（base 环境全过；战役环境 223 过 / 3 skip，skip 原因是该环境缺
-`colour`、`skimage`，且 `dataset_build.src.construct.rendering` 因 libstdc++ 版本问题 import 不了——生产路径只用
-`dataset_build.lut_io`，不受影响）。
+`q3vl/what/tests/`，共 **229 个测试**（base 环境全过；战役环境 221 过 / 8 skip）。
+
+战役环境的 8 个 skip 分两类，都不是缺陷：
+- 4 个跨实现对拍缺 `colour` / `skimage` / `dataset_build.src.construct.rendering`（后者因 R6 的同一个
+  libstdc++ 问题）——生产路径只用 `dataset_build.lut_io`（纯 numpy），不受影响；
+- 4 个 published-shard store 契约测试需要 `q3vl.data.shardio`（触 sqlite3），在 pytest 进程里 torch 已先加载，
+  故按 R6 跳过。**生产入口脚本已加 sqlite3-before-torch guard 并有 AST 单测钉住**，实测三个脚本在战役环境下
+  连同两个 store 一起 import 正常。
 
 - `test_review_blockers.py`（29 个）逐条钉住初审的六个 blocker，尽量复用审阅人自己给的构造性反例，
   **每一条在修复前的代码上都会失败**（不是「跑一遍已修好的路径」）。
