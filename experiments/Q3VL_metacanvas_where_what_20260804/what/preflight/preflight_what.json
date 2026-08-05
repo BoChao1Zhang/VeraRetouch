@@ -1,12 +1,13 @@
 {
  "ok": true,
  "complete": true,
- "n_pass": 11,
+ "n_pass": 12,
  "n_fail": 0,
  "n_skip": 0,
  "skipped": [],
  "missing_required": [],
  "required": [
+  "WT-P7-color-context-flows",
   "WT-P8-no-h-where",
   "WT-P9-no-target-leak",
   "WT-P12-gaussian-constraints",
@@ -20,12 +21,85 @@
   "WT-P-zero-init-identity"
  ],
  "env": {
-  "git_commit": "fef9f93f2834fa96167fc64db38b548b3fdc0f1a",
+  "git_commit": "dc6944ca0d25c8382b7a00e041bb23611e327760",
   "python": "3.12.12",
   "torch": "2.10.0+cu128",
   "cuda_available": true
  },
  "checks": [
+  {
+   "id": "WT-P7-color-context-flows",
+   "status": "pass",
+   "message": "",
+   "detail": {
+    "generated_color_context_params": [
+     "close_id",
+     "eos_id",
+     "genctx_mode",
+     "generated_ids",
+     "max_tokens",
+     "sample_id",
+     "text"
+    ],
+    "no_close_tag": {
+     "mode": "generated",
+     "n_tokens": 3,
+     "provenance": "s0",
+     "format_failure": true,
+     "truncated": false,
+     "stop_reason": "no_close_tag",
+     "n_generated_tokens": 3,
+     "genctx_mode": ""
+    },
+    "closed": {
+     "mode": "generated",
+     "n_tokens": 2,
+     "provenance": "s0",
+     "format_failure": false,
+     "truncated": false,
+     "stop_reason": "closed",
+     "n_generated_tokens": 3,
+     "genctx_mode": ""
+    },
+    "teacher_per_micro_batch": {
+     "2": [
+      1
+     ],
+     "4": [
+      2
+     ],
+     "8": [
+      4
+     ]
+    },
+    "odd_micro_batch_rejected": true,
+    "genctx_mode_by_arm": {
+     "T01": "with_where_prefix",
+     "T02": "with_where_prefix",
+     "T03": "with_where_prefix",
+     "T04": "with_where_prefix",
+     "T05": "with_where_prefix",
+     "T06": "with_where_prefix",
+     "T07": "with_where_prefix",
+     "T08": "with_where_prefix",
+     "C01": "forced_color_prefix",
+     "C02": "forced_color_prefix",
+     "C03": "with_where_prefix",
+     "C04": "with_where_prefix"
+    },
+    "gt": {
+     "mode": "gt",
+     "n_tokens": 2,
+     "provenance": "s0",
+     "format_failure": false,
+     "truncated": false,
+     "stop_reason": "closed",
+     "n_generated_tokens": 0,
+     "genctx_mode": ""
+    },
+    "offenders": []
+   }
+  },
   {
    "id": "WT-P8-no-h-where",
    "status": "pass",

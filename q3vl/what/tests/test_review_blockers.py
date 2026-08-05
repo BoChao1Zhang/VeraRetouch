@@ -30,8 +30,9 @@ from q3vl.what.trainer import WhatTrainer
 from .conftest import MockBuilder, MockDataset, small_arm
 
 
-def _row(arm, step, de, p90=1.0, ceiling=False, gate=True):
-    return {"arm": arm, "step": step, "local_image_de00_median": de,
+def _row(arm, step, de, p90=1.0, ceiling=False, gate=True, context="generated"):
+    return {"arm": arm, "step": step, "context": context,
+            "local_image_de00_median": de,
             "lut_de00_p90": p90, "boundary_de00_median": de,
             "n_trainable_params": 1, "latency_ms": 1.0,
             "is_ceiling": ceiling, "gate_pass": gate}

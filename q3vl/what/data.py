@@ -39,12 +39,21 @@ from q3vl.where.fpre import grid_from_geometry
 from q3vl.where.upsample import area_resize, luma_guide
 
 from .config import (
+    COLOR_CONTEXT_MAX_TOKENS,
+    CONTEXT_GENERATED,
+    CONTEXT_GT,
     GLOBAL_BUILDS,
     GT_LUT_INTERP,
     LOCAL_BUILDS,
     N_QUERY_NATURAL,
     SPLIT_DIR,
     ArmConfig,
+)
+from .context import (
+    ColorContext,
+    FormatStats,
+    generated_color_context,
+    gt_color_context,
 )
 from .hiddens import ColorEncodeItem, WhatVLM
 from .lut import LutBank
@@ -304,6 +313,8 @@ class Batch:
     targets: list[dict[str, Any]]
     sample_ids: list[str]
     meta: list[dict[str, Any]] = field(default_factory=list)
+    #: amendment A-4: one :class:`~q3vl.what.context.ColorContext` per sample
+    contexts: list[Any] = field(default_factory=list)
 
     def check_inputs(self, expect_source: str | None = None) -> None:
         extra = set(self.inputs) - set(MODEL_INPUT_KEYS)
@@ -339,7 +350,8 @@ class WhatBatchBuilder:
                  lut_bank: LutBank, zgt_center: torch.Tensor,
                  d_func_scale: float, *,
                  where_runner: WhereRunner | None = None,
-                 oracle_store=None, device: str | torch.device = "cpu",
+                 oracle_store=None, color_genctx=None,
+                 device: str | torch.device = "cpu",
                  gt_interp: str = GT_LUT_INTERP, seed: int = 0):
         self.collator = collator
         self.tokenizer = collator.tokenizer
@@ -362,11 +374,55 @@ class WhatBatchBuilder:
         self.d_func_scale = float(d_func_scale)
         self.where_runner = where_runner
         self.oracle_store = oracle_store
+        #: amendment A-4: the published generated ``<color>`` context.  ``None``
+        #: means this builder can only serve teacher batches, which is legal for
+        #: a GT-context evaluation pass and illegal for training.
+        self.color_genctx = color_genctx
         self.device = torch.device(device)
         self.gt_interp = gt_interp
         self.seed = seed
         self._x_uniform = uniform_query_points()
         self._kind = query_kind_index()
+        self.format_stats: dict[str, FormatStats] = {}
+        self.close_color_id = int(self.tokenizer(
+            "</color>", add_special_tokens=False)["input_ids"][0])
+        self.eos_id = self.tokenizer.eos_token_id
+
+    # -- amendment A-4: the <color> context ---------------------------------
+    def color_context(self, sample: WhatSample, mode: str) -> ColorContext:
+        """GT or generated ``<color>`` span for one sample.
+
+        The generated branch never sees ``sample.color_text``, so there is no
+        value it could fall back to -- the no-GT-fallback rule of amendment A-4
+        is a property of this function's inputs, not a check inside it.
+        """
+        if mode == CONTEXT_GT:
+            ctx = gt_color_context(self.tokenizer, sample.sample_id,
+                                   sample.color_text)
+        elif mode == CONTEXT_GENERATED:
+            if self.color_genctx is None:
+                raise RuntimeError(
+                    f"{sample.sample_id}: generated <color> context requested but "
+                    "no ColorGenContextStore is attached.  Run the extended "
+                    "make_generated_context job first (amendment A-4); never fall "
+                    "back to the GT span."
+                )
+            rec = self.color_genctx.record(sample.sample_id)
+            ctx = generated_color_context(
+                sample.sample_id, rec["color_ids"], self.close_color_id,
+                text=rec.get("color_text", ""), eos_id=self.eos_id,
+                genctx_mode=rec["mode"],
+                max_tokens=COLOR_CONTEXT_MAX_TOKENS,
+            )
+            if ctx.genctx_mode != self.cfg.genctx_mode:
+                raise AssertionError(
+                    f"{sample.sample_id}: context generated in {ctx.genctx_mode!r} "
+                    f"but {self.cfg.arm} needs {self.cfg.genctx_mode!r}"
+                )
+        else:
+            raise ValueError(f"unknown context mode {mode!r}")
+        self.format_stats.setdefault(mode, FormatStats()).update(ctx)
+        return ctx
 
     # -- query points and their GT -----------------------------------------
     def query_points(self, sample: WhatSample, m_hi: torch.Tensor | None
@@ -420,15 +476,21 @@ class WhatBatchBuilder:
         }
 
     # -- one batch ----------------------------------------------------------
-    def build(self, samples: Sequence[WhatSample]) -> Batch:
+    def build(self, samples: Sequence[WhatSample],
+              modes: Sequence[str] | None = None) -> Batch:
+        modes = [CONTEXT_GT] * len(samples) if modes is None else list(modes)
+        if len(modes) != len(samples):
+            raise ValueError("samples and context modes must align")
+        contexts = [self.color_context(s, m) for s, m in zip(samples, modes)]
         items, sup_items = [], []
-        for s in samples:
+        for s, ctx in zip(samples, contexts):
             enc = self.collator.encode_one(s)
             n_p, n_w = enc["n_prompt_tokens"], enc["n_where_tokens"]
-            n_c = enc["n_color_tokens"]
             prompt_ids = enc["input_ids"][:n_p]
             gt_where_ids = enc["input_ids"][n_p:n_p + n_w]
-            color_ids = enc["input_ids"][n_p + n_w:n_p + n_w + n_c]
+            # amendment A-4: the <color> ids are the context's, teacher or
+            # generated.  The GT slice of `enc` is deliberately not used here.
+            color_ids = ctx.token_ids
             items.append(ColorEncodeItem(
                 sample_id=s.sample_id, image=s.image, prompt_ids=prompt_ids,
                 where_ids=gt_where_ids if self.cfg.where_prefix else [],
@@ -488,7 +550,8 @@ class WhatBatchBuilder:
             targets.append(self.targets_for(s, x, weighting))
         batch = Batch(inputs=inputs, targets=targets,
                       sample_ids=[s.sample_id for s in samples],
-                      meta=[dict(s.meta) for s in samples])
+                      meta=[dict(s.meta) for s in samples],
+                      contexts=contexts)
         batch.check_inputs(expect_source=self.cfg.where_source)
         return batch
 
@@ -560,6 +623,13 @@ class WhatBatchBuilder:
             "supervision_forward": ("shared with the model forward"
                                     if self.cfg.where_prefix
                                     else "separate prompt+<where> forward"),
+            # amendment A-4
+            "genctx_mode": self.cfg.genctx_mode,
+            "color_genctx": (self.color_genctx.summary()
+                             if self.color_genctx is not None else None),
+            "color_context_max_tokens": COLOR_CONTEXT_MAX_TOKENS,
+            "format_stats": {m: st.to_dict()
+                             for m, st in sorted(self.format_stats.items())},
         }
 
 

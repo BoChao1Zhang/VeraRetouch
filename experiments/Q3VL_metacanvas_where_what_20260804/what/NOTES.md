@@ -110,8 +110,13 @@ sigmoid 上界 0.50），进而影响单个 Gaussian 能覆盖多大的颜色区
 
 **行文修正（2026-08-05，因 REVIEW-impl-What B-5）**：初版这里写的「`T01/T05` 与 `C01/C02` 的唯一差别就是语言序列里还有没有
 `<where>` 段」当时**只在模型输入侧成立**，loss 侧不成立——§9.1 的 natural 半区采样当时对 `where_source="none"` 的臂退回了全图
-采样。裁定 D-W10（协议 amendment A-3）之后这句话才**严格成立**：12 臂的 natural 半区一律用同一个冻结 Where 的 `m_pred` 加权，
+采样。裁定 D-W10（协议 amendment A-3）之后这句话才在 loss 侧**成立**：12 臂的 natural 半区一律用同一个冻结 Where 的 `m_pred` 加权，
 `where_source` 只影响模型输入侧。审阅抓得对：这是一处未声明的第二处差别。
+
+**第二次行文修正（因 NF-1 / amendment A-4）**：`<where>` 段的有无现在还决定了**该臂的 generated `<color>` 是怎么生成的**——
+`C01`/`C02` 用 forced `<color>` prefix（prompt 无 `<where>`），其余臂用 with-`<where>`-prefix 生成。所以准确的表述是：
+**`T01/T05` 与 `C01/C02` 的差别自始至终只有一件事——语言序列里有没有 `<where>` 段——而这件事同时决定了模型输入侧的
+`H_color` 与 generated context 的生成方式**。两者是同一个决定的两个面，不是两处差别。
 
 ### D-W5 `C03/C04` 的 oracle `z_where`
 
@@ -226,12 +231,18 @@ float32 而非 float16：`.cube` 是 6 位小数，§12.1 的 bake gate 是 1e-4
 
 ## 八、测试清单
 
-`q3vl/what/tests/`，共 **191 个测试**（base 环境全过；战役环境 188 过 / 3 skip，skip 原因是该环境缺
+`q3vl/what/tests/`，共 **226 个测试**（base 环境全过；战役环境 223 过 / 3 skip，skip 原因是该环境缺
 `colour`、`skimage`，且 `dataset_build.src.construct.rendering` 因 libstdc++ 版本问题 import 不了——生产路径只用
 `dataset_build.lut_io`，不受影响）。
 
-新增 `test_review_blockers.py`（29 个）逐条钉住 REVIEW-impl-What 的六个 blocker，尽量复用审阅人自己给的构造性反例，
-**每一条在修复前的代码上都会失败**（不是「跑一遍已修好的路径」）。
+- `test_review_blockers.py`（29 个）逐条钉住初审的六个 blocker，尽量复用审阅人自己给的构造性反例，
+  **每一条在修复前的代码上都会失败**（不是「跑一遍已修好的路径」）。
+- `test_a4_color_context.py`（35 个）钉住 amendment A-4：无 GT 回退（对**签名**断言，不是读实现体）、
+  截断/EOS/空生成的四种 stop_reason、teacher 侧超界报错、micro-batch 2/4/8/32 全部恰好 50/50、奇数被拒、
+  两阶段 mode 字符串一致、一个样本每 epoch 只被看见一种 context、arm→生成模式由 `where_prefix` **推导**而非硬编码列表、
+  published store 的四条契约（v1 拒收 / mode 不匹配 / 未知 mode / 覆盖不全）、builder 的两条分支与三种拒绝、
+  trainer 无 genctx 时拒训、mock 跑批逐步记录 50/50 与两个 context 的 `L_func`、
+  **选择只读 generated 榜**（teacher 行再好也选不上）、无 context 标签的行被拒、`context_report` 的 gap。
 
 | 文件 | 覆盖 |
 |---|---|

@@ -32,6 +32,18 @@ Usage
 
 from __future__ import annotations
 
+# --- environment guard: sqlite3 must be imported BEFORE torch ---------------
+# Verified 2026-08-05 in the campaign env (/home/bc/envs/q3vl_sft):
+#   import torch; import sqlite3  -> ImportError, libstdc++ CXXABI_1.3.15 not found
+#   import sqlite3; import torch  -> fine
+# torch loads a libstdc++ that shadows the one `_sqlite3`'s dependency chain
+# (libicui18n) needs, so any process that touches torch first can never open a
+# published shard afterwards -- `q3vl.data.shardio` imports sqlite3, and every
+# store in this campaign goes through it.  Importing it first costs nothing and
+# inoculates the whole process.  This is campaign-wide, not Stage-What specific:
+# `q3vl.whereb.stores` sits on the same chain (see NOTES R6).
+import sqlite3  # noqa: F401  (import order is the point)
+
 import argparse
 import hashlib
 import io

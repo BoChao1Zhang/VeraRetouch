@@ -501,3 +501,264 @@ digest 不一致即 `SystemExit`。
 清完 B-1 … B-6 后**无需重做**已通过的 11 项 CPU preflight（现已在战役环境复跑并落盘，
 `complete: true`）与 158 个单测中与这些 blocker 无关的部分；但涉及 loss 的测试（B-3/B-4）
 必须重跑并重新落盘。
+
+> **本节判决已被 2026-08-05 的聚焦复审取代，见下方 §七。**
+
+---
+
+# 聚焦复审（2026-08-05，commit `cf17089`）
+
+- 范围：只审修复 diff 与其单测 + 协议 amendment A-1/A-2/A-3 的文本忠实性。
+- 方式：只读；未用 GPU（Base SFT rank PID 3395226/3395227 全程 54 GiB 正常运行）；
+  复跑用 `/home/bc/envs/q3vl_sft/bin/python`。
+- 复跑：`pytest q3vl/what/tests -q` → **188 passed, 3 skipped**（skip 仍是该环境缺
+  `skimage`/`colour`/`sqlite3`，base 环境下全过），与实现者报数一致。
+
+## 七、六个 BLOCKER 的复审结论
+
+### B-1 · §12.4 step 1 变成真过滤器 —— **pass**
+
+`main_board` 现在先按 `gate_pass` 切成 `passed` / `failed`：`_best_per_arm(passed)` 决定
+每臂代表，`_rank` 只排过 gate 的；没有任何过 gate checkpoint 的臂被单列进 `gate_failed`
+（按其自身最好的失败 step），不与主榜混排。我用初审那两个反例复跑，行为已翻转：
+
+- 两臂（T01 gate 未过 / dE00 1.0，T02 过 / dE00 2.0）→ `ranked` 只剩 T02，T01 落 `gate_failed`；
+- 同臂两 step（step500 未过 / 更好，step1000 过）→ 进榜的是 step1000。
+
+全臂未过时：`ranked = []`、`top2 = []`、`selection_possible: false`、整榜 `tag =
+WHAT-GATE-FAILED`，另出 `diagnostic_ranked` 供调试。这正是 §5.6 给 Where 的形状转置过来，
+也正好落实「gate 不得事后放宽，不过则按 §15 分阶段报告」的裁定——**选择被禁用，诊断被保留**，
+两者分在不同键上，不会被误读成一次选择。
+
+`WhatTrainer.best` 同步收紧（`gated = [c for c in scored if c.get("gate_pass", True)]`），
+`test_b2_best_skips_gate_failing_checkpoints` 覆盖。N-15 的平局方向也一并明确
+（`_best_per_arm` 保留先到者 = 较早 step，docstring 写明理由）。
+
+### B-2 · 滚动删除不再吃掉将被选中的 checkpoint —— **pass**
+
+三处结构性改动，缺一不可，都到位了：
+
+1. `_roll` 不再把已删条目移出 `state.saved`，而是留 `deleted: True`。这是后面两点能成立的前提；
+2. `save()` 的顺序改成 **append → `_protect_best()` → `_roll()`**，即先给新文件挂上保护再滚动；
+   `_eval_and_record()` 末尾也调 `_protect_best()`。**两条路径都算**，符合任务卡要求；
+3. `_protect_best` 用两个**分离**的标志：`protected`（0.5/1.0 epoch 与 final，永不清）与
+   `best_protected`（随最优移动，全局只留一份）。
+
+「文件未写」vs「已被删」的区分**严密**：
+- `entries` 非空 ⟺ `save()` 曾为该 step 追加过记录（且记录永不被移除）；
+- `entries` 空 → eval 先于 save 的良性时序，静默（否则每次 eval 都告警，告警就没人看了）；
+- `entries` 非空但 `alive` 空 → 文件确实被删过，进 `lost_best_steps` 显式告警。
+
+`TrainState.lost_best_steps` 有 docstring 写明「必须保持为空，非空即 §10.4 被违反」。
+`keep_last=None` 直接短路 `_roll`。回归测试 7 条，含「eval_steps==save_steps」与
+「save_steps<eval_steps」两种交错（S0-TRAIN 双删除路径的教训被显式引用）。
+
+单调性我另行确认过：`best()` 取全历史最小，一旦 B 胜过 A，A 不可能再变回最优，
+所以「只留一份 `best_protected`」不会丢掉未来还会用到的文件。
+
+### B-3 / amendment A-2 · `d_func` 恢复协议字面 —— **pass**
+
+- `pairwise_d_func(u_gt, C) = ‖u_i − u_j‖₂ / C`，`u_gt` 是**原始**
+  `flatten(T(x) − x)`（未过 SRHT、未 L2 归一化）；`data.py::targets_for` 现在同时产出
+  `u_gt` 与 `z_gt`，两者来自同一次 `table.apply(17³ grid)`。
+- **闭式 `C` 的正确性：我独立验算，逐位吻合。** 推导
+  `Σ_{i<j}‖u_i−u_j‖² = ½Σ_{i,j}(‖u_i‖²+‖u_j‖²−2⟨u_i,u_j⟩) = N Σ‖u_i‖² − ‖Σu_i‖²`，
+  除以 `N(N−1)/2` 即
+  `C² = 2(N Σ‖u_i‖² − ‖Σu_i‖²)/(N(N−1))`，**恰为全部 `N(N−1)/2` 对的均方距离**，
+  `C` 即成对距离的 RMS。数值复核（vs 暴力枚举）：
+
+  | N | D | brute RMS | 闭式 | 相对误差 |
+  |---:|---:|---|---|---|
+  | 5 | 7 | 6.444604774796 | 6.444604774796 | 0 |
+  | 37 | 129 | 28.771785411032 | 28.771785411032 | 1.2e-16 |
+  | 200 | 64 | 21.150010035765 | 21.150010035765 | 0 |
+
+  另验证了 docstring 声称的「中心化在差分里抵消」（最大差 1.8e-15），所以
+  `make_zgt_center.py` 用同一次遍历的 `sum_u` / `sum_sq` 求 `C` 是精确的，无抽样、无二次开销。
+- **拒绝 `C ≤ 0` 的三道闸**：`srht.pairwise_rms` 在 `n<2` 或均方 ≤0 时抛错；
+  `WhatBatchBuilder.__init__` 在 `d_func_scale` 缺失/非正时抛错；`WhatTrainer.__init__` 从
+  builder 读出后再查一次并抛错；`loss_style_dist` 自己还有一道。
+- **`d_func_scale` 必填无默认**：`compute_batch(..., *, d_func_scale: float, ...)` 是
+  keyword-only **且无默认值**，任何调用点想省略都会 `TypeError`；trainer 从 builder 读而不是
+  另收一个参数，使 loss 与 batch 不可能对 `C` 有分歧。构造正确。
+- 反例测试 `test_d_func_is_the_raw_u_distance_not_the_normalised_code` 用「同一 look 的
+  0.2 与 1.0 强度」造出 `u₂ = 5u₁`，断言原始距离看得见（>0.5‖u₂‖）而 `z_gt` 距离 <1e-4。
+  这正是 B-3 描述的失效模式，判别力充分。
+
+### B-4 · §12.3 Spearman 用原始函数距离 —— **pass（并经我实测确认有双向动态范围）**
+
+`style_diagnostics` 现在给两个数：`z_dist_spearman_vs_func`（对 **原始** `‖u_i−u_j‖`，
+协议 §12.3 要的那个）与 `z_dist_spearman_vs_zgt`（方向-only，并列保留、明确命名、
+docstring 写明「不是那个诊断」）。
+
+实现者的反例测试只断言 `vs_func < 0.9`，看起来很松，所以我自己量了它的**判别力**：
+
+| 探针 | `vs_zgt` | `vs_func` |
+|---|---:|---:|
+| 幅度盲码（测试的反例，20 个种子） | 1.000 | **0.110 – 0.329**（均值 0.205） |
+| 幅度写在**范数**里的码 | 1.000 | 0.189 |
+| 幅度写在**方向**里的球面等距嵌入（K=2×/10×/100×） | 0.189 | **0.996 / 0.9999 / 1.0000** |
+
+即：真正把函数幅度编进**方向**（也就是 `L_style_dist` 唯一能奖励的那种编码）的码，
+`vs_func` 可达 1.00；幅度盲码只有 0.2。**诊断的动态范围是满的，不是一个恒低的数**。
+`< 0.9` 的阈值虽宽，但实测落在 0.33 以下，留了三倍余量，不会误判。
+
+顺带确认了一件容易被误读的事：`d_style` 两处（loss 与诊断）都用 **L2 归一化后**的
+`z_style`，所以「把幅度放进范数」是无效策略——码必须把幅度编进方向。这与
+`L_style_cos` 也只管方向是自洽的，且 A-2 的 `C`（使 `d_func` 的 RMS 为 1）正好把目标压进
+`d_style ∈ [0,2]` 的可达区间。见 N-19 的一条配套建议。
+
+### B-5 / amendment A-3 · 12 臂统一 natural 采样 —— **pass**
+
+- `_frozen_where(...)` **无条件**运行冻结 Where（`where_runner is None` 直接 `RuntimeError`，
+  明写「没有 fallback」），`_model_signals(...)` 才按 `where_source` 决定模型输入侧
+  （`none` → 空 `WhereSignals`；`oracle` → GT mask + oracle latent；否则 → frozen）。
+  **供给侧与输入侧被彻底分开**，这是 A-3 的正确结构。
+- `query_points` 三分支：global → `global_uniform`；local 且有 `m_hi` → `frozen_m_pred`；
+  **local 且无 `m_hi` → `RuntimeError`**（不再静默退回全图）。`natural_weighting` 逐样本写进
+  target 与 per-sample 记录，可审计。
+- C03/C04 的查询点用的是 **frozen `m_pred`**（`frozen.m_hi`），不是 GT mask——与 A-3 一致，
+  ceiling 臂的 oracle 只进模型输入。这点容易做错，实现做对了。
+- **C01/C02 的短前向不引入 `<color>` 泄漏**：`sup_items` 构造为
+  `prompt_ids + gt_where_ids`、`color_ids=[]`，故 `h_color` 切片为空、`h_where` 干净；
+  模型侧的 `encoded` 则是 `prompt + color`（无 `<where>`）。两条序列各取所需，互不污染。
+  索引对齐我核过：`sup_items` 与 `items` 同循环同序，且 `not where_prefix` 时每个样本都建，
+  故 `sup_encoded[i]` 与 `samples[i]` 对应；`where_prefix` 时 `sup_encoded is encoded`。
+  另外 `_frozen_where` 复用 `encoded` 的 `f_pre`（而非 `sup_encoded` 的），这是**更强**的
+  选择：保证 Where 模型与 What 模型看到逐位相同的 `F_pre`。
+- 回归测试含「六个臂（T01/T04/C01/C02/C03/C04）产生逐位相同的查询点」，直接钉死 A-3 的语义。
+
+### B-6 · Where checkpoint provenance —— **pass**
+
+新增 `q3vl/what/provenance.py`，三条硬停路径齐备且顺序正确（在任何昂贵操作之前）：
+
+1. 任一既有 `run_setup.json` **不可读/损坏** → `WhereProvenanceError`
+   （「崩在写 provenance 之前的那次 run，正是没人能担保其 checkpoint 的那次」）；
+2. 已有臂**声明过** digest 而本臂拿不出 → 停（「丢了 provenance 不比 provenance 冲突轻」）；
+3. digest **不一致** → 停，并列出每个冲突臂的 digest 与路径。
+
+`run_what.py` 对**所有 12 臂**强制 `--where-checkpoint`（A-3 之后 C01/C02 也被冻结 mask 条件化，
+不再豁免），先 `file_sha256` 再 `assert_where_consistency`，结果写进 `run_setup.json.where`
+（含 `used_for: "model input + supervision mask"` / `"supervision mask only (amendment A-3)"`）。
+`collect_where_digests` 用 `exclude_arm` 排除自己的上一次 run，避免自我冲突。7 条回归测试
+覆盖全部路径，含「第一个臂无可冲突对象」与「no-where 控制臂不豁免」。
+
+## 八、amendment A-1/A-2/A-3 文本审定
+
+| 条 | 与我 §一末建议的一致性 | 是否越界 |
+|---|---|---|
+| **A-1** | **忠实**。§7.6 替换段、「为什么不是 (I+ΔG)x」、`G' = G + I` 重参数化证明、四条不变量（容量/参数量/§12 指标/§15 问题）、实现指针（`model_rdg::render` + `ci_checks_rdg`）逐条都在。**新增**了一张两方独立复算对照表（实现者 vs 审阅人），是加强不是改动 | **否** |
+| **A-2** | **忠实且更完整**。我建议的是「`d_func = ‖u_i−u_j‖/c`，`c` 为 train 集 RMS，与 `mean_train_u` 一起发布」——A-2 就是这个，并补上了闭式与「禁逐 batch 归一」的红线措辞。它顺带**定义**了协议原本未定义的 `d_style`（L2 归一化后的欧氏距离）——补全未定义符号属必要，不属越界 | **否** |
+| **A-3** | **忠实且取了更强的一支**。我给了 (a) 统一冻结 `m_pred` 与 (b) 登记 `natural_weighting` 字段两个选项，A-3 **两个都取**：既统一采样，又要求逐样本记字段。并正确推导出「C03/C04 的 oracle 只进输入、loss 分布与主臂相同」 | **否** |
+
+三条都只改了它们各自要改的东西：**没有动任何 loss 权重、没有动 §8 的 12 臂、没有动 §12 的
+指标定义或 gate 阈值、没有动 §10.4 的任何超参**。我逐条比对过 §7.4/§7.5 的 1116/684、
+§9.5 的七个权重、§12.1 的 1e-4/5e-4、§12.4 的字典序五键——全部未变。
+
+**一条编辑体例上的 nit（N-17）**：§7.6 正文仍原样保留 `(I + DeltaG) x` 的公式块，只在其**后**
+加了「修订说明」脚注。脚注醒目、紧邻、指向明确，可以接受；但任何人 grep
+`T_pred(x) = clamp(` 首先命中的仍是被取代的式子。建议在代码块**内部**加一行
+`# SUPERSEDED by amendment A-1 (2026-08-05)`，使公式本身自带标记。
+
+## 九、N-16 与 N-13
+
+- **N-16 · pass**。`--out` 默认值从交付目录改为 `RUN_ROOT / "preflight"`（scratch）；
+  新增 `write_report(..., force=False)`：当**已存在**报告 `complete: true` 而新报告
+  `complete: false` 时**拒绝写入**并给出解释，`--force` 才允许且先备份为
+  `preflight_what.json.superseded`。两条回归测试（拒绝 + 默认值不是交付目录）。
+  这条修得比我建议的更彻底——我只提了改默认值，实现把「静默降级」也堵上了。
+- **N-13 · 确认当前状态无一致性风险**（维持不上提，记可选债务）：
+  `q3vl/what/config.py` 由 `from q3vl.whereb.contracts import ...` 引入并改名
+  `COLOR_HIDDEN_*`，测试以 **`is` 身份**（不是 `==`）断言其与 `SEGMENT_HIDDEN_*` 为同一对象，
+  `WhatVLM.__init__` 的默认值同样以身份断言。两份扫描测试（whereb-root、what-root）合起来
+  覆盖两个包的全部非测试 `.py`，且 what 侧的扫描名单额外包含 `COLOR_HIDDEN_*` 两个别名。
+  what → whereb 的依赖方向本就大量存在（`whereb.heads` / `stores` / `config` / `model`），
+  不引入新耦合。**结论：两阶段现状下漂移风险为零**；债务只在「未来出现第三个阶段」时兑现。
+
+## 十、新增发现
+
+### NF-1（**BLOCKER**）· Stage-What 全程用 GT `<where>` / `<color>` 文本，且此决策从未声明
+
+**这是我初审漏掉的**（不是本次修复引入的回归），是在为 B-5 重读 batch 构造时发现的。
+
+`WhatBatchBuilder.build` 的 `where_ids` / `color_ids` 全部来自
+`collator.encode_one(s)`，即 record 里的 **GT** `where` / `color` 文本。Stage-What 的
+**训练与评测**因此 100% teacher-forced：`Q_color` 读的是 GT `<color>` 推理，
+冻结 Where 读的是 GT `<where>` 推理。包内没有任何生成路径（grep `generated` / `gencontext`
+零命中）。
+
+而 Where-B 对同一问题有**完全相反**的纪律：`q3vl/whereb/gencontext.py` +
+`scripts/make_generated_context.py` 产出并发布 `.genwhere.json`，`whereb/trainer.py` 按
+`["gt", "nd"] * (mb//2)` 做 50/50，`run_where_b.py` 断言逐样本覆盖并明写
+**"there is no GT fallback"**——正是 §5.4 要求的。
+
+为什么这是 blocker 而不是 nit：
+
+1. **§0 的核心主张失去证据**。「最终网络只接收 `I_in + instruction`」在 Stage-What 的任何一个
+   交付数字里都没有被检验过；§15 问题 3/4/5 的答案全部条件在 GT 推理文本上。
+2. **A-3 恰好抬高了赌注**。冻结 Where 的 `m_pred` 现在是全部 12 臂的**监督**掩膜，而那个
+   `m_pred` 是由 GT `<where>` 文本算出来的——包括按构造永远看不到 `<where>` 的 C01/C02。
+   （A-3 本身没错：它比较的是**输入**通道，这正是 §8.2 要的；但整块板子是 teacher-forced。）
+3. **train/test 失配无法事后补救**。若 12 臂在 100% teacher 上训完，再改用 generated 上下文
+   评测，掉分是必然的，正确动作只能是**重训 12 臂**。Where-B 用 50/50 训练就是为了避免这件事。
+4. **它是一条未声明的决策**。NOTES §三「待主 agent 决策」里没有它（grep `context` / `teacher` /
+   `generated` 在 NOTES 与 PENDING 中零命中），违反「属于决策的写入待决策节，不许静默拍板」。
+
+**需要主 agent 裁定**，可选项：
+- (a) 与 Where-B 对齐：训练 50/50 teacher/generated，选择以 generated 为主，四种上下文
+  （GT / generated / null / shuffled）分开报告（§5.4 的形状）。代价是要把
+  `make_generated_context.py` 扩到同时产出 `<color>` 段（Base SFT 本来就一次生成
+  `<where>...</where><color>...</color>`，多半只是把已生成的字符串多留一段）。
+- (b) 明确裁定 Stage-What 用 teacher context，并**在协议里写下来**（新 amendment A-4）+
+  在 REPORT 与 §15 的结论措辞里声明「Stage-What 的全部数字条件在 GT 推理文本上」，
+  同时把 generated-context 复评列为 `T_final` 之后的独立一次性附加实验。
+
+我倾向 (a)：(b) 会让 §15 的问题 3/4/5 都带一个无法在本轮消除的限定词，而这正是
+「不能用最终平均图像指标掩盖…」那条纪律要防的。但两种做法都合理、都影响后续，
+所以是**决策**不是缺陷，交主 agent。
+
+### 新增 NIT
+
+- **N-17**：§7.6 正文的公式块本身未带 SUPERSEDED 标记（见 §八）。
+- **N-18**：`WhatTrainer.best` 的 `pool = gated or scored` 在**全部 checkpoint 都未过 gate**
+  时回退到全集，于是返回一个 gate 未过的行；这对 `_protect_best`（保住文件供 §15 诊断）
+  是对的，但 `best()` 同时也是「哪个 checkpoint 赢了」的公开访问器，而 `main_board` 在同样
+  情形下是 `selection_possible: false`。两者语义不同却同名同形。建议 `best()` 额外返回
+  `gate_fallback: True`，或 docstring 明写「回退时返回的不是选择」。
+- **N-19**：`c.get("gate_pass", True)` 在 eval 报告缺该键时默认**通过**。生产路径的
+  `arm_metrics` 永远会写这个键，所以目前是理论洞；但这正是 Where-B 审阅 blocker B1
+  （「没跑的检查不得报 PASS」）的同型。建议缺键即计入一个 `n_gate_unknown` 并在 setup 里报。
+- **N-20**：`make_zgt_center.py` 发布了 `C`，但没发布 `d_func` 的分布尾部。由于
+  `d_style = ‖ẑ_i − ẑ_j‖ ≤ 2` 而 `d_func` 无上界，`d_func > 2` 的那部分对是**结构上不可达**的
+  （Huber 只是把它们的梯度压成线性）。建议同一次遍历里抽样估一个 `d_func` 的 p99/max 并落盘，
+  让结果审阅知道有多少比例的对落在可达区间之外。
+- **N-21**：`config/arm_matrix.json`、`config/mock_e2e.json`、`preflight_what.json` 的环境戳
+  已按 N-1 改成战役环境（3.12.12 / torch 2.10.0+cu128）✓，但 `git_commit` 仍是 `fef9f93`
+  （生成于 `cf17089` 提交之前）。建议提交后重新生成，或改记 `git describe --dirty`。
+
+## 十一、最终判决（取代 §六）
+
+**修复复审：B-1 … B-6 全部 pass，A-1/A-2/A-3 文本忠实且未越界，N-16 pass，
+N-13 现状确认无一致性风险。原 6 个 BLOCKER 清零。**
+
+**新增 BLOCKER 1 项：NF-1（Stage-What 全程 teacher-forced 推理文本，决策未声明）。
+新增 NIT 5 项：N-17 … N-21。**
+
+**是否准许进入正式训练（Where 定档后）：**
+
+- **GPU preflight `WT-G1`–`WT-G8`：准许**（两卡释放后即可）。NF-1 不改变这八项测量的对象。
+  建议在 `WT-G2` 里顺带把「GT vs generated 两条序列的 `H_color`」一起测出来——那正是
+  NF-1 选项 (a) 需要的第一个数字。
+- **正式训练（12 臂任何一臂）：仍不准许**，唯一未清项是 **NF-1**，且它需要的是**主 agent
+  裁定**而不是更多实现工作。理由与 B-3/B-5 同档：它决定 12 臂**训练时**看到什么上下文，
+  跑完再改只能重训全部 12 臂。
+- 一旦 NF-1 裁定落地（选 (a) 则需扩 `make_generated_context.py` 并加 50/50 采样；
+  选 (b) 则需写 amendment A-4 + REPORT 措辞约束），**即可开跑**。N-17 … N-21 全部为
+  非阻塞，可在训练期间并行处理。
+
+对实现者这一轮的评价：六个 blocker 全部是**结构性**修复而非打补丁——B-1 把标签变成过滤器、
+B-2 把两个保护标志分离并覆盖两条时序、B-3 用闭式常量取代了抽样、B-5 把「供给侧」与
+「输入侧」拆成两个方法、B-6 新建了一个只负责 provenance 的模块。回归测试尽量复用了我给的
+构造性反例（`test_b1_a_gate_failing_arm_cannot_top_the_board` 的 docstring 直接写
+「the reviewer's counter-example, verbatim」），这使「修复前会失败」是可验证的而不是自述的。
+N-16 修得比我提的更彻底。

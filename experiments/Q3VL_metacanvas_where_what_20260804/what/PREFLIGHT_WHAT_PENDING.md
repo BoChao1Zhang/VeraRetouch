@@ -5,11 +5,12 @@
 
 ## 一、已完成（CPU，`preflight/preflight_what.json`，11/11 pass）
 
-在战役环境 `/home/bc/envs/q3vl_sft/bin/python`（transformers 4.57.1 / torch 2.10.0+cu128，
-git `fef9f93`）下运行 `python -m q3vl.what.preflight --limit 400`：
+在战役环境 `/home/bc/envs/q3vl_sft/bin/python`（transformers 4.57.1 / torch 2.10.0+cu128）下运行
+`python -m q3vl.what.preflight --limit 400 --out <交付目录> --force`（**12 项**，amendment A-4 新增一项）：
 
 | 检查 id | 协议条款 | 结论 |
 |---|---|---|
+| `WT-P7-color-context-flows` | §5.4（经 amendment A-4 转置到 `<color>`） | pass。四条：generated builder 的签名**不可能**拿到 GT 文本；缺闭合标签→截断并标记（非回退）；micro-batch 2/4/8 全部恰好 50/50 且奇数被拒；`C01`/`C02` → forced-prefix、其余 → with-where-prefix |
 | `WT-P8-no-h-where` | §14.8 后半 | pass。AST 标识符扫描：`color.py` / `attention.py` 中不存在含 `where` 的标识符（`torch.where` 按限定名单独放行，且测试验证放行不会掩盖真的 `h_where`）；`ColorConnector.forward` / `ColorStack.forward` 的形参集合被断言封闭；`ColorStack` 的参数名里无 `where` |
 | `WT-P9-no-target-leak` | §14.9 | pass。`WhatModel.forward` 形参 == `MODEL_INPUT_KEYS` 白名单；`WhereSignals` 无 `i_tar`/`baked`/`target`/`lut` 字段；`META_KEYS` 不含 baked locator；oracle 输入只到达 C03/C04 |
 | `WT-P12-gaussian-constraints` | §14.12 | pass。μ∈cube、σ>0（SPD）、`Σq_i ≤ 1`、opacity/existence∈(0,1)、前向与两组 raw 输出的梯度全有限 |
@@ -27,7 +28,7 @@ git `fef9f93`）下运行 `python -m q3vl.what.preflight --limit 400`：
 | id | 内容 | 依赖 | 为什么不能在 CPU 上代替 |
 |---|---|---|---|
 | `WT-G1` | `H_color` 抽取契约在真实 Qwen3-VL 上的验证：`hidden_states` 层数、post-final-RMSNorm 口径、`<color>` 段切片位置与 `n_color_tokens` 对齐 | Base SFT checkpoint | 需要真实权重与真实 tokenizer；Where-B 已在真机上验证过 `H_where` 的同一契约（`q3vl/whereb/tests/test_hiddens.py`），Stage-What 只是换了切片区间，但**必须自己跑一遍** |
-| `WT-G2` | 证明 `where_prefix=True/False` 只改变序列而不改变其它任何输入（T01 vs C01 的唯一差别） | 同上 | 需要真实 forward 才能对比两条序列的 `H_color` |
+| `WT-G2` | 证明 `where_prefix=True/False` 只改变序列而不改变其它任何输入（T01 vs C01 的唯一差别）。**并入 amendment A-4（审阅者点名）**：同时测出 **GT vs generated 两条序列的 `H_color`** —— 差异范数、逐 token 对齐、以及 `<color>` 段起止位置在两条序列下的一致性。这是 A-4 需要的第一个数字，也是「generated 主榜比 teacher 差多少」的下界解释 | 同上 | 需要真实 forward 才能对比两条序列的 `H_color` |
 | `WT-G3` | `F_pre` 真实形状 / 宽高比 / 与 `rgb_low` 网格对齐（§14.4 的 What 侧复核） | 同上 | 需要真实 vision tower |
 | `WT-G4` | 冻结 Where checkpoint 接入：digest 校验、`m_low`/`m_hi`/`canvas_axis`/`canvas_rho`/`w`/`rho` 六路信号形状与取值域断言 | **Where-B 选出并冻结一个 checkpoint**（§5.6） | 现在还没有 checkpoint |
 | `WT-G5` | 单 batch 显存 / 吞吐 / micro-batch 探测，使 effective batch = 32（§14.15 的 What 侧） | 两卡空闲 | 只能在 H100 上测 |
@@ -47,6 +48,19 @@ git `fef9f93`）下运行 `python -m q3vl.what.preflight --limit 400`：
 | `WT-J6` | **paired bootstrap 95% CI**（§10.4 / §12.4 / §13.1，审阅 N-9） | bootstrap 脚本 | 主差异的置信区间；`across-seed range` 需要 top-2 的多 seed 复跑先完成 |
 | `WT-J7` | **33³ baked render 的最终图像指标与可视化**（§12.1 / §13，审阅 N-10） | 每样本第二组图像指标 | 现在 `sample_row` 只渲染 analytic；§13 的联图要求 `pred analytic render` 与 `pred 33³ render` 并排，交付前必须补 |
 | `WT-J8` | 12 臂 `run_setup.json` 的 Where digest 一致性巡检 | 一次全量扫描 | `provenance.assert_where_consistency` 在每个臂启动时已强制，但全部跑完后应再做一次总巡检并写进 REPORT |
+| `WT-J9` | **`<color>` 段 token 边界的全语料校验**（amendment A-4） | 全 split 的 `tokens.color` 直方图 | 现在的 384 来自 3,745 条抽样（max 324）。teacher 侧超界会**报错**而非截断，所以违例会立即暴露；但正式开跑前应在全语料上确认一次，属重 IO |
+| `WT-J10` | **generated `<color>` context 生成作业**（amendment A-4，**WB-IMPL 负责**） | 每 split × 每 mode 一套 `genwhere/2` shards | Stage-What 的**硬前置**：`run_what.py` 在任何昂贵操作前 `assert_covers` 全 split，缺一条即拒跑。需要两套：`with_where_prefix`（T01-T08 + C03/C04）与 `forced_color_prefix`（C01/C02）。Base SFT 本就一次生成两段，v2 只是把 `<color>` 段留下 |
+
+### 三-bis、amendment A-4 带来的排期依赖
+
+| 依赖 | 谁负责 | 阻塞什么 |
+|---|---|---|
+| `genwhere/2` schema（v1 + `<color>` 段 + `mode` 字段） | WB-IMPL | 全部 12 臂的训练 |
+| forced-`<color>`-prefix CLI 模式 | WB-IMPL | `C01`/`C02` 两臂 |
+| 每 split × 每 mode 的生成作业执行 | 排期（需 GPU） | 全部 12 臂的训练 |
+
+Stage-What 侧的消费契约已实现并有测试（`q3vl/what/stores.py` + `test_a4_color_context.py`）：
+schema 非 v2、缺字段、`mode` 不匹配、覆盖不全，四种情况都在**第一步之前**硬停，不会在训练中途才发现。
 
 ## 四、风险与预注册说明
 
@@ -80,6 +94,39 @@ ModLN 投影共享或 `z_style` 先降维——**属于改结构，需主 agent 
 见 NOTES 第五节：opacity 初值 `sigmoid(z−2)≈0.12`，所以 §12.3 的"激活数分布"在训练早期恒为 0，是设计而非坍缩；
 `z_effective_rank` 必须在 ≥32 样本的评测集上算，micro-batch 上的读数无意义。
 
+### R6 — **战役环境里 `import torch` 会毒掉 `import sqlite3`（campaign-wide，非 Stage-What 特有）**
+
+落地 A-4 时在战役环境 `/home/bc/envs/q3vl_sft` 实测到：
+
+```
+import sqlite3; import torch   -> 正常
+import torch;   import sqlite3 -> ImportError: /lib/x86_64-linux-gnu/libstdc++.so.6:
+                                  version `CXXABI_1.3.15' not found
+                                  (required by .../llm_factory/lib/.../libicui18n.so.78)
+```
+
+torch 加载的 libstdc++ 遮蔽了 `_sqlite3` 依赖链（libicui18n）所需的那一份。**本战役所有读已发布 shard 的
+store 都经 `q3vl.data.shardio` 触到 sqlite3**，因此任何先 import torch 的进程之后都打不开 shard——
+`run_what.py` 在构造 `ColorGenContextStore` 时正会撞上。
+
+**已实测确认 `q3vl/whereb/stores.py` 在同一条链上**：
+
+```
+import torch; import q3vl.whereb.stores   -> 同样的 ImportError
+```
+
+即 **Where-B 的 `run_where_b.py` 有同样暴露**，这不是 A-4 或 Stage-What 引入的。
+
+**Stage-What 侧已修**：三个入口脚本（`run_what.py` / `pack_gt_luts.py` / `make_zgt_center.py`）在最顶部
+先 `import sqlite3`，一行成本，整个进程免疫；并加了 AST 单测 `test_every_entry_point_imports_sqlite3_before_torch`
+钉住 import 顺序，防止被「整理」掉。库模块（如 `preflight.py`）**不加**该 guard——它们在 torch 之后才被 import，
+guard 反而会让 import 本身失败。
+
+**需要主 agent 决策**（越出「不改 whereb」边界，故未动）：Where-B 的入口脚本
+（`run_where_b.py` / `make_generated_context.py` / `make_oracle_latents.py`）是否也加同样一行。
+`WT-J10`（A-4 的 generated context 生成作业）正是 WB-IMPL 要跑的作业之一，**它会读写 shard**，
+所以这条对 A-4 的排期是直接前置。
+
 ### R5 — `--out` 默认值已移出交付目录（审阅 N-16 / 审阅人自身事故）
 
 审阅期间有人用默认参数跑了一次 `--no-data` preflight，把交付的 `preflight_what.json` 静默覆盖成 9 pass / 2 skip 的版本，
@@ -92,7 +139,8 @@ ModLN 投影共享或 `z_style` 先降维——**属于改结构，需主 agent 
 
 Stage-What 的全部 12 臂代码、§9 全配方 loss（含 amendment A-2 的 `d_func` 口径与 A-3 的统一 natural 采样）、
 33³ 烘焙与四面体回读、以及协议 §14 的项 8b/9/12/13/14 preflight 均已实现并在 CPU 上通过
-（11/11 preflight、**191 个单测**、T01/T08 mock 闭环 loss 单调下降）。
-REVIEW-impl-What 的 **6 个 BLOCKER 全部清零**，各配回归测试。
+（**12/12** preflight、**226 个单测**、T01/T08 mock 闭环 loss 单调下降）。
+REVIEW-impl-What 的 **6 个初审 BLOCKER 与复审新增的 NF-1 全部清零**，各配回归测试。
 **未启动任何训练，未占用 GPU，未执行任何重 IO 作业。** 进入正式训练还差：Where-B 定档一个冻结 checkpoint、
-两卡释放后跑完 `WT-G1`–`WT-G8`、以及 `WT-J1`/`WT-J2` 两个数据派生物作业。
+两卡释放后跑完 `WT-G1`–`WT-G8`、`WT-J1`/`WT-J2` 两个数据派生物作业，以及 **`WT-J10`（WB-IMPL 的 `genwhere/2`
+生成作业，amendment A-4 的硬前置）**。

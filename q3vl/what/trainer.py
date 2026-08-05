@@ -51,7 +51,9 @@ import torch
 
 from q3vl.where.calibrate import make_scheduler
 
-from .config import ArmConfig, PROTECTED_EPOCHS, TrainConfig
+from .config import (ArmConfig, CONTEXT_GENERATED, CONTEXT_GT,
+                     PROTECTED_EPOCHS, TrainConfig)
+from .context import BalancedContextSampler, context_breakdown, iter_modes
 from .data import Batch
 from .gaussians import render
 from .losses import StyleQueue, bake_readback, compute_loss, grad_norm_ratio
@@ -116,6 +118,22 @@ def build_optimizer(model: WhatModel, cfg: TrainConfig) -> torch.optim.Optimizer
 # --- one micro-batch --------------------------------------------------------
 
 @torch.no_grad()
+def _per_context_loss(t_pred: torch.Tensor, t_gt: torch.Tensor,
+                      contexts: Sequence[Any]) -> dict[str, float]:
+    """``L_func`` split by teacher / generated context (amendment A-4 item 2)."""
+    from .losses import charbonnier
+
+    per_sample = charbonnier(t_pred - t_gt).mean(dim=(1, 2))
+    out: dict[str, float] = {}
+    for mode in sorted({c.mode for c in contexts}):
+        sel = torch.tensor([c.mode == mode for c in contexts],
+                           device=per_sample.device)
+        if bool(sel.any()):
+            out[f"L_func_ctx_{mode}"] = float(per_sample[sel].mean())
+    return out
+
+
+@torch.no_grad()
 def _geometry_stats(params: dict[str, torch.Tensor],
                     seed_geom: dict[str, torch.Tensor] | None) -> dict[str, float]:
     """Review nit N-6: two readings a results review cannot reconstruct later.
@@ -178,6 +196,12 @@ def compute_batch(model: WhatModel, batch: Batch, cfg: ArmConfig,
         stats.update(style_diagnostics(z_style, z_gt, u_gt))
         stats.update(out.extra.get("pool", {}))
         stats.update(_geometry_stats(params, out.extra.get("seed_geometry")))
+        if batch.contexts:
+            # amendment A-4: the 50/50 ratio is asserted per micro-batch, and the
+            # per-context loss is reported so "generated is worse by X" is a
+            # number in every step row rather than a post-hoc reconstruction.
+            stats.update(context_breakdown(batch.contexts))
+            stats.update(_per_context_loss(t_pred, t_gt, batch.contexts))
         if want_grad_ratio:
             stats.update(grad_norm_ratio(model.parameters(), loss.parts["L_func"],
                                          loss.parts["L_hc"]))
@@ -219,6 +243,17 @@ class WhatTrainer:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.eval_fn = eval_fn
         self.log_every = log_every
+        # amendment A-4: training is always 50/50, so a builder that cannot
+        # produce a generated context cannot train.  Refused here rather than at
+        # the first generated micro-batch, which would be a few minutes in.
+        if getattr(builder, "color_genctx", None) is None:
+            raise ValueError(
+                "the batch builder has no generated <color> context store; "
+                "amendment A-4 makes training 50% generated and forbids falling "
+                "back to the GT span.  Run the extended make_generated_context "
+                "job for this split first."
+            )
+        self.generated_mode = CONTEXT_GENERATED
         self.state = TrainState()
         self.queue = StyleQueue(train_cfg.style_queue_size)
         # amendment A-2: C comes from the builder, which got it from the published
@@ -232,12 +267,18 @@ class WhatTrainer:
                 "(amendment A-2 forbids a per-batch scale)")
 
         torch.manual_seed(train_cfg.seed)
-        g = torch.Generator().manual_seed(train_cfg.seed)
-        n = len(dataset)
-        self.order = (list(order) if order is not None
-                      else torch.randperm(n, generator=g).tolist())
+        # amendment A-4: every micro-batch is exactly 50% teacher / 50% generated.
+        # Enforcing the ratio at the *micro* batch makes it hold for every
+        # gradient-accumulated effective batch whatever the accumulation factor
+        # is -- the same argument Where-B's BalancedContextSampler is built on,
+        # and the same class, so the two stages cannot drift apart.
+        self.sampler = BalancedContextSampler(
+            len(dataset), train_cfg.micro_batch, seed=train_cfg.seed,
+            teacher_fraction=train_cfg.teacher_fraction)
+        self.order = list(order) if order is not None else None
         self.gas = train_cfg.grad_accum()
-        n_micro = len(self.order) // train_cfg.micro_batch
+        n_micro = (len(self.order) // train_cfg.micro_batch if self.order is not None
+                   else len(self.sampler))
         self.state.total_steps = max(1, n_micro // self.gas)
         self.optimizer = build_optimizer(self.model, train_cfg)
         self.scheduler = make_scheduler(self.optimizer, self.state.total_steps,
@@ -261,13 +302,27 @@ class WhatTrainer:
             "n_dataset": len(self.dataset),
             "style_queue": self.queue.facts(),
             "d_func_scale": self.d_func_scale,
+            "teacher_fraction": self.cfg.teacher_fraction,
+            "generated_mode": self.generated_mode,
+            "sampler": self.sampler.facts(),
             "builder": self.builder.facts() if hasattr(self.builder, "facts") else {},
         }
 
     def micro_batches(self):
+        """``[(dataset_index, context_mode), ...]`` per micro-batch.
+
+        ``order`` is an explicit index list used by the mock loop and by resume;
+        it is paired with the same 50/50 alternation so a fixed order does not
+        quietly become a teacher-only run.
+        """
         mb = self.cfg.micro_batch
+        if self.order is None:
+            yield from iter_modes(self.sampler)
+            return
+        half = mb // 2
+        modes = [CONTEXT_GT] * half + [self.generated_mode] * (mb - half)
         for i in range(0, len(self.order) - mb + 1, mb):
-            yield self.order[i:i + mb]
+            yield list(zip(self.order[i:i + mb], modes))
 
     # -- one epoch ----------------------------------------------------------
     def train(self, max_steps: int | None = None) -> TrainState:
@@ -285,8 +340,9 @@ class WhatTrainer:
                 self.model.collect_pool_stats = (
                     accum == 0 and (want_ratio
                                     or (self.state.step + 1) % self.log_every == 0))
-                samples = [self.dataset[i] for i in micro]
-                batch = self.builder.build(samples)
+                samples = [self.dataset[i] for i, _ in micro]
+                modes = [m for _, m in micro]
+                batch = self.builder.build(samples, modes)
                 with self.autocast:
                     total, stats = compute_batch(
                         self.model, batch, self.arm_cfg, self.queue,

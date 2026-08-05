@@ -6,6 +6,8 @@
         an oracle latent;
     12. 48-Gaussian SPD, weight normalisation, identity initialisation and finite
         gradients;
+    7.  (transposed from protocol 5.4 by amendment A-4) the GT / generated
+        ``<color>`` context flows do not cross, and there is no GT fallback;
     13. Lab loss units and per-term gradient norms;
     14. analytic -> 33^3 bake -> tetrahedral readback numerical unit test.
 
@@ -61,6 +63,7 @@ __all__ = ["Check", "PreflightReport", "run_what_preflight", "write_report"]
 COLOR_PATH_MODULES = (_color_mod, _attention_mod)
 
 REQUIRED_CHECKS: tuple[str, ...] = (
+    "WT-P7-color-context-flows",
     "WT-P8-no-h-where",
     "WT-P9-no-target-leak",
     "WT-P12-gaussian-constraints",
@@ -171,6 +174,102 @@ def _code_identifiers(path: Path) -> set[str]:
         elif isinstance(node, ast.alias):
             names.add(node.asname or node.name)
     return {n for n in names if n not in IDENTIFIER_ALLOWLIST}
+
+
+# --- amendment A-4: the two <color> context flows ---------------------------
+
+def check_color_context_flows() -> Check:
+    """Amendment A-4 -- protocol 5.4's discipline, transposed to ``<color>``.
+
+    Four properties, each of which was false before A-4:
+
+    1. the teacher and the generated builder are different functions, and the
+       generated one **cannot** reach the GT text -- checked on its signature,
+       not by reading its body;
+    2. a generation with no closing tag is cut and marked, never replaced;
+    3. the micro-batch is exactly 50/50 for any even micro-batch size;
+    4. ``C01``/``C02`` map to the forced-``<color>``-prefix generation and every
+       other arm to the with-``<where>``-prefix one.
+    """
+    from .config import (
+        CONTEXT_GENERATED,
+        CONTEXT_GT,
+        GENCTX_MODE_FORCED_COLOR,
+        GENCTX_MODE_WITH_WHERE,
+        genctx_mode_of,
+    )
+    from .context import (
+        BalancedContextSampler,
+        generated_color_context,
+        gt_color_context,
+    )
+
+    detail: dict[str, Any] = {}
+    bad: list[str] = []
+
+    # 1. no GT is reachable from the generated builder
+    gen_params = set(inspect.signature(generated_color_context).parameters)
+    detail["generated_color_context_params"] = sorted(gen_params)
+    for forbidden in ("color_text", "sample", "record", "tokenizer"):
+        if forbidden in gen_params:
+            bad.append(f"generated_color_context accepts {forbidden!r}")
+
+    # 2. a missing close tag is a recorded failure, not a fallback
+    ctx = generated_color_context("s0", [10, 11, 12], close_id=99)
+    detail["no_close_tag"] = ctx.to_dict()
+    if not (ctx.format_failure and ctx.stop_reason == "no_close_tag"
+            and ctx.token_ids == [10, 11, 12]):
+        bad.append("a generation without </color> is not reported as a failure")
+    closed = generated_color_context("s0", [10, 99, 12], close_id=99)
+    detail["closed"] = closed.to_dict()
+    if closed.token_ids != [10, 99] or closed.format_failure:
+        bad.append("the span is not cut at the first </color>")
+    empty = generated_color_context("s0", [], close_id=99)
+    if not (empty.format_failure and empty.stop_reason == "empty"):
+        bad.append("an empty generation is not reported")
+
+    # 3. the 50/50 ratio, for every even micro-batch
+    ratios = {}
+    for mb in (2, 4, 8):
+        sampler = BalancedContextSampler(64, mb, seed=0)
+        counts = [sum(1 for _, m in batch if m == CONTEXT_GT) for batch in sampler]
+        ratios[mb] = sorted(set(counts))
+        if counts and set(counts) != {mb // 2}:
+            bad.append(f"micro-batch {mb} is not 50/50: {sorted(set(counts))}")
+    detail["teacher_per_micro_batch"] = ratios
+    try:
+        BalancedContextSampler(64, 3, seed=0)
+        bad.append("an odd micro-batch was accepted; 50/50 needs an even one")
+    except ValueError:
+        detail["odd_micro_batch_rejected"] = True
+
+    # 4. arm -> generation mode
+    modes = {a: genctx_mode_of(a) for a in ARM_IDS}
+    detail["genctx_mode_by_arm"] = modes
+    forced = {a for a, m in modes.items() if m == GENCTX_MODE_FORCED_COLOR}
+    if forced != {"C01", "C02"}:
+        bad.append(f"forced-<color>-prefix arms are {sorted(forced)}, expected C01/C02")
+    if any(modes[a] != GENCTX_MODE_WITH_WHERE for a in ARM_IDS if a not in forced):
+        bad.append("a with-<where> arm is not on the with_where_prefix generation")
+
+    # the teacher path does exist and is separate
+    tok = _StubTokenizer()
+    gt = gt_color_context(tok, "s0", "a body")
+    detail["gt"] = gt.to_dict()
+    if gt.mode != CONTEXT_GT or gt.genctx_mode:
+        bad.append("the teacher context is not labelled as such")
+    if ctx.mode != CONTEXT_GENERATED:
+        bad.append("the generated context is not labelled as such")
+
+    return Check("WT-P7-color-context-flows", "fail" if bad else "pass",
+                 detail | {"offenders": bad})
+
+
+class _StubTokenizer:
+    """Just enough tokeniser for the context-flow check (no model needed)."""
+
+    def __call__(self, text: str, add_special_tokens: bool = False):
+        return {"input_ids": [hash(t) % 1000 for t in text.split()]}
 
 
 # --- item 8 (the Stage-What half) -------------------------------------------
@@ -531,6 +630,7 @@ def run_what_preflight(out_dir: Path | None = None, *, arm: str = "T01",
     rep = PreflightReport(env=_env())
     cfg = arm_config(arm)
     model = WhatModel(cfg)
+    rep.add(check_color_context_flows())
     rep.add(check_no_h_where(model))
     rep.add(check_no_target_leak(model))
     rep.add(check_gaussian_constraints(cfg))

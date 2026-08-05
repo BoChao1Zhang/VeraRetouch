@@ -23,10 +23,13 @@ from q3vl.what.config import (
     ArmConfig,
     BackendConfig,
     ColorConnectorConfig,
+    CONTEXT_GENERATED,
+    CONTEXT_GT,
     N_QUERY_NATURAL,
     TEXT_HIDDEN,
     arm_config,
 )
+from q3vl.what.context import ColorContext
 from q3vl.what.data import Batch
 from q3vl.what.lut import GtLutTable, lattice_points
 from q3vl.what.queries import natural_query_points, query_kind_index, uniform_query_points
@@ -60,6 +63,9 @@ class MockSample:
     lut_id: str
     table: GtLutTable
     h_color: torch.Tensor
+    #: amendment A-4: what the model would read if it had to generate its own
+    #: <color> reasoning -- the same signal, degraded.
+    h_color_generated: torch.Tensor
     f_pre: torch.Tensor
     rgb_low: torch.Tensor
     m_low: torch.Tensor
@@ -91,6 +97,8 @@ def make_mock_sample(i: int, *, text_dim: int = TEXT_HIDDEN, text_len: int = 6,
     E = torch.randn(theta.numel(), text_dim, generator=eg) / theta.numel() ** 0.5
     h_color = (theta @ E).unsqueeze(0).repeat(text_len, 1)
     h_color = h_color + 0.01 * torch.randn(text_len, text_dim, generator=g)
+    # the generated context carries the same information, less cleanly
+    h_color_generated = h_color + 0.05 * torch.randn(text_len, text_dim, generator=g)
 
     image = torch.rand(3, GRID_H * 8, GRID_W * 8, generator=g)
     rgb_low = torch.rand(N_PATCH, 3, generator=g)
@@ -98,6 +106,7 @@ def make_mock_sample(i: int, *, text_dim: int = TEXT_HIDDEN, text_len: int = 6,
     m_hi = torch.rand(image.shape[-2:], generator=g).clamp(0.05, 1.0)
     return MockSample(
         sample_id=f"mock_{i:04d}", lut_id=tbl.lut_id, table=tbl, h_color=h_color,
+        h_color_generated=h_color_generated,
         f_pre=torch.randn(N_PATCH, 1024, generator=g), rgb_low=rgb_low,
         m_low=m_low, m_hi=m_hi, image=image, is_global=is_global)
 
@@ -131,8 +140,32 @@ class MockDataset:
         return self.samples[i]
 
 
+class MockColorGenCtx:
+    """Stand-in for the published generated-``<color>`` store (amendment A-4).
+
+    It satisfies the two things the trainer and the builder facts ask of a real
+    :class:`~q3vl.what.stores.ColorGenContextStore` -- that it exists and that it
+    reports its mode -- without needing published shards.  The *contract* of the
+    real store (schema version, mode agreement, coverage) is tested directly in
+    ``test_a4_color_context.py`` against a fake published payload.
+    """
+
+    def __init__(self, mode: str):
+        self.mode = mode
+
+    def summary(self) -> dict[str, Any]:
+        return {"kind": "MockColorGenCtx", "mode": self.mode, "n": 0}
+
+
 class MockBuilder:
-    """Assembles real :class:`Batch` objects from :class:`MockSample`s."""
+    """Assembles real :class:`Batch` objects from :class:`MockSample`s.
+
+    Amendment A-4: the generated context is modelled as the teacher embedding
+    plus noise -- "the model's own colour reasoning is an imperfect version of
+    the GT one".  That keeps the 50/50 plumbing, the per-context loss split and
+    the ratio assertions on a real code path, while the *store* contract is
+    tested separately against a fake published record.
+    """
 
     def __init__(self, cfg: ArmConfig, seed: int = 0, gt_interp: str = "trilinear"):
         from q3vl.what.srht import SRHT
@@ -151,11 +184,25 @@ class MockBuilder:
         # amendment A-2's C, computed over the mock "train" LUT set with the same
         # closed form the real job uses.  A constant, never a per-batch statistic.
         self.d_func_scale = mock_d_func_scale()
+        self.color_genctx = MockColorGenCtx(cfg.genctx_mode)
 
-    def build(self, samples: Sequence[MockSample]) -> Batch:
+    def build(self, samples: Sequence[MockSample],
+              modes: Sequence[str] | None = None) -> Batch:
         b = len(samples)
-        text_dim = samples[0].h_color.shape[-1]
-        h_color = torch.stack([s.h_color for s in samples])
+        modes = [CONTEXT_GT] * b if modes is None else list(modes)
+        if len(modes) != b:
+            raise ValueError("samples and context modes must align")
+        contexts = [
+            ColorContext(mode=m, token_ids=[1, 2, 3], provenance=s.sample_id,
+                         stop_reason="closed",
+                         genctx_mode=(self.cfg.genctx_mode
+                                      if m == CONTEXT_GENERATED else ""))
+            for s, m in zip(samples, modes)
+        ]
+        h_color = torch.stack([
+            s.h_color if m == CONTEXT_GT else s.h_color_generated
+            for s, m in zip(samples, modes)
+        ])
         inputs: dict[str, Any] = {
             "h_color": h_color,
             "h_color_mask": torch.ones(b, h_color.shape[1], dtype=torch.bool),
@@ -185,7 +232,7 @@ class MockBuilder:
                                      "build": "l1"}})
         batch = Batch(inputs=inputs, targets=targets,
                       sample_ids=[s.sample_id for s in samples],
-                      meta=[t["meta"] for t in targets])
+                      meta=[t["meta"] for t in targets], contexts=contexts)
         batch.check_inputs()
         return batch
 
@@ -207,7 +254,9 @@ class MockBuilder:
 
     def facts(self) -> dict[str, Any]:
         return {"kind": "MockBuilder", "gt_interp": self.gt_interp,
-                "d_func_scale": self.d_func_scale}
+                "d_func_scale": self.d_func_scale,
+                "genctx_mode": self.cfg.genctx_mode,
+                "color_genctx": self.color_genctx.summary()}
 
 
 @pytest.fixture()

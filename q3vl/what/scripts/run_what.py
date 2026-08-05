@@ -4,6 +4,8 @@ One arm per GPU (protocol 11's ``T1``-``C2`` waves).  Everything this script doe
 before the first optimiser step is a refusal check:
 
 * the preflight of protocol 14 must pass;
+* the published generated ``<color>`` context (amendment A-4) must exist, be in
+  the mode this arm requires, and cover every sample of the split;
 * the frozen Where checkpoint must exist and be the *same* one for every arm --
   its digest goes into ``run_setup.json`` and a mismatch with a previous arm's
   record is a hard stop, because "the Where checkpoint is exactly the same and
@@ -23,6 +25,18 @@ Usage
 
 from __future__ import annotations
 
+# --- environment guard: sqlite3 must be imported BEFORE torch ---------------
+# Verified 2026-08-05 in the campaign env (/home/bc/envs/q3vl_sft):
+#   import torch; import sqlite3  -> ImportError, libstdc++ CXXABI_1.3.15 not found
+#   import sqlite3; import torch  -> fine
+# torch loads a libstdc++ that shadows the one `_sqlite3`'s dependency chain
+# (libicui18n) needs, so any process that touches torch first can never open a
+# published shard afterwards -- `q3vl.data.shardio` imports sqlite3, and every
+# store in this campaign goes through it.  Importing it first costs nothing and
+# inoculates the whole process.  This is campaign-wide, not Stage-What specific:
+# `q3vl.whereb.stores` sits on the same chain (see NOTES R6).
+import sqlite3  # noqa: F401  (import order is the point)
+
 import argparse
 import json
 import time
@@ -33,6 +47,7 @@ import torch
 
 from q3vl.what.config import (
     ARM_IDS,
+    COLOR_GENCTX_ROOT,
     GTLUT_DIR,
     RUN_ROOT,
     SFT_CHECKPOINT,
@@ -40,6 +55,7 @@ from q3vl.what.config import (
     ZGT_DIR,
     arm_config,
 )
+from q3vl.what.stores import ColorGenContextStore
 from q3vl.what.data import WhatBatchBuilder, WhereRunner, open_dataset
 from q3vl.what.hiddens import WhatVLM
 from q3vl.what.lut import LutBank
@@ -88,6 +104,9 @@ def main() -> int:
     ap.add_argument("--sft-checkpoint", default=str(SFT_CHECKPOINT))
     ap.add_argument("--gtluts", default=str(GTLUT_DIR))
     ap.add_argument("--zgt", default=str(ZGT_DIR))
+    ap.add_argument("--color-genctx", default=str(COLOR_GENCTX_ROOT),
+                    help="root of the published generated-<color> context "
+                         "(amendment A-4); one dir per (split, mode)")
     ap.add_argument("--run-dir", default=None)
     ap.add_argument("--run-root", default=str(RUN_ROOT),
                     help="where the other arms' run_setup.json live (B-6 scan)")
@@ -161,10 +180,21 @@ def main() -> int:
     dataset, ds_info = open_dataset(
         args.split, need_mask=(cfg.where_source == "oracle"), limit=args.limit)
     center, d_func_scale = load_center(Path(args.zgt))
+
+    # amendment A-4: training is 50/50 teacher/generated, so the published
+    # generated <color> context must exist and must cover the whole split before
+    # the first step.  A coverage hole discovered mid-run has no legal repair --
+    # falling back to the GT span is exactly what A-4 forbids.
+    genctx_root = Path(args.color_genctx) / args.split / cfg.genctx_mode
+    color_genctx = ColorGenContextStore(genctx_root, mode=cfg.genctx_mode)
+    genctx_coverage = color_genctx.assert_covers(
+        [dataset.refs[i].sample_id for i in range(len(dataset))])
+
     builder = WhatBatchBuilder(
         collator, vlm, cfg, build_bank(Path(args.gtluts), dataset),
         center, d_func_scale, where_runner=where_runner,
-        oracle_store=oracle_store, device=args.device, seed=cfg.seed)
+        oracle_store=oracle_store, color_genctx=color_genctx,
+        device=args.device, seed=cfg.seed)
 
     model = WhatModel(cfg)
     tcfg = TrainConfig(arm=args.arm, micro_batch=args.micro_batch)
@@ -175,6 +205,10 @@ def main() -> int:
     setup.update({"dataset": ds_info, "where": where_facts,
                   "sft_checkpoint": args.sft_checkpoint,
                   "gtluts": args.gtluts, "zgt": args.zgt,
+                  "color_genctx": {"root": str(genctx_root),
+                                   "mode": cfg.genctx_mode,
+                                   "coverage": genctx_coverage,
+                                   "summary": color_genctx.summary()},
                   "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
     (run_dir / "run_setup.json").write_text(
         json.dumps(setup, ensure_ascii=False, indent=1), encoding="utf-8")

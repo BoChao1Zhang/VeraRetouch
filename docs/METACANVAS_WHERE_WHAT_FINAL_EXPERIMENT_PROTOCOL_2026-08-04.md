@@ -381,6 +381,8 @@ z_style = LN(MLP(AttentionPool(M_color))) in R^1024
 
 `Q_color` 不直接读取 `H_where`。Where 信息只通过四个显式 WC 接口进入，这样每个接口的增益可以归因。
 
+> **修订说明**：`H_color` 的来源已由 **amendment A-4（2026-08-05）** 定档为「训练 50% GT / 50% Base SFT 自回归生成，评测两种 context 分开报告，`V_what` 选择以 generated 为主榜，C01/C02 用 forced `<color>` prefix 生成」。原文未声明此事，等价于 100% teacher-forced。见本文末尾 changelog 的 A-4 条目。
+
 `z_style` 是连续 LUT function code，不是整数 style ID。其监督目标由冻结、确定性的 functional encoder 给出：
 
 ```text
@@ -474,6 +476,9 @@ Gaussian 中心用 sigmoid 限定在 RGB cube；协方差由 Cholesky 构造并�
 令归一化权重为 `q_i(x)`，则：
 
 ```text
+# SUPERSEDED by amendment A-1 (2026-08-05) -- see the changelog at the end of
+# this document.  The global term is now a pure residual `G x`, G zero-init;
+# the form below gives T(x) = 2x at zero initialisation.
 T_pred(x) = clamp(
     (I + DeltaG) x + b_g
     + sum_i q_i(x) * (M_i x + b_i),
@@ -926,3 +931,27 @@ C^2 = 2 * ( N * sum_i ||u_i||^2 - || sum_i u_i ||^2 ) / ( N * (N-1) )
 理由：§9.5 明写「该配方是所有 12 个 What 臂的统一起点和主配置」。若 no-where 臂的 natural 半区退回全图采样，则它与主臂的目标分布不同，控制臂就不再是干净的下界，而是「下界 + 一次目标分布消融」的混合体。
 
 **实现要求**：每条 per-sample 记录写 `natural_weighting` 字段（取值 `frozen_m_pred` / `global_uniform`，后者只用于 global 样本），使该性质可被审计。
+
+
+### 2026-08-05 · amendment A-4（NF-1）：Stage-What 的 `<color>` context 定档为 50/50 teacher/generated
+
+**依据**：`docs/reviews/REVIEW-impl-What.md` 聚焦复审 §十 NF-1（新增 BLOCKER）+ 主 agent 裁定（采纳审阅者选项 (a)）。
+
+**问题**。初版 Stage-What 实现的 `color_ids` 与 `where_ids` 全部来自 record 的 **GT** 文本，即训练与评测 100% teacher-forced，且此决策从未声明。后果有三：
+
+1. **§0 的核心主张失去证据**。「最终网络只接收 `I_in + instruction`」在 Stage-What 的任何一个交付数字里都没有被检验过；§15 的问题 3/4/5 的答案全部条件在 GT 推理文本上。
+2. **amendment A-3 抬高了赌注**。冻结 Where 的 `m_pred` 现在是全部 12 臂的**监督**掩膜，而那个 `m_pred` 由 GT `<where>` 文本算出——包括按构造永远看不到 `<where>` 的 C01/C02。
+3. **train/test 失配无法事后补救**。12 臂若在 100% teacher 上训完，再改用 generated 上下文评测，掉分是必然的，唯一正确动作是**重训 12 臂**。Where-B 的 §5.4 用 50/50 训练正是为了避免这件事。
+
+**定档内容**（四点）：
+
+1. **训练 50/50**。每个 **micro**-batch 固定 50% teacher context（GT `<color>` token hidden）/ 50% generated context（Base SFT 自回归生成的 `<color>` token hidden）。在 micro-batch 上强制，因而对任何梯度累积倍数下的 effective batch 都成立。generated 样本缺失闭合标签时**不得回退 GT**：按固定 token 边界截断并记录 format 失败（与 §5.4 逐字同构）。缓存的是 **token ids** 而非 hidden；hidden 在训练时由 teacher context 所用的同一个 encode 重放，使「同层、同位置、同归一化」成为构造性事实。
+2. **评测分报**。GT 与 generated 两种 context **分开报告**，永不混成一个均值；`arm_metrics` 的每个 checkpoint 产出**每 context 一行**。
+3. **generated 主榜**。`V_what` 的 checkpoint 选择以 **generated-context** 榜为准（`main_board` 增加 context 维度，默认 `generated`）。teacher-context 榜并列报告，两者之差（generated − teacher）是「该臂对 GT 推理文本的依赖程度」的直接读数。
+4. **控制臂的 generated 语义**。`C01`/`C02` 按构造去掉 `<where>` prefix，因此其 generated context 必须由**同样的**方式生成：prompt 不含 `<where>`，`<color>` 开标签作为 **forced prefix**，其后自回归生成。若给它们重放「`<where>` 之后生成的」`<color>`，where 推理会经由 token ids 回到严格 no-where 控制臂里，正是该控制臂要排除的东西。
+
+**上游依赖**。generated context 由**扩展后的** Where-B 生成作业产出（`q3vl.whereb.scripts.make_generated_context`，schema `q3vl.where_b.genwhere/2` = v1 + `<color>` 段；新增 forced-prefix CLI 模式）。Base SFT 本就一次生成 `<where>...</where><color>...</color>`，v2 只是把第二段一并留下。每条记录必带 `mode` 字段（`with_where_prefix` / `forced_color_prefix`），消费侧逐样本断言其与本臂所需一致。
+
+**token 边界**。`<color>` 段边界 = **384**。实测依据：跨五个 split 抽样 3,745 条 record 的 `tokens.color`，min 108 / p50 178 / p95 246 / p99 285 / **max 324**；384 = max + 两个标签 + 约 18% 余量（与 Where-B 的 96 对 measured max 79 同样的余量）。teacher 侧超界**报错**而非截断——边界是对语料的断言，不是截断路径。
+
+**科学问题的影响**：本 amendment **恢复**（而非改变）§0 与 §15 问题 3/4/5 的可回答性——它们本就要求 generated 语境下的数字。§7.4/§7.5 的每样本参数量、§9.5 的七个权重、§12.1 的 gate 阈值、§12.4 的字典序五键、§8 的 12 臂矩阵均**不变**。

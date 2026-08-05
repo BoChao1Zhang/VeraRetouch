@@ -48,6 +48,43 @@ SCHEMA_GTLUT = "q3vl.what.gtlut/1"
 SCHEMA_ZGT = "q3vl.what.zgt/1"
 
 # ===========================================================================
+# amendment A-4 -- teacher / generated <color> context
+# ===========================================================================
+# Protocol 5.4 gave Stage-Where a 50/50 teacher/generated discipline; the
+# original Stage-What implementation was 100% teacher-forced and never said so
+# (REVIEW-impl-What NF-1).  A-4 puts What on the same footing:
+#
+#   training   50% GT <color> hidden / 50% Base-SFT-generated <color> hidden
+#   evaluation GT and generated reported separately
+#   selection  the generated-context board is the main one
+#   controls   C01/C02 generate with no <where> prompt and a forced <color> prefix
+CONTEXT_GT = "gt"
+CONTEXT_GENERATED = "generated"
+CONTEXT_MODES = (CONTEXT_GT, CONTEXT_GENERATED)
+#: the board V_what selection reads (amendment A-4 item 3)
+SELECTION_CONTEXT = CONTEXT_GENERATED
+TEACHER_FRACTION = 0.5
+
+# Measured on 3,745 records sampled across all five splits (``tokens.color``):
+# min 108, p50 178, p95 246, p99 285, **max 324**.  384 = max + the two tags +
+# ~18% margin, the same margin Where-B used for its 96 (measured max 79).
+# ``gt_color_context`` *raises* rather than truncating, so a corpus sample past
+# the boundary surfaces immediately instead of silently shortening a teacher
+# context; the full-corpus verification is job ``WT-J9``.
+COLOR_CONTEXT_MAX_TOKENS = 384
+# The with-<where> generation emits ``<where>..</where><color>..</color>`` in one
+# pass, so the budget has to cover both spans (81 + 326 measured maxima).
+GEN_COLOR_MAX_NEW_TOKENS = 512
+
+#: How an arm's generated context is produced.  Both are published by the
+#: extended Where-B genctx job (WB-IMPL); an arm asserts the ``mode`` field of
+#: every record it reads, so the two can never be silently swapped.
+GENCTX_MODE_WITH_WHERE = "with_where_prefix"      # prompt -> <where>..</where><color>..
+GENCTX_MODE_FORCED_COLOR = "forced_color_prefix"  # prompt (no <where>) + <color> forced
+GENCTX_MODES = (GENCTX_MODE_WITH_WHERE, GENCTX_MODE_FORCED_COLOR)
+SCHEMA_COLOR_GENCTX = "q3vl.where_b.genwhere/2"   # v2 = v1 + the <color> segment
+
+# ===========================================================================
 # protocol 7.1 -- Q_color and the continuous style code
 # ===========================================================================
 N_COLOR_QUERIES = 16            # "16 learnable color queries"
@@ -248,6 +285,20 @@ CONTROL_ARM_IDS = tuple(a for a in ARMS if a.startswith("C"))
 #: enter the main board".
 CEILING_ARM_IDS = ("C03", "C04")
 
+
+def genctx_mode_of(arm: str) -> str:
+    """Amendment A-4 item 4: which generation an arm's ``<color>`` context is.
+
+    ``C01``/``C02`` drop the ``<where>`` prefix from the model's sequence, so
+    their *generated* context has to be generated the same way -- from a prompt
+    with no ``<where>`` and a forced ``<color>`` open tag.  Replaying a context
+    that was generated *after* a ``<where>`` span would put the where reasoning
+    back into the control arm through the token ids, which is precisely what the
+    strict no-where control exists to exclude.
+    """
+    return (GENCTX_MODE_FORCED_COLOR if not WC_INTERFACES[ARMS[arm][0]]["where_prefix"]
+            else GENCTX_MODE_WITH_WHERE)
+
 # ===========================================================================
 # protocol 9 -- the loss, symbol by symbol
 # ===========================================================================
@@ -365,6 +416,10 @@ RECIPE_ROOTS = (Path("/home/bc/data/datasets/recipes"),)
 # is always *reported* next to it (protocol 12.1) but is not the training GT.
 GT_LUT_INTERP = "trilinear"     # "trilinear" | "tetrahedral"
 
+#: published by the extended ``q3vl.whereb.scripts.make_generated_context``
+#: (WB-IMPL); one directory per (split, mode).
+COLOR_GENCTX_ROOT = Path("/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere")
+
 WHAT_ROOT = Path("/mnt/nfs/bc/data/datasets/what-20260805")
 GTLUT_DIR = WHAT_ROOT / "gtluts"        # <lut_id>.lut.npy + <lut_id>.lutmeta.json
 ZGT_DIR = WHAT_ROOT / "zgt"             # zgt_center.npz + per-lut z_gt
@@ -476,6 +531,10 @@ class ArmConfig:
     def is_ceiling(self) -> bool:
         return self.arm in CEILING_ARM_IDS
 
+    @property
+    def genctx_mode(self) -> str:
+        return genctx_mode_of(self.arm)
+
 
 @dataclass(frozen=True)
 class TrainConfig:
@@ -499,6 +558,7 @@ class TrainConfig:
     seed: int = SEED
     grad_ratio_every: int = GRAD_RATIO_EVERY
     style_queue_size: int = STYLE_QUEUE_SIZE
+    teacher_fraction: float = TEACHER_FRACTION      # amendment A-4
 
     def grad_accum(self) -> int:
         if self.effective_batch % self.micro_batch:

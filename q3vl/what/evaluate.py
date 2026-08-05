@@ -37,7 +37,9 @@ import torch
 from .config import (
     BAKE_GATE,
     CEILING_ARM_IDS,
+    CONTEXT_MODES,
     FINITE_GATE,
+    SELECTION_CONTEXT,
     GATE_FAILED_TAG,
     INSTRUCTION_SHUFFLE_MIN_DELTA,
     SELECTION_ORDER,
@@ -57,7 +59,7 @@ from .metrics import (
 )
 
 __all__ = ["sample_row", "summarise", "strata_report", "arm_metrics", "main_board",
-           "write_per_sample", "ceiling_board"]
+           "write_per_sample", "ceiling_board", "context_report"]
 
 
 @torch.no_grad()
@@ -138,13 +140,23 @@ def strata_report(rows: Sequence[Mapping[str, Any]],
 
 def arm_metrics(rows: Sequence[Mapping[str, Any]], *, arm: str, step: int,
                 n_trainable: int, latency_ms: float | None = None,
-                shuffle_rows: Sequence[Mapping[str, Any]] | None = None
-                ) -> dict[str, Any]:
-    """One checkpoint's board row: gates, the selection keys and the strata."""
+                shuffle_rows: Sequence[Mapping[str, Any]] | None = None,
+                context: str = SELECTION_CONTEXT) -> dict[str, Any]:
+    """One checkpoint's board row: gates, the selection keys and the strata.
+
+    ``context`` is amendment A-4's teacher/generated dimension.  A checkpoint
+    produces **one row per context**; they are never averaged together, and
+    :func:`main_board` selects on the generated one.  Reporting a single blended
+    number would hide exactly the quantity A-4 exists to expose -- how much the
+    arm loses when it has to read its own colour reasoning instead of the GT one.
+    """
+    if context not in CONTEXT_MODES:
+        raise ValueError(f"unknown context {context!r}; have {CONTEXT_MODES}")
     local = [r for r in rows if r.get("render_mode") == "local"]
     glob = [r for r in rows if r.get("render_mode") == "global"]
     m: dict[str, Any] = {
-        "arm": arm, "step": step, "n_trainable_params": n_trainable,
+        "arm": arm, "step": step, "context": context,
+        "n_trainable_params": n_trainable,
         "latency_ms": latency_ms, "n": len(rows),
         "is_ceiling": arm in CEILING_ARM_IDS,
     }
@@ -224,14 +236,15 @@ def _rank(rows: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
 
 
 def _summary(r: Mapping[str, Any]) -> dict[str, Any]:
-    return {"arm": r["arm"], "step": r["step"],
+    return {"arm": r["arm"], "step": r["step"], "context": r.get("context"),
             **{k: r.get(k) for k, _ in SELECTION_ORDER},
             "gate_pass": r.get("gate_pass"),
             "instruction_shuffle_pass": r.get("instruction_shuffle_pass")}
 
 
 def main_board(candidates: Iterable[Mapping[str, Any]], *, split: str,
-               allow: Sequence[str] = ("V_what",)) -> dict[str, Any]:
+               allow: Sequence[str] = ("V_what",),
+               context: str = SELECTION_CONTEXT) -> dict[str, Any]:
     """Protocol 12.4 selection: **gate first, then the lexicographic order**.
 
         "1. first satisfy the bake gate, the finite gate and the positive
@@ -257,8 +270,21 @@ def main_board(candidates: Iterable[Mapping[str, Any]], *, split: str,
             "T_final and T_lut_unseen are opened once, after every selection is "
             "frozen (protocol 12.4)."
         )
+    if context not in CONTEXT_MODES:
+        raise ValueError(f"unknown context {context!r}; have {CONTEXT_MODES}")
     rows = [c for c in candidates]
-    board = [r for r in rows if not r.get("is_ceiling")]
+    # amendment A-4 item 3: selection reads the generated-context board.  A row
+    # that carries no context at all predates A-4 and is refused rather than
+    # silently treated as generated.
+    unlabelled = [r for r in rows if r.get("context") is None]
+    if unlabelled:
+        raise ValueError(
+            f"{len(unlabelled)} candidate rows carry no 'context' field; "
+            "amendment A-4 requires every board row to declare teacher or "
+            "generated context (arm_metrics writes it)."
+        )
+    board = [r for r in rows
+             if not r.get("is_ceiling") and r.get("context") == context]
     passed = [r for r in board if r.get("gate_pass")]
     failed = [r for r in board if not r.get("gate_pass")]
 
@@ -271,7 +297,9 @@ def main_board(candidates: Iterable[Mapping[str, Any]], *, split: str,
     top2 = ranked[:2]
     out: dict[str, Any] = {
         "split": split,
+        "context": context,
         "n_candidates": len(rows),
+        "n_candidates_in_context": len(board),
         "n_checkpoints_gate_pass": len(passed),
         "n_checkpoints_gate_failed": len(failed),
         "n_arms": len(best_pass),
@@ -293,11 +321,41 @@ def main_board(candidates: Iterable[Mapping[str, Any]], *, split: str,
     return out
 
 
-def ceiling_board(candidates: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def ceiling_board(candidates: Iterable[Mapping[str, Any]],
+                  context: str = SELECTION_CONTEXT) -> list[dict[str, Any]]:
     """``C03``/``C04`` reported *beside* the board, never inside it."""
-    return [{"arm": c["arm"], "step": c["step"],
+    return [{"arm": c["arm"], "step": c["step"], "context": c.get("context"),
              **{k: c.get(k) for k, _ in SELECTION_ORDER}}
-            for c in candidates if c.get("is_ceiling")]
+            for c in candidates
+            if c.get("is_ceiling") and c.get("context") == context]
+
+
+def context_report(candidates: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    """Amendment A-4 item 2: the two contexts side by side, per arm.
+
+    ``gap`` is generated minus teacher on the primary selection key.  A large
+    positive gap is the honest reading of "this arm depends on GT colour
+    reasoning"; a gap near zero is what protocol 0's claim needs.  Neither is
+    visible if the two contexts are averaged, which is why they never are.
+    """
+    rows = list(candidates)
+    by: dict[tuple[str, int], dict[str, Mapping[str, Any]]] = {}
+    for r in rows:
+        by.setdefault((r["arm"], r["step"]), {})[r.get("context")] = r
+    key = SELECTION_ORDER[0][0]
+    out = []
+    for (arm, step), ctxs in sorted(by.items()):
+        gt, gen = ctxs.get("gt"), ctxs.get("generated")
+        row: dict[str, Any] = {"arm": arm, "step": step,
+                               "gt": gt.get(key) if gt else None,
+                               "generated": gen.get(key) if gen else None,
+                               "metric": key}
+        if gt is not None and gen is not None and gt.get(key) is not None \
+                and gen.get(key) is not None:
+            row["gap"] = float(gen[key]) - float(gt[key])
+        out.append(row)
+    return {"metric": key, "rows": out,
+            "n_pairs": sum(1 for r in out if r.get("gap") is not None)}
 
 
 def write_per_sample(rows: Iterable[Mapping[str, Any]], path: Path) -> Path:
