@@ -29,8 +29,9 @@ from .config import SHUFFLE_GROUP_KEYS, WHERE_CONTEXT_MAX_TOKENS
 
 __all__ = [
     "GT", "GENERATED", "NULL", "SHUFFLED", "CONTEXT_MODES",
-    "WhereContext", "FormatStats", "gt_context", "generated_context",
-    "null_context", "shuffled_context", "ShuffleIndex", "BalancedContextSampler",
+    "WhereContext", "FormatStats", "SegmentSpan", "extract_segment",
+    "gt_context", "generated_context", "null_context", "shuffled_context",
+    "ShuffleIndex", "BalancedContextSampler",
 ]
 
 GT = "gt"
@@ -135,6 +136,81 @@ def gt_context(tokenizer, sample_id: str, where_text: str,
                         provenance=sample_id, stop_reason="closed")
 
 
+@dataclass
+class SegmentSpan:
+    """One tagged segment carved out of a generation.
+
+    The same rule governs ``<where>`` and ``<color>`` (amendment A-4): keep up to
+    and including the first closing tag; if there is none, cut at a fixed token
+    boundary and record a format failure.  **Neither ever falls back to GT** --
+    this function cannot see any GT text.
+    """
+
+    token_ids: list[int]
+    format_failure: bool
+    truncated: bool
+    stop_reason: str          # closed | closed_over_boundary | no_close_tag |
+                              # no_open_tag | empty
+    start: int = 0            # index in the generation where the span begins
+    end: int = 0              # one past the last kept token
+
+    @property
+    def n_tokens(self) -> int:
+        return len(self.token_ids)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"n_tokens": self.n_tokens, "format_failure": self.format_failure,
+                "truncated": self.truncated, "stop_reason": self.stop_reason,
+                "start": self.start, "end": self.end}
+
+
+def extract_segment(
+    generated_ids: Sequence[int],
+    close_id: int,
+    max_tokens: int,
+    *,
+    open_id: int | None = None,
+    start: int = 0,
+    eos_id: int | None = None,
+) -> SegmentSpan:
+    """Carve one tagged segment out of a generation.
+
+    ``open_id=None`` (the ``<where>`` case) takes the window as it stands, which
+    is what the where extractor has always done -- the first segment is expected
+    at position 0 and a missing ``<where>`` shows up as ``no_close_tag`` or as
+    ``starts_with_where_open=False`` rather than as a separate failure mode.
+    ``open_id`` set (the ``<color>`` case) first seeks the opening tag, because
+    the colour segment starts wherever the where segment ended.
+    """
+    ids = list(generated_ids)
+    if eos_id is not None and eos_id in ids:
+        ids = ids[: ids.index(eos_id)]
+    window = ids[start:]
+    offset = start
+    if open_id is not None:
+        if open_id not in window:
+            return SegmentSpan([], True, False, "no_open_tag", offset, offset)
+        i = window.index(open_id)
+        offset += i
+        window = window[i:]
+
+    if close_id in window:
+        cut = window.index(close_id) + 1
+        span = window[:cut]
+        failure, truncated, reason = False, False, "closed"
+        if len(span) > max_tokens:
+            span = span[:max_tokens]
+            truncated, failure, reason = True, True, "closed_over_boundary"
+    else:
+        span = window[:max_tokens]
+        failure = True
+        truncated = len(window) > max_tokens
+        reason = "no_close_tag"
+    if not span:
+        failure, reason = True, "empty"
+    return SegmentSpan(span, failure, truncated, reason, offset, offset + len(span))
+
+
 def generated_context(
     sample_id: str,
     generated_ids: Sequence[int],
@@ -150,29 +226,17 @@ def generated_context(
     they should start with ``<where>``.  The span kept is up to and including the
     first ``</where>``; if there is none, the first ``max_tokens`` tokens are
     kept and ``format_failure`` is set.
+
+    Since amendment A-4 the cached generation also contains the ``<color>``
+    segment.  That changes nothing here: greedy decoding is prefix-deterministic,
+    so the tokens before the first ``</where>`` are identical to what a
+    where-only run produced, and this function still cuts there.
     """
-    ids = list(generated_ids)
-    n_gen = len(ids)
-    if eos_id is not None and eos_id in ids:
-        ids = ids[: ids.index(eos_id)]
-    if close_id in ids:
-        cut = ids.index(close_id) + 1
-        span = ids[:cut]
-        failure, truncated, reason = False, False, "closed"
-        if len(span) > max_tokens:
-            span = span[:max_tokens]
-            truncated, failure, reason = True, True, "closed_over_boundary"
-    else:
-        span = ids[:max_tokens]
-        failure = True
-        truncated = len(ids) > max_tokens
-        reason = "no_close_tag"
-    if not span:
-        failure, reason = True, "empty"
+    seg = extract_segment(generated_ids, close_id, max_tokens, eos_id=eos_id)
     return WhereContext(
-        mode=GENERATED, token_ids=span, text=text, provenance=sample_id,
-        format_failure=failure, truncated=truncated, stop_reason=reason,
-        n_generated_tokens=n_gen,
+        mode=GENERATED, token_ids=seg.token_ids, text=text, provenance=sample_id,
+        format_failure=seg.format_failure, truncated=seg.truncated,
+        stop_reason=seg.stop_reason, n_generated_tokens=len(generated_ids),
     )
 
 

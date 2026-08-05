@@ -158,7 +158,13 @@ class MaskViewStore(PublishedStore):
 
 
 class GenContextStore(PublishedStore):
-    """This stage's cached generated ``<where>`` spans (see :mod:`gencontext`)."""
+    """This stage's cached generated reasoning spans (see :mod:`gencontext`).
+
+    Schema v2 (amendment A-4) carries the ``<color>`` segment next to the
+    ``<where>`` one.  Every v1 field kept its name *and* its meaning, so
+    :meth:`where_ids` -- the only thing Where-B reads -- behaves identically on
+    v1 and v2 records.
+    """
 
     SUFFIX = ".genwhere.json"
 
@@ -170,19 +176,29 @@ class GenContextStore(PublishedStore):
             if suf == self.SUFFIX:
                 yield self.read_json(sid, suf)
 
-    def summary(self) -> dict[str, Any]:
-        n = fail = trunc = 0
-        reasons: dict[str, int] = {}
+    # -- per-segment accessors ---------------------------------------------
+    def where_ids(self, sample_id: str) -> list[int]:
+        """The ``<where>`` span.  Present in v1 and v2 alike."""
+        return list(self.record(sample_id)["where_ids"])
+
+    def color_ids(self, sample_id: str) -> list[int]:
+        """The ``<color>`` span.  Raises on a v1 record rather than guessing."""
+        rec = self.record(sample_id)
+        if "color_ids" not in rec:
+            raise KeyError(
+                f"{sample_id}: record is schema {rec.get('schema_version')!r}, which "
+                "predates the <color> segment (amendment A-4). Re-run "
+                "scripts/make_generated_context.py for this split."
+            )
+        return list(rec["color_ids"])
+
+    def has_color(self) -> bool:
         for r in self.iter_records():
-            n += 1
-            fail += int(r.get("format_failure", False))
-            trunc += int(r.get("truncated", False))
-            k = str(r.get("stop_reason"))
-            reasons[k] = reasons.get(k, 0) + 1
-        return {
-            "n": n,
-            "format_failure_rate": fail / n if n else None,
-            "truncation_rate": trunc / n if n else None,
-            "stop_reasons": dict(sorted(reasons.items())),
-            **self.facts(),
-        }
+            return "color_ids" in r
+        return False
+
+    def summary(self) -> dict[str, Any]:
+        from .gencontext import summarise_records
+
+        records = list(self.iter_records())
+        return {**summarise_records(records), **self.facts()}

@@ -360,3 +360,94 @@ preflight PASS  (complete=False; skipped=['WB-P7b-hidden-contract', 'WB-P8b-h-wh
 ### 8.4 既有套件回归
 
 `pytest q3vl/where/tests q3vl/tests -q` → **120 passed**（Where-A 正被 WA-IMPL 修复中，本次只读不改）。
+
+---
+
+## 九、amendment A-4：生成产物同时保留 `<where>` 与 `<color>` 两段
+
+日期：2026-08-05 ｜ 触发：Stage-What 审阅 NF-1 ｜ 裁定：What 阶段与 Where-B 对齐，
+采用 50/50 teacher/generated **color** context（消费侧由 WHAT-IMPL 落地，本包只负责**产出侧**）。
+
+Base SFT 本来就一次生成 `<where>…</where><color>…</color>`，此前只是把后半段丢了。
+
+### 9.1 schema `q3vl.where_b.genwhere/1 → /2`：**只增不改**
+
+| 类别 | 字段 |
+|---|---|
+| **v1 原样保留**（名字与含义都不变，含义 = `<where>` 段） | `schema_version` `sample_id` `split` `build` `render_mode` `winner_confidence` `checkpoint` `generated_ids` `generated_text` `n_generated_tokens` `where_ids` `where_text` `format_failure` `truncated` `stop_reason` `starts_with_where_open` `gen`（含 `max_context_tokens` / `close_id` / `open_id` 三个 v1 名字） |
+| **v2 新增** | `mode` `where_suppressed` `color_ids` `color_text` `color_format_failure` `color_truncated` `color_stop_reason` `starts_with_color_open` `segments`（两段的 `start/end/n_tokens/…`）`segments_overlap`；`gen` 增 `where_max_tokens` `color_max_tokens` `mode` `forced_prefix_ids` `forced_prefix_text` 与四个 tag id |
+
+**向后兼容是被单测钉住的，不是承诺**：
+`test_gencontext.py::test_every_v1_field_is_present_in_a_v2_record`（逐字段清单来自
+`config.SCHEMA_GENCTX_V1_FIELDS`）、`::test_v1_fields_still_describe_the_where_segment`
+（拿 v2 记录的 `generated_ids` 重跑 `generated_context()`，四个 v1 字段逐项相等）、
+`::test_the_whereb_consumer_path_is_untouched_by_the_new_schema`、
+`::test_store_round_trips_a_v2_record_and_rejects_colour_on_v1`（v1 记录仍可读
+`where_ids`；对 v1 记录取 `color_ids` **明确抛错**而不是猜）。
+
+**Where-B 训练路径一行未改**：`BatchBuilder.context_for` 仍只读 `generated_ids` +
+`</where>` id。生成预算变大不影响 `where_ids`——贪心解码是前缀确定的，第一个 `</where>`
+之前的 token 与 where-only 时代逐位相同（`::test_where_ids_do_not_change_when_the_budget_grows`）。
+
+### 9.2 `<color>` 的失败处理与 `<where>` 同构
+
+抽取规则提炼成 `context.extract_segment()`，两段共用：
+**取到第一个闭合标签为止；没有就在固定边界处截断 + 记格式失败；永不回退 GT**
+（该函数签名里根本没有任何 GT 文本参数，有单测断言）。
+`<color>` 多一个失败模式 `no_open_tag`（连 `<color>` 都没生成出来）。
+
+边界取值（实测 2711 条 GT record 的 `tokens.*`）：
+
+| 段 | 实测 | 固定边界 |
+|---|---|---:|
+| `where` | p50 41 / max 79（+2 标签 = 81） | **96**（不变） |
+| `color` | p50 178 / p95 244 / p99 283 / **max 324**（+2 标签 = 326） | **384** |
+| `where+color` | p50 204 / p99 296 / **max 332**（+4 标签 = 336） | 生成预算 128 → **512** |
+
+**单测抓到的一个真 bug**：`<where>` 不闭合时，它的 96-token 边界截断点可能落在 `<color>`
+标签**之后**，于是从该点开始找 `<color>` 会找不到 —— 一个 where 格式失败会**级联**成一个
+colour 格式失败，白白丢掉一段本来完好的 colour。改为：`<where>` 正常闭合时 colour 从
+`where.end` 开始找，**不闭合时从 0 开始找全段**（两段各有自己的标签，colour 的可恢复性不该
+依赖 where 的失败），并把重叠显式记进 `segments_overlap`。
+
+### 9.3 forced-prefix 模式（What 控制臂 C01/C02）
+
+`--forced-color-prefix` → `mode="forced_color"`：以 `<color>` 作为 assistant 的**强制首 token**
+生成，因此 colour 段前面没有任何 `<where>` 推理——这正是 §8.2 要的 strict no-where 控制
+（`WC-0 ColorOnly` 的因果语言态里仍然流过一个生成的 `<where>`）。
+
+- `FrozenVLM.generate_where(..., prefix_ids=...)`：前缀接到 prompt 末尾再解码，返回时**前置回去**，
+  调用方拿到的永远是完整的 assistant 续写（有 stub 单测断言两侧都对）。
+- 记录里 `where_ids = []`、`where_suppressed = True`、
+  **`format_failure = False`、`stop_reason = "suppressed_by_mode"`**——没要 where 就说 where 失败是撒谎。
+- 发布到**独立的 root**（`<split>-forced_color`），两种产物不可能混进同一套 shard。
+
+### 9.4 CPU 实跑验证（真实 `V_where` 索引，不占 GPU）
+
+| 模式 | 日志 | 结果 |
+|---|---|---|
+| `two_segment` | `logs/a4_genctx_two_segment_smoke.log` | exit 0；`schema_version=q3vl.where_b.genwhere/2`；两段都被抽取；`manifest.status=complete`、`sample_count=2`；store 读回 `index_rows=2`；`segments_overlap_rate=0.0` |
+| `forced_color` | `logs/a4_genctx_forced_color_smoke.log` | exit 0；见 §9.5 |
+
+⚠ 与 §8.2 同样的注意：这两次用的是 **base（未 SFT）权重 + `--max-new-tokens 24`**，
+所以 `format_failure_rate=1.0`、`starts_with_where_open_rate=0.0`、colour 段
+`no_open_tag` 全是**预期**的——base 模型从没见过那四个 special token，24 个 token 也不够写完
+where 段。**这些数只证明路径通，不是质量信号。**
+
+### 9.5 forced_color 实跑结果（`logs/a4_genctx_forced_color_smoke.log`，exit 0）
+
+```
+mode = forced_color        out_root = .../V_where-forced_color   (独立 root)
+schema_version = q3vl.where_b.genwhere/2
+
+where 段：  format_failure_rate 0.0   stop_reasons {suppressed_by_mode: 2}   where_tokens max 0
+color 段：  starts_with_color_open_rate 1.0   stop_reasons {no_close_tag: 2}  color_tokens 25
+generated_tokens 25 = 1 个强制前缀 + 24 个生成
+落盘记录：where_ids=[] / where_suppressed=true / format_failure=false /
+          color_ids[0]=151671(<color>) / gen.forced_prefix_ids=[151671] / forced_prefix_text="<color>"
+```
+
+**`starts_with_color_open_rate = 1.0` 是这次最有信息量的一行**：同一个 base 模型在
+`two_segment` 档下该值是 **0.0**（它从没见过这四个 special token，自己绝不会吐 `<color>`），
+forced 档下变成 1.0，说明**强制前缀确实落到了解码序列里**，而不是被 padding 或
+`generate` 的参数吃掉。`color_format_failure=1.0` 仍是 `--max-new-tokens 24` 的预期结果。

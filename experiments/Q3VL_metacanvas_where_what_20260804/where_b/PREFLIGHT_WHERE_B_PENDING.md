@@ -73,7 +73,17 @@ Where-A NOTES 记录 CPU 上 1536 点约 2 s/图/readout。
 ```bash
 bash q3vl/whereb/scripts/run_where_b.sh genctx train   0
 bash q3vl/whereb/scripts/run_where_b.sh genctx V_where 1
+
+# Stage-What 控制臂 C01/C02 的 forced-prefix 档（amendment A-4），另发布一套 shard
+$PY -m q3vl.whereb.scripts.make_generated_context --split V_what --forced-color-prefix
 ```
+
+**amendment A-4：一次生成同时留下 `<where>` 与 `<color>` 两段。** What 阶段与 Where-B 对齐
+采用 50/50 teacher/generated color context，而 Base SFT 本来就一次吐两段，此前只是把后半段丢了。
+schema `/1 → /2` **只增不改**：v1 的每个字段名与含义（= `<where>` 段）原样保留，
+Where-B 的消费路径一行未动。`<color>` 缺闭合标签与 `<where>` **同构**处理（固定边界截取 +
+记 `color_format_failure`，**不回退 GT**）。生成预算相应从 128 提到 **512**
+（实测 `tokens.where + tokens.color` max 332、p99 296，加四个标签）。
 
 产物：`/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/<split>/`（indexed shards）
 + `experiments/.../where_b/genctx_<split>.json`。
@@ -85,10 +95,14 @@ bash q3vl/whereb/scripts/run_where_b.sh genctx V_where 1
 | 项 | 预期 | 依据 |
 |---|---|---|
 | `<where>` 段长度 | p50 ~41 tok，max ≤ 96（固定边界） | GT 实测 2711 条：local max 79 + 2 标签 |
+| `<color>` 段长度 | p50 ~178 tok，max ≤ 384（固定边界） | GT 实测 2711 条：max 324 + 2 标签 = 326 |
 | prompt 长度 | ~448 tok（含 384 visual） | record 的 `tokens.prompt` |
 | 吞吐 | **待实测**（先 `--limit 256` 标定 samples/s，再外推） | 单卡 H100、bf16、batch 8 |
 | `starts_with_where_open_rate` | 应 ≈ 1.0 | assistant 的第一个 token 就该是 `<where>` |
-| `format_failure_rate` | **报告即可，不设门**；它本身是 §5.4 要记录的量 | — |
+| `starts_with_color_open_rate` | 应 ≈ 1.0 | `</where>` 之后就该是 `<color>` |
+| `format_failure_rate` / `color_format_failure_rate` | **报告即可，不设门**；它们本身是 §5.4 要记录的量 | — |
+| `both_segments_well_formed_rate` | 报告 | 两段都闭合的比例，What 消费侧关心 |
+| `segments_overlap_rate` | 应 ≈ 0 | 只有 `<where>` 不闭合、96 token 边界切过了 `<color>` 标签时才为真 |
 
 **吞吐不够时的唯一备选**：conda env `vllm`（0.16.0，registry 确认支持
 `Qwen3VLForConditionalGeneration`）。但它在另一套 torch/transformers 上、且给不出 hidden，

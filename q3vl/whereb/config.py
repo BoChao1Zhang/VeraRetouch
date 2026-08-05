@@ -30,7 +30,21 @@ from q3vl.where.config import MASKVIEW_DIR as WHERE_A_MASKVIEW_DIR  # noqa: F401
 from q3vl.where.config import ORACLE_DIR as WHERE_A_ORACLE_DIR  # noqa: F401
 from q3vl.where.config import SPLIT_DIR  # noqa: F401
 
-SCHEMA_GENCTX = "q3vl.where_b.genwhere/1"
+#: v2 adds the ``<color>`` segment alongside the ``<where>`` one (amendment A-4:
+#: Stage-What adopts the same 50/50 teacher/generated context split as Where-B,
+#: and the Base SFT model emits both segments in a single generation anyway).
+#: **Every v1 field keeps its exact name and its exact meaning** -- the v1 keys
+#: still describe the ``<where>`` segment -- so a v1 consumer reading a v2
+#: record sees no change.  ``q3vl/whereb/tests/test_gencontext.py`` asserts that.
+SCHEMA_GENCTX = "q3vl.where_b.genwhere/2"
+SCHEMA_GENCTX_V1 = "q3vl.where_b.genwhere/1"
+#: the field set a v1 consumer is entitled to find in any record
+SCHEMA_GENCTX_V1_FIELDS: tuple[str, ...] = (
+    "schema_version", "sample_id", "split", "build", "render_mode",
+    "winner_confidence", "checkpoint", "generated_ids", "generated_text",
+    "n_generated_tokens", "where_ids", "where_text", "format_failure",
+    "truncated", "stop_reason", "starts_with_where_open", "gen",
+)
 
 GLOBAL_BUILDS = ("g1", "g2", "g3", "g4")
 
@@ -90,7 +104,18 @@ TEACHER_FRACTION = 0.5          # protocol 5.4: batch is fixed 50/50
 # local max 79, global max 30, p99 60.  81 = 79 body + <where> + </where>, so
 # 96 never truncates a GT segment and is a hard bound for a runaway generation.
 WHERE_CONTEXT_MAX_TOKENS = 96
-GEN_MAX_NEW_TOKENS = 128        # generation budget (> the 96 boundary)
+# Same rule for the <color> segment (amendment A-4).  Measured on the same 2711
+# records (``tokens.color``): min 108, p50 178, p95 244, p99 283, **max 324**;
+# 324 + <color> + </color> = 326, so 384 never truncates a GT colour segment.
+COLOR_CONTEXT_MAX_TOKENS = 384
+# Generation budget.  A two-segment continuation is where + colour + 4 tags:
+# measured ``tokens.where + tokens.color`` max 332, p99 296 -> 336 with tags.
+# 512 leaves headroom and matches the Base SFT spec's gen_diag_max_new_tokens.
+GEN_MAX_NEW_TOKENS = 512
+# What the where-only pipeline used before amendment A-4; kept for reference.
+GEN_MAX_NEW_TOKENS_WHERE_ONLY = 128
+#: generation modes of scripts/make_generated_context.py
+GENCTX_MODES = ("two_segment", "forced_color")
 # DECISION: shuffle partners come from the same source image and the same
 # render mode ("same image, same local level", protocol 5.4).  Measured on
 # V_where: 4.5% of local samples have no partner under this rule (23% under the

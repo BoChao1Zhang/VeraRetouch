@@ -1,16 +1,27 @@
 #!/usr/bin/env python
-"""FULL-SCALE JOB -- NOT RUN YET.  Cache the Base SFT model's own ``<where>`` spans.
+"""FULL-SCALE JOB -- NOT RUN YET.  Cache the Base SFT model's own reasoning spans.
 
 Protocol 5.4: half of every Where-B training batch is conditioned on the
 *generated* ``<where>`` context, and evaluation reports it as its own board.
-This job produces that context once, for a whole split, as indexed tar shards
-(protocol 2.3).
+Amendment A-4 extends the same 50/50 teacher/generated split to Stage-What's
+``<color>`` context.  The Base SFT model emits both segments in one greedy
+continuation, so this job caches both.  Output is indexed tar shards (2.3).
 
-    for each sample in <split>:
-        prompt   <- the SFT collator's own prompt ids (identical tokenisation)
-        ids      <- greedy generate, max_new_tokens=128, do_sample=False
-        span     <- up to and including the first </where>, else the first 96
-                    tokens with format_failure=True   (NEVER the GT span)
+    two_segment (default):
+        prompt <- the SFT collator's own prompt ids (identical tokenisation)
+        ids    <- greedy generate, max_new_tokens=512, do_sample=False
+        where  <- up to and including the first </where>, else the first 96
+                  tokens with format_failure=True     (NEVER the GT span)
+        color  <- from the first <color> after that, up to and including the
+                  first </color>, else the first 384 tokens with
+                  color_format_failure=True           (NEVER the GT span)
+
+    forced_color (--forced-color-prefix, Stage-What controls C01/C02):
+        <color> is forced as the assistant's first token, so the colour segment
+        is generated with no <where> reasoning in front of it -- the strict
+        no-where control of protocol 8.2.  where_ids is empty and
+        where_suppressed=True (it is not a format failure: no where was asked
+        for).  Publishes to a separate root so the two artefacts cannot mix.
 
 Only token ids are cached; the hidden states are re-derived at training time by
 the same ``FrozenVLM.encode`` the teacher context uses, which is what makes the
@@ -37,10 +48,12 @@ import torch
 from q3vl.train.collator import Sft2SegCollator
 from q3vl.train.modeling import load_model, load_processor
 from q3vl.whereb.config import (
+    COLOR_CONTEXT_MAX_TOKENS,
     GENCTX_DIR,
     GEN_MAX_NEW_TOKENS,
     MODEL_DIR,
     REPORT_DIR,
+    SCHEMA_GENCTX,
     SFT_CHECKPOINT,
     WHERE_CONTEXT_MAX_TOKENS,
 )
@@ -61,12 +74,21 @@ def main() -> int:
     ap.add_argument("--attn", default="flash_attention_2")
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--max-new-tokens", type=int, default=GEN_MAX_NEW_TOKENS)
+    ap.add_argument("--color-max-tokens", type=int, default=COLOR_CONTEXT_MAX_TOKENS)
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--out-root", default=str(GENCTX_DIR))
     ap.add_argument("--report-dir", default=str(REPORT_DIR))
+    ap.add_argument("--forced-color-prefix", action="store_true",
+                    help="Stage-What controls C01/C02: force <color> as the "
+                         "assistant's first token, so the colour segment is "
+                         "generated with no <where> reasoning in front of it")
     args = ap.parse_args()
 
-    out_root = Path(args.out_root) / args.split
+    mode = "forced_color" if args.forced_color_prefix else "two_segment"
+    # a separate root per mode: the two artefacts answer different questions and
+    # must never end up in the same shard set
+    leaf = args.split if mode == "two_segment" else f"{args.split}-forced_color"
+    out_root = Path(args.out_root) / leaf
     if out_root.exists():
         raise SystemExit(
             f"{out_root} already exists.  Publication is atomic; move the old "
@@ -87,12 +109,16 @@ def main() -> int:
     # resolver and died on the first local sample).
     dataset, ds_info = open_dataset(args.split, need_mask=False, limit=args.limit)
     setup = {
-        "split": args.split, "checkpoint": args.checkpoint, "env": _env(),
+        "split": args.split, "mode": mode, "checkpoint": args.checkpoint,
+        "env": _env(),
         "special_token_ids": special_ids, "vlm": vlm.facts(),
         "dataset": ds_info,
         "n_samples": len(dataset), "batch_size": args.batch_size,
         "max_new_tokens": args.max_new_tokens,
-        "max_context_tokens": WHERE_CONTEXT_MAX_TOKENS,
+        "max_context_tokens": WHERE_CONTEXT_MAX_TOKENS,   # v1 name = where
+        "where_max_tokens": WHERE_CONTEXT_MAX_TOKENS,
+        "color_max_tokens": args.color_max_tokens,
+        "schema_version": SCHEMA_GENCTX,
         "out_root": str(out_root),
     }
     print(json.dumps(setup, indent=2), flush=True)
@@ -101,7 +127,7 @@ def main() -> int:
     records = list(generate_records(
         vlm, collator, dataset, batch_size=args.batch_size,
         max_new_tokens=args.max_new_tokens, checkpoint=args.checkpoint,
-        limit=args.limit,
+        limit=args.limit, mode=mode, color_max_tokens=args.color_max_tokens,
     ))
     gen_seconds = time.time() - t0
 
@@ -120,7 +146,7 @@ def main() -> int:
     }
     rd = Path(args.report_dir)
     rd.mkdir(parents=True, exist_ok=True)
-    (rd / f"genctx_{args.split}.json").write_text(
+    (rd / f"genctx_{leaf}.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     print(json.dumps({k: v for k, v in report.items() if k != "setup"},

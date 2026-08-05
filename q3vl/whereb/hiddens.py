@@ -229,12 +229,22 @@ class FrozenVLM:
         items: Sequence[EncodeItem],
         max_new_tokens: int,
         eos_token_id: int | None = None,
+        prefix_ids: Sequence[int] = (),
     ) -> list[list[int]]:
         """Greedy continuation of the prompts.  Left padding, so every sample's
-        generation starts at the same position and the KV cache stays valid."""
+        generation starts at the same position and the KV cache stays valid.
+
+        ``prefix_ids`` is a **forced prefix**: it is appended to every prompt
+        before decoding and prepended to every returned row, so the caller always
+        receives the complete assistant continuation.  Stage-What's strict
+        no-where controls (C01/C02) use it to force ``<color>`` as the first
+        assistant token, i.e. to obtain a colour segment that was never
+        conditioned on a ``<where>`` reasoning span.
+        """
         if not items:
             return []
-        prompts = [list(it.prompt_ids) for it in items]
+        prefix = [int(t) for t in prefix_ids]
+        prompts = [list(it.prompt_ids) + prefix for it in items]
         max_len = max(len(p) for p in prompts)
         input_ids = torch.full((len(items), max_len), self.pad_id, dtype=torch.long)
         attn = torch.zeros((len(items), max_len), dtype=torch.long)
@@ -255,7 +265,7 @@ class FrozenVLM:
             eos_token_id=eos_token_id,
         )
         new = gen[:, max_len:]
-        return [[int(t) for t in row.tolist()] for row in new]
+        return [prefix + [int(t) for t in row.tolist()] for row in new]
 
     def facts(self) -> dict[str, Any]:
         return {
