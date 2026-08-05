@@ -245,6 +245,9 @@ class FitResult:
     flags: list[str] = field(default_factory=list)
     metrics: dict[str, float] = field(default_factory=dict)
     start_losses: list[float] = field(default_factory=list)
+    # first few distinct exceptions raised by a start, so a systemic failure
+    # (broken BLAS in a worker) cannot masquerade as a hard sample
+    start_errors: list[str] = field(default_factory=list)
     best_start: int = -1
     n_starts: int = 0
     n_failed_starts: int = 0
@@ -269,6 +272,7 @@ class FitResult:
             "best_start": self.best_start,
             "n_starts": self.n_starts,
             "n_failed_starts": self.n_failed_starts,
+            "start_errors": list(self.start_errors),
             "seed": self.seed,
             "soft_iou_minmax": self.metrics.get("soft_iou_minmax"),
         }
@@ -288,6 +292,7 @@ class FitResult:
             "best_start": self.best_start,
             "n_starts": self.n_starts,
             "n_failed_starts": self.n_failed_starts,
+            "start_errors": list(self.start_errors),
             "seed": self.seed,
             "usable": self.usable,
             "latent": self.latent.to_dict() if self.latent is not None else None,
@@ -325,6 +330,7 @@ def fit_latent(
     starts, n_informed_dropped = build_starts(phi, target, readout, cfg)
     best: dict[str, Any] | None = None
     start_losses: list[float] = []
+    start_errors: list[str] = []
     n_failed = 0
 
     for i, st in enumerate(starts):
@@ -347,7 +353,15 @@ def fit_latent(
 
         try:
             opt.step(closure)
-        except Exception:                      # a diverged line search, not a sample failure
+        except Exception as exc:               # usually a diverged line search
+            # ...but not always.  A broken worker environment (e.g. OpenBLAS
+            # after a fork) makes *every* start raise, and without the message
+            # that is indistinguishable from "this sample is hard": the fit
+            # reports `all_starts_failed` and the rejection report says nothing
+            # about why.  Keep the first few distinct errors.
+            msg = f"{type(exc).__name__}: {exc}"[:200]
+            if msg not in start_errors:
+                start_errors.append(msg)
             n_failed += 1
             start_losses.append(float("inf"))
             continue
@@ -372,7 +386,7 @@ def fit_latent(
         return FitResult(
             latent=None, readout=readout, loss=float("inf"), status="rejected",
             reject_reason="all_starts_failed", flags=base_flags,
-            start_losses=start_losses,
+            start_losses=start_losses, start_errors=start_errors[:3],
             n_starts=len(starts), n_failed_starts=n_failed, objective=cfg.objective,
             seed=cfg.seed,
         )
@@ -403,7 +417,8 @@ def fit_latent(
     return FitResult(
         latent=latent, readout=readout, loss=best["loss"], status=status,
         reject_reason=reason, flags=flags, metrics=metrics,
-        start_losses=start_losses, best_start=best["i"], n_starts=len(starts),
+        start_losses=start_losses, start_errors=start_errors[:3],
+        best_start=best["i"], n_starts=len(starts),
         n_failed_starts=n_failed, objective=cfg.objective, seed=cfg.seed,
     )
 

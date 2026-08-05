@@ -2,7 +2,8 @@
 
 生成 2026-08-05，**两轮审阅后修订**：初审 6 个 BLOCKER 已全部关闭（复审确认 6/6），
 复审新增 B-7（`r*(z)` 网格 121 → 257）与 10 项 nit，本轮一并清完。
-**当前放行状态：S1 已完成、S2 已完成（8/8 PASS，checkpoint-4976）、D5 已定档；S4 / S5 就绪待跑。**
+**当前放行状态：S2 已完成（8/8 PASS，checkpoint-4976）、D5 已定档、D12 吞吐已实测；
+S4 / S5 就绪待跑（S4 单臂 ~1.9–2.8 h，四臂串行 ~6.7 h）。S1 仍待 Base SFT 之后执行。**
 **以下每一项都未执行。** 阻塞原因：两张 H100 被 Base SFT 占用（rank PID 3395226 / 3395227），
 全量 mask 作业与训练读写同一套 NFS build 树与本地盘。
 
@@ -181,6 +182,28 @@ bash q3vl/where/scripts/run_where_a.sh calibrate BA-1-Band
 bash q3vl/where/scripts/run_where_a.sh calibrate BA-2-CBand12
 bash q3vl/where/scripts/run_where_a.sh calibrate BA-3-Joint     # 预注册主方案
 ```
+
+### 墙钟已实测（D12，详见 NOTES §四之四）
+
+20 步真实循环（GPU1 + checkpoint-4976 + live mask resolver，batch 32，32 worker CPU 池，
+预取 depth 2）：**5.5–7.4 s/step**，拟合阶段 2.9 s。按保守端 7.4 s/step、1,336 步：
+
+| 臂 | 训练 | 最终重拟合 | 合计 |
+|---|---:|---:|---:|
+| `BA-0-Fixed`（不训练） | — | ~4 min | **~5 min** |
+| `BA-1-Band` / `BA-2-CBand12`（单 readout） | ~5 s/step | ~4 min | **~1.9 h** 每臂 |
+| `BA-3-Joint`（双 readout） | 7.4 s/step | ~4 min | **~2.8 h** |
+| **四臂串行合计** | | | **~6.7 h** |
+
+**串行跑在一张卡上，不要两卡并行**：CPU 拟合池是共享瓶颈，两臂并行各只分到 16–19 worker，
+fit 阶段几乎翻倍，总时长几乎不变却多占一张卡。串行一晚跑完，另一张卡留给 genctx。
+
+- worker 数取 **32 = batch_size**（任务粒度是每样本，多开是空转；实测 38 与 32 在噪声内，
+  24 会多跑一波）。剩下 16 核留给 S1 打包与 genctx 的 CPU 侧。
+- **`--prefetch 2` 必开**：不开的话数据路径（5.24 s/step）比计算还慢，wall 翻倍。
+- S1 完成后加 `--maskview-root`，数据路径还能再快一截，届时值得重跑一次 20 步基准。
+- 重跑基准：`python -m q3vl.where.scripts.bench_calibration --steps 20 --batch-size 32
+  --workers 32 --prefetch 2 --checkpoint <ckpt>`
 
 审阅后新增的三项运行期保障：
 

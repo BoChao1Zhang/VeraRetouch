@@ -25,6 +25,14 @@ Usage (D-20: rm -f the log first, then verify with `ps -p <PID>`, never pgrep):
 
 from __future__ import annotations
 
+# D12: the BLAS thread pin must land before numpy/torch load.  One thread per fit
+# is the canonical numeric setting, not an optimisation -- see fitpool.py.
+import os
+
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 import argparse
 import json
 import math
@@ -39,9 +47,10 @@ from q3vl.where.config import (
     ARMS, BASIS_DIR, CalibConfig, FitConfig, MODEL_DIR, ORACLE_DIR, PhiConfig,
     REPORT_DIR, UpsampleConfig,
 )
+from q3vl.where.fitpool import FitPool, pin_single_thread
 from q3vl.where.fpre import fpre_facts, load_vision_tower
 from q3vl.where.packing import pack_oracle, verify_published, write_basis
-from q3vl.where.pipeline import WhereADataSource
+from q3vl.where.pipeline import WhereADataSource, prefetch
 from q3vl.where.preflight import _env
 
 
@@ -80,6 +89,13 @@ def main() -> int:
                     help="also record one accepted fit every N steps")
     ap.add_argument("--count-cache", default=None,
                     help="JSON produced by a previous eligible-count pass")
+    # D12: 64 single-core fits per step is ~104 s; the pool takes that to ~2.9 s.
+    # Tasks are per-sample, so more workers than --batch-size sit idle.
+    ap.add_argument("--workers", type=int, default=32,
+                    help="CPU fit-pool workers (default = batch size; 0 = serial)")
+    ap.add_argument("--prefetch", type=int, default=2,
+                    help="batches of data prepared ahead of the step (0 = off). "
+                         "Without it the data path, not the fit, is the bottleneck.")
     args = ap.parse_args()
 
     run_dir = Path(args.out_root) / args.arm
@@ -113,6 +129,10 @@ def main() -> int:
     total_steps = max(1, math.ceil(n_planned / args.batch_size))
     cal = Calibrator(cfg, total_steps=total_steps, device=args.device)
 
+    pin_single_thread()
+    pool = FitPool(n_workers=args.workers or None)
+    pool.warmup()
+
     setup = {
         "arm": args.arm, "env": _env(), "fpre": fpre_facts(visual),
         "weights": str(src_dir),
@@ -130,6 +150,8 @@ def main() -> int:
             "upsample": cfg.upsample.__dict__,
         },
         "projector_init": cal.projector.facts(),
+        "fit_pool": pool.facts(),
+        "prefetch_depth": args.prefetch,
     }
     (run_dir / "run_setup.json").write_text(json.dumps(setup, indent=2))
     print(json.dumps(setup, indent=2), flush=True)
@@ -142,8 +164,20 @@ def main() -> int:
     rej_before = len(source.rejections)
     with log_path.open("a") as log, rej_path.open("a") as rej:
         stream = (p.sample for p in source.iter_split("train", limit=args.train_limit))
+        if args.prefetch:
+            stream = prefetch(stream, depth=args.prefetch * args.batch_size)
+        first = True
         for batch in _batched(stream, args.batch_size):
-            out = cal.step(batch, sample_every=args.sample_every)
+            if first:
+                # one real fit, worker vs parent, before the epoch: a broken
+                # worker fails every start and reports it as an ordinary
+                # rejection, which would look like a data problem for 1,336 steps
+                check = pool.self_check(cal.fit_tasks(batch[:1], cal.readouts, step=0)[0])
+                setup["fit_pool_self_check"] = check
+                (run_dir / "run_setup.json").write_text(json.dumps(setup, indent=2))
+                print(json.dumps({"fit_pool_self_check": check}), flush=True)
+                first = False
+            out = cal.step(batch, sample_every=args.sample_every, pool=pool)
             n_seen += len(batch)
             # B-2: every non-ok fit lands on disk, sample-level, as it happens
             for row in out.pop("fit_rows"):
@@ -203,6 +237,7 @@ def main() -> int:
     report = cal.evaluate(
         (p.sample for p in source.iter_split("V_where", limit=args.eval_limit)),
         readouts=("band", "cband12"), fit_cfg=final_fit, record_fits=True,
+        pool=pool, chunk=args.batch_size,
     )
     rows = report.pop("rows")
 
@@ -255,6 +290,7 @@ def main() -> int:
     (REPORT_DIR / f"calibration_{args.arm}.json").write_text(json.dumps({
         "setup": setup, "eval": report, "basis": basis_meta,
     }, indent=2))
+    pool.close()
     source.close()
     return 0
 

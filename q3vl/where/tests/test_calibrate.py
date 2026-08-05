@@ -176,19 +176,26 @@ def _mock_hi(i: int, gh: int = 8, gw: int = 12) -> WhereASample:
 
 
 class _RejectingCalibrator(Calibrator):
-    """Forces every fit of one readout to be rejected, latent and all."""
+    """Forces every fit of one readout to be rejected, latent and all.
+
+    Hooks `run_fits`, the single seam between the calibration loop and the fit
+    backend, so the injection works identically for the serial and pooled paths.
+    """
 
     def __init__(self, *a, reject: str = "band", **kw):
         super().__init__(*a, **kw)
         self.reject = reject
 
-    def fit_sample(self, sample, phi_dir, readout, **kw):
-        fit = super().fit_sample(sample, phi_dir, readout, **kw)
-        if readout == self.reject:
-            return FitResult(latent=None, readout=readout, loss=float("inf"),
-                             status="rejected", reject_reason="all_starts_failed",
-                             n_starts=fit.n_starts, objective=fit.objective)
-        return fit
+    def run_fits(self, tasks, pool=None):
+        fits = super().run_fits(tasks, pool)
+        for per in fits.values():
+            if self.reject in per:
+                ref = per[self.reject]
+                per[self.reject] = FitResult(
+                    latent=None, readout=self.reject, loss=float("inf"),
+                    status="rejected", reject_reason="all_starts_failed",
+                    n_starts=ref.n_starts, objective=ref.objective)
+        return fits
 
 
 def test_rejected_fits_never_reach_the_projector():

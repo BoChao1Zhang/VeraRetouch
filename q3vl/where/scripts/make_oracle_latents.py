@@ -31,6 +31,13 @@ Usage:
 
 from __future__ import annotations
 
+# D12: pin BLAS to one thread before numpy/torch load (see fitpool.py).
+import os
+
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 import argparse
 import json
 import time
@@ -45,10 +52,11 @@ from q3vl.where.config import (
     ARMS, BASIS_DIR, CBAND_NORMALIZATION, CURVE_Z_N, MODEL_DIR, ORACLE_DIR,
     REPORT_DIR, S_DOMAIN, CalibConfig, FitConfig, PhiConfig, UpsampleConfig,
 )
+from q3vl.where.fitpool import FitPool, pin_single_thread
 from q3vl.where.fpre import fpre_facts, load_vision_tower
 from q3vl.where.oracle import evaluate_latent
 from q3vl.where.packing import pack_oracle, verify_published
-from q3vl.where.pipeline import WhereADataSource
+from q3vl.where.pipeline import WhereADataSource, prefetch
 from q3vl.where.preflight import _env
 from q3vl.where.projector import BasisProjector
 from q3vl.where.readout import apply_readout
@@ -86,6 +94,10 @@ def main() -> int:
     ap.add_argument("--attach-hi", action="store_true",
                     help="also record delivery-resolution metrics (slower)")
     ap.add_argument("--log-every", type=int, default=200)
+    ap.add_argument("--workers", type=int, default=32,
+                    help="CPU fit-pool workers (0 = serial); D12")
+    ap.add_argument("--prefetch", type=int, default=64,
+                    help="samples prepared ahead of the fits (0 = off)")
     ap.add_argument("--out-root", default=None)
     args = ap.parse_args()
 
@@ -116,6 +128,9 @@ def main() -> int:
 
     cfg = CalibConfig(arm=args.arm, phi=PhiConfig(), upsample=UpsampleConfig())
     cal = Calibrator(cfg, projector=projector, device=args.device)
+    pin_single_thread()
+    pool = FitPool(n_workers=args.workers or None)
+    pool.warmup()
     # N-24: "B is never touched" must be enforced, not merely intended.  This
     # job never calls cal.step(), but the Calibrator would happily have built an
     # optimiser for an arm with readouts; freeze it for real and prove it.
@@ -132,7 +147,10 @@ def main() -> int:
 
     def rows():
         nonlocal n_done
-        for j, prepared in enumerate(source.iter_split(args.split, limit=args.limit)):
+        stream = source.iter_split(args.split, limit=args.limit)
+        if args.prefetch:
+            stream = prefetch(stream, depth=args.prefetch)
+        for j, prepared in enumerate(stream):
             sample = prepared.sample
             with torch.no_grad():           # no graph: B is frozen (N-24)
                 parts = cal.phi_for(sample)
@@ -199,7 +217,9 @@ def main() -> int:
     with (rep_dir / f"{args.arm}_{args.split}.rejections.jsonl").open("w") as fh:
         for r in rejections:
             fh.write(json.dumps(r) + "\n")
+    report["fit_pool"] = pool.facts()
     print(json.dumps(report, indent=2), flush=True)
+    pool.close()
     source.close()
     return 0 if report["verify"]["ok"] else 1
 

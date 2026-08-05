@@ -63,7 +63,7 @@
 
 ## 三、CPU 级验证结果
 
-### 3.1 单元测试：**162 个全部通过**（`q3vl/where/tests/`，用时 63 s；初审前 97 → 一审 134 → 复审 142 → S2 修复 162）
+### 3.1 单元测试：**176 个全部通过**（`q3vl/where/tests/`；初审前 97 → 一审 134 → 复审 142 → S2 修复 162 → fit 池 176）
 
 | 文件 | 数量 | 覆盖 |
 |---|---:|---|
@@ -369,6 +369,91 @@ cband12 的落差**为负**——交付分辨率比低分辨率还好，说明�
 
 ---
 
+## 四之四、D12 · 校准吞吐（CPU fit 池 + 数据预取），2026-08-05
+
+D11 把内层拟合搬到 CPU 之后，单核 1.63 s/fit × 64 fits/step（batch 32 × 2 readout）
+= **~104 s/step**，1,336 步就是 **38.6 小时/臂**，且那还只是拟合本身。本机 48 核，
+而一个 step 内的 64 次拟合彼此完全独立（各看一张图的 phi 和自己的 mask，不共享任何东西），
+是标准的尴尬并行。
+
+### 实现：常驻单线程进程池（`q3vl/where/fitpool.py`）
+
+- **常驻**：池建一次用一整个 epoch（~1,336 步），不每步重建。
+- **每个 worker 单线程**：`OMP/OPENBLAS/MKL/NUMEXPR/VECLIB_NUM_THREADS=1` + `torch.set_num_threads(1)`。
+- **任务粒度 = 每样本**（两个 readout 打包在一起），所以 (1536,71) 的 `phi` 每样本只 pickle 一次。
+- `Calibrator.run_fits()` 是循环与拟合后端之间**唯一的接缝**，串行 / 池 / 测试替身共用它；
+  `evaluate()`（V_where 最终重拟合，~800 次全档拟合/臂）也走同一条路。
+
+### 两个必须记下来的坑
+
+**(1) `fork` 会静默毁掉每一次拟合。** 父进程已经初始化了 OpenBLAS（numpy 和 torch 导入时都会），
+fork 出来的子进程继承了一个**线程并不存在**的线程池。实测：`fork` 下**每次拟合的 10 个起点全部抛异常**，
+于是每个样本都返回 `all_starts_failed` —— 池看起来在正常工作，返回的全是垃圾，而且这个失败
+和"这批样本很难拟合"**在报告里长得一模一样**。改用 `spawn` 后同一次拟合与父进程**逐位相同**。
+两条防线：
+- `FitPool.self_check()` 在任何计时之前跑一次真实拟合，worker 与父进程对不上就直接抛异常；
+- `fit_latent` 现在记录 `start_errors`（前 3 条不同的异常信息），
+  `all_starts_failed` 不再是一个没有下文的结论。
+
+**(2) 线程数会改变数值，而 `torch.set_num_threads` 管不到 numpy。** BLAS 的归约顺序不满足结合律：
+同一次拟合 1 线程 vs 8 线程，`w_raw` 差 ~3e-8。而 `*_NUM_THREADS` 环境变量是在库**加载时**读的，
+运行中再设无效——于是父进程的 `np.linalg.lstsq`（informed 起点）仍是多线程，spawn 出的 worker 是真单线程，
+两者在第 13 位小数上分道扬镳。`pin_single_thread()` 因此通过 ctypes 调用 OpenBLAS 自己的
+`openblas_set_num_threads64_` 在运行时压到 1 线程。**单线程是本实验的规范数值口径**，
+不是性能选项——它保证"同 seed 同结果"与池子开几个 worker 无关。
+单测 `test_pool_matches_serial_bitwise` 用 `torch.equal`（不是 allclose）钉住这一点。
+
+### 实测（GPU1，checkpoint-4976，live mask resolver，BA-3-Joint，batch 32，20 步取后 18 步中位）
+
+| 配置 | fit 阶段 | 数据等待 | wall/step | 单臂（1,336 步） |
+|---|---:|---:|---:|---:|
+| GPU 上串行拟合（首次 S2） | — | — | ~406 s | 150.8 h |
+| CPU 串行拟合（D11） | ~104 s | — | ~104 s | 38.6 h |
+| + 32 worker 池 | 2.86 s | **5.24 s** | 11.73 s | 4.35 h |
+| **+ 数据预取 depth=2** | 2.86–3.04 s | **0.00–0.24 s** | **5.53–7.42 s** | **2.05–2.75 h** |
+
+拟合阶段本身：**104 s → 2.9 s，约 36 倍**。
+
+**加池之后瓶颈立刻从拟合翻到数据**（5.24 s 等待 vs 4.70 s 计算）：live resolver 要读 shard、
+解 JPEG、解 mask PNG、做 spec-5 缩放、再跑一次冻结视觉前向，全在主循环里串着。
+`pipeline.prefetch()` 用一个后台线程把它与 step 重叠（IO / PIL / CUDA 都放 GIL），
+数据等待降到 ~0，wall 再砍一半。**注意第一版基准把 `t_data` 计在了 `next()` 之后，报出来是 0.0，
+差点把这个瓶颈整个漏掉**——现在计时包住 `next()`，并额外报 `wall_s_per_step` 与
+`unaccounted_s_per_step` 做交叉核对。
+
+### worker 数建议：**32**（= batch_size），不是 38
+
+任务粒度是每样本，所以一个 step 只有 `batch_size` 个任务：worker 开到 32 以上是空转
+（38 worker 与 32 worker 的 fit 阶段实测 3.04 s vs 2.86 s，在噪声内），而 24 worker 要跑两波，
+fit 阶段涨到 3.29 s。**取 32 恰好一波，且给 S1 打包与 genctx 的 CPU 侧留下 16 核**。
+
+残余噪声：两次 20 步跑的 `phi_gpu` 分别是 0.42 s 与 3.35 s——预取线程也在用 GPU 跑视觉前向，
+与主线程的 phi 前向争 GPU，交错方式逐次不同。合计 wall 因此在 5.5–7.4 s/step 之间浮动；
+排期按**保守端 7.4 s/step** 算。
+
+### 单臂墙钟与 A1/A2 排期建议
+
+按 D1 裁定的 headline 口径（42,752 normal 样本 / batch 32 = 1,336 步），保守端 7.4 s/step：
+
+| 臂 | 训练 | 最终重拟合(V_where) | 合计 |
+|---|---:|---:|---:|
+| `BA-0-Fixed` | **不训练** | ~4 min | **~5 min** |
+| `BA-1-Band` | 单 readout，fit 减半 → ~5 s/step | ~4 min | **~1.9 h** |
+| `BA-2-CBand12` | 同上 | ~4 min | **~1.9 h** |
+| `BA-3-Joint` | 双 readout → 7.4 s/step | ~4 min | **~2.8 h** |
+| | | | **合计 ~6.7 h** |
+
+若放开 low（75,544 样本 / 2,361 步）则约 **11.8 h**。
+
+**建议串行跑在一张卡上，不要两卡并行。** CPU 拟合池是共享瓶颈：两臂并行各只能分到 16–19 个
+worker，fit 阶段几乎翻倍，总时间几乎不变，却多一份 OOM/争用风险，还占住第二张卡。
+串行 ~6.7 h 一晚跑完，另一张卡留给 genctx。
+
+**开跑条件**：S1（maskview shards）完成后，`--maskview-root` 指向它，数据路径还能再快一截
+（省掉每 epoch 重解 `.cgt.png`）；届时值得把 20 步基准再跑一次确认。
+
+---
+
 ## 五、代码地图
 
 ```
@@ -393,7 +478,8 @@ q3vl/where/
     run_calibration.py     ⏸ 单臂全量校准，未跑
     make_oracle_latents.py ⏸ train split oracle latent（Where-B 前置），未跑
     run_where_a.sh         ⏸ 提交入口，内置 D-20 四步
-  tests/                   162 个用例，全绿（+ test_scripts.py：待跑作业的接口契约）
+  fitpool.py    D12  常驻单线程 CPU 进程池（spawn；self_check；逐位一致）
+  tests/                   176 个用例，全绿（+ test_fitpool.py：池与串行逐位一致）
 ```
 
 ---

@@ -27,7 +27,47 @@ from .maskdata import (
 )
 from .upsample import area_resize, luma_guide
 
-__all__ = ["PreparedSample", "WhereADataSource"]
+__all__ = ["PreparedSample", "WhereADataSource", "prefetch"]
+
+
+def prefetch(iterable, depth: int = 2):
+    """Pull from ``iterable`` on a background thread, up to ``depth`` ahead.
+
+    The 20-step calibration benchmark measured the data path (shard read, JPEG
+    decode, mask decode, spec-5 resize, frozen vision forward) at 5.24 s/step
+    against 4.70 s of actual step work: the loop spends more time waiting for
+    samples than calibrating on them.  The two phases use different resources --
+    the data path is IO plus PIL plus a GPU forward, the step is a CPU fit pool
+    -- so overlapping them turns a sum into a max.
+
+    A thread, not a process: the expensive parts (``os.pread``, PIL decode,
+    CUDA) all release the GIL, and a process would have to ship the samples
+    back over a pipe.
+    """
+    import queue
+    import threading
+
+    q: "queue.Queue" = queue.Queue(maxsize=max(1, depth))
+    sentinel = object()
+
+    def _pump() -> None:
+        try:
+            for item in iterable:
+                q.put(item)
+        except BaseException as exc:                    # noqa: BLE001
+            q.put(exc)
+        finally:
+            q.put(sentinel)
+
+    t = threading.Thread(target=_pump, name="where-a-prefetch", daemon=True)
+    t.start()
+    while True:
+        item = q.get()
+        if item is sentinel:
+            return
+        if isinstance(item, BaseException):
+            raise item
+        yield item
 
 
 @dataclass

@@ -34,6 +34,7 @@ oracle mask expressiveness, the instruction is not used").
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Sequence
 
@@ -44,6 +45,7 @@ from .config import (
     ARM_READOUTS, ARMS, GUIDED_PARAMS_PROVISIONAL, HEADLINE_WINNER_CONFIDENCE,
     JOINT_READOUT_WEIGHTS, CalibConfig,
 )
+from .fitpool import FitPool, FitTask, run_fits_serial
 from .oracle import FitResult, evaluate_latent, fit_latent, objective_value
 from .phi import build_phi_dir
 from .projector import BasisProjector
@@ -190,6 +192,7 @@ class Calibrator:
             max(1, int(round(total_steps * cfg.warmup_ratio))) if total_steps else None
         )
         self.fit_report: list[dict[str, Any]] = []
+        self._phi_cache: dict[str, Any] = {}
         # running rejection tally over the calibration epoch (B-2)
         self.n_fits = 0
         self.n_rejected = 0
@@ -228,6 +231,51 @@ class Calibrator:
             res.latent = res.latent.to(self.device)
         return res
 
+    def fit_tasks(
+        self, batch: Sequence[WhereASample], readouts: Sequence[str],
+        fit_cfg=None, step: int | None = None,
+    ) -> list[FitTask]:
+        """Package a batch's fits for the pool.
+
+        Both readouts of a sample share one task so the (1536, 71) ``phi`` is
+        pickled once per sample instead of once per fit.  The seed offset is the
+        same expression the serial path uses, so switching to the pool does not
+        move a single number.
+        """
+        cfg = fit_cfg or self.cfg.inner_fit
+        if cfg.objective != self.cfg.objective:
+            raise ValueError(
+                f"fit_cfg.objective={cfg.objective!r} != calibration objective "
+                f"{self.cfg.objective!r} (REVIEW-impl-WhereA B-6/N-18)"
+            )
+        step = self.step_count if step is None else step
+        tasks = []
+        for j, sample in enumerate(batch):
+            # `step()` fills the cache for the whole batch first; a caller that
+            # wants tasks on their own (the pool self-check) gets phi computed
+            # here instead of a KeyError.
+            parts = self._phi_cache.get(sample.sample_id)
+            if parts is None:
+                with torch.no_grad():
+                    parts = self.phi_for(sample)
+            tasks.append(FitTask(
+                key=sample.sample_id,
+                phi=parts.phi_dir.detach().double().cpu(),
+                target=sample.mask_low.detach().double().cpu(),
+                readouts=tuple(readouts),
+                cfg=cfg,
+                seed_offset=step * 1000 + j,
+            ))
+        return tasks
+
+    def run_fits(
+        self, tasks: Sequence[FitTask], pool: "FitPool | None" = None
+    ) -> dict[str, dict[str, FitResult]]:
+        """Execute a batch's fits.  The single seam between the calibration loop
+        and the fit backend, so a pool, a serial run and a test double are all
+        the same call site."""
+        return pool.run(tasks) if pool is not None else run_fits_serial(tasks)
+
     def freeze_projector(self) -> None:
         """Make "B is never touched" structural: drop the optimiser/scheduler and
         clear ``requires_grad``.  Used by the oracle-latent job, which loads an
@@ -252,6 +300,7 @@ class Calibrator:
         batch: Sequence[WhereASample],
         record_fits: bool = False,
         sample_every: int = 0,
+        pool: "FitPool | None" = None,
     ) -> dict[str, Any]:
         """One AdamW step on ``B``.
 
@@ -261,6 +310,11 @@ class Calibrator:
         ``fit_rejections.jsonl`` (protocol 10.2 / B-1 / B-2).  ``sample_every``
         additionally emits one accepted row every N steps, so the report has a
         healthy baseline to compare the failures against.
+
+        With a ``pool``, the batch's fits run concurrently on CPU workers.  The
+        ordering is unchanged -- every ``phi`` is built first (GPU, graph kept),
+        then all fits are dispatched, then the outer losses are accumulated in
+        batch order -- so the pool changes the wall clock and nothing else.
         """
         if self.optimizer is not None:
             self.optimizer.zero_grad(set_to_none=True)
@@ -272,11 +326,29 @@ class Calibrator:
         loss_sum = torch.zeros((), device=self.device)
         sampled = bool(sample_every) and (self.step_count % sample_every == 0)
 
+        # 1. every phi first: the pool needs them all before it can start, and
+        #    the graphs stay alive for the outer backward.
+        t_phi = time.perf_counter()
+        self._phi_cache = {s.sample_id: self.phi_for(s) for s in batch}
+        if self.device.startswith("cuda"):
+            torch.cuda.synchronize()
+        t_phi = time.perf_counter() - t_phi
+
+        # 2. all fits, concurrently when a pool is given
+        t_fit = time.perf_counter()
+        tasks = self.fit_tasks(batch, self.readouts, step=self.step_count)
+        fits = self.run_fits(tasks, pool)
+        t_fit = time.perf_counter() - t_fit
+
+        # 3. outer loss, in batch order
+        t_out = time.perf_counter()
         for j, sample in enumerate(batch):
-            parts = self.phi_for(sample)
+            parts = self._phi_cache[sample.sample_id]
             target = sample.mask_low.to(self.device).to(parts.phi_dir.dtype)
             for r in self.readouts:
-                fit = self.fit_sample(sample, parts.phi_dir, r, seed_offset=self.step_count * 1000 + j)
+                fit = fits[sample.sample_id][r]
+                if fit.latent is not None:
+                    fit.latent = fit.latent.to(self.device)
                 self._tally(fit)
                 if record_fits:
                     row = fit.to_dict()
@@ -308,9 +380,12 @@ class Calibrator:
                 counts[r] += 1
                 fit_losses[r].append(fit.loss)
 
+        t_out = time.perf_counter() - t_out
+        self._phi_cache = {}
         n_used = max(1, sum(counts.values()) // max(1, len(self.readouts) or 1))
         loss_mean = loss_sum / n_used
         grad_norm = None
+        t_bwd = time.perf_counter()
         if self.trains_projector and loss_mean.requires_grad:
             loss_mean.backward()
             grad_norm = float(torch.nn.utils.clip_grad_norm_(
@@ -318,9 +393,15 @@ class Calibrator:
             self.optimizer.step()
             if self.scheduler is not None:
                 self.scheduler.step()
+        if self.device.startswith("cuda"):
+            torch.cuda.synchronize()
+        t_bwd = time.perf_counter() - t_bwd
         self.step_count += 1
         return {
             "step": self.step_count,
+            "timing_s": {"phi_gpu": round(t_phi, 3), "fit": round(t_fit, 3),
+                         "outer": round(t_out, 3), "backward": round(t_bwd, 3),
+                         "total": round(t_phi + t_fit + t_out + t_bwd, 3)},
             "loss": float(loss_mean.detach()),
             "loss_per_readout": {
                 r: (totals[r] / counts[r] if counts[r] else float("nan")) for r in self.readouts
@@ -341,9 +422,20 @@ class Calibrator:
     def _eval_phi(self, sample: WhereASample):
         return self.phi_for(sample)
 
+    def _chunks(self, samples: Iterable[WhereASample], size: int):
+        buf: list[WhereASample] = []
+        for s in samples:
+            buf.append(s)
+            if len(buf) == size:
+                yield buf
+                buf = []
+        if buf:
+            yield buf
+
     def evaluate(
         self, samples: Iterable[WhereASample], readouts: Sequence[str] | None = None,
         fit_cfg=None, record_fits: bool = True, headline_confidence=HEADLINE_WINNER_CONFIDENCE,
+        pool: "FitPool | None" = None, chunk: int = 32,
     ) -> dict[str, Any]:
         """Refit oracle latents with ``B`` frozen (protocol 4.4 final step) and
         report the oracle ceiling per readout.
@@ -366,44 +458,65 @@ class Calibrator:
         n_rejected = {r: 0 for r in readouts}
         rejected_reasons: dict[str, dict[str, int]] = {r: {} for r in readouts}
         n = n_hi = 0
-        for j, sample in enumerate(samples):
-            parts = self._eval_phi(sample)
-            target = sample.mask_low.to(self.device).double()
-            for r in readouts:
-                fit = self.fit_sample(sample, parts.phi_dir, r,
-                                      fit_cfg=fit_cfg or self.cfg.inner_fit, seed_offset=j)
-                row = fit.to_dict() if record_fits else {"readout": r, "status": fit.status}
-                row["sample_id"] = sample.sample_id
-                row["meta"] = sample.meta
-                if record_fits:
-                    row["phi_diag"] = parts.diag
-                if not fit.usable:
-                    n_rejected[r] += 1
-                    reason = fit.reject_reason or "unknown"
-                    rejected_reasons[r][reason] = rejected_reasons[r].get(reason, 0) + 1
-                    rows.append(row)
-                    continue
+        # The final refit is ~800 full multi-start fits per arm (V_where x 2
+        # readouts at n_random=6, max_iter=120), so it goes through the same pool
+        # as the training loop.  Chunked, streaming: the samples stay an iterator.
+        cfg_fit = fit_cfg or self.cfg.inner_fit
+        j = -1
+        for group in self._chunks(samples, chunk):
+            parts_by_id = {}
+            for s in group:
                 with torch.no_grad():
-                    ev = evaluate_latent(
-                        parts.phi_dir.double(), fit.latent, target,
-                        sample.grid_h, sample.grid_w,
-                        guide_hi=(sample.guide_hi.to(self.device).double()
-                                  if sample.has_hi else None),
-                        target_hi=(sample.mask_hi.to(self.device).double()
-                                   if sample.has_hi else None),
-                        up_cfg=self.cfg.upsample,
-                    )
-                entry: dict[str, Any] = {
-                    "low": ev["low"], "hi": ev.get("hi"),
-                    "s_domain": ev.get("s_domain"),
-                    "winner_confidence": sample.meta.get("winner_confidence"),
-                }
-                per[r].append(entry)
-                if record_fits:
-                    row["eval"] = ev
-                rows.append(row)
-            n += 1
-            n_hi += int(sample.has_hi)
+                    parts_by_id[s.sample_id] = self._eval_phi(s)
+            self._phi_cache = parts_by_id
+            base = j + 1
+            tasks = []
+            for k, s in enumerate(group):
+                tasks.extend(self.fit_tasks([s], readouts, fit_cfg=cfg_fit, step=0))
+                tasks[-1].seed_offset = base + k       # unchanged: seed_offset = j
+            group_fits = self.run_fits(tasks, pool)
+            self._phi_cache = {}
+
+            for sample in group:
+                j += 1
+                parts = parts_by_id[sample.sample_id]
+                target = sample.mask_low.to(self.device).double()
+                for r in readouts:
+                    fit = group_fits[sample.sample_id][r]
+                    if fit.latent is not None:
+                        fit.latent = fit.latent.to(self.device)
+                    row = fit.to_dict() if record_fits else {"readout": r, "status": fit.status}
+                    row["sample_id"] = sample.sample_id
+                    row["meta"] = sample.meta
+                    if record_fits:
+                        row["phi_diag"] = parts.diag
+                    if not fit.usable:
+                        n_rejected[r] += 1
+                        reason = fit.reject_reason or "unknown"
+                        rejected_reasons[r][reason] = rejected_reasons[r].get(reason, 0) + 1
+                        rows.append(row)
+                        continue
+                    with torch.no_grad():
+                        ev = evaluate_latent(
+                            parts.phi_dir.double(), fit.latent, target,
+                            sample.grid_h, sample.grid_w,
+                            guide_hi=(sample.guide_hi.to(self.device).double()
+                                      if sample.has_hi else None),
+                            target_hi=(sample.mask_hi.to(self.device).double()
+                                       if sample.has_hi else None),
+                            up_cfg=self.cfg.upsample,
+                        )
+                    entry: dict[str, Any] = {
+                        "low": ev["low"], "hi": ev.get("hi"),
+                        "s_domain": ev.get("s_domain"),
+                        "winner_confidence": sample.meta.get("winner_confidence"),
+                    }
+                    per[r].append(entry)
+                    if record_fits:
+                        row["eval"] = ev
+                    rows.append(row)
+                n += 1
+                n_hi += int(sample.has_hi)
 
         def summarize(entries, res: str) -> dict[str, Any]:
             vals = [e[res] for e in entries if e.get(res) is not None]
