@@ -131,8 +131,8 @@ def aligned_pool(
     stats = {
         "n_invalid_slots": int((~is_valid).sum()),
         "invalid_fraction": float((~is_valid).float().mean()),
-        "log_mass_min": float(log_mass.min()),
-        "log_mass_max": float(log_mass.max()),
+        "log_mass_min": float(log_mass.detach().min()),
+        "log_mass_max": float(log_mass.detach().max()),
         "mask_conditioned": m_pred is not None,
         "stats_collected": True,
     }

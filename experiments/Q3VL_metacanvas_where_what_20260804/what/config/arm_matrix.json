@@ -3,12 +3,24 @@
  "protocol_amendments": [
   "A-1 (D-W1)",
   "A-2 (D-W9)",
-  "A-3 (D-W10)"
+  "A-3 (D-W10)",
+  "A-4 (D-W11 / NF-1)"
  ],
- "git_commit": "fef9f93f2834fa96167fc64db38b548b3fdc0f1a",
+ "git_commit": "ba9963e88e11066f9878df4e780086ee0c99173b",
+ "git_describe": "ba9963e-dirty",
+ "git_commit_note": "HEAD at generation time = the commit whose code produced these numbers",
  "python": "3.12.12",
  "torch": "2.10.0+cu128",
  "env": "/home/bc/envs/q3vl_sft/bin/python (campaign env)",
+ "context": {
+  "modes": [
+   "gt",
+   "generated"
+  ],
+  "selection_context": "generated",
+  "teacher_fraction": 0.5,
+  "color_context_max_tokens": 384
+ },
  "n_arms": 12,
  "arms": [
   {
@@ -19,6 +31,7 @@
    "is_ceiling": false,
    "mask_pool": false,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis"
    ],
@@ -40,6 +53,7 @@
    "is_ceiling": false,
    "mask_pool": true,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis",
     "f_roi",
@@ -63,6 +77,7 @@
    "is_ceiling": false,
    "mask_pool": false,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis",
     "z_where",
@@ -87,6 +102,7 @@
    "is_ceiling": false,
    "mask_pool": true,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis",
     "f_roi",
@@ -113,6 +129,7 @@
    "is_ceiling": false,
    "mask_pool": false,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis"
    ],
@@ -134,6 +151,7 @@
    "is_ceiling": false,
    "mask_pool": true,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis",
     "f_roi",
@@ -157,6 +175,7 @@
    "is_ceiling": false,
    "mask_pool": false,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis",
     "z_where",
@@ -181,6 +200,7 @@
    "is_ceiling": false,
    "mask_pool": true,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis",
     "f_roi",
@@ -207,6 +227,7 @@
    "is_ceiling": false,
    "mask_pool": false,
    "where_prefix": false,
+   "genctx_mode": "forced_color_prefix",
    "wc_tokens": [
     "global_vis"
    ],
@@ -228,6 +249,7 @@
    "is_ceiling": false,
    "mask_pool": false,
    "where_prefix": false,
+   "genctx_mode": "forced_color_prefix",
    "wc_tokens": [
     "global_vis"
    ],
@@ -249,6 +271,7 @@
    "is_ceiling": true,
    "mask_pool": true,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis",
     "f_roi",
@@ -275,6 +298,7 @@
    "is_ceiling": true,
    "mask_pool": true,
    "where_prefix": true,
+   "genctx_mode": "with_where_prefix",
    "wc_tokens": [
     "global_vis",
     "f_roi",
@@ -452,6 +476,7 @@
   "keep_last": 3,
   "seed": 20260804,
   "grad_ratio_every": 50,
-  "style_queue_size": 256
+  "style_queue_size": 256,
+  "teacher_fraction": 0.5
  }
 }
