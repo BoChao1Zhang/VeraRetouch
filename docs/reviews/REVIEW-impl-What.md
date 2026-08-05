@@ -1,0 +1,503 @@
+# REVIEW-impl-What：Stage-What 实现审阅
+
+- 审阅人：独立实现审阅 subagent（与实现者无共享上下文）
+- 日期：2026-08-05
+- 规格权威：`docs/METACANVAS_WHERE_WHAT_FINAL_EXPERIMENT_PROTOCOL_2026-08-04.md`
+  §2.2 / §2.3 / §6 / §7 / §8 / §9 / §10.4 / §12 / §14
+- 审阅对象：`q3vl/what/`（19 模块 + 11 测试文件 + 3 作业脚本），
+  `experiments/Q3VL_metacanvas_where_what_20260804/what/`（NOTES.md、
+  PREFLIGHT_WHAT_PENDING.md、config/arm_matrix.json、config/mock_e2e.json、
+  preflight/preflight_what.json）
+- git commit：`fef9f93`
+- 审阅方式：全量读码 + 独立复跑。未修改任何代码/数据，未使用 GPU
+  （Base SFT rank PID 3395226/3395227 全程未受干扰）。
+
+## 复跑记录（审阅人自己执行的，不采信实现者报数）
+
+| 动作 | 环境 | 结果 |
+|---|---|---|
+| `pytest q3vl/what/tests -q` | `/home/bc/envs/q3vl_sft/bin/python`（3.12.12 / torch 2.10.0+cu128） | **155 passed, 3 skipped**（skip = 缺 `skimage` / `colour` / `dataset_build.src.construct.rendering` 的 libstdc++ 问题） |
+| 同上 3 个 skip 的对拍 | `/home/bc/miniconda3/bin/python` | **全部 pass**（20 passed，含 colour-science 1e-9、dataset_build CPU oracle 1e-5、skimage Lab） |
+| `python -m q3vl.what.preflight --limit 400` | 战役环境 | **11 pass / 0 fail / 0 skip**，`ok=true, complete=true`，与 `PREFLIGHT_WHAT_PENDING.md` 声称的 11/11 逐项一致 |
+| `check_lut_unseen_disjoint()` 全量 index 扫描 | 战役环境 | **pass**：`T_lut_unseen` 259 LUT，与 train(3149)/V_where(530)/V_what(531)/T_final(577) 交集全 0 |
+| `check_gt_lut_resolves(limit=400)` | 战役环境 | **pass**：5 个 split 各 400 条，`n_missing = 0`（LUT 数 310/288/304/251/298） |
+| D-W1 独立重推（自写公式，不调用 `q3vl.what.gaussians`） | 战役环境 | `Σ_i q_i ∈ [0.9999975, 1.0]`；字面公式 `mean T(x)/x = 1.99999988`、`max|T−x| = 0.99984`；实现的 `residual_zero` `max|T−x| = 2.4e-6` |
+| `main_board` gate 行为构造性验证 | 战役环境 | 见 B-1，gate 未生效 |
+
+---
+
+## 一、D-W1 amendment 审定（最高优先，单列）
+
+### (a) 数学上确认字面公式确实产生 2x —— **确认**
+
+协议 §7.6 同时给出两句话：
+
+1. 「全局与局部 affine 都采用 identity-centered residual 参数化」；
+2. `T_pred(x) = clamp((I + ΔG) x + b_g + Σ_i q_i(x)·(M_i x + b_i), 0, 1)`。
+
+关键在 `q_i` 是**归一化**权重。实现的归一化式（与 GLUT 一致）为
+`q_i = o_i g_i N_i / (Σ_j o_j g_j N_j + ε)`，因此 `Σ_i q_i ≤ 1`，且在锚点覆盖良好时
+`Σ_i q_i → 1`（我实测 min 0.9999975 / max 1.0，ε=1e-6 只会让它**小于**1，永远不会大于 1）。
+
+于是当 `M_i = I + ΔM_i` 且 `ΔG = ΔM_i = b_g = b_i = 0` 时：
+
+```
+T(x) = (I)·x + Σ_i q_i(x)·(I·x) = x + (Σ_i q_i)·x ≈ 2x
+```
+
+我用**自己写的公式**（不经过 `q3vl.what.gaussians.render`）复算：`mean T(x)/x = 1.99999988`，
+不 clamp 时 `max|T−x| = 0.99984`（在 x→1 处）。这正是战役红线点名的
+「全局仿射 G 初始化 = 0 不是 I（否则 f(x)=2x）」。**实现者的发现成立，不是误读。**
+
+补充一个实现者没写出来的必要条件：这个失败是**零初始化**特有的。协议之所以能写出这个公式
+而不自觉，是因为它没有同时固定「输出头零初始化」。而输出头必须零初始化——否则第一步的
+`T_pred` 就是一个随机 LUT，`L_bake`（权重 0.10）会在训练开始就把一个随机函数烘进 33³ 格点。
+所以「identity-centered 局部 affine」+「零初始化头」+「归一化权重」三者是**联立不可能**的，
+必须改其中一条。
+
+### (b) 实现采用的修正是否正确且最小 —— **正确，且是最小改动**
+
+实现取 `GLOBAL_AFFINE_MODE = "residual_zero"`：
+
+```
+T_pred(x) = clamp( ΔG·x + b_g + Σ_i q_i(x)·(M_i x + b_i), 0, 1 ),   M_i = I + ΔM_i, ΔG|_{init} = 0
+```
+
+**正确性**：我把 `q3vl/what/gaussians.py::render` 与 `model/glut_repro/model_rdg.py::render`
+逐行对读，除命名（`gate`↔`existence`、`c`↔`b_g`）与 §7.6 新加的 `clamp` 外**逐项相同**：
+同一个前代换 Mahalanobis、同一个 log-max 外提、同一个 `eps_term = exp(clamp(-m, max=80))·1e-6`
+放在分母、同一个 `Σ_i w_i(M_i x + b_i) = (Σ_i w_i M_i)x + Σ_i w_i b_i` 展开。
+而 `model_rdg.py::render` 已由 `ci_checks_rdg.check_render_matches_batched_glut` 对拍
+`BatchedGLUT`（GLUT Eq.1-3）到 <1e-5。所以「等于 GLUT 官方渲染核」在本仓库是**测试**不是主张。
+零初始化恒等我复跑得 `max|T−x| = 2.4e-6`（交付 preflight 记 1.49e-6，同量级）。
+
+**最小性**：只有一项改变——`decode_global` 里 `G = 0.1·z` 而不是 `I + 0.1·z`。局部 affine 仍是
+§7.6 要求的 identity-centered，混合权重、归一化 ε、SPD 构造、clamp 全部不动。
+保留 `identity_centered` 分支**只**为让 2x 可被测量（`WT-P-zero-init-identity` 的 detail
+里同时记了 `literal_formula_unclamped_ratio = 2.0000`）。这是正确做法：把红线证据写成数字而
+不是注释里的论证。
+
+### (c) 修正是否改变协议的科学问题 —— **否，且可证明**
+
+两种写法的**函数族完全相同**：令 `G' = G + I`，则
+`{x ↦ (I+ΔG)x + b_g + Σ q_i(M_i x + b_i)}` 与 `{x ↦ ΔG'x + b_g + Σ q_i(M_i x + b_i)}`
+在 `ΔG, ΔG' ∈ R^{3×3}` 上取遍同一集合。差别**只在参数化的原点落在哪个函数上**。
+由于 decoder head 的第二个 Linear 零初始化，那个原点恰好就是初始化点。
+
+因此 amendment 改的是**初始化**，不是**假设类**：
+- 表达容量不变；
+- 每样本参数量不变（FG 1116 / SB 684，§7.4/§7.5 的数字都不动）；
+- §12 的任何指标定义不动；
+- §15 的五个论文问题一个都不动。
+
+**审定结论：D-W1 修正应予批准，并以 amendment 形式写回协议 §7.6。**
+理由不是「实现方便」，而是字面公式与本战役红线直接冲突且已被实测证伪；不改写协议的话，
+每一轮实现审阅都会在同一处撞墙，而且任何后来者照字面重写渲染器都会复现 f(x)=2x。
+
+### amendment 文本建议（可直接粘进协议）
+
+在 §7.6 末尾，把公式段替换为：
+
+> Gaussian 中心用 sigmoid 限定在 RGB cube；协方差由 Cholesky 构造并对角 softplus（带正下界
+> `σ_lo = 0.02`），保证 SPD；opacity/existence 使用 sigmoid。
+>
+> **局部** affine 采用 identity-centered residual 参数化 `M_i = I + ΔM_i`；**全局** affine 采用
+> **纯残差**参数化，`G` 零初始化（**不是** `I`）。令归一化权重为 `q_i(x)`（`Σ_i q_i ≤ 1`，
+> 分母含 `ε = 1e-6`），则：
+>
+> ```
+> T_pred(x) = clamp( G x + b_g + Σ_i q_i(x) * (M_i x + b_i), 0, 1 )
+> ```
+>
+> **为什么不是 `(I + ΔG)x`**：`q_i` 归一化意味着 `Σ_i q_i(x)·M_i x ≈ x` 已经在混合项里给出了
+> 恒等；若全局项再写成 `(I + ΔG)x`，零初始化时 `T(x) = 2x`——正是战役红线点名的失败
+> （实测 `mean T(x)/x = 2.0000`，见 `preflight_what.json::WT-P-zero-init-identity`）。
+> 本式与 `model/glut_repro/model_rdg.py::render`（已 CI 对拍 `BatchedGLUT` / GLUT Eq.1-3 到
+> 1e-5）逐项一致，零初始化恒等实测 `max|T(x)−x| ≤ 2e-6`。
+>
+> 该改写是**参数化原点**的改写，不是假设类的改写：`G' = G + I` 的重参数化使两式的可达函数集
+> 完全相同，表达容量、每样本参数量（FG 1116 / SB 684）与 §12 全部指标定义不变。
+>
+> 所有输出均可在固定 33³ RGB lattice 上求值并烘焙成标准 LUT。生产评测一律使用与交付一致的
+> tetrahedral interpolation 回读。
+
+并在协议末尾 changelog 追加：
+
+> **2026-08-05 · amendment A-1（D-W1）**：§7.6 的 `T_pred` 公式由
+> `(I + ΔG)x + b_g + Σ q_i(M_i x + b_i)` 改写为 `G x + b_g + Σ q_i(M_i x + b_i)`，`G` 零初始化。
+> 依据：字面式在零初始化时给出 `f(x) = 2x`（实测比值 2.0000），与战役红线冲突；改写为
+> `G' = G + I` 的重参数化，函数族不变、科学问题不变。由独立实现审阅
+> （`docs/reviews/REVIEW-impl-What.md` §一）审定。
+
+---
+
+## 二、逐项 pass / blocker / nit
+
+### 2.1 §9 Loss 逐符号（任务卡重点 2）
+
+| 项 | 判定 | 依据 |
+|---|---|---|
+| `L_func` 2048 点、50/50 uniform/natural | **pass** | `queries.py`：uniform 固定 8³ strata × 2 抖动点 = 1024，`UNIFORM_SEED` 单次抽取后全局共享；natural 1024 对 `(seed, sample_id)` 用 sha256 确定。总 loss 对 2048 点取平均，故 50/50 由构造保证而非加权 |
+| Charbonnier | **pass** | `sqrt(d²+ε²)`，ε=1e-3（D-W8 已声明） |
+| uniform / natural 分别报告 | **pass** | `loss_func` 每步写 `L_func_uniform` / `L_func_natural`；`evaluate.sample_row` 也按 kind 分列 |
+| `L_hc` 归一化 chroma 加权 hue cosine | **pass** | `normalised_chroma` 除以**全局常量** `√2`，非逐图/逐 batch 最大值（红线「s 禁逐图归一化」的同类纪律）；hue 差用 `(a1a2+b1b2)/(C1C2)` 避开 atan2 分支切割 |
+| Lab 归一化的单位契约 | **pass** | `colorspace.py` 只暴露两种 Lab，`srgb_to_lab_norm = (L/100, a/128, b/128)` 是唯一允许进 loss 与 `v_i` 的形式。preflight 实测放大倍数 L=100.0、a/b=128.0，`lab_norm_abs_max = 0.977` |
+| `grad_norm(L_func)` vs `grad_norm(10·L_hc)` 记录 | **pass** | `losses.grad_norm_ratio` 用真实两次 backward；trainer 每 50 步（含 step 0）写进 `steps.jsonl`。这是能在第一步抓住 A0 那次 229 倍事故的唯一手段 |
+| `R_sparse` | **pass** | `0.5·(mean be(opacity) + mean be(existence))`，与协议 `mean(be(o)+be(e))/2` 等价 |
+| `L_style_cos` | **pass** | `1 − cos(z_style, z_gt)` |
+| `L_style_dist` | **BLOCKER B-3** | 见下 |
+| `L_var` / `L_cov` | **pass** | `L_var = mean relu(1 − std_d)`（VICReg 式 `std = sqrt(var+1e-4)`）、`L_cov = Σ off-diag² / d`，与协议字面一致 |
+| stop-gradient FIFO queue（单卡臂 → 该分支为操作分支） | **pass** | `StyleQueue` 固定 256 / 暖机 32，只 push `detach()`，类里没有任何逐臂旋钮（§9.3 末句「队列内容和更新规则对所有 arm 固定」被结构性满足）。queue 在 loss 之后 push，当前 batch 不会自己统计自己两次 |
+| `L_bake` 同批查询点、bake_33 + tetra 回读、可微 | **pass** | `bake_readback(params, cfg, x)` 用同一 `x`；`bake` → `tetra_lookup` 全程可微，`compute_batch` 复用同一个 `t_read` 供 loss 与 `bake_metrics`，不会出现「loss 用一份、指标用另一份」 |
+| 权重 1.00/10.00/0.001/0.05/0.05/0.02/0.10 | **pass** | `config.LOSS_WEIGHTS` 逐值，测试逐值断言，`arm_matrix.json` 也落盘 |
+| `I_tar` 不进 `L_what` | **pass** | `compute_loss` 签名里没有任何图像参数；`WhatDataset.load_target_image` 的唯一调用方在 evaluate 路径 |
+
+### 2.2 SRHT `z_gt`（任务卡重点 3）
+
+**pass**。`Φ = sqrt(n/k)·S·H·D`：`D` 为 ±1 对角、`H` 为归一化 Walsh-Hadamard（FWHT 后除 `sqrt(pad)`）、
+`S` 为 `randperm(pad)[:k]` 的无放回行采样、`scale = sqrt(pad/k)`。这是标准 JL 构造，
+`E‖Φv‖² = ‖v‖²` 成立。实测（我复跑）：跨实例逐位相同（`reconstruction_max_abs_diff = 0.0`）、
+距离比 mean 1.00006 / 区间 [0.935, 1.073]、`z_gt` 单位范数。17³ grid 与 `lattice_points` 同序
+（R 最慢），`u(T)` 对恒等 LUT 严格为 0。`mean_train_u` 只用 train 的 `lut_id`——
+`scripts/make_zgt_center.py` 把这条写死在 `TRAIN_SPLIT` 常量与 `center_report.json` 里，
+并在模块 docstring 里说明「若用全语料求中心，§2.2 的 unseen-LUT 说法作废」。
+`SRHT` 刻意不是 `nn.Module`，无法被误收进 optimizer group。`digest()` 存在，可跨机核对。
+
+一处残余风险（已被 digest 覆盖，故不列 nit）：`torch.randperm` 的实现在 torch 大版本间理论上
+可变，此时 `digest` 会变，因此会被发现而不是静默漂移。
+
+### 2.3 §7.3–7.5 结构（任务卡重点 4）
+
+| 项 | 判定 | 依据 |
+|---|---|---|
+| 2 seed + 4 refinement | **pass** | `BackendConfig.seed_blocks=2 / refine_blocks=4`；`_BaseGenerator.forward` 的次序就是 `run_seed → seed_geometry → pool_fn → run_refine → heads` |
+| 每 block 512 / 8 heads / FFN 2048 / pre-norm | **pass** | `SlotBlock`：ModLN(pre) → self-attn → gated cross(M_color) → gated cross(WC) → gated v_i → ModLN → FFN |
+| provisional geometry → aligned pooling → refinement 的梯度通路 | **pass（附 N-6）** | `pool_fn(geom)` 里没有 detach，梯度确实能回到 provisional head。实现者自己指出并测试了零初始化门的后果：第 0 步 `gate_v = 0` 使 `∂loss/∂v = 0`，此时有梯度的是 `gate_v` 本身；门离开 0 后通路打开。测试拆成两条（`test_the_v_gate_receives_gradient_at_step_zero` / `test_gradient_reaches_the_provisional_geometry_through_the_pooling`）而不是把断言放宽——这是正确处理 |
+| zero-init gated residual 恒等断言 | **pass** | 三个 gate（color / wc / v）都是零初始化标量；`SlotHeads.w2`、`b2`、`global_head[-1]` 全零初始化，故 `z_prim = z_glob = 0` → `T(x) = x`（实测 1.49e-6） |
+| ModLN | **pass** | `LayerNorm(elementwise_affine=False)` + 零初始化 `Linear(1024, 2·512)`，初始即普通 LayerNorm；每子层独立一份（RD-G / PLAN 1.4 先例） |
+| 48 独立 head + global head | **pass** | 批量参数 `(48, in, out)` 的 einsum，不共享任何权重；测试断言 head i 的输出只依赖 slot i。global head 读 `[mean_i h_i, P(z_style)]` |
+| FG/SB 参数量差 0.013% | **pass（复算通过）** | 我手算：`in_dim = 512+128 = 640`；FG 增量 = 48·(640·128+128+128·23+23) + (640·128+128+128·12+12) + 48·(512·9+9) = 4,385,932；SB 增量 = 32093·b + 1116，b=137 → 4,397,857；差 **11,925**。与 `arm_matrix.json` 的六对 `abs_diff = 11925`、`rel_diff = 1.27e-4 ~ 1.31e-4` 完全一致。preflight WT-W4 在战役环境复跑亦得 61,394,716 / 61,406,641 |
+| `solve_sb_bottleneck` 的搜索正确性 | **pass** | 目标函数在 b 上严格单增，`elif value > target: break` 的提前退出在 b=138 才触发（b=137 时 err=11,925 < b=136 的 20,168），不会漏掉最优 |
+| SB shared geometry：4×4×3 anchors 初始化 | **pass** | `anchor_points` 取**cell 中心** `(i+0.5)/n`——因为 `mu` 过 sigmoid，0.0/1.0 没有有限前像。`GeometryBank.raw` 零初始化 → `mu = anchor`、`σ = σ_init` |
+| SB shared geometry 独立 lr | **pass** | `_group_of("generator.geometry.raw") → "geometry" → 5e-5`；`_no_decay` 命中 `"geometry" in name` → 无 WD |
+| FG/SB 同深同宽同 query 数 | **pass** | 两者共用同一个 `SlotBackend(cfg)`，唯一差别是 head 的 `n_out`(23/14)、bottleneck 与 provisional head / GeometryBank |
+
+### 2.4 参数域与 D-W2（任务卡重点 5）
+
+**pass**。`mu = sigmoid(z + logit(anchor))`（闭 cube，且 z=0 时回到锚点，而不是 48 个中心叠在 0.5）；
+`σ = 0.02 + softplus(raw + softplus_inv(0.18))`，`raw=0` 时 σ=0.20，严格正下界保证 SPD 与条件数；
+`off` 只缩放不约束（下三角，SPD 只需对角为正）；opacity/existence 走 sigmoid，偏置 −2 / +4 沿用
+RD-G（恒等 CI 依赖 gate 是**公因子**、在归一化器里消去——这条实现者引用得准确，
+`render` 里 `og = opacity * existence` 确实在分子而非载荷上）；输出 `clamp(0,1)`。
+preflight WT-P12 实测 `mu_in_cube=True`、`σ ∈ [0.031, 1.418]`、`Σq_i ∈ [0.9999965, 1.0000002]`、
+两组 raw 的梯度全有限。
+
+D-W2 的裁定（`softplus_floor`）已落实为默认；`bounded_sigmoid`（RD-G 已验证的 `0.02+0.48·sigmoid`）
+保留为一常量之隔的开关，两条路径都有域测试。**主 agent 已裁定 softplus_floor，实现与裁定一致。**
+提醒结果审阅：softplus 无上界，实测已出现 σ=1.42（远大于 RGB cube 的边长 1），
+此时该 Gaussian 近似均匀覆盖全 cube、退化为一个额外的全局 affine 分支。这不是 bug，
+但「48 个基元有多少个塌成全局项」应当作为 §12.3 的一个读数记录（见 N-6 的同类建议）。
+
+### 2.5 WC 接口 §6 四种 + C01–C04（任务卡重点 6）
+
+| 项 | 判定 |
+|---|---|
+| WC-0/1/2/3 的 token 集与 `mask_pool` 与 §6 表逐行一致 | **pass**（`config.WC_INTERFACES`；WC-1/WC-3/ORACLE 开 mask_pool，WC-0/WC-2/NOWHERE 不开） |
+| `F_roi` / `F_bg` 公式 | **pass**（`roi_bg_pool` 与 §6 逐符号一致，含 padding 处理） |
+| D-W4（WC-0 不吃 `m_pred`） | **模型输入侧 pass，loss 侧 BLOCKER B-5** |
+| D-W5（oracle `z_where` 用 `OracleLatentEncoder(w*, ρ*)`） | **pass**。把**预测的** query state 喂给 oracle 臂会让上界不成其为上界；实现拒绝这么做，并在 `WCEncoder.facts()["z_where_from"]` 记 `"oracle_latent"` |
+| D-W6（C01/C02 图像指标仍用冻结 `m_pred` 合成） | **pass（附 N-5 标签问题）**。`evaluate.py` 模块 docstring 写明理由，每行记 `composite_mask` |
+| oracle 输入只进 ceiling control 的隔离 | **pass**。`ARMS` 里只有 C03/C04 是 `"oracle"`；`preflight.check_no_target_leak` 断言 `{oracle arms} == {C03, C04}`；`evaluate.main_board` 用 `is_ceiling` 把两臂剔出主榜，`ceiling_board` 单列 |
+| `Q_color` 不读 `H_where` | **pass**。`ColorStack.forward(h_color, h_color_mask)` 签名封闭并被 preflight 断言；`color.py` / `attention.py` 的 AST 标识符里不存在含 `where` 的名字（`torch.where` 按**限定名**放行，故裸 `where` 局部变量仍会被抓）。`attention.py` 刻意重写而不 import Where-B 的 connector，正是为了让这个证明是结构性的 |
+
+### 2.6 `T_gt` 管线（任务卡重点 7）
+
+**pass**。
+
+- `preset_path` → `dataset_build.lut_io.load_lut` → **一次**转置 `(2,1,0,3)` 到 `table[r,g,b]`，
+  之后全链路不再记轴序。`test_cube_round_trip_axis_order` 用真实 `.cube` 回读——考虑到
+  `render_backend` 2026-07-17 修过一次 `f(B,G,R)` 轴序 bug，这个测试是必要的而不是装饰。
+- **按原生网格求值**：`GtLutTable` 不重采样，`_corner_setup` 用 `K = table.shape[1]`，
+  16/25/32/33/64/65 各尺寸都按各自的 K 插值。
+- **拒绝 npy33 缓存**：全包 grep `npy33` / `dcube` 零命中；NOTES V-W12 给了拒绝理由
+  （用重采样到 33³ 的缓存会把 32³/64³ 原生表的重采样误差注入监督目标）。这条判断正确。
+- **D-W3（三线性监督 / 四面体并排）**：`GT_LUT_INTERP = "trilinear"`，与 `I_tar` 的生成方式
+  （`grid_sample(mode="bilinear", align_corners=True, padding_mode="border")` 及其 CPU oracle）
+  一致；四面体口径由 §12.1 的并排指标与 `L_bake` 始终报告。**主 agent 已裁定三线性，实现一致。**
+  `z_gt` 与 `t_gt` 用同一个 `gt_interp`，不会出现两套定义。
+- **`T_lut_unseen` 的 lut_id 隔离强制**：`WT-W2` 是**全量 index 扫描**（不是抽样），我独立复跑
+  得 259 / 0 / 0 / 0 / 0。§2.2 的「unseen LUT generalization」说法成立。
+- 无法解析 `T_gt` 的样本走 `LutBank._load` 的 `KeyError`，错误信息明确写「必须拒绝样本，
+  不得用伪造目标训练」——符合「失败样本进入显式 rejection，不静默换成零向量」的纪律。
+
+### 2.7 跨实现对拍的证据力（任务卡重点 8）—— **pass，且不是自证**
+
+我逐条确认这三组对拍的**对照方是外部或生产代码**，不是本包自己的另一份拷贝：
+
+| 对拍 | 对照方 | 是否外部 | 我复跑结果 |
+|---|---|---|---|
+| 三线性 | `dataset_build.src.construct.rendering.apply_lut_cpu_oracle` | **是**——这就是生产 `I_tar` 的那份算术；测试还刻意把本包的 `[r,g,b]` 表转置成 `[b,g,r]` 再喂给对照方，等于同时验证了轴序 | pass（base 环境，<1e-5） |
+| 四面体 | `colour.algebra.table_interpolation_tetrahedral` | **是**——第三方库 colour-science | pass（base 环境，<1e-9，double 精度） |
+| 四面体 | `model/glut_repro/model_rdg.py::tetra_lookup` | 同仓库，但该实现已由 `ci_checks_rdg` 独立对拍 colour-science | pass（<1e-6） |
+| Lab / ΔE00 | `model/glut_repro::srgb_to_lab` / `delta_e00`，以及 `skimage.color.rgb2lab` | skimage 为外部 | pass（glut_repro <1e-4；skimage 差 ~0.015 Lab 单位，NOTES V-W9 已定位为**白点约定**差异而非精度，选择与本仓库既有实现一致——这个归因我核对过，`_XN = 0.3127/0.3290` 是色度导出值，skimage 用 ASTM 表值） |
+
+我另外独立验证了四面体的 6 个 case 覆盖全部 6 种大小序、两两互斥，且每个 case 的四个顶点与
+权重 `(1−a, a−b, b−c, c)` 均为标准 Kasson 分解——即使没有外部库也站得住。
+
+三个 skip 只发生在战役环境（缺 `skimage`/`colour`，`dataset_build.src.construct.rendering`
+因 libstdc++ 版本 import 不了）。生产路径只用 `dataset_build.lut_io`（纯 numpy），不受影响。
+**结论：对拍证据力充分。**
+
+### 2.8 §12 评测与 gate 脚本、§12.4 字典序、hidden 口径（任务卡重点 9）
+
+| 项 | 判定 |
+|---|---|
+| §12.1 指标齐备（MAE/RMSE/PSNR、ΔE00 mean/median/p90/p95、hue/chroma、analytic vs baked、out-of-range、non-finite） | **pass** |
+| bake gate 三条阈值常量 | **pass**（`BAKE_GATE = 1e-4 / 5e-4 / 0`，逐值断言） |
+| bake gate 的聚合口径 | **pass**（`bake_err_p99` 取全 arm 的 **max**、`bake_non_finite` 取 max，不是平均掩盖） |
+| §12.2 分区（内部/3px 边界带/外部）与分层 | **pass**（`boundary_band` 用 max_pool 膨胀−腐蚀；`STRATA_KEYS` 覆盖 build/render_mode/winner_confidence/upscaled/mask_area/L-level） |
+| §12.2 LPIPS | **pass（诚实缺项）**——无后端时报 `nan` 并显式列在 `PREFLIGHT_WHAT_PENDING.md` 的 `WT-G7`，不做静默替代 |
+| §12.4 只在 `V_what` 选择 | **pass**——`main_board` 对非白名单 split 抛 `PermissionError`，「我们偷看了 T_final」必须是一次刻意的传参 |
+| §12.4 字典序键与方向 | **pass**（`SELECTION_ORDER` 五键、全部 smaller-is-better） |
+| §12.4 step 1（gate 作为选择前置） | **BLOCKER B-1** |
+| 每 arm 只有一个 checkpoint 进跨臂排名 + top-2 必须是两个不同配置 | **pass**（`best_per_arm` + `top2_distinct_arms`） |
+| checkpoint 选择禁用 val loss（红线） | **pass**——`WhatTrainer.best` 只按 `evaluate` 产出的榜单键排序，docstring 明写「never eval_loss」 |
+| hidden 口径 import `q3vl/whereb/contracts.py` | **pass**——`config.py` 由 `from q3vl.whereb.contracts import ...` 引入并改名 `COLOR_HIDDEN_*`，无重声明；`WhatVLM.__init__` 的默认值取自该常量。whereb 侧扫描测试的 root 是 `q3vl/whereb`（不覆盖 what），本包自带了同型的 what-root 扫描测试，两者都过（见 N-13） |
+
+### 2.9 12 臂 arm_matrix 与 §8 表逐行对照（任务卡重点 10）—— **pass**
+
+| §8 表 | `config.ARMS` / `arm_matrix.json` | 一致 |
+|---|---|---|
+| T01 WC-0 + FG48 | `("WC-0","FG48","predicted")` | ✓ |
+| T02 WC-1 + FG48 | ✓ | ✓ |
+| T03 WC-2 + FG48 | ✓ | ✓ |
+| T04 WC-3 + FG48 | ✓ | ✓ |
+| T05 WC-0 + SB48 | ✓ | ✓ |
+| T06 WC-1 + SB48 | ✓ | ✓ |
+| T07 WC-2 + SB48 | ✓ | ✓ |
+| T08 WC-3 + SB48 | ✓ | ✓ |
+| C01 NoWhere-FG48 | `("NOWHERE","FG48","none")`，`where_prefix=False`、`mask_pool=False` | ✓ |
+| C02 NoWhere-SB48 | 同上 SB | ✓ |
+| C03 OracleWhere-FG48 | `("ORACLE","FG48","oracle")`，`is_ceiling=True`，六 token 全给 | ✓ |
+| C04 OracleWhere-SB48 | 同上 SB | ✓ |
+
+12 臂全部可构造并前向（preflight `WT-P-arm-matrix` pass，我复跑确认）。
+`4 WC × 2 generator + 4 control = 12`，无减配、无混用。
+
+### 2.10 §10.4 优化器 —— **pass**
+
+三组 lr（backend/head 1e-4、geometry 5e-5）、WD 0.01、warmup 0.03、cosine、clip 1.0、bf16、
+effective batch 32（`grad_accum()` 在 micro 不整除时直接抛错）、1 epoch、eval/save 500、
+keep 3、保护 0.5/1.0 epoch —— 全部逐值落实并有测试。`_no_decay` 覆盖 geometry / bias /
+LayerNorm / **ModLN**（`".mod_"` 匹配到 `mod_self`/`mod_q_color`/`mod_q_wc`/`mod_ffn` 的
+`proj.weight`），逐参数断言存在。
+
+---
+
+## 三、BLOCKER 清单（6 项）
+
+### B-1 · §12.4 step 1 的 gate 根本没有参与选择
+**位置**：`q3vl/what/evaluate.py::main_board`（L191-201）、`lexicographic_best`。
+**事实**：`gate_pass` 只被写进行里和 `any_gate_failed`，既不参与「每臂选一个 checkpoint」，
+也不参与跨臂排序。我构造性验证：
+
+```
+两臂：T01 gate_pass=False / dE00=1.0，T02 gate_pass=True / dE00=2.0
+→ ranked = [('T01', False), ('T02', True)]，top2 第一名是 gate 未过的臂
+同一臂：step500 gate_pass=False / dE00=1.0，step1000 gate_pass=True / dE00=1.5
+→ 进榜的是 step500（gate 未过）
+```
+
+§12.4 明写「**先**满足 bake gate、finite gate 和 instruction-shuffle 正向依赖」。这是过滤器，
+不是标签。考虑到 R1（bake gate 可能所有臂都过不了），正确形态是：把 `gate_pass` 作为
+字典序的**首键**（过 gate 的一律排在未过的前面），全部未过时仍出排名但整榜打
+`WHAT-GATE-FAILED` 标记——与 §5.6 给 Where 的 `WHERE-GATE-FAILED` 同构，也正好落实
+主 agent「gate 不得事后放宽，不过则按 §15 分阶段报告」的裁定。
+**修法**：`main_board` 的两处排序键前置 `not r.get("gate_pass")`；board 级加 `tag`。
+
+### B-2 · 滚动删除会删掉将被选中的 checkpoint
+**位置**：`q3vl/what/trainer.py::_roll`（L310-316）。
+**事实**：`keep_last=3`，`save_steps=500`，约 4975 步 → 约 9 次普通保存，前 6 次被 `unlink`。
+`_eval_and_record` 只把指标写进 `state.checkpoints`，不引用 checkpoint 文件，也不把当前最优
+标记为 protected。于是若某臂的 `V_what` 最优出现在 step 500–3000，选择时文件已不存在。
+§10.4 明写「被选中和保护的 checkpoint 不受滚动删除影响」；§12.4「同一 arm 的多个 step 只保留
+最佳 checkpoint 进入跨 arm 排名」也预设文件还在。Where-B 的 trainer 根本没有滚动删除，
+这个风险是 Stage-What 新引入的。
+**修法**：`_eval_and_record` 之后按 §12.4 键重排 `state.checkpoints`，把当前最优对应的
+`saved` 条目置 `protected=True`（并把被它替下的还原为普通）；或直接 `keep_last=None`
+（9 个 checkpoint × 约 0.4 GB ≈ 3.5 GB/臂，代价可接受）。
+
+### B-3 · `L_style_dist` 的 `d_func(T_i, T_j)` 被替换成 `d(z_gt_i, z_gt_j)`，且未声明
+**位置**：`q3vl/what/losses.py::loss_style_dist`（L127-146）。
+**事实**：协议 §9.3 写 `L_style_dist = Huber(d_style(i,j), d_func(T_i, T_j))`。实现两侧都用
+**L2 归一化后**的码：`d_func := ‖ẑ_gt_i − ẑ_gt_j‖`。因为 `z_gt = L2Norm(SRHT(u − mean))`，
+归一化把 `u(T) = T(x) − x` 的**幅度**信息全部丢掉：两个只差强度（比如同一 look 的 50% 版本）
+的 preset，其 `d_func` 在这个替换下为 0，而真实函数距离很大。本仓库语料是 Lightroom preset，
+强度变体是常见的。
+叠加 `L_style_cos` 也只管方向，结果是 **`L_what` 里没有任何一项监督 `z_style` 的编辑幅度**。
+这不是笔误级别的自由度：它改变了 §15 问题 5（连续函数码能否泛化）的答案含义。
+而且它**不在** NOTES 的 D-W1…D-W8 待决策清单里，属于对冻结公式的**未声明**替换；
+§9.5 禁止事后改 loss，所以必须现在定。
+**修法（二选一，需主 agent 裁定）**：
+(a) `d_func := ‖u_i − u_j‖ / c`，`c` 为 train 集上 `‖u_i − u_j‖` 的 RMS，与 `mean_train_u`
+一起在 `make_zgt_center.py` 里算好并发布（一个常量，不逐 batch、不逐图，不触红线）；
+`d_style := ‖ẑ_style_i − ẑ_style_j‖`。
+(b) 明确批准「用归一化码距离作为 `d_func`」，写进 amendment，并在 REPORT 中声明
+`z_style` 不携带幅度信息。
+我倾向 (a)：它才是协议字面，并且顺带解掉 B-4。
+
+### B-4 · §12.3 的防坍缩诊断与它要检验的 loss 同源（循环论证）
+**位置**：`q3vl/what/metrics.py::style_diagnostics`（L230-237）。
+**事实**：`z_dist_spearman_vs_gt` 用的正是 `L_style_dist` 直接优化的那组 `z_gt` 成对距离。
+§12.3 要求的是「`z_style` pairwise distance 与 **GT LUT function distance** 的 Spearman 相关」。
+用被优化的目标当独立证据，这个诊断在 0.05 权重下仍然会偏高，无法回答「码是否真的编码了函数」。
+**修法**：与 B-3 同一处修——把真实 `u` 距离（或其发布的成对尺度）带进 target dict，
+Spearman 对它算；两者都报也可以，但独立那个必须存在。
+
+### B-5 · C01/C02 与 T01/T05 有**两处**差别，与已裁定的 D-W4 矛盾
+**位置**：`q3vl/what/data.py::WhatBatchBuilder.query_points`（L357-364）+ `_where_signals`（L436-440）。
+**事实**：D-W4（主 agent 已按保守默认采纳）声明「T01/T05 与 C01/C02 的**唯一**差别就是语言
+序列里还有没有 `<where>` 段」。模型输入侧确实做到了。但 §9.1 的 natural 半区采样：
+
+```python
+w = None if sample.is_global else m_hi          # data.py:360
+```
+
+对 `where_source == "none"` 的 C01/C02，`WhereSignals(source="none")` 的 `m_hi is None`，
+于是 local 样本也退回**全图**采样；而 T01/T05（`where_source="predicted"`）拿到 `m_hi`，
+按 `m_pred` 加权采样。两臂的 **loss 查询色分布不同**，这是第二处差别，且未声明。
+C03/C04 同理（按 **GT mask** 加权），使 ceiling 臂的目标分布又是第三种。
+**修法（需主 agent 裁定）**：§9.1 的 `m_pred` 是**监督侧**的冻结量，与 `T_gt` 同性质，不是
+模型输入；§9.5 又说「该配方是所有 12 个 What 臂的统一起点」。因此正解是
+(a) 让 12 臂**都**用同一个冻结 Where 的 `m_pred` 加权 natural 半区（C01/C02 也照常跑
+`WhereRunner`，只是其输出不进模型）；备选 (b) 保留现状但登记为新决策项 D-W9，并在每条
+per-sample 记录里写 `natural_weighting` 字段。我倾向 (a)——它才让 C01/C02 是干净的下界。
+
+### B-6 · Where checkpoint digest 校验被写进文档，但代码里不存在
+**位置**：`q3vl/what/scripts/run_what.py`（docstring L6-10 与 L100-110）；NOTES §七同款描述。
+**事实**：docstring 写「its digest goes into `run_setup.json` and a mismatch with a previous
+arm's record is a hard stop」。实际只记录了 `path` / `where_arm` / `step` / `basis_digest`
+（**basis** 的 digest，不是 Where checkpoint 的），也没有任何跨臂比对。§6 要求
+「Where checkpoint 对所有 What arm 完全相同且冻结」——12 个臂跨 4 个 wave 分批起跑，
+这正是最容易出错的地方，而现在没有任何机制会发现。
+**修法**：`sha256` checkpoint 文件写进 `run_setup.json`；启动时扫描 `RUN_ROOT/*/run_setup.json`，
+digest 不一致即 `SystemExit`。
+
+---
+
+## 三-bis · 审阅过程中由审阅人造成的一次事故（自我披露）
+
+审阅初期我执行了 `python -m q3vl.what.preflight --no-data`，**没有注意到该脚本 `--out` 的
+默认值就是交付目录** `experiments/.../what/preflight/`。这次运行把交付的
+`preflight_what.json` 覆盖成了一份 `--no-data` 的产物（9 pass / 2 skip / `complete: false`）。
+我一度据此写下一条「文档声称 11/11、落盘却是 9+2」的 blocker——**那条是我自己造成的，
+不是实现者的缺陷**，现已撤销。
+
+发现方式：文件 mtime 07:55:36 与同目录其它交付物 07:38–07:44 相差 11 分钟，恰好落在我第一次
+运行的时刻。
+
+处置：我在战役环境按 `PREFLIGHT_WHAT_PENDING.md` 记录的原命令 `--limit 400` 重跑并覆盖回去，
+现在文件是 `ok=true / complete=true / 11 pass / 0 fail / 0 skip`，`WT-W1` 与 `WT-W2` 的 detail
+与文档声称的数字逐项一致。**实现者的 preflight 声明经核实为真。**
+
+由此得到一条对实现者的改进建议（列为 N-16）：**preflight 脚本的 `--out` 默认值不该是交付目录**。
+任何人跑一次带默认参数的 preflight 就会静默覆盖交付证据，而覆盖后的文件看起来完全正常
+（`ok: true`），只有 `complete` 字段和 `skipped` 列表会变——这正是本战役 s 缓存契约里
+说的「第二种失败模式是静默的」。建议默认写到 run_dir 或要求显式 `--out`，
+并在写入前对已存在的文件做 `complete` 降级检查（从 complete=true 覆盖成 complete=false 应拒绝或备份）。
+
+---
+
+## 四、NIT 清单（16 项）
+
+- **N-1**：`config/arm_matrix.json` 与 `config/mock_e2e.json` 的环境戳是 `python 3.13.5 /
+  torch 2.6.0+cu124`（base conda），不是战役环境（3.12.12 / 2.10.0+cu128）——与主 agent 裁定
+  R3（正式作业一律 q3vl_sft）不符。参数量我在战役环境复跑得同值（61,394,716 / 61,406,641），
+  所以没有错数字，但两份交付物的 provenance 应重新生成。
+- **N-2**：`colorspace.hue_cos_diff` 的 docstring 说灰点「yields 0」；实际返回 1.0
+  （`cos = 0/(ε·ε) = 0`）。复合的 `L_hc` 仍≈0（因为 `normalised_chroma ≈ 7e-7`），loss 正确，
+  注释错误。改注释即可。
+- **N-3**：`pooling.aligned_pool` 每次前向都做 `torch.isfinite(v).all()` 断言并把 6 个
+  `int()/float()` 统计取回主机——每 micro-batch 一次 device sync。改成按 `log_every` 周期检查。
+- **N-4**：`WhereSignals.m_hi` 标注 `torch.Tensor | None`，两个生产者（`WhereRunner.signals`、
+  `_oracle_signals`）都返回 `list[Tensor]`（各图网格不同，无法 stack）。标注应改。
+- **N-5**：`evaluate.sample_row` 的 `composite_mask` 只有 `"predicted"` / `"ones"` 两值，
+  于是 C03/C04 的 **GT mask** 会被记成 `"predicted"`。D-W6 让这个字段成为审计凭据，标签必须准。
+  加一个显式的 `mask_source` 入参。
+- **N-6**：FG48 用 **provisional** geometry 做 aligned pooling，用 **refined** geometry 渲染，
+  两者之间没有任何约束项。这是 §7.4 的字面读法，实现无误；但训练后两套 geometry 可能分道扬镳，
+  届时「每个 Gaussian 对应的真实颜色分布」（§7.2）就不再成立。建议把
+  `mean‖mu_prov − mu_refined‖` 与 `σ` 的同类差写进 `steps.jsonl`，供结果审阅归因。
+  同处建议：记录 σ 越过 cube 边长（>1.0）的基元数——softplus 无上界，preflight 已见 σ=1.42。
+- **N-7**：`arm_metrics["lut_de00_p90"]` 实为「每样本 p90 的跨样本中位数」。§12.4 的
+  「LUT function CIEDE2000 p90」更自然读作汇总分布的 p90。二选一并写进 REPORT，或两者都报。
+- **N-8**：`instruction_shuffle_delta` 比较两组聚合中位数，不是**配对**差。同一批样本本来就
+  两次都跑，改成配对差是免费的，且严格更强。
+- **N-9**：§12.3 的 **image-shuffle** 负控制、**WC-1/2/3 相对 WC-0 的 paired improvement**、
+  以及 §10.4/§12.4/§13.1 的 **paired bootstrap 95% CI** 都未实现。image-shuffle 已列
+  `WT-J4`；后两项**没有出现在任何 pending 清单里**。请补进 `PREFLIGHT_WHAT_PENDING.md`。
+- **N-10**：§12.1/§13 要求最终图像同时给 analytic render 与 **33³ baked render**；
+  `sample_row` 只渲染 analytic（bake 只在 LUT 函数层面对比）。交付前需补，且当前不在 pending 清单。
+- **N-11**：渲染器参数（`mu/sigma/off/M/b/G/b_g`）是在 bf16 autocast 区内解码的，
+  `compute_batch` 才 `.float()`。docstring 的「renderer 之后全 float32」成立，但**喂给** renderer
+  的参数带 bf16 舍入（相对约 4e-3）。这对 bake gate 无影响（analytic 与 baked 用同一份参数），
+  属标准混合精度；但 `WT-G6` 应把 `out.params` 与 `aligned_pool` 内 Mahalanobis 的实测 dtype
+  一并记录，不要只查外层 autocast 泄漏。
+- **N-12**：`StyleQueue` 把 256×1024 保存在 CPU，每个 micro-batch `.to(device)` 一次
+  （约 1 MB/step）。放在 device 上即可。
+- **N-13**：hidden 契约的重声明扫描存在两份（whereb-root 与 what-root），各自只覆盖自己的包，
+  未来第三个阶段仍会漏。建议把扫描提到 `q3vl/` 根的共享 helper。
+- **N-14**：`Batch.check_inputs` 只校验键名，不校验 `where.source` 与 `cfg.where_source` 一致。
+  主臂被塞进 oracle `WhereSignals` 不会报错（现有 sanctioned 路径不会发生，但 §8.2 值得一行断言）。
+- **N-15**：`lexicographic_best` 平局取第一个参数，于是 `main_board` 的每臂循环在完全平局时
+  偏向**较晚**的 checkpoint。无害，但应显式写明。
+- **N-16**：`q3vl/what/preflight.py::main` 的 `--out` 默认值是交付目录
+  `REPORT_DIR / "preflight"`。任何人跑一次默认参数的 preflight（尤其带 `--no-data`）就会
+  **静默覆盖**交付证据，且覆盖后的文件仍然 `ok: true`，只有 `complete` 与 `skipped` 会变
+  ——审阅人本人就踩了这个坑（见 §三-bis）。建议默认写 run_dir 或强制显式 `--out`，
+  并在覆盖前拒绝 `complete: true → false` 的降级（或先备份）。
+
+---
+
+## 五、值得表扬的做法（供后续任务卡复用）
+
+1. **红线冲突被做成可测量的数字而不是注释里的论证**：`identity_centered` 分支保留下来，
+   专门用于让 `T(x)=2x` 出现在 `preflight_what.json` 的 detail 里。
+2. **「证明」是结构性的而不是约定性的**：§14.8 用 AST 标识符扫描 + 封闭 forward 签名，
+   并且 `attention.py` 刻意重写而非 import Where-B 的 connector——正是为了让「一个 import 边
+   之外就有 `h_where`」这件事不成立。
+3. **失败模式被分成两条测试而不是放宽一条**：零初始化门导致第 0 步梯度不经 pooling 回 geometry，
+   实现者没有把断言改松，而是拆成「gate 本身有梯度」与「门打开后通路成立」两条。
+4. **拒绝 npy33 缓存**：宁可按原生网格（16/25/32/33/64/65）求值，也不让重采样误差进监督目标。
+   这个判断直接关系到 §12.1 的 1e-4 bake gate 是否有意义。
+5. **R1 被预先写成「这是实验结果，不是实现缺陷」**：随机参数下 48-Gaussian 的
+   analytic→33³→tetra 回读 MAE 2.19e-4 / p99 4.01e-3（gate 的 2.2 倍 / 8 倍），
+   同时给出仿射函数 4.8e-7、格点 0.0 的对照，证明插值器本身无损。这是正确的归因方式。
+
+---
+
+## 六、判决
+
+**BLOCKER 数量：6**（B-1 … B-6）。**NIT：16**。
+（初稿曾有第 7 条 blocker，经查是审阅人自己覆盖交付文件所致，已撤销并复原——见 §三-bis。）
+
+**是否准许进入 GPU preflight 与正式训练（Where 定档后）：**
+
+- **GPU preflight `WT-G1`–`WT-G8`：准许**（在两卡从 Base SFT 释放后）。
+  6 个 blocker 没有一个会改变 `WT-G1`–`WT-G8` 所测量的对象（`H_color` 切片契约、
+  `where_prefix` 的序列差、`F_pre` 形状、冻结 Where 接入、显存/吞吐、bf16 数值、LPIPS、延迟），
+  提前跑掉可以给排期解压。建议把 **N-11** 的 dtype 记录并入 `WT-G6`。
+- **正式训练（12 臂任何一臂）：不准许**，直到 B-1 … B-6 全部清零。理由分三档：
+  - **B-3 / B-5 必须在第一个臂起跑前定档**——§9.5 明禁「看到主实验结果后改 Loss 再只重跑失败臂」，
+    这两项都在 loss / 控制臂定义里，跑完再改等于全部作废；
+  - **B-2 / B-6 会在跑的过程中静默毁证据**（删掉将被选中的 checkpoint、放跑不同 Where checkpoint
+    的臂），事后无法补救；
+  - **B-1 / B-4 是交付/选择的正确性问题**，可以与训练并行修，但必须在 `V_what` 选择发生前完成。
+- B-3、B-5 需要**主 agent 裁定**（两者都是「两种做法都合理、影响后续」的决策，
+  我在各自条目里给了倾向与理由）；B-1、B-2、B-4、B-6 是纯实现修复，无需裁定。
+- 另需主 agent 走完的动作：把 **D-W1 amendment（本文 §一末的文本）** 追加进协议 §7.6 与
+  changelog，此后 `GLOBAL_AFFINE_MODE = "residual_zero"` 即为规格，不再是「实现偏离」。
+
+清完 B-1 … B-6 后**无需重做**已通过的 11 项 CPU preflight（现已在战役环境复跑并落盘，
+`complete: true`）与 158 个单测中与这些 blocker 无关的部分；但涉及 loss 的测试（B-3/B-4）
+必须重跑并重新落盘。

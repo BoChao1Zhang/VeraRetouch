@@ -1,0 +1,457 @@
+{
+ "protocol": "docs/METACANVAS_WHERE_WHAT_FINAL_EXPERIMENT_PROTOCOL_2026-08-04.md",
+ "protocol_amendments": [
+  "A-1 (D-W1)",
+  "A-2 (D-W9)",
+  "A-3 (D-W10)"
+ ],
+ "git_commit": "fef9f93f2834fa96167fc64db38b548b3fdc0f1a",
+ "python": "3.12.12",
+ "torch": "2.10.0+cu128",
+ "env": "/home/bc/envs/q3vl_sft/bin/python (campaign env)",
+ "n_arms": 12,
+ "arms": [
+  {
+   "arm": "T01",
+   "wc": "WC-0",
+   "generator": "FG48",
+   "where_source": "predicted",
+   "is_ceiling": false,
+   "mask_pool": false,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis"
+   ],
+   "n_trainable_params": 91364898,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 526336,
+    "generator": 61394716
+   },
+   "per_sample_lut_params": 1116,
+   "head_bottleneck": 128
+  },
+  {
+   "arm": "T02",
+   "wc": "WC-1",
+   "generator": "FG48",
+   "where_source": "predicted",
+   "is_ceiling": false,
+   "mask_pool": true,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg"
+   ],
+   "n_trainable_params": 92415522,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 1576960,
+    "generator": 61394716
+   },
+   "per_sample_lut_params": 1116,
+   "head_bottleneck": 128
+  },
+  {
+   "arm": "T03",
+   "wc": "WC-2",
+   "generator": "FG48",
+   "where_source": "predicted",
+   "is_ceiling": false,
+   "mask_pool": false,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "n_trainable_params": 92739106,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 1900544,
+    "generator": 61394716
+   },
+   "per_sample_lut_params": 1116,
+   "head_bottleneck": 128
+  },
+  {
+   "arm": "T04",
+   "wc": "WC-3",
+   "generator": "FG48",
+   "where_source": "predicted",
+   "is_ceiling": false,
+   "mask_pool": true,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "n_trainable_params": 93789730,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 2951168,
+    "generator": 61394716
+   },
+   "per_sample_lut_params": 1116,
+   "head_bottleneck": 128
+  },
+  {
+   "arm": "T05",
+   "wc": "WC-0",
+   "generator": "SB48",
+   "where_source": "predicted",
+   "is_ceiling": false,
+   "mask_pool": false,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis"
+   ],
+   "n_trainable_params": 91376823,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 526336,
+    "generator": 61406641
+   },
+   "per_sample_lut_params": 684,
+   "head_bottleneck": 137
+  },
+  {
+   "arm": "T06",
+   "wc": "WC-1",
+   "generator": "SB48",
+   "where_source": "predicted",
+   "is_ceiling": false,
+   "mask_pool": true,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg"
+   ],
+   "n_trainable_params": 92427447,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 1576960,
+    "generator": 61406641
+   },
+   "per_sample_lut_params": 684,
+   "head_bottleneck": 137
+  },
+  {
+   "arm": "T07",
+   "wc": "WC-2",
+   "generator": "SB48",
+   "where_source": "predicted",
+   "is_ceiling": false,
+   "mask_pool": false,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "n_trainable_params": 92751031,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 1900544,
+    "generator": 61406641
+   },
+   "per_sample_lut_params": 684,
+   "head_bottleneck": 137
+  },
+  {
+   "arm": "T08",
+   "wc": "WC-3",
+   "generator": "SB48",
+   "where_source": "predicted",
+   "is_ceiling": false,
+   "mask_pool": true,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "n_trainable_params": 93801655,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 2951168,
+    "generator": 61406641
+   },
+   "per_sample_lut_params": 684,
+   "head_bottleneck": 137
+  },
+  {
+   "arm": "C01",
+   "wc": "NOWHERE",
+   "generator": "FG48",
+   "where_source": "none",
+   "is_ceiling": false,
+   "mask_pool": false,
+   "where_prefix": false,
+   "wc_tokens": [
+    "global_vis"
+   ],
+   "n_trainable_params": 91364898,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 526336,
+    "generator": 61394716
+   },
+   "per_sample_lut_params": 1116,
+   "head_bottleneck": 128
+  },
+  {
+   "arm": "C02",
+   "wc": "NOWHERE",
+   "generator": "SB48",
+   "where_source": "none",
+   "is_ceiling": false,
+   "mask_pool": false,
+   "where_prefix": false,
+   "wc_tokens": [
+    "global_vis"
+   ],
+   "n_trainable_params": 91376823,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 526336,
+    "generator": 61406641
+   },
+   "per_sample_lut_params": 684,
+   "head_bottleneck": 137
+  },
+  {
+   "arm": "C03",
+   "wc": "ORACLE",
+   "generator": "FG48",
+   "where_source": "oracle",
+   "is_ceiling": true,
+   "mask_pool": true,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "n_trainable_params": 94109730,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 3271168,
+    "generator": 61394716
+   },
+   "per_sample_lut_params": 1116,
+   "head_bottleneck": 128
+  },
+  {
+   "arm": "C04",
+   "wc": "ORACLE",
+   "generator": "SB48",
+   "where_source": "oracle",
+   "is_ceiling": true,
+   "mask_pool": true,
+   "where_prefix": true,
+   "wc_tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "n_trainable_params": 94121655,
+   "params_by_group": {
+    "color": 29180934,
+    "vision": 262912,
+    "wc": 3271168,
+    "generator": 61406641
+   },
+   "per_sample_lut_params": 684,
+   "head_bottleneck": 137
+  }
+ ],
+ "wc_interfaces": [
+  {
+   "wc": "WC-0",
+   "tokens": [
+    "global_vis"
+   ],
+   "mask_pool": false,
+   "where_prefix": true
+  },
+  {
+   "wc": "WC-1",
+   "tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg"
+   ],
+   "mask_pool": true,
+   "where_prefix": true
+  },
+  {
+   "wc": "WC-2",
+   "tokens": [
+    "global_vis",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "mask_pool": false,
+   "where_prefix": true
+  },
+  {
+   "wc": "WC-3",
+   "tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "mask_pool": true,
+   "where_prefix": true
+  },
+  {
+   "wc": "NOWHERE",
+   "tokens": [
+    "global_vis"
+   ],
+   "mask_pool": false,
+   "where_prefix": false
+  },
+  {
+   "wc": "ORACLE",
+   "tokens": [
+    "global_vis",
+    "f_roi",
+    "f_bg",
+    "z_where",
+    "w",
+    "rho"
+   ],
+   "mask_pool": true,
+   "where_prefix": true
+  }
+ ],
+ "fg_sb_param_match": [
+  {
+   "fg_arm": "T01",
+   "sb_arm": "T05",
+   "fg_params": 91364898,
+   "sb_params": 91376823,
+   "abs_diff": 11925,
+   "rel_diff": 0.00013050355230669378,
+   "within_tolerance": true
+  },
+  {
+   "fg_arm": "T02",
+   "sb_arm": "T06",
+   "fg_params": 92415522,
+   "sb_params": 92427447,
+   "abs_diff": 11925,
+   "rel_diff": 0.0001290201167192252,
+   "within_tolerance": true
+  },
+  {
+   "fg_arm": "T03",
+   "sb_arm": "T07",
+   "fg_params": 92739106,
+   "sb_params": 92751031,
+   "abs_diff": 11925,
+   "rel_diff": 0.00012856999939979104,
+   "within_tolerance": true
+  },
+  {
+   "fg_arm": "T04",
+   "sb_arm": "T08",
+   "fg_params": 93789730,
+   "sb_params": 93801655,
+   "abs_diff": 11925,
+   "rel_diff": 0.00012712995309091294,
+   "within_tolerance": true
+  },
+  {
+   "fg_arm": "C01",
+   "sb_arm": "C02",
+   "fg_params": 91364898,
+   "sb_params": 91376823,
+   "abs_diff": 11925,
+   "rel_diff": 0.00013050355230669378,
+   "within_tolerance": true
+  },
+  {
+   "fg_arm": "C03",
+   "sb_arm": "C04",
+   "fg_params": 94109730,
+   "sb_params": 94121655,
+   "abs_diff": 11925,
+   "rel_diff": 0.00012669772965636866,
+   "within_tolerance": true
+  }
+ ],
+ "generator_match_report": {
+  "fg_bottleneck": 128,
+  "sb_bottleneck": 137,
+  "fg_params": 61394716,
+  "sb_params": 61406641,
+  "abs_diff": 11925,
+  "rel_diff": 0.00019419723674512663,
+  "tolerance": 0.02,
+  "within_tolerance": true
+ },
+ "loss_weights": {
+  "L_func": 1.0,
+  "L_hc": 10.0,
+  "R_sparse": 0.001,
+  "L_style_cos": 0.05,
+  "L_style_dist": 0.05,
+  "L_varcov": 0.02,
+  "L_bake": 0.1
+ },
+ "train_config": {
+  "arm": "T01",
+  "backend_lr": 0.0001,
+  "head_lr": 0.0001,
+  "geometry_lr": 5e-05,
+  "weight_decay": 0.01,
+  "warmup_ratio": 0.03,
+  "scheduler": "cosine",
+  "max_grad_norm": 1.0,
+  "precision": "bf16",
+  "effective_batch": 32,
+  "micro_batch": 4,
+  "epochs": 1.0,
+  "eval_steps": 500,
+  "save_steps": 500,
+  "keep_last": 3,
+  "seed": 20260804,
+  "grad_ratio_every": 50,
+  "style_queue_size": 256
+ }
+}
