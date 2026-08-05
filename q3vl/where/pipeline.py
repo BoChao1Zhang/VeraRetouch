@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterator
 
 import numpy as np
@@ -115,8 +116,36 @@ class WhereADataSource:
         # path can measure the ceiling at delivery resolution (B-4).  Training
         # does not need it and pays ~1.5 MB/sample for it, so it is off there.
         self.attach_hi = attach_hi
-        self.maskviews = MaskViewStore(maskview_root, verify=verify) if maskview_root else None
+        # `maskview_root` may be one split's shards, or the parent that holds
+        # `<root>/<split>` for all of them.  A calibration run reads `train` for
+        # the epoch and `V_where` for the final refit, so pointing at the parent
+        # keeps both on published shards instead of silently falling back to
+        # re-decoding every `.cgt.png` for the evaluation split.
+        self._maskview_root = Path(maskview_root) if maskview_root else None
+        self._maskview_verify = verify
+        self._maskview_cache: dict[str, MaskViewStore | None] = {}
+        self.maskviews: MaskViewStore | None = (
+            self._store_for(None) if maskview_root else None
+        )
         self.rejections: list[dict[str, Any]] = []
+
+    def _store_for(self, split: str | None) -> MaskViewStore | None:
+        """The mask-view store covering ``split``, or ``None`` to fall back."""
+        if self._maskview_root is None:
+            return None
+        key = split or "__root__"
+        if key not in self._maskview_cache:
+            root = self._maskview_root
+            if split is not None and (root / split / "manifest.json").exists():
+                root = root / split
+            elif not (root / "manifest.json").exists():
+                self._maskview_cache[key] = None
+                return None
+            try:
+                self._maskview_cache[key] = MaskViewStore(root, verify=self._maskview_verify)
+            except Exception:                          # noqa: BLE001 -- fall back cleanly
+                self._maskview_cache[key] = None
+        return self._maskview_cache[key]
 
     # -- one sample ---------------------------------------------------------
     def prepare(self, ref, record: dict[str, Any]) -> PreparedSample | None:
@@ -222,6 +251,7 @@ class WhereADataSource:
         self, split: str, limit: int | None = None, local_only: bool = True
     ) -> Iterator[PreparedSample]:
         index = ShardIndex.load(split_index_path(split))
+        self.maskviews = self._store_for(split)
         n = 0
         for ref in index.samples:
             if local_only and ref.meta.get("build") not in LOCAL_BUILDS:
@@ -268,8 +298,20 @@ class WhereADataSource:
                 "exclude_low": self.exclude_low,
                 "skipped_reasons": reasons, "by_winner_confidence": by_conf}
 
+    def maskview_stats(self) -> dict[str, Any]:
+        """Where the masks actually came from -- shard hits vs live fallbacks."""
+        out: dict[str, Any] = {"root": str(self._maskview_root or "")}
+        for key, store in self._maskview_cache.items():
+            out[key] = ({"hits": store.n_hits, "misses": store.n_misses,
+                         "n_samples": len(store)} if store is not None
+                        else {"unavailable": True})
+        return out
+
     def close(self) -> None:
         self.store.close()
         self.resolver.close()
-        if self.maskviews is not None:
-            self.maskviews.close()
+        for store in self._maskview_cache.values():
+            if store is not None:
+                store.close()
+        self._maskview_cache.clear()
+        self.maskviews = None

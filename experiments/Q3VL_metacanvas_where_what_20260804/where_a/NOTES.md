@@ -63,7 +63,7 @@
 
 ## 三、CPU 级验证结果
 
-### 3.1 单元测试：**176 个全部通过**（`q3vl/where/tests/`；初审前 97 → 一审 134 → 复审 142 → S2 修复 162 → fit 池 176）
+### 3.1 单元测试：**178 个全部通过**（`q3vl/where/tests/`；初审前 97 → 一审 134 → 复审 142 → S2 修复 162 → fit 池 176）
 
 | 文件 | 数量 | 覆盖 |
 |---|---:|---|
@@ -454,6 +454,89 @@ worker，fit 阶段几乎翻倍，总时间几乎不变，却多一份 OOM/争�
 
 ---
 
+## 四之五、S4 执行口径与就绪状态（2026-08-05）
+
+### 训练口径 = 75,544（D1：含 low），已实测确认
+
+`count_eligible("train")` 实跑（只读 record，31 s，无 GPU）：
+
+```json
+{"n_eligible": 75544, "exclude_low": false,
+ "by_winner_confidence": {"normal": 42752, "low": 32792},
+ "skipped_reasons": {}}
+```
+
+`EXCLUDE_WINNER_CONFIDENCE_LOW = False` → `eligibility()` 保留 low → 训练与 S5 oracle latents
+一律 **75,544**。**42,752 只是评测 headline 分层**（`HEADLINE_WINNER_CONFIDENCE = ("normal",)`，
+由 `evaluate()` 在报告时切出来），不是训练口径。已同步修正：
+- `bench_calibration.py` 的 `--eligible` 默认 42752 → **75544**（此前外推用错了口径）；
+- 计数缓存落在 `/home/bc/data/runs/where_a/shared/eligible_count_train.json`，
+  四臂共用同一份 → 四条 cosine 调度完全一致（B-3 要求），且省掉每臂一次 31 s 预扫。
+
+按 75,544 / batch 32 = **2,361 步**，保守端 7.4 s/step：
+BA-0 ~5 min｜BA-1、BA-2 各 ~3.3 h｜BA-3 ~4.9 h｜**四臂串行 ~11.8 h**。
+
+### S1 数据面验证（CPU，不占 GPU）
+
+`scripts/verify_maskviews.py`：published shard 与 live resolver 逐样本对拍
+（sha256 随机读、mask_low/mask_hi 数值、元数据 grid/locator、以及"split 里每个 eligible
+样本都在 shard 里、shard 里没有不该在的样本"）。
+
+`V_where` 已验（S1 该 split 已发布）：
+
+| 项 | 结果 |
+|---|---|
+| shard 随机读 + sha256（128 次） | 0 失败 |
+| shard 样本数 vs split eligible 数 | 400 / 400，缺 0、多 0 |
+| 与 live resolver 对拍 | 60 个样本，0 不一致 |
+| `mask_low` 最大差 | **2.44e-4**（float16 存储量化，符合预期） |
+| `mask_hi` 最大差 | **1.96e-3 = 0.5/255**（uint8 PNG 舍入，符合预期） |
+
+`train` 仍在写（`.train.partial.*`），发布后用同一命令验：
+`python -m q3vl.where.scripts.verify_maskviews --split train --sample 200`
+
+### maskview root 现在按 split 解析
+
+一次校准要读 `train`（epoch）与 `V_where`（最终重拟合）两个 split。原来 `--maskview-root`
+只指一个 split 的 shards，V_where 会**静默退回**逐张重解 `.cgt.png`。现在传**父目录**即可，
+`WhereADataSource` 按 split 找 `<root>/<split>`，找不到才回退（回退仍然干净，且
+`maskview_stats()` 把 hits/misses 落进 `eval_V_where.json`，退回不会无声）。
+
+### 序列脚本：`q3vl/where/scripts/run_where_a_arms.sh`
+
+一条命令跑完四臂，**严格串行、单卡**：
+
+```bash
+GPU=0 bash q3vl/where/scripts/run_where_a_arms.sh          # 全部四臂
+DRY_RUN=1 bash q3vl/where/scripts/run_where_a_arms.sh      # 只打印命令
+bash q3vl/where/scripts/run_where_a_arms.sh BA-3-Joint     # 单臂
+```
+
+- **启动前门禁**：checkpoint 存在、`maskviews/train` 已发布（还在写就报
+  "S1 must finish first"）、计数缓存存在**且等于 75,544**（不等就拒跑并要求重新计数）。
+- **每臂 D-20 四步**：`rm -f` 日志 → `ps -p $PID` 判活 → 等日志出现 `projector_init`
+  实质内容（最多等 10 min，其间进程死了立刻报错）→ 才写 `job.marker`。全程无 `pgrep`。
+- **臂间衔接**：`while ps -p $pid; do sleep 60; done` 阻塞到本臂结束，校验
+  `projector_final.pt` 存在才写 `DONE` 并进入下一臂；任一臂失败立即 `ABORTING` 不再往下跑。
+  重跑时带 `DONE` 的臂自动跳过。
+- **BA-3 结束后自动打印**：B 的路径、shape、`sha256(B.npy)`、`digest(B)`、oracle shard 路径，
+  外加**可直接复制的 S5 命令**（`make_oracle_latents --arm BA-3-Joint --split train --basis ...`）。
+- 默认 `--workers 32 --prefetch 2 --batch-size 32`，环境变量 `GPU/CKPT/MASKVIEWS/WORKERS/
+  PREFETCH/BATCH` 可覆盖。
+
+### 就绪状态
+
+| 项 | 状态 |
+|---|---|
+| 训练口径 75,544 | ✅ 实测确认，计数已缓存共用 |
+| S1 `V_where` / `V_what` / `T_final` / `T_lut_unseen` | ✅ 已发布；`V_where` 数据面已验 |
+| S1 `train` | ⏳ 仍在写，发布后跑一次 `verify_maskviews --split train` |
+| 序列脚本 | ✅ 已写、语法校验、DRY_RUN 全流程走通、门禁实测会拦 |
+| 20-step 带 maskview 基准 | ⏳ 随 BA-0 一起做（BA-0 只 5 min，本身就是预热） |
+| GPU 占用 | 本轮全程 0（两卡在跑 genctx） |
+
+---
+
 ## 五、代码地图
 
 ```
@@ -479,7 +562,7 @@ q3vl/where/
     make_oracle_latents.py ⏸ train split oracle latent（Where-B 前置），未跑
     run_where_a.sh         ⏸ 提交入口，内置 D-20 四步
   fitpool.py    D12  常驻单线程 CPU 进程池（spawn；self_check；逐位一致）
-  tests/                   176 个用例，全绿（+ test_fitpool.py：池与串行逐位一致）
+  tests/                   178 个用例，全绿（+ test_fitpool.py：池与串行逐位一致）
 ```
 
 ---

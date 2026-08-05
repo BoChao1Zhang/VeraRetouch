@@ -83,8 +83,9 @@ def main() -> int:
                     help="drop winner_confidence=low from the TRAINING population "
                          "(D1 default is to keep it; the headline stays normal-only)")
     ap.add_argument("--maskview-root", default=None,
-                    help="published mask views (scripts/extract_maskviews.py); "
-                         "avoids re-decoding every .cgt.png per arm")
+                    help="published mask views (scripts/extract_maskviews.py). "
+                         "Point at the PARENT dir so both the train epoch and the "
+                         "V_where refit read shards instead of re-decoding .cgt.png")
     ap.add_argument("--sample-every", type=int, default=200,
                     help="also record one accepted fit every N steps")
     ap.add_argument("--count-cache", default=None,
@@ -260,6 +261,7 @@ def main() -> int:
                         "winner_confidence": by("winner_confidence"),
                         "build": by("build")}
     report["elapsed_s"] = round(time.time() - t0, 1)
+    report["maskview_stats"] = source.maskview_stats()
     (run_dir / "eval_V_where.json").write_text(json.dumps(report, indent=2))
     print(json.dumps({k: v for k, v in report.items() if k != "strata"}, indent=2), flush=True)
 

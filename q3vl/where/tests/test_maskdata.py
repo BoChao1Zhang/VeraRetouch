@@ -168,3 +168,41 @@ def test_maskview_store_rejects_an_empty_root(tmp_path):
     (tmp_path / "indexes").mkdir(parents=True)
     with pytest.raises(MaskLookupError):
         MaskViewStore(tmp_path)
+
+
+def test_maskview_root_can_be_the_parent_of_several_splits(tmp_path):
+    """A calibration run reads `train` for the epoch and `V_where` for the final
+    refit.  Pointing at the parent keeps both on published shards; a train-only
+    root would silently send the evaluation split back to decoding .cgt.png."""
+    from q3vl.where.packing import pack_maskviews
+    from q3vl.where.pipeline import WhereADataSource
+
+    gh, gw = 8, 12
+    for split, n in (("train", 3), ("V_where", 2)):
+        rows = [(f"sft_{split[:2]}{i:030x}", torch.rand(gh, gw),
+                 torch.rand(gh * 16, gw * 16), {"build": "l1", "grid": [gh, gw]})
+                for i in range(n)]
+        pack_maskviews(rows, tmp_path / "maskviews" / split, source_label="test")
+
+    src = WhereADataSource(None, None, device="cpu", verify="none",
+                           maskview_root=str(tmp_path / "maskviews"))
+    assert len(src._store_for("train")) == 3
+    assert len(src._store_for("V_where")) == 2
+    assert src._store_for("T_final") is None          # not packed -> clean fallback
+    stats = src.maskview_stats()
+    assert stats["train"]["n_samples"] == 3
+    assert stats["T_final"] == {"unavailable": True}
+    src.close()
+
+
+def test_maskview_root_can_still_be_a_single_split(tmp_path):
+    """Backwards compatible: pointing straight at one split's shards works."""
+    from q3vl.where.packing import pack_maskviews
+    from q3vl.where.pipeline import WhereADataSource
+
+    rows = [(f"sft_{i:032x}", torch.rand(4, 4), torch.rand(64, 64), {}) for i in range(2)]
+    root = tmp_path / "one"
+    pack_maskviews(rows, root, source_label="test")
+    src = WhereADataSource(None, None, device="cpu", verify="none", maskview_root=str(root))
+    assert src.maskviews is not None and len(src.maskviews) == 2
+    src.close()

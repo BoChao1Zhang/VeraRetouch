@@ -65,7 +65,10 @@ def main() -> int:
     ap.add_argument("--model-dir", default=str(MODEL_DIR))
     ap.add_argument("--checkpoint", default=None)
     ap.add_argument("--maskview-root", default=None)
-    ap.add_argument("--eligible", type=int, default=42752,
+    # D1: training uses the FULL local train pool including winner_confidence=low
+    # (75,544 = 42,752 normal + 32,792 low, verified by count_eligible).  42,752 is
+    # only the reporting headline stratum, never the training population.
+    ap.add_argument("--eligible", type=int, default=75544,
                     help="eligible sample count used for the wall-clock projection")
     ap.add_argument("--warmup-steps", type=int, default=2,
                     help="steps excluded from the timing (pool start, CUDA autotune)")

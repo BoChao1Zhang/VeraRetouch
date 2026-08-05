@@ -176,12 +176,20 @@ float64 的 L-BFGS + strong-Wolfe 是几千个无算术强度的小 kernel，H10
 
 ## S4 · 四个校准臂（每臂 1 GPU；本机可并行 2 臂）
 
+**一条命令跑完四臂（严格串行、单卡）**：
+
 ```bash
-bash q3vl/where/scripts/run_where_a.sh calibrate BA-0-Fixed
-bash q3vl/where/scripts/run_where_a.sh calibrate BA-1-Band
-bash q3vl/where/scripts/run_where_a.sh calibrate BA-2-CBand12
-bash q3vl/where/scripts/run_where_a.sh calibrate BA-3-Joint     # 预注册主方案
+GPU=0 bash q3vl/where/scripts/run_where_a_arms.sh
 ```
+
+门禁：checkpoint 存在 + `maskviews/train` 已发布 + 计数缓存 == 75,544，任一不满足直接拒跑。
+每臂走 D-20 四步（`rm -f` 日志 → `ps -p` 判活 → 等 `projector_init` 实质输出 → 写 `job.marker`），
+臂间阻塞衔接并校验 `projector_final.pt`，失败即 `ABORTING`；BA-3 结束后自动打印 B 的
+digest / 冻结路径 / 可直接复制的 S5 命令。`DRY_RUN=1` 先看命令。
+
+**训练口径 75,544（D1 含 low）**，实测 `normal 42,752 + low 32,792`，计数缓存于
+`/home/bc/data/runs/where_a/shared/eligible_count_train.json`，四臂共用以保证调度一致。
+2,361 步 × 7.4 s/step：BA-0 ~5 min、BA-1/BA-2 各 ~3.3 h、BA-3 ~4.9 h，**合计 ~11.8 h**。
 
 ### 墙钟已实测（D12，详见 NOTES §四之四）
 
