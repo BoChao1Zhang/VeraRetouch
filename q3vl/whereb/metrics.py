@@ -44,6 +44,7 @@ from .config import (
     GATE_FAILED_TAG,
     ANTONYM_INVARIANCE_MAX,
     GRID_BOUNDARY_TOL_CELLS,
+    SOFT_IOU_KIND,
     SELECTION_ORDER,
 )
 from .losses import _EPS, boundary_map, soft_iou
@@ -68,7 +69,23 @@ def percentile(xs: Sequence[float], p: float) -> float | None:
 
 
 def soft_iou_value(m: torch.Tensor, t: torch.Tensor) -> float:
-    return float(soft_iou(m.reshape(-1).double(), t.reshape(-1).double()))
+    """``sum(min)/sum(max)`` -- **the min/max form; the product form is banned.**
+
+    Where-A result review B-1: the product form
+    ``sum(p*g) / sum(p + g - p*g)`` correlates **0.955 with the softness of the
+    GT mask** and **-0.003 with fit quality**, and its ceiling on a *perfect*
+    prediction of a soft GT has median **0.786** -- below the 0.75 gate's
+    headroom.  A §5.6 "soft-IoU >= 0.75" gate evaluated in that form would
+    therefore mostly be measuring how soft the GT happens to be, which is
+    exactly the failure mode that got AUC banned.  Measured here: a perfect
+    prediction of a soft GT scores 1.0000 in min/max and 0.5054 in product.
+
+    ``soft_iou`` still exposes ``kind="prod"`` because Where-A reports both for
+    provenance, but nothing on the criteria path may use it -- asserted by
+    ``tests/test_soft_iou_form.py``.
+    """
+    return float(soft_iou(m.reshape(-1).double(), t.reshape(-1).double(),
+                          SOFT_IOU_KIND))
 
 
 def boundary_f1(m: torch.Tensor, t: torch.Tensor, kernel: int = 3, tol_px: int = 3) -> float:

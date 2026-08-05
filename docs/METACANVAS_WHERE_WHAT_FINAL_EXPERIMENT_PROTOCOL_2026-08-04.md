@@ -325,11 +325,27 @@ L_where = L_mask + 0.25 L_s + 0.25 L_curve + 0.05 L_dir
 > **本表已由 amendment A-5（§17.2，2026-08-05）修订**：删除 `AUC_target` 行、
 > 「3px boundary F1」改为 **grid 级** boundary F1、新增中心先验基线的配对 Δ 与 p 值两行。
 > 下表为**修订后**的现行判据；§5.5 的 loss 一个字未动。
+>
+> **脚注 1 · soft-IoU 一律为 min/max 形式** `sum(min(p,g)) / sum(max(p,g))`，
+> **积形式 `sum(p·g)/sum(p+g−p·g)` 全实验禁用**。依据 Where-A 结果审阅 B-1 的实测：
+> 积形式与 **GT mask 软度相关 0.955**、与**拟合质量相关 −0.003**，
+> 且对**完美预测**的天花板中位仅 **0.786**。用积形式读本表的 `>= 0.75`，
+> 排的是「GT 有多软」而不是「场对不对」——与 AUC 被禁是同一个失败机制。
+> min/max 对软 GT 的完美预测恰好给 1.0（本仓库实测 1.0000 vs 积形式 0.5054）。
+>
+> **脚注 2 · 「相对 oracle」的分母** = Where-A 逐图 oracle 天花板，
+> **low 档、min/max 形式**：`band 0.827` / `cband12 0.835`。
+> 换一个档位或换成积形式都会**静默改变这条 gate**，因此分母在
+> `q3vl/whereb/config.py:ORACLE_CEILING_LOW_MINMAX` 里钉死。
+> 顺带一个读表时有用的推论：天花板约 0.83 时，绝对值那行 `>= 0.75`
+> 对应约 **90.7%**（band）/ **89.8%**（cband12）的 oracle 占比，
+> **高于本行的 85%** —— 即两行同时生效时，**绝对值那行才是更紧的那个**；
+> 看到「相对 oracle 差一点」时先确认到底是哪一行在卡。
 
 | 指标 | Gate |
 |---|---:|
 | local `.cgt` median soft-IoU | `>= 0.75` |
-| 相对逐图 oracle 的 soft-IoU | `>= 85%` |
+| 相对逐图 oracle 的 soft-IoU〔分母见脚注 2〕 | `>= 85%` |
 | local soft-IoU p10 | `>= 0.55` |
 | **grid 级** boundary F1 / oracle | `>= 75%` |
 | **中心先验配对 Δ(hard-IoU)** | `> 0` |
@@ -1035,6 +1051,23 @@ C^2 = 2 * ( N * sum_i ||u_i||^2 - || sum_i u_i ||^2 ) / ( N * (N-1) )
 > luminance / temperature / saturation 三轴。实测覆盖率：**98.5%** 的指令含可翻转词
 > （luma 352 / temp 341 / sat 253，n=400），而 `<where>` 段只有 **1%** ——
 > 主体文本本来就不谈颜色，这正是该控制干净的原因；翻转在全语料上是**对合**（400/400 往返一致）。
+
+### soft-IoU 的形式（2026-08-06，Where-A 结果审阅 B-1 触发）
+
+本 amendment 顺带把一个**一直隐含**的口径写成明文：**soft-IoU 恒为 min/max 形式**，
+`sum(min(p,g)) / sum(max(p,g))`；**积形式禁用**。
+
+Where-A 结果审阅 B-1 实测积形式：与 **GT mask 软度相关 0.955**、
+与**拟合质量相关 −0.003**、**完美预测的天花板中位 0.786**。
+若 §5.6 的 `soft-IoU >= 0.75` 用积形式读，它就是**第二个 AUC**——
+排的是 GT 软度而非空间正确性。
+
+本仓库现状核实（2026-08-06）：`q3vl/whereb/metrics.py` 的 `soft_iou_value`
+**本来就是 min/max**（实测：对软 GT 的完美预测得 **1.0000**，积形式为 **0.5054**）。
+本次把它从「默认参数恰好是对的」升级为「**读 `config.SOFT_IOU_KIND` 的显式契约**」，
+并补了负向断言测试 `tests/test_soft_iou_form.py`（14 条）：
+天花板恒为 1.0、对软度不敏感（min/max 极差 <1e-4，积形式 >0.5）、
+criteria 路径的 AST 扫描里不得出现 `"prod"`。
 
 ### loss 不变（明确声明）
 

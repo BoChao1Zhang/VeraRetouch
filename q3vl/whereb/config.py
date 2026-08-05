@@ -141,7 +141,18 @@ MASK_BF1_W = 0.10
 # ``soft_iou_minmax``), so the Where-B loss, the Where-B gate and the Where-A
 # oracle ceiling are all the *same* number and the "relative to oracle" gate is
 # meaningful.
+# **MIN/MAX ONLY -- the product form is banned campaign-wide.**
+# Where-A result review B-1 measured the product form
+# ``sum(p*g)/sum(p + g - p*g)`` at correlation **0.955 with GT mask softness**
+# and **-0.003 with fit quality**, with a median ceiling of **0.786** on a
+# perfect prediction.  A "soft-IoU >= 0.75" gate read in that form would be a
+# second AUC: it would rank fields by how soft their GT is.  min/max scores a
+# perfect prediction of a soft GT at exactly 1.0.
 SOFT_IOU_KIND = "minmax"
+# Denominator of the `soft_iou_vs_oracle_ratio` gate: the Where-A per-image
+# oracle ceiling, measured in the **low tier** with the **min/max** form.
+# Using a different tier or the product form would silently change the gate.
+ORACLE_CEILING_LOW_MINMAX = {"band": 0.827, "cband12": 0.835}
 # Boundary-F1 surrogate of Bokhovkin & Burnaev, arXiv:1905.07852 (verified
 # 2026-08-05, see NOTES V-B6): boundary map = pool(1-y, 3) - (1-y); tolerance
 # map = pool(boundary, theta); P = sum(b_pd * b_gt_ext)/sum(b_pd);
