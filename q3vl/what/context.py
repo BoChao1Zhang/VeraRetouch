@@ -124,6 +124,14 @@ def generated_color_context(
 ) -> ColorContext:
     """The Base SFT model's own ``<color>`` span.  No GT is reachable from here.
 
+    ``text`` is **metadata only** -- it lands in ``ColorContext.text`` and never
+    in ``token_ids`` -- so the no-GT-fallback proof covers the conditioning path
+    whatever a caller puts there (review N-22).  It is still worth being strict
+    about: a call site that passed the GT body would poison the per-sample
+    provenance log while the model saw the right tokens.  ``data.py`` therefore
+    takes it from the published record and nothing else, and
+    ``test_a4_color_context`` asserts that by reading the call site.
+
     ``generated_ids`` are the ids of the ``<color>`` segment as published by the
     generation job -- for ``with_where_prefix`` that is the slice after
     ``</where>``; for ``forced_color_prefix`` it is the forced ``<color>`` tag

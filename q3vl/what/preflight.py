@@ -40,6 +40,7 @@ import torch
 
 from . import attention as _attention_mod
 from . import color as _color_mod
+from . import data as _data_mod
 from .config import (
     ARM_IDS,
     BAKE_SIZE,
@@ -213,6 +214,17 @@ def check_color_context_flows() -> Check:
     for forbidden in ("color_text", "sample", "record", "tokenizer"):
         if forbidden in gen_params:
             bad.append(f"generated_color_context accepts {forbidden!r}")
+    # Review N-22: `text` is not on that list because it is metadata -- it lands
+    # in ColorContext.text and never in token_ids.  The structural proof covers
+    # the *conditioning* path; the provenance field is covered by the call site
+    # instead, which data.py takes from the published record.
+    detail["text_is_metadata_only"] = True
+    src = Path(inspect.getfile(_data_mod)).read_text(encoding="utf-8")
+    if "text=rec.get(\"color_text\"" not in src.replace("'", '"'):
+        bad.append("data.py's generated branch does not take `text` from the record")
+    if "sample.color_text" in src.split("elif mode == CONTEXT_GENERATED")[-1] \
+            .split("else:")[0]:
+        bad.append("data.py's generated branch mentions the GT colour text")
 
     # 2. a missing close tag is a recorded failure, not a fallback
     ctx = generated_color_context("s0", [10, 11, 12], close_id=99)

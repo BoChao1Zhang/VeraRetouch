@@ -756,9 +756,278 @@ N-13 现状确认无一致性风险。原 6 个 BLOCKER 清零。**
   选 (b) 则需写 amendment A-4 + REPORT 措辞约束），**即可开跑**。N-17 … N-21 全部为
   非阻塞，可在训练期间并行处理。
 
+> **本节判决已被 2026-08-05 的第三轮聚焦审阅取代，见下方 §十二起。**
+
 对实现者这一轮的评价：六个 blocker 全部是**结构性**修复而非打补丁——B-1 把标签变成过滤器、
 B-2 把两个保护标志分离并覆盖两条时序、B-3 用闭式常量取代了抽样、B-5 把「供给侧」与
 「输入侧」拆成两个方法、B-6 新建了一个只负责 provenance 的模块。回归测试尽量复用了我给的
 构造性反例（`test_b1_a_gate_failing_arm_cannot_top_the_board` 的 docstring 直接写
 「the reviewer's counter-example, verbatim」），这使「修复前会失败」是可验证的而不是自述的。
 N-16 修得比我提的更彻底。
+
+---
+
+# 第三轮聚焦审阅（2026-08-05，commits `ba9963e` / `2eb706c` / `e002262` / `5977dc5`）
+
+- 范围：只审 A-4 相关 diff（含与 WB-IMPL `dc6944c` 的接口对齐）。
+- 方式：只读；未用 GPU（Base SFT 收尾中，两卡未受干扰）。
+- 复跑（战役环境 `/home/bc/envs/q3vl_sft/bin/python`）：
+  - `pytest q3vl/what/tests -q` → **221 passed, 8 skipped**（8 skip = 5 个需
+    `PublishedStore`/shardio 的 store 契约测试 + 3 个缺 `colour`/`skimage`/`dataset_build`
+    的跨实现对拍），与上报一致；
+  - `python -m q3vl.what.preflight --limit 400`（写到 scratch，**未碰交付目录**）→
+    **12 pass / 0 fail / 0 skip、`complete: true`**，与交付的 `preflight_what.json` 逐项一致。
+
+## 十二、逐项复审
+
+### 12.1 A-4 amendment 文本 —— **pass**
+
+**四点齐全**：① 训练 50/50（明确锁在 **micro**-batch 上，因而对任意梯度累积倍数的 effective
+batch 都成立；缺闭合标签不回退 GT，与 §5.4 逐字同构；缓存 **token ids** 而非 hidden，使
+「同层、同位置、同归一化」成为构造性事实）；② 评测分报，每 checkpoint 每 context 一行，
+永不混成均值；③ generated 主榜，teacher 榜并列，两者之差是「对 GT 推理文本的依赖程度」；
+④ 控制臂 forced prefix，且明写「生成模式由 `where_prefix` 推导，非硬编码」。
+另含上游依赖（`genwhere/2`）与 token 边界（384，附 3745 条抽样的 min/p50/p95/p99/max）。
+
+**「恢复而非改变可回答性」的论证成立**。§0 写的是「最终网络只接收 `I_in + instruction`」，
+§15 的问题 3/4/5 也都以此为前提——它们**本来就要求** generated 语境下的数字。100% teacher-forced
+不是协议的一个选项，而是协议未声明处被实现默认掉的一个缺省。因此 A-4 是把本就该有的口径补上，
+不是引入新口径。这个论证我认为是准确的，不是修辞。
+
+**不变量声明准确**——我直接 import config 逐值核对，全部与 A-4 声称的一致：
+
+| 声称不变 | 实测 |
+|---|---|
+| §9.5 七个权重 | `1.0 / 10.0 / 0.001 / 0.05 / 0.05 / 0.02 / 0.1` ✓ |
+| §12.1 bake gate | `1e-4 / 5e-4 / 0` ✓ |
+| §12.4 字典序五键 | `local_image_de00_median, lut_de00_p90, boundary_de00_median, n_trainable_params, latency_ms` ✓ |
+| §8 十二臂 | `len(ARMS) == 12` ✓ |
+| §7.4/§7.5 每样本参数量 | `1116 / 684` ✓ |
+
+一处措辞需要读者注意（不构成 blocker）：A-4 说「§12.4 的字典序五键不变」——**字面成立**，
+但选择的**候选集合**确实变了（只有 generated-context 行进榜）。这一点 A-4 第 3 点已明说，
+两处合起来没有误导。
+
+顺带确认 N-17 已修：§7.6 的公式块**内部**现在带
+`# SUPERSEDED by amendment A-1 (2026-08-05)` 三行行内标记，grep 到公式即看到标记。
+
+### 12.2 训练 50/50 与「无 GT 回退」的结构性证明 —— **pass**
+
+- **复用 whereb 的 `BalancedContextSampler` 正确**：`q3vl/what/context.py` 直接 import
+  Where-B 的 sampler 与 `FormatStats`，不是重实现。`iter_modes` 在 yield 前**断言**
+  Where-B 的 `GT`/`GENERATED` 字符串与本包的 `CONTEXT_GT`/`CONTEXT_GENERATED` 相同，
+  任一侧改名即 `AssertionError` 而不是「一批 teacher context 被标成 generated」。
+  奇数 micro-batch 在 sampler 构造时就抛 `ValueError`（`micro_batch % 2`），
+  WT-P7 对 mb ∈ {2,4,8} 实测每批恰好一半 teacher，对 mb=3 实测被拒。
+- **`generated_color_context` 签名无 GT 入参**：实测参数集为
+  `{sample_id, generated_ids, close_id, text, max_tokens, eos_id, genctx_mode}`。
+  WT-P7 断言 `color_text` / `sample` / `record` / `tokenizer` 均不在其中——**审的是签名，
+  不是读实现体**，符合任务卡要求。`data.py::color_context` 的 generated 分支也确实
+  只传 `rec["color_ids"]`，`sample.color_text` 在该分支不可达。
+- 无闭合标签 → 截断 + `format_failure=True` + `stop_reason="no_close_tag"`；
+  闭合但超界 → `closed_over_boundary`；空 → `empty`。四条都有测试。
+- teacher 侧超界**报错而非截断**（`gt_color_context` 抛 `ValueError`，并说明「边界是对语料的
+  断言，不是截断路径」），全语料校验列为 `WT-J9`。这个方向是对的：截断 teacher context
+  会静默改变监督。
+
+### 12.3 评测分报与 generated 主榜 —— **库层 pass，接线 BLOCKER（见 NF-2）**
+
+库层实现正确：
+- `arm_metrics(..., context=SELECTION_CONTEXT)` 把 context 写进行里，未知 context 直接
+  `ValueError`；
+- `main_board(..., context=...)` 先**拒收无 `context` 标签的行**（明写「A-4 之前的行不得被
+  静默当作 generated」），再按 context 过滤，然后才是第二轮已通过的 gate 过滤 + 字典序；
+- `ceiling_board` 也按 context 过滤，C03/C04 不会跨 context 混进来；
+- `context_report` 按 `(arm, step)` 配对两种 context，在**主选择键**上给 `gap = generated − teacher`，
+  并统计 `n_pairs`。
+- 关键设计正确：**disjoint 只发生在训练 sampler，评测侧没有任何 disjoint 划分**，
+  所以「同一批 `V_what` 样本各跑两遍」在库层是可实现的，`gap` 是配对量。
+
+### 12.4 C01/C02 的 forced prefix 由 `where_prefix` 推导 —— **pass**
+
+`config.genctx_mode_of(arm)` 的实现是
+
+```python
+return (GENCTX_MODE_FORCED_COLOR if not WC_INTERFACES[ARMS[arm][0]]["where_prefix"]
+        else GENCTX_MODE_WITH_WHERE)
+```
+
+即**从 WC 接口表的 `where_prefix` 推导**，不是 `{"C01","C02"}` 硬编码。WT-P7 反过来验证
+推导结果恰为 `{C01, C02}`（实测 `genctx_mode_by_arm` 里 T01–T08/C03/C04 全是 `two_segment`），
+且有一条测试专门盯「模式跟随 `where_prefix` 而非臂名」。这样将来新增一个 no-where 臂会自动
+落到 forced 档，不需要有人记得改列表。消费侧还逐样本断言 `rec["mode"] == cfg.genctx_mode`
+（`data.py` 与 `ColorGenContextStore.record` 两道），错档记录无法被静默使用。
+
+### 12.5 接口对齐（`e002262`）与 WB-IMPL `dc6944c` 的逐字段核对 —— **pass**
+
+我把消费侧与 producer 侧并排核对：
+
+| 共享量 | producer（`q3vl/whereb/config.py`） | consumer（`q3vl/what/config.py`） |
+|---|---|---|
+| mode 词表 | `GENCTX_MODES = ("two_segment", "forced_color")` | **import**，并在 import 处断言集合相等 |
+| schema id | `SCHEMA_GENCTX = "q3vl.where_b.genwhere/2"` | **import** as `SCHEMA_COLOR_GENCTX` |
+| `<color>` 边界 | `COLOR_CONTEXT_MAX_TOKENS = 384` | **import** |
+| 生成预算 | `GEN_MAX_NEW_TOKENS = 512` | **import** as `GEN_COLOR_MAX_NEW_TOKENS` |
+
+四个共享量**全部 import、无一重声明**，运行时实测
+`('two_segment', 'forced_color') / 'q3vl.where_b.genwhere/2' / 384`。可读标识符
+`GENCTX_MODE_WITH_WHERE` / `_FORCED_COLOR` 保留但**取 producer 的值**——命名归消费侧、
+取值归 producer，这个分工是对的。
+
+字段逐一核对（producer `q3vl/whereb/gencontext.py` 的 payload vs consumer 的
+`REQUIRED_FIELDS` + `summary()`）：`sample_id` / `schema_version` / `mode` / `color_ids` /
+`color_text` / `color_stop_reason` / `color_format_failure` / `color_truncated` —— **八个全部对得上**。
+
+自曝的分歧值得记一笔：消费侧原本自拟 `("with_where_prefix", "forced_color_prefix")`，
+与 producer 实际的 `("two_segment", "forced_color")` 不同，**会让每一条真实记录都被
+`ColorGenContextStore.record` 拒收**。这是「先写消费侧契约、再对齐 producer」这条路线本该
+暴露出来的东西，而它确实被暴露了——因为契约是硬断言而不是 `.get()` 默认值。
+
+`ColorGenContextStore` 的四条契约（缺字段 / schema 非 v2 / mode 不匹配 / 覆盖不全）
+全部是硬停，`assert_covers` 在**任何昂贵操作之前**对整个 split 跑一次。这与 Where-B
+`run_where_b.py` 的 `assert_genctx_coverage` 同构。
+
+### 12.6 自曝的 NOTES 静默未落盘（`5977dc5`）—— **pass**
+
+我直接 grep 交付文件确认三节**现已真实存在**：`### D-W9`（第 141 行）、`### D-W10`（163）、
+`### D-W11`（177），内容与 A-2/A-3/A-4 一一对应，D-W11 还含与 WB-IMPL 的接口对齐记录。
+
+事故本身（用带全角括号的锚点 `### D-W8（未在协议中固定…）` 去 `str.replace`，
+实际标题无括号，替换失败原样返回而脚本仍打印 "ok"）是**实现者自查发现并主动上报**的，
+修法是把锚点改成硬断言（锚点不存在即 `AssertionError`），并逐条 grep 复核本轮所有文档改动
+确实落盘。这与我自己在 §三-bis 记的那次是同一类失败（「第二种失败模式是静默的」），
+处理方式也一致：披露 + 复原 + 加断言。**该处理正确，不留 blocker。**
+
+### 12.7 R6 guard（sqlite3-before-torch）—— **pass**
+
+R6 我独立复现，是真的：
+
+```
+import torch; import sqlite3   -> ImportError
+import sqlite3; import torch   -> OK
+```
+
+三个入口脚本（`run_what.py` / `pack_gt_luts.py` / `make_zgt_center.py`）都在
+`from __future__` 之后、**任何其它 import 之前**放了 `import sqlite3  # noqa: F401`，
+并附了解释性注释。AST 单测取每个模块的**首次** import 行号并断言
+`lines["sqlite3"] < lines["torch"]`，同时断言 guard 存在（「这条测试是用来阻止有人把它整理掉的」）——
+这正是这类 guard 最需要的那种测试。
+
+我另行确认了一件容易误判的事：`q3vl/what/preflight.py` **没有** guard，但它**不需要**——
+其数据检查走 `q3vl.train.shards.ShardStore`，不在 `q3vl.data.shardio → sqlite3` 那条链上；
+我用 `python -m q3vl.what.preflight --limit 400`（torch 先于一切被 import）实跑，
+`WT-W1`/`WT-W2` 均 **pass**。真正踩链的是 `PublishedStore`（`ColorGenContextStore` 的基类），
+而它只在 `run_what.py` 里被构造，那里有 guard。**覆盖面正确，无遗漏。**
+
+实现者同时上报「`q3vl/whereb/stores.py` 在同一条链上，`run_where_b.py` 有同样暴露，
+越出边界故未改，已写入 PENDING R6 待主 agent 决策」——**这个处理是对的**：发现越界问题
+应上报而不是顺手改别人的包。请主 agent 把它转给 WB-IMPL。
+
+### 12.8 互斥样本池的读数警告 —— **pass**
+
+NOTES 第 260 行起写得准确且完整：
+
+> **这两列不可跨 context 比大小**：`BalancedContextSampler` 把数据集**一次性**切成互斥的
+> teacher / generated 两池（这正是「1 epoch = 每样本只被看见一种 context」的实现方式），
+> 所以两列跑的是**不同的样本子集**…… 可比的是**各自的趋势**——两列都单调下降。
+> 真实的 "generated 比 teacher 差多少" 要由 §12 的评测双榜（同一批 `V_what` 样本各跑两遍）
+> 给出，`evaluate.context_report` 的 `gap` 就是那个数，不是这里。
+
+三件事都说到了：为什么不可比、什么可比、真正的数在哪里。mock 表里
+`L_func` 已按 teacher/generated 分列，且记录了「全部步 `n_gt == n_generated`、
+`teacher_fraction` 取值集合 = {0.5}」。
+
+**评测侧确实正确承接**（库层）：`BalancedContextSampler` 只被 trainer 使用，
+`arm_metrics` / `main_board` / `context_report` 都不做任何 disjoint 划分，
+`context_report` 按 `(arm, step)` 配对——所以 `gap` 在设计上是配对量，不重复训练侧的混淆。
+唯一的问题是这条路径目前没有任何生产入口在调用（NF-2）。
+
+## 十三、新增发现
+
+### NF-2（**BLOCKER**）· 生产路径没有接线评测：`eval_fn` 未挂，无评测入口脚本
+
+`q3vl/what/scripts/` 只有三个脚本（`run_what.py` / `pack_gt_luts.py` / `make_zgt_center.py`）。
+`run_what.py` 构造 trainer 时**不传 `eval_fn`**：
+
+```python
+trainer = WhatTrainer(model, builder, dataset, cfg, tcfg, run_dir=run_dir,
+                      device=args.device)          # eval_fn 缺省为 None
+```
+
+全仓库 grep `arm_metrics|main_board|context_report`，**除 `evaluate.py` 自身与测试外零命中**。
+三个后果，第二个最严重：
+
+1. **§10.4 的 `eval_steps: 500` 在生产路径上未实现**——不会有任何 in-loop 评测。
+2. **第二轮通过的 B-2 修复在生产路径上是失效的**。`eval_fn is None` ⇒
+   `state.checkpoints` 恒空 ⇒ `best()` 返回 `None` ⇒ `_protect_best()` 清空所有标志后直接
+   return ⇒ 没有任何 checkpoint 被 `best_protected` ⇒ `_roll()` 按 `keep_last=3` 照常删。
+   约 4975 步、`save_steps=500` 下有约 9 次普通保存，**前 6 次仍会被删掉**——正是 B-2 被提出的
+   那个失效模式。B-2 的 7 条回归测试全部注入了 `_EvalStub`，所以它们全绿而生产无保护。
+   **这一条我在第二轮漏了**：我验证了机制，没有验证接线。与 NF-1 同类的疏漏，记在我账上。
+3. **A-4 的第 2、3 点没有生产者**。`arm_metrics(context=...)` / `main_board(context=...)` /
+   `context_report` 实现正确、测试充分，但没有任何代码在真实数据上调用它们；
+   NOTES 指向的「`context_report` 的 `gap` 就是那个数」目前还没有产出它的路径。
+
+**这不在任何 pending 清单里**。`WT-J4`/`J5`/`J6`/`J7` 都是对评测的**增补**，
+全部预设「评测 harness 已存在」；没有一条说「evaluate 尚无生产入口」。
+
+**修法（两条都可，需主 agent 选一条并落盘）**：
+- (a) **接线 in-loop 评测**：给 `run_what.py` 加一个 `eval_fn`，在 `V_what`（或其固定子集）上
+  按两种 context 各跑一遍，产出两行 `arm_metrics`，写 `eval.jsonl`。这同时激活 B-2 的保护、
+  落实 §10.4 的 `eval_steps`、并让 A-4 的 `gap` 每 500 步就有读数。代价是每 500 步一次评测的
+  时间开销（可用固定子集控制）。
+- (b) **离线评测 + 关闭滚动删除**：`run_what.py` 传 `keep_last=None`（约 9 × 0.37 GB ≈ 3.4 GB/臂、
+  12 臂约 41 GB，NFS 可承受），训练只保存不评测；另写一个 `evaluate_what.py`，训练后对全部
+  存活 checkpoint × 两种 context 出 `arm_metrics`，再 `main_board` + `context_report`。
+  这条更省训练时间，但 §10.4 的 `eval_steps: 500` 需要在 REPORT 里显式声明为「离线等价执行」。
+
+**无论选哪条，都必须在第一个臂起跑前落地**：选 (a) 需要改 runner；选 (b) 至少需要**现在**
+就把 `keep_last=None` 写进 `TrainConfig` 的生产取值，否则前 6 个 checkpoint 在第一个臂跑完时
+就已经不存在了，事后无法补救。
+
+### 新增 NIT
+
+- **N-22**：`generated_color_context` 的 `text` 形参是一个**无约束的自由字符串**。
+  WT-P7 的禁用名单是 `color_text/sample/record/tokenizer`，不含 `text`。它只流向
+  `ColorContext.text`（元数据），不进 `token_ids`，所以**条件化路径**的无-GT-回退证明成立；
+  但一个写错的调用点可以把 GT 文本塞进标着 `mode="generated"` 的记录里，污染 per-sample 日志
+  与 `color_text` 溯源。建议把 `text` 也纳入 WT-P7 的说明（明确「结构性证明覆盖的是 token 路径」），
+  或让 `data.py` 只从 store 记录取该字段（现已如此，但没有断言钉住）。
+- **N-23**：`ColorGenContextStore.assert_covers` 只查**存在性**，不查
+  `mode`/`schema_version`（那两条在 `record()` 里逐样本查）。于是「整个 split 都是错档」
+  这一情形要到第一个 batch 才暴露，而不是在启动前的覆盖检查里。建议 `assert_covers` 顺带抽
+  1 条 `record()`，把三条契约都提前到启动前。
+- **N-24**：`WT-J9`（`<color>` 边界全语料校验）目前排在正式开跑**之后**的作业里，
+  但 `gt_color_context` 超界是**抛错**，意味着一条超界样本会让某个臂在训练中途崩。
+  边界校验是纯读 record 的轻量扫描，建议提到开跑前与 `WT-J3` 合并做一次。
+
+## 十四、最终判决（取代 §六 与 §十一）
+
+**A-4 相关全部审阅项 pass**：amendment 文本（四点齐全、论证成立、不变量经实测核对）、
+训练 50/50（sampler 复用正确、签名级无-GT-回退证明成立）、评测分报与 generated 主榜（库层）、
+C01/C02 forced prefix 由 `where_prefix` 推导、接口对齐（四个共享量全 import、八个字段全对齐）、
+NOTES 三节已真实落盘、R6 guard（三入口 + AST 单测，覆盖面经实测确认无遗漏）、
+互斥样本池警告已写入且评测双榜设计正确承接。
+
+**BLOCKER 累计：1 项（NF-2，本轮新增；其中第 2 点是我第二轮的漏审）。**
+**NIT 新增 3 项（N-22 … N-24），历史 N-9/N-10/N-11 等仍在 PENDING 中跟踪。**
+
+**是否准许正式训练（Where 定档后）：**
+
+- **不准许**，唯一未清项是 **NF-2**。它需要一个**主 agent 的选择**（in-loop 评测 vs
+  离线评测 + `keep_last=None`）加一处不大的实现改动。
+- 之所以仍判为 blocker 而不是 nit：NF-2 的第 2 点会**在跑的过程中静默删除将被选中的
+  checkpoint**，与 B-2 完全同型且事后不可补救；第 3 点则意味着 A-4 刚刚定档的 generated 主榜
+  在跑完之后没有任何产出路径。两者都属于「跑完再修等于重跑」。
+- 其余前置条件不变且已就绪：CPU preflight 12/12（`complete: true`，我独立复跑一致）、
+  221 单测通过、协议 amendment A-1…A-4 齐备。仍需等待的外部依赖是
+  **Where-B 定档一个冻结 checkpoint**、**`WT-J10`（WB-IMPL 的 `genwhere/2` 生成作业，两种 mode）**、
+  以及两卡释放后的 `WT-G1`–`WT-G8`（其中 `WT-G2` 已按我上轮建议并入「GT vs generated 两条序列的
+  `H_color`」测量）。
+- **GPU preflight `WT-G1`–`WT-G8`：仍准许**先跑，NF-2 不影响其测量对象。
+
+对本轮的评价：A-4 是一次范围明确、边界克制的落地——`context.py` 复用 Where-B 的 sampler 而不是
+重实现，共享量全部 import 而不是重声明，越界发现（whereb 的 R6 暴露）上报而不顺手改。
+两次自曝（接口词表分歧、NOTES 未落盘）都由实现者自己发现并主动上报，这比审阅者抓到更有价值。
+唯一的系统性缺口是 NF-2：三轮下来，**被审的一直是库，没有人审过"谁来调用这个库"**——
+这也是我连续两轮没抓到它的原因。

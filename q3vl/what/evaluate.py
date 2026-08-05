@@ -330,7 +330,8 @@ def ceiling_board(candidates: Iterable[Mapping[str, Any]],
             if c.get("is_ceiling") and c.get("context") == context]
 
 
-def context_report(candidates: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+def context_report(candidates: Iterable[Mapping[str, Any]],
+                   metric: str | None = None) -> dict[str, Any]:
     """Amendment A-4 item 2: the two contexts side by side, per arm.
 
     ``gap`` is generated minus teacher on the primary selection key.  A large
@@ -342,7 +343,7 @@ def context_report(candidates: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     by: dict[tuple[str, int], dict[str, Mapping[str, Any]]] = {}
     for r in rows:
         by.setdefault((r["arm"], r["step"]), {})[r.get("context")] = r
-    key = SELECTION_ORDER[0][0]
+    key = metric or SELECTION_ORDER[0][0]
     out = []
     for (arm, step), ctxs in sorted(by.items()):
         gt, gen = ctxs.get("gt"), ctxs.get("generated")

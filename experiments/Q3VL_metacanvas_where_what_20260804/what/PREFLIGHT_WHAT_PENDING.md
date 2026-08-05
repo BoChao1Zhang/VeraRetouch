@@ -35,6 +35,7 @@
 | `WT-G6` | bf16 下的数值复核：确认 renderer / bake / 四面体 / loss 全部在 float32（trainer 已用 `autocast(enabled=False)` 包住，但要在真机上验证没有外层 autocast 泄漏）。**并入审阅 N-11**：另需记录 `out.params`（在 autocast 区内解码，带 bf16 舍入 ~4e-3）与 `aligned_pool` 内 Mahalanobis 的**实测 dtype**，不要只查外层泄漏 | 同上 | 这是 Where-B review blocker B4 的同类问题，必须实测 |
 | `WT-G7` | LPIPS 后端接入（`image_metrics` 目前在没有后端时报 `nan` 并显式列在此处，不做静默替代） | 需要预训练网络 | §12.2 要求 LPIPS |
 | `WT-G8` | 33³ bake 延迟与 VLM 后增量延迟测量（§7.5 要求与质量并列报告） | 两卡空闲 | |
+| `WT-G9` | **在线评测（`eval_fn`）的真实墙钟** | 两卡空闲 | NOTES 第十一节给了实测（CPU、What 侧 39.4 ms/sample）+ 外推（GPU 一次 eval ≈ 25 s，占比 0.2–0.4%）。**VLM 那一项是从 Base SFT 的 5.1 s/step 外推的，不是直接测的**。`make_eval_fn` 每次把 `eval_seconds` 写进 `eval.jsonl`，第一次真实 eval 之后即为实测 |
 
 ## 三、待作业（IO 密集，脚本已写好，**未执行**）
 
@@ -48,7 +49,7 @@
 | `WT-J6` | **paired bootstrap 95% CI**（§10.4 / §12.4 / §13.1，审阅 N-9） | bootstrap 脚本 | 主差异的置信区间；`across-seed range` 需要 top-2 的多 seed 复跑先完成 |
 | `WT-J7` | **33³ baked render 的最终图像指标与可视化**（§12.1 / §13，审阅 N-10） | 每样本第二组图像指标 | 现在 `sample_row` 只渲染 analytic；§13 的联图要求 `pred analytic render` 与 `pred 33³ render` 并排，交付前必须补 |
 | `WT-J8` | 12 臂 `run_setup.json` 的 Where digest 一致性巡检 | 一次全量扫描 | `provenance.assert_where_consistency` 在每个臂启动时已强制，但全部跑完后应再做一次总巡检并写进 REPORT |
-| `WT-J9` | **`<color>` 段 token 边界的全语料校验**（amendment A-4） | 全 split 的 `tokens.color` 直方图 | 现在的 384 来自 3,745 条抽样（max 324）。teacher 侧超界会**报错**而非截断，所以违例会立即暴露；但正式开跑前应在全语料上确认一次，属重 IO |
+| `WT-J9` | **`<color>` 段 token 边界的全语料校验** —— **已按审阅 N-24 提升为开跑前硬前置** | `preflight/color_boundary_scan.json` | 384 来自 3,745 条抽样（max 324）；`gt_color_context` 超界**抛错**，一条超界样本会让某个臂在训练中途崩。脚本 `scripts/scan_color_boundary.py`（纯读 record，不解码图像、不 tokenise，用 build 已写好的 `tokens.color`）；门 `boundary.require_color_boundary_scan` 由 `run_what.py` 在**任何昂贵操作之前**调用，缺失/schema 过期/边界不符/未覆盖全部 split/有超界样本/有缺字段记录，六种都硬停 |
 | `WT-J10` | **generated `<color>` context 生成作业**（amendment A-4，**WB-IMPL 负责**） | 每 split × 每 mode 一套 `genwhere/2` shards | Stage-What 的**硬前置**：`run_what.py` 在任何昂贵操作前 `assert_covers` 全 split，缺一条即拒跑。需要两套：`with_where_prefix`（T01-T08 + C03/C04）与 `forced_color_prefix`（C01/C02）。Base SFT 本就一次生成两段，v2 只是把 `<color>` 段留下 |
 
 ### 三-bis、amendment A-4 带来的排期依赖
@@ -135,12 +136,27 @@ guard 反而会让 import 本身失败。
 现在：默认 `--out` 是 `RUN_ROOT/preflight`（scratch），要发布必须显式给交付路径；并且把 `complete: true` 覆盖成 `false`
 会被**拒绝**，`--force` 时先把旧报告备份成 `preflight_what.json.superseded`。
 
+### 三-ter、评测的两个入口（NF-2 路线 (a)+离线互补）
+
+| | 在线 | 离线 |
+|---|---|---|
+| 入口 | `run_what.py` 构造的 `eval_fn`（`evalloop.make_eval_fn`） | `scripts/evaluate_what.py`（**未执行**） |
+| 数据 | `V_what` 固定 256 条确定性分层子集（清单落盘且进 `config_digest`） | 完整 `V_what`，双 context |
+| 指标 | LUT function 级 + bake gate | §12.1 全套 + §12.2 图像分区分层 + §12.3 |
+| 产出 | 每 500 步两行 `arm_metrics` + `gap`，写 `eval.jsonl` / `eval_per_sample.jsonl` | `main_board` / `ceiling_board` / `context_report` + `per_sample_*.jsonl` |
+| 作用 | 保住将被选中的 checkpoint 文件（激活 B-2）、落实 `eval_steps` | **最终选择依据** |
+
+`I_tar` 只在离线入口出现（已加测试断言：全包只有 `data.py` 定义与 `evaluate_what.py` 调用两处提及
+`load_target_image`）。
+
 ## 五、一句话结论
 
 Stage-What 的全部 12 臂代码、§9 全配方 loss（含 amendment A-2 的 `d_func` 口径与 A-3 的统一 natural 采样）、
 33³ 烘焙与四面体回读、以及协议 §14 的项 8b/9/12/13/14 preflight 均已实现并在 CPU 上通过
-（**12/12** preflight、**229 个单测**、T01/T08 mock 闭环 loss 单调下降且每步 50/50 teacher/generated）。
-REVIEW-impl-What 的 **6 个初审 BLOCKER 与复审新增的 NF-1 全部清零**，各配回归测试。
+（**12/12** preflight、**254 个单测**、T01/T08 mock 闭环 loss 单调下降且每步 50/50 teacher/generated）。
+REVIEW-impl-What 的 **6 个初审 BLOCKER、复审的 NF-1、三审的 NF-2 全部清零**，各配回归测试——
+其中 NF-2 的回归测试**不再依赖 `_EvalStub`**：既有对 `run_what.py` 调用点的 AST 断言（`eval_fn` 是否真的传了、
+边界门是否在 trainer 之前），也有用**真实 `make_eval_fn`** 驱动真实 trainer 的 B-2 保护验证。
 **未启动任何训练，未占用 GPU，未执行任何重 IO 作业。** 进入正式训练还差：Where-B 定档一个冻结 checkpoint、
 两卡释放后跑完 `WT-G1`–`WT-G8`、`WT-J1`/`WT-J2` 两个数据派生物作业，以及 **`WT-J10`（WB-IMPL 的 `genwhere/2`
 生成作业，amendment A-4 的硬前置）**。

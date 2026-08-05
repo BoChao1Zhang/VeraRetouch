@@ -371,6 +371,26 @@ PROTECTED_EPOCHS = (0.5, 1.0)
 SEED = 20260804
 
 # ===========================================================================
+# NF-2 ruling -- in-loop evaluation (route (a) + offline complement)
+# ===========================================================================
+# Protocol 10.4 fixes ``eval_steps: 500``.  Running it on the whole of V_what
+# twice (both contexts) with a full image render would cost more than the 500
+# training steps it interrupts, so the in-loop pass is a **fixed deterministic
+# subset**, LUT-function metrics only.  The complete V_what with image metrics is
+# the offline job (``scripts/evaluate_what.py``) and is what selection reads.
+EVAL_SUBSET_SIZE = 256
+EVAL_SUBSET_SEED = 20260804
+#: mask-area strata edges (fraction of frame).  Used only when a mask source is
+#: available; the subset manifest records whether it was.
+MASK_AREA_BINS = (0.05, 0.20, 0.50)
+#: The online proxy for protocol 12.4's primary key.  **Not** the same
+#: measurement -- no image is rendered in the loop -- but the same direction:
+#: CIEDE2000 on local samples, generated context, smaller is better.  It decides
+#: which checkpoint *files survive* the rolling deletion; the offline board
+#: decides which checkpoint *wins*.  See NOTES D-W12.
+ONLINE_SELECTION_KEY = "local_lut_de00_median"
+
+# ===========================================================================
 # protocol 12 -- gates and selection
 # ===========================================================================
 # (metric key, comparison, threshold) -- analytic vs 33^3 tetrahedral readback
@@ -568,6 +588,10 @@ class TrainConfig:
     grad_ratio_every: int = GRAD_RATIO_EVERY
     style_queue_size: int = STYLE_QUEUE_SIZE
     teacher_fraction: float = TEACHER_FRACTION      # amendment A-4
+    eval_subset_size: int = EVAL_SUBSET_SIZE        # NF-2: in-loop eval subset
+    eval_micro_batch: int = 4
+    #: the key ``best()`` ranks by.  The online proxy, not the offline primary.
+    selection_key: str = ONLINE_SELECTION_KEY
 
     def grad_accum(self) -> int:
         if self.effective_batch % self.micro_batch:

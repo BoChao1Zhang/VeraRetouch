@@ -21,7 +21,7 @@
   "WT-P-zero-init-identity"
  ],
  "env": {
-  "git_commit": "e002262541498e41510d8c0f8a21643a84fea181",
+  "git_commit": "1738779149be98efc391d0c3819d0ad3349db05c",
   "python": "3.12.12",
   "torch": "2.10.0+cu128",
   "cuda_available": true
@@ -41,6 +41,7 @@
      "sample_id",
      "text"
     ],
+    "text_is_metadata_only": true,
     "no_close_tag": {
      "mode": "generated",
      "n_tokens": 3,

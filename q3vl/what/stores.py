@@ -98,9 +98,19 @@ class ColorGenContextStore(PublishedStore):
                 "span, so the generation job must be completed for this split "
                 "before any arm starts."
             )
+        # Review N-23: existence is only one of the three contracts.  Reading one
+        # record here moves the schema and mode checks from "the first batch,
+        # minutes into the run" to "before anything expensive starts" -- and the
+        # failure they catch ("the whole split is the wrong generation") is a
+        # property of the directory, so one sample settles it.
+        probe: dict[str, Any] | None = None
+        if ids:
+            rec = self.record(ids[0])
+            probe = {"sample_id": ids[0], "schema_version": rec["schema_version"],
+                     "mode": rec["mode"], "n_color_ids": len(rec["color_ids"])}
         self._checked = True
         return {"n_requested": len(ids), "n_present": len(ids), "mode": self.mode,
-                "root": str(self.root), "coverage": 1.0}
+                "root": str(self.root), "coverage": 1.0, "probe": probe}
 
     def iter_records(self) -> Iterator[dict[str, Any]]:
         for sid, suf in sorted(self.rows):

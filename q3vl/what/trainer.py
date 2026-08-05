@@ -503,20 +503,41 @@ class WhatTrainer:
         """Protocol 13.1's ``checkpoint index``, including what was rolled away."""
         return [dict(c) for c in self.state.saved]
 
-    def best(self, key: str = "local_image_de00_median",
+    def best(self, key: str | None = None,
              bigger_is_better: bool = False) -> dict[str, Any] | None:
         """Best recorded checkpoint on the protocol 12.4 board.
 
-        Red line: never ``eval_loss``.  ``key`` names a metric produced by
-        :mod:`q3vl.what.evaluate`.  Gate-failing checkpoints are skipped when the
-        eval report carries ``gate_pass`` -- selection may not land on a
-        checkpoint the gate rejected (protocol 12.4 step 1), and neither may the
-        protection that keeps a checkpoint alive *for* selection.
+        Red line: never ``eval_loss``.  The default key is
+        ``TrainConfig.selection_key`` = ``ONLINE_SELECTION_KEY``, the in-loop
+        **proxy** for protocol 12.4's primary ordering: same direction (local
+        CIEDE2000, generated context, smaller is better) computed on the fixed
+        eval subset without rendering images.  It decides which checkpoint files
+        survive ``_roll``; the offline board
+        (``scripts/evaluate_what.py`` -> ``main_board``) decides which
+        checkpoint wins.  A proxy pointing the other way would let the rolling
+        deletion discard the file the offline board later wants, which is blocker
+        B-2 one level up.
+
+        Gate-failing checkpoints are skipped when the eval report carries
+        ``gate_pass`` -- selection may not land on a checkpoint the gate rejected
+        (protocol 12.4 step 1), and neither may the protection that keeps a
+        checkpoint alive *for* selection.  ``gate_fallback`` in the returned dict
+        (review N-18) marks the case where *every* checkpoint failed and this is
+        therefore a diagnostic pick, not a selection.
         """
+        key = key or self.cfg.selection_key
         scored = [c for c in self.state.checkpoints if c.get(key) is not None]
         gated = [c for c in scored if c.get("gate_pass", True)]
+        n_unknown = sum(1 for c in scored if "gate_pass" not in c)
         pool = gated or scored
         if not pool:
             return None
         pick = max if bigger_is_better else min
-        return pick(pool, key=lambda c: float(c[key]))
+        best = dict(pick(pool, key=lambda c: float(c[key])))
+        # review N-18: same shape as main_board's ``selection_possible: false``
+        best["gate_fallback"] = not gated
+        # review N-19: a report with no ``gate_pass`` key counted as passing; it
+        # is still treated as passing (the production arm_metrics always writes
+        # it) but the count is surfaced instead of being invisible.
+        best["n_gate_unknown"] = n_unknown
+        return best

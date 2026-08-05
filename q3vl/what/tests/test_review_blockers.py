@@ -14,7 +14,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from q3vl.what.config import GATE_FAILED_TAG, TrainConfig
+from q3vl.what.config import (GATE_FAILED_TAG, ONLINE_SELECTION_KEY,
+                              TrainConfig)
 from q3vl.what.evaluate import ceiling_board, main_board
 from q3vl.what.losses import loss_style_dist
 from q3vl.what.metrics import style_diagnostics
@@ -94,7 +95,8 @@ class _EvalStub:
 
     def __call__(self, step: int) -> dict:
         self.calls.append(step)
-        return {"local_image_de00_median": self.scores.get(step, 99.0),
+        # the online proxy key, which is what ``best()`` ranks by (NF-2 ruling)
+        return {ONLINE_SELECTION_KEY: self.scores.get(step, 99.0),
                 "gate_pass": self.gate.get(step, True)}
 
 

@@ -40,6 +40,8 @@ import sqlite3  # noqa: F401  (import order is the point)
 import argparse
 import json
 import time
+import hashlib
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -56,7 +58,9 @@ from q3vl.what.config import (
     arm_config,
 )
 from q3vl.what.stores import ColorGenContextStore
+from q3vl.what.boundary import require_color_boundary_scan
 from q3vl.what.data import WhatBatchBuilder, WhereRunner, open_dataset
+from q3vl.what.evalloop import build_eval_subset, eval_subset_rows, make_eval_fn
 from q3vl.what.hiddens import WhatVLM
 from q3vl.what.lut import LutBank
 from q3vl.what.model import WhatModel
@@ -86,6 +90,26 @@ def load_center(root: Path) -> tuple[torch.Tensor, float]:
     return torch.from_numpy(z["mean_u"]).float(), float(z["d_func_scale"])
 
 
+def _config_digest(setup: dict, subset_manifest: dict) -> str:
+    """One digest over the things that define what this run measured.
+
+    Includes the eval subset digest, so "which 256 samples the online proxy ran
+    on" cannot drift between arms without the digest changing.
+    """
+    material = {
+        "arm": setup.get("arm"),
+        "train": setup.get("train"),
+        "where": {k: setup.get("where", {}).get(k)
+                  for k in ("checkpoint_sha256", "where_arm", "step")},
+        "d_func_scale": setup.get("d_func_scale"),
+        "genctx_mode": setup.get("builder", {}).get("genctx_mode"),
+        "eval_subset_digest": subset_manifest.get("digest"),
+        "eval_subset_strata": subset_manifest.get("strata_keys"),
+    }
+    blob = json.dumps(material, ensure_ascii=False, sort_keys=True).encode()
+    return hashlib.sha256(blob).hexdigest()
+
+
 def build_bank(gtluts: Path, dataset) -> LutBank:
     path_map = dataset.lut_path_map()
     root = Path(gtluts)
@@ -113,12 +137,23 @@ def main() -> int:
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--micro-batch", type=int, default=4)
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--eval-split", default="V_what",
+                    help="split the in-loop eval subset is drawn from (NF-2)")
+    ap.add_argument("--eval-subset-size", type=int, default=None)
+    ap.add_argument("--boundary-report", default=None,
+                    help="the <color> boundary full-corpus scan report (N-24); "
+                         "defaults to the published location")
     ap.add_argument("--skip-preflight", action="store_true")
     args = ap.parse_args()
 
     cfg = arm_config(args.arm)
     run_dir = Path(args.run_dir or (RUN_ROOT / args.arm))
     run_dir.mkdir(parents=True, exist_ok=True)
+
+    # N-24: gt_color_context *raises* past the boundary, so one over-long sample
+    # would kill an arm mid-epoch.  The scan is a cheap record-only pass; it has
+    # to have happened, and to have passed, before anything expensive starts.
+    boundary = require_color_boundary_scan(args.boundary_report)
 
     if not args.skip_preflight:
         rep = run_what_preflight(run_dir / "preflight", arm=args.arm, with_data=True,
@@ -198,8 +233,38 @@ def main() -> int:
 
     model = WhatModel(cfg)
     tcfg = TrainConfig(arm=args.arm, micro_batch=args.micro_batch)
+    if args.eval_subset_size is not None:
+        tcfg = replace(tcfg, eval_subset_size=args.eval_subset_size)
+
+    # --- NF-2: the in-loop evaluation -------------------------------------
+    # A fixed deterministic subset of V_what, both contexts, LUT-function metrics
+    # only.  This is what implements protocol 10.4's eval_steps, activates B-2's
+    # checkpoint protection (which is inert without an eval report) and produces
+    # amendment A-4's two boards every 500 steps.
+    eval_dataset, eval_ds_info = open_dataset(
+        args.eval_split, need_mask=(cfg.where_source == "oracle"))
+    eval_genctx = ColorGenContextStore(
+        Path(args.color_genctx) / args.eval_split / cfg.genctx_mode,
+        mode=cfg.genctx_mode)
+    eval_genctx.assert_covers(
+        [eval_dataset.refs[i].sample_id for i in range(len(eval_dataset))])
+    eval_builder = WhatBatchBuilder(
+        collator, vlm, cfg, build_bank(Path(args.gtluts), eval_dataset),
+        center, d_func_scale, where_runner=where_runner,
+        oracle_store=oracle_store, color_genctx=eval_genctx,
+        device=args.device, seed=cfg.seed)
+    subset_idx, subset_manifest = build_eval_subset(
+        eval_subset_rows(eval_dataset, getattr(eval_dataset, "maskviews", None)),
+        n=tcfg.eval_subset_size)
+    (run_dir / "eval_subset.json").write_text(
+        json.dumps(subset_manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+    eval_fn = make_eval_fn(
+        model, eval_builder, eval_dataset, subset_idx, cfg,
+        n_trainable=model.n_trainable(), micro_batch=tcfg.eval_micro_batch,
+        subset_manifest=subset_manifest, out_dir=run_dir)
+
     trainer = WhatTrainer(model, builder, dataset, cfg, tcfg, run_dir=run_dir,
-                          device=args.device)
+                          device=args.device, eval_fn=eval_fn)
 
     setup = trainer.setup()
     setup.update({"dataset": ds_info, "where": where_facts,
@@ -209,7 +274,18 @@ def main() -> int:
                                    "mode": cfg.genctx_mode,
                                    "coverage": genctx_coverage,
                                    "summary": color_genctx.summary()},
+                  "color_boundary_scan": boundary,
+                  "eval": {"split": args.eval_split, "dataset": eval_ds_info,
+                           "subset": {k: v for k, v in subset_manifest.items()
+                                      if k != "sample_ids"},
+                           "subset_manifest": str(run_dir / "eval_subset.json"),
+                           "kind": "online_subset_lut_function",
+                           "note": ("LUT-function metrics only; the full V_what "
+                                    "with image metrics is scripts/evaluate_what.py "
+                                    "and is what selection reads")},
                   "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    # the subset content is part of the run's identity (NF-2 ruling item 1)
+    setup["config_digest"] = _config_digest(setup, subset_manifest)
     (run_dir / "run_setup.json").write_text(
         json.dumps(setup, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(setup, ensure_ascii=False, indent=1), flush=True)

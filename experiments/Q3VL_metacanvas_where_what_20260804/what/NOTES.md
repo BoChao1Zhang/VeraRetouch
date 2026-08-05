@@ -203,6 +203,35 @@ mode 词表一致（producer 用 `two_segment` / `forced_color`；本包保留�
 （本包据 3745 条抽样：min 108 / p50 178 / p95 246 / p99 285 / max 324，+两标签 +18% 余量）。teacher 侧超界**报错**
 而非截断；全语料校验列为 `WT-J9`。消费侧逐条断言：缺字段、schema 非 v2、`mode` 不匹配、覆盖不全，四种都硬停。
 
+### D-W12（已裁定，NF-2 路线 (a)+离线互补）在线评测 vs 离线选择
+
+**问题**（REVIEW-impl-What 三审 NF-2，**审阅者自承第 2 点是二审漏审的**）：`run_what.py` 构造 trainer 时不传 `eval_fn`，
+于是三件事同时不成立——§10.4 的 `eval_steps: 500` 在生产路径上未实现；**B-2 的 checkpoint 保护在生产上是失效的**
+（无 eval 报告 ⇒ `best()` 返回 None ⇒ 无人被标 `best_protected` ⇒ 滚动删除照常吃掉前 6 个）；amendment A-4 的双榜
+没有生产者。B-2 的 7 条回归测试全部注入 `_EvalStub`，所以全绿而生产无保护。
+
+**主 agent 裁定**：路线 (a) + 离线互补。两条**不是同一个测量**，命名上必须分清：
+
+| | 在线（`evalloop.make_eval_fn`） | 离线（`scripts/evaluate_what.py`） |
+|---|---|---|
+| 数据 | `V_what` 的**固定确定性子集**（256 条） | **完整** `V_what` |
+| 指标 | LUT function 级（§9.1 的 2048 查询点）+ bake gate | §12.1 全套 + §12.2 图像指标（渲染 `I_out` 对 `I_tar`、三分区、分层）+ §12.3 |
+| 频率 | 每 `eval_steps`(=500) 步 | 训练后一次 |
+| 用途 | 决定**哪些 checkpoint 文件活下来** | 决定**哪个 checkpoint 赢**（`main_board` 的输入） |
+| 主键 | `ONLINE_SELECTION_KEY = "local_lut_de00_median"`（代理） | `local_image_de00_median`（§12.4 主键） |
+
+**代理与主键必须同向**：两者都是 local 样本、generated context、CIEDE2000、越小越好。**不同向的代理会让滚动删除
+丢掉离线榜后来想要的那个文件——那就是 B-2 换了一层再犯一次**。在线报告里**故意不写** `local_image_de00_median`
+（这一趟不渲染图像），一个名字与别处含义不同的键比一个缺失的键更坏。
+
+**子集**：256 条，按 `(build, render_mode, mask_area_bin)` 分层、最大余数比例分配，组内按
+`sha256(seed|sample_id)` 排序取——**跨进程/跨机器/跨 Python 可复现**（`random`/`torch.randperm` 只在单进程内够用）。
+清单落 `run_dir/eval_subset.json`，其 digest 进 `run_setup.json` 的 `config_digest`，所以「在线代理是在哪 256 条上算的」
+是这次 run 身份的一部分。mask 面积来自 Where-A 已发布的低分辨率 maskview（40×32 的小数组，897 条读取代价可忽略）；
+**maskviews 未发布时 manifest 记 `mask_area_used: false` 并退回两键分层**，不静默少一层。
+
+**墙钟实测与预估**：见第十一节。
+
 ### D-W8 未在协议中固定、已按惯例取值的次要常量
 
 Color connector 深度 6（与 §5.1 的 Where connector 同型，只去掉 `F_pre` cross-attn）｜ Charbonnier ε=1e-3 ｜
@@ -302,7 +331,7 @@ float32 而非 float16：`.cube` 是 6 位小数，§12.1 的 bake gate 是 1e-4
 
 ## 八、测试清单
 
-`q3vl/what/tests/`，共 **229 个测试**（base 环境全过；战役环境 221 过 / 8 skip）。
+`q3vl/what/tests/`，共 **254 个测试**（base 环境全过；战役环境 221 过 / 8 skip）。
 
 战役环境的 8 个 skip 分两类，都不是缺陷：
 - 4 个跨实现对拍缺 `colour` / `skimage` / `dataset_build.src.construct.rendering`（后者因 R6 的同一个
@@ -352,6 +381,10 @@ float32 而非 float16：`.cube` 是 6 位小数，§12.1 的 bake gate 是 1e-4
 | **B-3** `d_func` 被换成归一化码距离 | 见 D-W9 / 协议 amendment A-2 | `test_d_func_is_the_raw_u_distance_not_the_normalised_code`、`test_style_dist_matches_a_hand_computed_huber` |
 | **B-4** §12.3 诊断与优化项同源 | `style_diagnostics` 的头号读数改为对**原始 `‖uᵢ−uⱼ‖`** 的 Spearman（`z_dist_spearman_vs_func`）；方向-only 的 `z_dist_spearman_vs_zgt` 并列保留但不作为唯一读数 | `test_the_function_spearman_sees_magnitude_that_the_zgt_spearman_misses`（构造一个「方向全对、幅度全错」的码：vs_zgt > 0.99 而 vs_func < 0.9） |
 | **B-5** C01/C02 与 T01/T05 有两处差别 | 见 D-W10 / 协议 amendment A-3 | `test_b5_*`（5，含「六个臂产生逐位相同查询点」） |
+| **NF-2** 生产路径没有接线评测 | `run_what.py` 构造并传入 `eval_fn`（固定 256 条确定性分层子集、双 context、LUT function 级）；新增 `evalloop.py` 与离线全量入口 `scripts/evaluate_what.py`；`best()` 改用 `TrainConfig.selection_key`（在线代理），与 §12.4 主键**同向**。回归测试**不再依赖 `_EvalStub`**：既有对 `run_what.py` 调用点的 AST 断言（`eval_fn` 是否真传、边界门是否在 trainer 之前），也有**真实 `make_eval_fn` 驱动真实 trainer** 验证 B-2 保护确实生效 | `test_nf2_eval_wiring.py`（25） |
+| **N-24** 边界校验排在开跑之后 | 提升为**开跑前硬前置**：`scripts/scan_color_boundary.py`（纯读 record）+ `boundary.require_color_boundary_scan`；缺失 / schema 过期 / 边界不符 / split 未覆盖 / 有超界样本 / 有缺字段记录，六种都硬停 | 同上（7 条） |
+| **N-22/N-23** | `text` 明确为元数据（结构性证明覆盖的是 token 路径），WT-P7 增断言「`data.py` 的 generated 分支只从 record 取 `text`，且分支内不提 GT 文本」；`assert_covers` 顺带抽一条 `record()`，把 schema/mode 两条契约从「第一个 batch」提前到「启动前」 | WT-P7 + 2 条 |
+| **N-18/N-19** | `best()` 返回 `gate_fallback`（全员未过 gate 时是诊断而非选择，与 `main_board` 的 `selection_possible: false` 同形）与 `n_gate_unknown`（缺 `gate_pass` 键的计数不再隐形） | 1 条 |
 | **B-6** Where checkpoint digest 校验只在文档里 | 新增 `q3vl/what/provenance.py`：`file_sha256` + `assert_where_consistency` 扫描 `RUN_ROOT/*/run_setup.json`，digest 不一致、**已宣称却缺失**、或 setup 不可读，三种情况都 `WhereProvenanceError` 硬停；`run_what.py` 在任何昂贵操作之前调用它 | `test_b6_*`（6） |
 
 NIT 处置：**已修** N-1（两份交付物改在战役环境重新生成）、N-2（灰点 docstring 改正为「返回 1.0，但被 `normalize(C_gt)≈7e-7`
@@ -368,3 +401,36 @@ N-10（33³ baked render 的最终图像指标与可视化）、N-11（bf16 下 
 
 **未处理并说明理由**：N-13（把 hidden 契约重声明扫描提到 `q3vl/` 根的共享 helper）——需要在 `q3vl/` 根新建模块，
 超出「不改 data/train/where/whereb」的边界之外还会牵动 Where-B 的既有测试，留给主 agent 决定是否单开一张卡。
+
+
+---
+
+## 十一、在线评测的墙钟（NF-2 要求给出）
+
+**已实测（CPU，生产宽度，8 线程，T04 即最重的 WC-3）**，每样本：
+
+| 环节 | ms/sample |
+|---|---:|
+| WhatModel forward | 22.2 |
+| render 2048 查询点 | 0.6 |
+| **bake 33³** | **15.1** |
+| tetra 回读 | 1.4 |
+| What 侧合计 | **39.4** |
+
+一次 eval = 256 条 × 2 context = 512 次样本前向 → **CPU 上 What 侧 20.2 s**。
+
+**GPU 预估**（H100，bf16）。主导项不是 What 侧而是**冻结 VLM 前向**（每样本每 context 一次）：
+
+- 由正在跑的 Base SFT 实测反推：global batch 32、两卡 ZeRO-3、**fwd+bwd** 5.1 s/step ⇒ ~160 ms/sample。
+  纯前向、单卡、无 ZeRO 通信、无反向约为其 1/4–1/6 ⇒ **30–50 ms/sample**。
+- 512 次样本前向 × ~40 ms ≈ **20 s**；Where 前向与 phi/guided upsample 约 +15% ≈ 3 s；
+  What 侧在 H100 上约 1–3 ms/sample ⇒ ~1 s。
+- **一次 eval ≈ 25 s**。
+
+**开销占比**：`eval_steps=500`、约 4975 步 ⇒ 每臂约 10 次 eval ≈ **4 分钟**。臂本身的步时同样由 VLM 前向主导
+（32 样本 × ~40 ms ≈ 1.3 s/step ⇒ 约 1.8 h/臂），故在线评测的开销约 **0.2–0.4%**。这正是「LUT function 级、
+不渲染全图、固定子集」三条限制换来的；若改成整个 `V_what`(897) 且渲染全图，同样的 10 次 eval 会变成小时级。
+
+**注意**：VLM 那一项是**从 Base SFT 的训练步时外推的**，不是直接测的。已列为 `WT-G9`，两卡释放后与
+`WT-G1`–`WT-G8` 一起实测确认；`make_eval_fn` 每次都把 `eval_seconds` 写进 `eval.jsonl`，所以第一次真实 eval
+之后这个数就不再是估计。C01/C02 另付一次**较短的**监督前向（`prompt + <where>`，无 color body），已计入。
