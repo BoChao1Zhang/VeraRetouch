@@ -487,3 +487,34 @@ def test_every_entry_point_imports_sqlite3_before_torch():
             assert lines["sqlite3"] < lines["torch"], (
                 f"{name}: sqlite3 must be imported before torch "
                 f"(sqlite3 at line {lines['sqlite3']}, torch at {lines['torch']})")
+
+
+def test_the_producer_and_the_consumer_share_one_vocabulary():
+    """Amendment A-4's interface with WB-IMPL, asserted rather than assumed.
+
+    The mode strings, the ``<color>`` boundary and the schema id all live on the
+    producer (``q3vl.whereb.config``) and are *imported* here.  A test is still
+    worth it: it names the four things that must not drift, so a future rename on
+    either side fails here with an explanation instead of failing at the first
+    real record with a mode mismatch.
+    """
+    from q3vl.whereb import config as wb
+
+    assert set(wb.GENCTX_MODES) == {GENCTX_MODE_WITH_WHERE, GENCTX_MODE_FORCED_COLOR}
+    assert SCHEMA_COLOR_GENCTX == wb.SCHEMA_GENCTX == "q3vl.where_b.genwhere/2"
+    assert COLOR_CONTEXT_MAX_TOKENS == wb.COLOR_CONTEXT_MAX_TOKENS == 384
+
+
+def test_the_consumer_reads_the_fields_the_producer_writes():
+    """The record shape, pinned against the producer's own payload builder."""
+    import inspect
+
+    from q3vl.whereb import gencontext as wb_gen
+    from q3vl.what.stores import REQUIRED_FIELDS
+
+    src = inspect.getsource(wb_gen)
+    for field in REQUIRED_FIELDS:
+        assert f'"{field}"' in src, f"producer does not emit {field!r}"
+    for optional in ("color_text", "color_stop_reason", "color_format_failure",
+                     "color_truncated"):
+        assert f'"{optional}"' in src, optional

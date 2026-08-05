@@ -65,24 +65,33 @@ CONTEXT_MODES = (CONTEXT_GT, CONTEXT_GENERATED)
 SELECTION_CONTEXT = CONTEXT_GENERATED
 TEACHER_FRACTION = 0.5
 
-# Measured on 3,745 records sampled across all five splits (``tokens.color``):
-# min 108, p50 178, p95 246, p99 285, **max 324**.  384 = max + the two tags +
-# ~18% margin, the same margin Where-B used for its 96 (measured max 79).
-# ``gt_color_context`` *raises* rather than truncating, so a corpus sample past
-# the boundary surfaces immediately instead of silently shortening a teacher
-# context; the full-corpus verification is job ``WT-J9``.
-COLOR_CONTEXT_MAX_TOKENS = 384
-# The with-<where> generation emits ``<where>..</where><color>..</color>`` in one
-# pass, so the budget has to cover both spans (81 + 326 measured maxima).
-GEN_COLOR_MAX_NEW_TOKENS = 512
+# The producer owns these three, so Stage-What **imports** them rather than
+# re-declaring them: the boundary, the mode vocabulary and the schema string all
+# have to be byte-identical on both sides or a consumer assertion becomes a
+# consumer bug.  (Both sides independently measured the same 384: Stage-What from
+# 3,745 sampled records -- min 108 / p50 178 / p95 246 / p99 285 / max 324 --
+# 384 = max + the two tags + ~18% margin, the margin Where-B used for its 96
+# against a measured max of 79.)  ``gt_color_context`` *raises* rather than
+# truncating, so a corpus sample past the boundary surfaces immediately instead
+# of silently shortening a teacher context; full-corpus verification is ``WT-J9``.
+from q3vl.whereb.config import (  # noqa: E402
+    COLOR_CONTEXT_MAX_TOKENS,
+    GENCTX_MODES,
+    SCHEMA_GENCTX as SCHEMA_COLOR_GENCTX,
+)
+from q3vl.whereb.config import GEN_MAX_NEW_TOKENS as GEN_COLOR_MAX_NEW_TOKENS  # noqa: E402
 
-#: How an arm's generated context is produced.  Both are published by the
-#: extended Where-B genctx job (WB-IMPL); an arm asserts the ``mode`` field of
-#: every record it reads, so the two can never be silently swapped.
-GENCTX_MODE_WITH_WHERE = "with_where_prefix"      # prompt -> <where>..</where><color>..
-GENCTX_MODE_FORCED_COLOR = "forced_color_prefix"  # prompt (no <where>) + <color> forced
-GENCTX_MODES = (GENCTX_MODE_WITH_WHERE, GENCTX_MODE_FORCED_COLOR)
-SCHEMA_COLOR_GENCTX = "q3vl.where_b.genwhere/2"   # v2 = v1 + the <color> segment
+#: How an arm's generated context is produced.  Values are the producer's
+#: (``q3vl.whereb.config.GENCTX_MODES``); the names are Stage-What's, because
+#: ``with_where_prefix`` reads better at a call site than ``two_segment``.
+GENCTX_MODE_WITH_WHERE = "two_segment"     # prompt -> <where>..</where><color>..
+GENCTX_MODE_FORCED_COLOR = "forced_color"  # prompt (no <where>) + <color> forced
+if set(GENCTX_MODES) != {GENCTX_MODE_WITH_WHERE, GENCTX_MODE_FORCED_COLOR}:
+    raise AssertionError(
+        f"the generated-context mode vocabulary diverged: producer publishes "
+        f"{GENCTX_MODES}, Stage-What consumes "
+        f"{(GENCTX_MODE_WITH_WHERE, GENCTX_MODE_FORCED_COLOR)}"
+    )
 
 # ===========================================================================
 # protocol 7.1 -- Q_color and the continuous style code
