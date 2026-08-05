@@ -30,7 +30,11 @@ from .metrics import (
     arm_metrics,
     attribution_section,
     evaluate_gates,
+    gt_area_k,
+    hard_iou,
+    instruction_paired_delta,
     sample_metrics,
+    topk_mask,
     summarise,
 )
 from .model import WhereBModel
@@ -59,6 +63,8 @@ def evaluate_context(
     idx = list(range(len(dataset) if limit is None else min(limit, len(dataset))))
     rows: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
+    # kept only for the same-image paired difference (A-5); ~6 KB per sample
+    fields: dict[str, dict[str, Any]] = {}
 
     for chunk in _chunks(idx, batch_size):
         samples = []
@@ -119,13 +125,54 @@ def evaluate_context(
                     "summarise() would drop this row from every stratum"
                 )
             rows.append(met)
+            fields[tgt["sample_id"]] = {
+                "grid_pred": f["m_low"].detach().reshape(gh, gw).cpu(),
+                "grid_gt": tgt["mask_low"].detach().reshape(gh, gw).float().cpu(),
+                "source_image_id": tgt["meta"].get("source_image_id"),
+                "instruction": tgt["meta"].get("instruction"),
+            }
 
     summary = summarise(rows)
+    summary["instruction_paired"] = _instruction_paired(fields)
     summary["n_skipped"] = len(skipped)
     summary["skipped"] = skipped[:50]
     summary["context"] = mode
     summary["format_stats"] = builder.stats().get(mode)
     return rows, summary
+
+
+def _instruction_paired(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Same-image paired difference (amendment A-5).
+
+    For every sample, score its own field against its own GT and against the GT
+    of a partner sample from the SAME image with a different region.  Holding the
+    image fixed cancels salience and the centre prior; what is left is whether
+    the field followed the instruction.
+    """
+    by_img: dict[str, list[str]] = {}
+    for sid, f in fields.items():
+        by_img.setdefault(str(f["source_image_id"]), []).append(sid)
+    rows = []
+    for img, members in by_img.items():
+        if len(members) < 2:
+            continue
+        for i, sid in enumerate(members):
+            partner = members[(i + 1) % len(members)]
+            a, b = fields[sid], fields[partner]
+            if a["grid_gt"].shape != b["grid_gt"].shape:
+                continue                       # different geometry, not comparable
+            if torch.equal(a["grid_gt"] > 0.5, b["grid_gt"] > 0.5):
+                continue                       # same target region: no contrast
+            k = gt_area_k(a["grid_gt"])
+            pred_bin = topk_mask(a["grid_pred"], k)
+            rows.append({
+                "sample_id": sid, "source_image_id": img, "partner": partner,
+                "self_iou": hard_iou(pred_bin, a["grid_gt"]),
+                "cross_iou": hard_iou(pred_bin, b["grid_gt"]),
+            })
+    out = instruction_paired_delta(rows)
+    out["n_pairs_scored"] = len(rows)
+    return out
 
 
 def _oracle_mask(builder: BatchBuilder, tgt: dict[str, Any], arm_cfg: ArmConfig):

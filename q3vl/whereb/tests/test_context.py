@@ -134,12 +134,17 @@ def test_shuffled_context_also_swaps_the_instruction(tokenizer):
     assert ctx.provenance == "sB" and ctx.text == WHERE_B
 
 
-def test_only_the_shuffled_context_may_override_the_instruction(tokenizer):
+def test_only_the_negative_controls_may_override_the_instruction(tokenizer):
+    """A-5 widened this from `shuffled` alone to the three negative controls;
+    every non-control mode must still be refused."""
     assert gt_context(tokenizer, "sA", WHERE_A).instruction is None
     assert null_context().instruction is None
     assert generated_context("sA", [1, 2], _close_id(tokenizer)).instruction is None
-    with pytest.raises(ValueError, match="only the shuffled"):
-        WhereContext(mode=GT, token_ids=[1], instruction="sneaky")
+    for mode in (GT, GENERATED):
+        with pytest.raises(ValueError, match="may not override"):
+            WhereContext(mode=mode, token_ids=[1], instruction="sneaky")
+    with pytest.raises(ValueError, match="may not override"):
+        WhereContext(mode=NULL, token_ids=[], instruction="sneaky")
 
 
 def test_shuffled_context_refuses_a_partner_without_an_instruction(tokenizer):

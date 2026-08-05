@@ -57,7 +57,8 @@ class FieldRender:
 
 def color_scale(field: torch.Tensor, valid: torch.Tensor | None = None,
                 *, mode: str = "valid_cells",
-                fixed: tuple[float, float] | None = None) -> tuple[float, float]:
+                fixed: tuple[float, float] | None = None,
+                allow_all_valid: bool = False) -> tuple[float, float]:
     """Colour-scale endpoints.
 
     ``mode="valid_cells"`` uses only the cells ``valid`` marks True -- the whole
@@ -80,6 +81,19 @@ def color_scale(field: torch.Tensor, valid: torch.Tensor | None = None,
         raise ValueError(f"unknown colour-scale mode {mode!r}")
     f = field.reshape(-1).double()
     if valid is None:
+        # Review nit N24: without a validity mask "valid_cells" silently becomes
+        # the whole-field min-max this module exists to ban -- the `mode`
+        # keyword was guarded and `valid` was not, so the ban was one argument
+        # away from being undone.  A caller that genuinely has no pad cells says
+        # so explicitly.  This module is shared with §13 and Stage-What, where
+        # pad cells DO exist, so the default cannot be the permissive one.
+        if not allow_all_valid:
+            raise PerImageMinMaxError(
+                "color_scale needs a `valid` mask: with valid=None the "
+                "'valid_cells' scale degenerates into the banned whole-field "
+                "min-max (CLAUDE.md 2026-08-05). Pass the mask, or pass "
+                "allow_all_valid=True to state that this field has no pad cells."
+            )
         v = f
     else:
         m = valid.reshape(-1).bool()
@@ -111,6 +125,7 @@ def render_field(
     mode: str = "valid_cells",
     fixed: tuple[float, float] | None = None,
     pad_style: str = "white",
+    allow_all_valid: bool = False,
 ) -> FieldRender:
     """Colour a ``(H, W)`` field.  Pad cells are drawn, never filled in.
 
@@ -122,9 +137,14 @@ def render_field(
     if pad_style not in ("white", "hatch"):
         raise ValueError(f"unknown pad_style {pad_style!r}")
     f = field.detach().double().cpu()
+    if valid is None and not allow_all_valid:
+        raise PerImageMinMaxError(
+            "render_field needs a `valid` mask (review nit N24); pass "
+            "allow_all_valid=True only if this field genuinely has no pad cells."
+        )
     v = (torch.ones_like(f, dtype=torch.bool) if valid is None
          else valid.detach().reshape(f.shape).bool().cpu())
-    vmin, vmax = color_scale(f, v, mode=mode, fixed=fixed)
+    vmin, vmax = color_scale(f, v, mode=mode, fixed=fixed, allow_all_valid=True)
 
     span = max(vmax - vmin, 1e-12)
     norm = ((f.numpy() - vmin) / span).clip(0.0, 1.0)
@@ -173,6 +193,7 @@ def grid_to_img(grid_h: int, grid_w: int, out_h: int, out_w: int) -> dict[str, A
 def overlay_grid_on_image(
     field: torch.Tensor, image: torch.Tensor, *, alpha: float = 0.5,
     valid: torch.Tensor | None = None, mode: str = "valid_cells",
+    allow_all_valid: bool = False,
 ) -> tuple[np.ndarray, FieldRender]:
     """Blend a grid field onto a ``(3, H, W)`` image via the exact inverse map."""
     if image.dim() != 3 or image.shape[0] != 3:
@@ -180,7 +201,7 @@ def overlay_grid_on_image(
     gh, gw = field.shape[-2:]
     out_h, out_w = image.shape[-2:]
     m = grid_to_img(gh, gw, out_h, out_w)
-    r = render_field(field, valid, mode=mode)
+    r = render_field(field, valid, mode=mode, allow_all_valid=allow_all_valid)
     # nearest-neighbour expansion by an integer factor == the exact inverse map
     big = np.repeat(np.repeat(r.rgba[..., :3], m["scale_y"], axis=0),
                     m["scale_x"], axis=1)

@@ -633,3 +633,67 @@ GT 为**偏心**主体（居中 GT 会让中心先验天然正确，不是有效
 其中 boundary 项仍是**像素级 3px**。判据用 grid 级、loss 用像素级，**故意不同**：
 协议 §9.5/§10.4 禁止事后改 loss，而这个差异反而让判据列不再是被直接优化的量，归因价值更高
 （已写进 `ATTRIBUTION_NOTE` 的 `weakly_optimised` 项）。
+
+---
+
+## 十二、A5-B1 闭环：三条负控制 + 同图配对差分（第 3 轮复审）
+
+日期：2026-08-05 ｜ 依据：`REVIEW-impl-WhereB.md` 第 3 轮（CONDITIONAL，A5-B1）
+主 agent 裁定：**走路线 (a) 完整实现**，红线是用户今日明文，不缩范围。
+
+### 12.1 配对差分的数据探明（**这一节是待裁定项的证据**）
+
+红线写的是「同图两条**相反**指令」的配对差分。实测 `V_where` 本地 400 条 / 114 个 `source_image_id` 组
+（96 个多样本组，382 条样本）：
+
+| 项 | 数量 |
+|---|---:|
+| 同图、指令文本不同的样本对 | **712** |
+| 其中在明暗/冷暖/饱和度**任一轴上语义相反** | **147**（冷暖 68 / 饱和 55 / 明暗 48） |
+| 被 ≥1 个相反对覆盖的样本 | 156 / 400 |
+| 相反对中 `subject:` 从句**相同**的 | **19** |
+| ↑ 其中 GT `mask_id` **真正相同**的 | **2** |
+| 不同主体的 665 对中 mask 相同的 | **1** |
+| 多样本组中含 ≥2 个不同 mask 的 | **96 / 96** |
+
+**结论：「同图 + 指令相反 + 目标区域相同」的样本对在现有语料里不存在**（n=2，统计上不可用）。
+原因是数据构造方式——每条指令都绑定它自己的候选区域，所以换指令必然换区域。
+
+**本轮采用（保守可行版）**：同图**不同指令**的配对差分。对每个 `source_image_id` 组内目标区域不同的
+两条样本 `A`/`B`：
+
+```
+d_A = IoU(field_A, GT_A) − IoU(field_A, GT_B)      （对称地算 d_B）
+Δ  = mean(d),  p = sign-flip 置换检验
+```
+
+**图像被固定**，因此图像显著性与中心先验在配对内成对抵消——这正是 `shuffled` 单板做不到的
+（它虽从同图取伙伴，却只对一个 GT 计分）。对 Where 阶段这也更贴题：**Where 的输出由主体决定，
+不由颜色方向决定**，所以「换主体 → 场应该跟着换」才是 Where 的指令条件性。
+
+**若要字面对照**：可用**反义指令文本变换**（翻转 darker↔brighter / cooler↔warmer 等方向词，
+主体不变 ⇒ **GT mask 不变 ⇒ 不需要新数据产物**）。但它测的是**不变性**
+（mask **不应**随颜色方向改变，Δ 应 ≈ 0），与「配对差分应为正」方向相反，属于另一类控制。
+**二选一请主 agent 裁定**（已同步写进协议 §17.2 与 `PREFLIGHT_WHERE_B_PENDING.md` 的 S5.5 条目）。
+
+### 12.2 修复清单
+
+| # | 项 | 落地 |
+|---|---|---|
+| A5-B1 | `irrelevant_words` / `fixed_phrase` 两条负控制 | 升为 `CONTEXT_MODES` 一等模式（六种）；`irrelevant_words_context`（固定词表 + 逐样本种子抽 12 个无关名词，同样本可复现、跨样本不同）、`fixed_phrase_context`（对全体样本相同的 `"the main subject"`——**红线自己的反例**）；两者与 `shuffled` 一样**同时替换 instruction 与 `<where>` 正文**（D-B15 同规则）；`BatchBuilder.context_for` 加分支；`evaluate_arm` 自动各出一块板 |
+| A5-B1 | 同图配对差分 | `metrics.instruction_paired_delta` + `evaluate._instruction_paired`；`evaluate_context` 保留逐样本 grid 场（约 6 KB/样本）做交叉计分；自动跳过「无伙伴」「几何不同」「目标区域相同」三种不可比情形 |
+| N23 | p 值改 **sign-flip 置换检验** | 配对设计下的教科书精确检验，比 CI 反演更严更便宜；**加一修正 ⇒ 永不报 p=0**（旧实现对全正差分报 0.0，现在报 `1/(n_perm+1)`）。单测钉住 `p > 0` 与符号对称性 |
+| N24 | `viz` 的 `valid=None` 对称拒绝 | `color_scale` / `render_field` 在 `valid=None` 且未显式 `allow_all_valid=True` 时抛 `PerImageMinMaxError`。此前 `mode` 被守住而 `valid` 没有——「一个键之遥」的标准没有对称适用，而 viz 是 §13/Stage-What 共用模块，那边**确实有 pad 格** |
+| N25 | 盲区进报告模板 | `ATTRIBUTION_NOTE["known_blind_spots"]` + `attribution_section()` 渲染出「单看 grid BF1 分不出『紧凑但位置错』与『散点噪声』（实测 0.0000 vs 0.0357）」与「单看任何一块上下文板证明不了指令跟随」两条，**随每份 `metrics.json` / `ATTRIBUTION.md` 落盘** |
+| N20 | `metrics.py` 模块 docstring | 重写为 A-5 后的十行 gate 表（原文还写着 `AUC_target >= 0.80`、「3px boundary F1」、"nine gates"） |
+| N21 | 记录更正 | `evaluate_gates` 的旧行为不是「其余走 `>=` 分支」，而是**走 `<=` 分支 = 判据反转**（未知算子被当成上界判据）。修复本身正确，是**记录**不准确 |
+| N22 | 记录更正 | 上一条 commit message 写「『紧凑但位置错』与『散点噪声』两者都 0.0000」是**错的**：实测 random（散点）= grid BF1 **0.0357** / hard-IoU **0.0050**。真正两者都 0.0000 的是 **displaced 与中心先验**。NOTES §11.2 原文是对的，commit message 错了 |
+
+### 12.3 单测
+
+新增 `test_a5b1_controls.py` **17 条**（两条控制的**产出路径**、逐样本确定性/跨样本差异、
+只有三条负控制可覆盖指令、**`BatchBuilder` 对每种 `CONTEXT_MODES` 都有分支**（防「命名了但产不出」重演）、
+配对差分正/零/无伙伴三种情形、置换检验 p>0 与符号对称、盲区进模板）；
+`test_viz.py` +1（`valid=None` 对称拒绝）；迁移 `test_context.py` / `test_evaluate_and_trainer.py`。
+
+`q3vl/whereb` 全套 **279 → 295 passed**。

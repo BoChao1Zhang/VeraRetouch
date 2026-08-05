@@ -40,15 +40,19 @@ from .config import (
     SPLIT_DIR,
 )
 from .context import (
+    FIXED_PHRASE,
     GENERATED,
     GT,
+    IRRELEVANT_WORDS,
     NULL,
     SHUFFLED,
     FormatStats,
     ShuffleIndex,
     WhereContext,
+    fixed_phrase_context,
     generated_context,
     gt_context,
+    irrelevant_words_context,
     null_context,
     shuffled_context,
 )
@@ -341,6 +345,7 @@ class BatchBuilder:
         genctx=None,                    # GenContextStore | None
         shuffle_index: ShuffleIndex | None = None,
         device: str | torch.device = "cpu",
+        control_seed: int = 0,
     ):
         self.collator = collator
         self.tokenizer = collator.tokenizer
@@ -350,6 +355,7 @@ class BatchBuilder:
         self.oracle = oracle
         self.genctx = genctx
         self.shuffle_index = shuffle_index
+        self.control_seed = control_seed
         self.device = torch.device(device)
         self.format_stats: dict[str, FormatStats] = {}
         self.close_id = int(self.tokenizer("</where>", add_special_tokens=False)["input_ids"][0])
@@ -373,6 +379,11 @@ class BatchBuilder:
                 sample.sample_id, rec["generated_ids"], self.close_id,
                 text=rec.get("generated_text", ""), eos_id=self.eos_id,
             )
+        elif mode == IRRELEVANT_WORDS:
+            ctx = irrelevant_words_context(self.tokenizer, sample.sample_id,
+                                           seed=self.control_seed)
+        elif mode == FIXED_PHRASE:
+            ctx = fixed_phrase_context(self.tokenizer, sample.sample_id)
         elif mode == SHUFFLED:
             if self.shuffle_index is None:
                 raise RuntimeError("shuffled context requested but no ShuffleIndex")
@@ -464,7 +475,7 @@ class BatchBuilder:
                 sample.mask_target_hi()[None, None],
                 (sample.grid_h, sample.grid_w))[0, 0].to(self.device),
             "is_global": sample.is_global,
-            "meta": dict(sample.meta),
+            "meta": {**sample.meta, "instruction": sample.instruction},
         }
         lat = None
         if self.oracle is not None and not sample.is_global:

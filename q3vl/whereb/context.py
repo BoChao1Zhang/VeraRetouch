@@ -31,14 +31,38 @@ __all__ = [
     "GT", "GENERATED", "NULL", "SHUFFLED", "CONTEXT_MODES",
     "WhereContext", "FormatStats", "SegmentSpan", "extract_segment",
     "gt_context", "generated_context", "null_context", "shuffled_context",
-    "ShuffleIndex", "BalancedContextSampler",
+    "irrelevant_words_context", "fixed_phrase_context", "ShuffleIndex",
+    "BalancedContextSampler", "NEGATIVE_CONTROL_MODES", "IRRELEVANT_WORDS",
+    "FIXED_PHRASE", "FIXED_PHRASE_TEXT", "IRRELEVANT_VOCAB",
 ]
 
 GT = "gt"
 GENERATED = "generated"
 NULL = "null"
 SHUFFLED = "shuffled"
-CONTEXT_MODES = (GT, GENERATED, NULL, SHUFFLED)
+#: amendment A-5 / red line: instruction conditionality needs THREE negative
+#: controls, not one.  `shuffled` swaps in a real instruction from the same
+#: image; these two swap in text that carries no instruction at all.
+IRRELEVANT_WORDS = "irrelevant_words"
+FIXED_PHRASE = "fixed_phrase"
+CONTEXT_MODES = (GT, GENERATED, NULL, SHUFFLED, IRRELEVANT_WORDS, FIXED_PHRASE)
+#: the three negative controls, in the order the red line lists them
+NEGATIVE_CONTROL_MODES = (SHUFFLED, IRRELEVANT_WORDS, FIXED_PHRASE)
+#: modes allowed to override the prompt's instruction (see WhereContext)
+INSTRUCTION_OVERRIDE_MODES = (SHUFFLED, IRRELEVANT_WORDS, FIXED_PHRASE)
+
+#: The red line's own example of a phrase that fools a ranking metric: a single
+#: constant string scored AUC 0.907 while `AUC_target` was 0.523 (RO-X1).  Using
+#: exactly that phrase keeps the control honest -- it is the known-bad case.
+FIXED_PHRASE_TEXT = "the main subject"
+#: Vocabulary for the irrelevant-words control: concrete nouns with no spatial or
+#: photographic meaning, so the text is well-formed English that says nothing
+#: about where to edit.  Fixed list + per-sample seed = reproducible.
+IRRELEVANT_VOCAB = (
+    "calendar", "envelope", "harmonica", "trombone", "paperclip", "granite",
+    "yesterday", "algebra", "sandal", "kettle", "notebook", "pebble",
+    "lantern", "cinnamon", "marble", "ledger", "violin", "thimble",
+)
 
 
 @dataclass
@@ -69,9 +93,10 @@ class WhereContext:
             raise ValueError(f"unknown context mode {self.mode!r}")
         if self.mode == NULL and self.token_ids:
             raise ValueError("the null context must carry no tokens")
-        if self.instruction is not None and self.mode != SHUFFLED:
+        if self.instruction is not None and self.mode not in INSTRUCTION_OVERRIDE_MODES:
             raise ValueError(
-                f"only the shuffled context may override the instruction, not {self.mode!r}"
+                f"{self.mode!r} may not override the instruction; only "
+                f"{INSTRUCTION_OVERRIDE_MODES} may"
             )
 
     @property
@@ -264,6 +289,43 @@ def shuffled_context(tokenizer, partner_id: str, partner_where_text: str,
     return WhereContext(mode=SHUFFLED, token_ids=ids, text=partner_where_text,
                         provenance=partner_id, stop_reason="closed",
                         instruction=partner_instruction)
+
+
+def irrelevant_words_context(tokenizer, sample_id: str, *, seed: int = 0,
+                             n_words: int = 12,
+                             max_tokens: int = WHERE_CONTEXT_MAX_TOKENS) -> WhereContext:
+    """Negative control 2: well-formed English that says nothing about the edit.
+
+    A model that keys off "there is an instruction shaped like this" rather than
+    off its content scores the same here as on the real instruction.  The words
+    are drawn from a fixed vocabulary with a per-sample seed, so the control is
+    reproducible and every sample gets a different draw (a single constant string
+    is the *other* control, below).
+    """
+    rng = random.Random(f"{seed}:{sample_id}")
+    words = [rng.choice(IRRELEVANT_VOCAB) for _ in range(n_words)]
+    text = " ".join(words)
+    ids = encode_where_span(tokenizer, text)[:max_tokens]
+    return WhereContext(mode=IRRELEVANT_WORDS, token_ids=ids, text=text,
+                        provenance=f"irrelevant:{seed}", stop_reason="closed",
+                        instruction=text)
+
+
+def fixed_phrase_context(tokenizer, sample_id: str, *,
+                         phrase: str = FIXED_PHRASE_TEXT,
+                         max_tokens: int = WHERE_CONTEXT_MAX_TOKENS) -> WhereContext:
+    """Negative control 3: one constant phrase for every sample in the split.
+
+    This is the red line's own worked example -- ``"the main subject"`` scored
+    AUC 0.907 while the instruction-specific ``AUC_target`` was 0.523, i.e. a
+    string carrying zero per-sample information beat the real thing on a ranking
+    metric.  If a field scores here what it scores on the real instruction, it is
+    reading image salience, not the instruction.
+    """
+    ids = encode_where_span(tokenizer, phrase)[:max_tokens]
+    return WhereContext(mode=FIXED_PHRASE, token_ids=ids, text=phrase,
+                        provenance=f"fixed:{phrase}", stop_reason="closed",
+                        instruction=phrase)
 
 
 # --- shuffling --------------------------------------------------------------

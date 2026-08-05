@@ -36,8 +36,11 @@ def test_color_scale_uses_valid_cells_only():
     vmin, vmax = color_scale(f, valid)
     assert vmax == pytest.approx(0.4), "pad cells leaked into the colour scale"
     assert vmin == pytest.approx(0.1)
-    # without the mask the pad mass would dominate, which is the bug
-    assert color_scale(f, None)[1] == pytest.approx(9.0)
+    # without the mask the pad mass would dominate -- which is why valid=None is
+    # now refused outright (nit N24) rather than silently degrading
+    with pytest.raises(PerImageMinMaxError, match="needs a `valid` mask"):
+        color_scale(f, None)
+    assert color_scale(f, None, allow_all_valid=True)[1] == pytest.approx(9.0)
 
 
 def test_render_marks_pad_cells_instead_of_filling_them():
@@ -93,7 +96,7 @@ def test_overlay_lands_on_cell_boundaries():
     field = torch.zeros(4, 4)
     field[0, 0] = 1.0
     img = torch.zeros(3, 16, 16)
-    out, r = overlay_grid_on_image(field, img, alpha=1.0)
+    out, r = overlay_grid_on_image(field, img, alpha=1.0, allow_all_valid=True)
     assert out.shape == (16, 16, 3)
     # the hot cell occupies exactly its 4x4 pixel block, no interpolation bleed
     block = out[0:4, 0:4]
@@ -112,3 +115,17 @@ def test_unknown_scale_mode_is_rejected():
     f, valid = _field_with_pad()
     with pytest.raises(ValueError, match="unknown colour-scale mode"):
         color_scale(f, valid, mode="whatever")
+
+
+def test_valid_none_is_refused_as_loudly_as_the_banned_mode():
+    """Nit N24: the ban has to be symmetric.  `mode` was guarded and `valid` was
+    not, so 'valid_cells' with no mask silently became whole-field min-max --
+    one argument away from undoing the rule.  viz is shared with §13 and
+    Stage-What, where pad cells really exist."""
+    f, _valid = _field_with_pad()
+    with pytest.raises(PerImageMinMaxError, match="valid"):
+        color_scale(f, None)
+    with pytest.raises(PerImageMinMaxError, match="valid"):
+        render_field(f, None)
+    # the escape hatch exists but must be said out loud
+    assert render_field(f, None, allow_all_valid=True).n_pad == 0

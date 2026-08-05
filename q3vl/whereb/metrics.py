@@ -1,27 +1,36 @@
-"""Protocol 5.6 -- the nine Where gates and the lexicographic selection rule.
+"""Protocol 5.6 as revised by amendment A-5 -- the Where gates and the
+lexicographic selection rule.
 
-| metric                                  | gate     |
-|-----------------------------------------|---------:|
-| local `.cgt` median soft-IoU            | `>= 0.75` |
-| soft-IoU relative to the per-image oracle | `>= 85%` |
-| local soft-IoU p10                      | `>= 0.55` |
-| `AUC_target`                            | `>= 0.80` |
-| 3px boundary F1 / oracle boundary F1    | `>= 75%` |
-| IoU drop after instruction shuffle      | `>= 0.20` |
-| median `std(s_pred) / std(s*)`          | `>= 0.60` |
-| global mask soft-IoU                    | `>= 0.98` |
-| GT vs generated context IoU gap         | `<= 0.05` |
+| metric                                    | gate      |
+|-------------------------------------------|----------:|
+| local `.cgt` median soft-IoU              | `>= 0.75` |
+| soft-IoU relative to the per-image oracle | `>= 85%`  |
+| local soft-IoU p10                        | `>= 0.55` |
+| **grid-level** boundary F1 / oracle       | `>= 75%`  |
+| centre-prior paired delta (hard-IoU)      | `> 0`     |
+| that delta's paired p-value               | `<= 0.05` |
+| IoU drop after instruction shuffle        | `>= 0.20` |
+| median `std(s_pred) / std(s*)`            | `>= 0.60` |
+| global mask soft-IoU                      | `>= 0.98` |
+| GT vs generated context IoU gap           | `<= 0.05` |
+
+Ten gates.  Amendment A-5 (2026-08-05, user red lines in CLAUDE.md) deleted the
+`AUC_target >= 0.80` row and does not produce the metric at all; replaced the
+pixel-level "3px boundary F1" criterion with a **grid-level** one; and added the
+zero-parameter centre-prior baseline with a paired delta and p-value.  The §5.5
+**loss is untouched** -- it keeps its pixel-level 3px term, and that divergence
+is deliberate: it leaves the criterion something training does not optimise.
+
+Thresholding is always **top-k matching the GT area**, never a per-field tuned
+threshold.  Instruction conditionality is measured by the same-image paired
+difference plus three negative controls (shuffled / irrelevant words / fixed
+phrase), never by any AUC variant.
 
     "Once the gates pass, the single frozen Where checkpoint is selected in this
-     order: generated-context local median soft-IoU; 3px boundary F1; p10
+     order: generated-context local median soft-IoU; grid boundary F1; p10
      soft-IoU; parameter count, peak memory and latency.  If no arm passes every
      gate, the lexicographic best is still selected for diagnosis but must be
-     tagged ``WHERE-GATE-FAILED``, and the downstream What results may not claim
-     that the complete method holds."
-
-All of these are computed on ``V_where`` with the **generated** context as the
-main board (protocol 5.4), which is why :func:`arm_metrics` takes a per-context
-mapping and refuses to average the contexts together.
+     tagged ``WHERE-GATE-FAILED``."
 """
 
 from __future__ import annotations
@@ -40,7 +49,7 @@ from .losses import _EPS, boundary_map, soft_iou
 
 __all__ = ["percentile", "soft_iou_value", "boundary_f1", "topk_mask",
            "gt_area_k", "center_prior_field", "hard_iou", "grid_boundary_f1",
-           "paired_delta", "sample_metrics", "summarise", "arm_metrics",
+           "paired_delta", "instruction_paired_delta", "sample_metrics", "summarise", "arm_metrics",
            "evaluate_gates", "lexicographic_best", "ATTRIBUTION_NOTE",
            "attribution_section", "context_deltas"]
 
@@ -164,12 +173,20 @@ def grid_boundary_f1(pred_mask: torch.Tensor, gt_mask: torch.Tensor,
     return 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
 
 
-def paired_delta(a: Sequence[float], b: Sequence[float], *, n_boot: int = 2000,
+def paired_delta(a: Sequence[float], b: Sequence[float], *, n_perm: int = 10000,
                  seed: int = 0) -> dict[str, Any]:
-    """Paired mean ``a - b`` with a bootstrap CI and a two-sided p-value.
+    """Paired mean ``a - b`` with a **sign-flip permutation** p-value and a CI.
 
-    Red line: "any claim that the field found the subject must show a paired
-    delta and a p-value" -- against the centre prior, on the same samples.
+    Under the paired null the two labels are exchangeable within a pair, so the
+    sign of each difference is equally likely to be + or -.  Enumerating (or
+    sampling) sign flips is the textbook exact test for this design, and it is
+    both cheaper and stricter than inverting a bootstrap CI, which was the
+    previous implementation (review nit N23): CI inversion also reported a hard
+    ``p = 0.0`` for an all-positive difference set instead of the honest
+    ``<= 1/(n_perm + 1)`` bound that a permutation test gives.
+
+    ``p`` is the two-sided add-one-corrected proportion of sign-flipped means at
+    least as extreme as the observed one, so it can never be exactly zero.
     """
     import random as _random
 
@@ -177,21 +194,66 @@ def paired_delta(a: Sequence[float], b: Sequence[float], *, n_boot: int = 2000,
              if x is not None and y is not None]
     n = len(pairs)
     if n == 0:
-        return {"n": 0, "delta": None, "p_value": None, "ci95": None}
+        return {"n": 0, "delta": None, "p_value": None, "ci95": None,
+                "test": "sign_flip_permutation"}
     diffs = [x - y for x, y in pairs]
     obs = sum(diffs) / n
     rng = _random.Random(seed)
+
+    n_extreme = 0
+    for _ in range(n_perm):
+        m = sum(d if rng.random() < 0.5 else -d for d in diffs) / n
+        if abs(m) >= abs(obs) - 1e-12:
+            n_extreme += 1
+    p = (n_extreme + 1) / (n_perm + 1)          # add-one: never exactly 0
+
+    # a percentile bootstrap CI is still the natural interval for the estimate
     boots = []
-    for _ in range(n_boot):
+    for _ in range(2000):
         boots.append(sum(diffs[rng.randrange(n)] for _ in range(n)) / n)
     boots.sort()
-    lo = boots[int(0.025 * (n_boot - 1))]
-    hi = boots[int(0.975 * (n_boot - 1))]
-    # two-sided bootstrap p: how often the resampled mean crosses zero
-    n_le = sum(1 for v in boots if v <= 0.0)
-    p = 2.0 * min(n_le, n_boot - n_le) / n_boot
-    return {"n": n, "delta": obs, "p_value": min(1.0, p), "ci95": [lo, hi],
-            "n_boot": n_boot}
+    return {"n": n, "delta": obs, "p_value": min(1.0, p),
+            "ci95": [boots[49], boots[1949]], "n_perm": n_perm,
+            "test": "sign_flip_permutation"}
+
+
+def instruction_paired_delta(
+    rows: Sequence[Mapping[str, Any]], *, seed: int = 0,
+) -> dict[str, Any]:
+    """Paired difference over two instructions on the **same image** (A-5).
+
+    For a pair ``(A, B)`` drawn from one ``source_image_id`` with different
+    instructions and different GT regions::
+
+        d_A = IoU(field_A, GT_A) - IoU(field_A, GT_B)
+        d_B = IoU(field_B, GT_B) - IoU(field_B, GT_A)
+
+    Both terms hold the *image* fixed, so image salience and the centre prior
+    cancel by construction -- which is exactly what the shuffled control cannot
+    guarantee, since it draws its partner from the same image but scores against
+    only one GT.  ``delta > 0`` with a small p means the field follows the
+    instruction rather than the picture.
+
+    Each row must carry ``sample_id``, ``source_image_id``, ``instruction``,
+    ``self_iou`` and ``cross_iou`` (the latter two computed by the caller, which
+    is the only place that holds the predicted fields).
+    """
+    groups: dict[str, list[Mapping[str, Any]]] = {}
+    for r in rows:
+        groups.setdefault(str(r.get("source_image_id")), []).append(r)
+    self_v, cross_v, n_groups = [], [], 0
+    for members in groups.values():
+        used = [m for m in members if m.get("cross_iou") is not None]
+        if len(used) < 2:
+            continue
+        n_groups += 1
+        for m in used:
+            self_v.append(float(m["self_iou"]))
+            cross_v.append(float(m["cross_iou"]))
+    out = paired_delta(self_v, cross_v, seed=seed)
+    out["n_groups"] = n_groups
+    out["n_samples"] = len(self_v)
+    return out
 
 
 def sample_metrics(
@@ -366,6 +428,23 @@ ATTRIBUTION_NOTE: dict[str, Any] = {
         "null_context_gap": "causal control; nothing optimises it",
         "gt_generated_iou_gap": "cross-context consistency; nothing optimises it",
     },
+    "known_blind_spots": {
+        "boundary_f1_alone": (
+            "grid boundary F1 cannot separate 'compact but in the wrong place' "
+            "from 'scattered noise': measured on an off-centre GT, a displaced "
+            "compact field and the centre prior both score 0.0000 while "
+            "scattered noise scores 0.0357. The coverage column (hard-IoU) and "
+            "the centre-prior column are what close that gap -- no single column "
+            "is a criterion, which is why the red line demands all three."
+        ),
+        "instruction_conditionality": (
+            "no single context board proves instruction following. The three "
+            "negative controls (shuffled / irrelevant_words / fixed_phrase) and "
+            "the same-image paired difference are read together; a field that "
+            "scores the same under fixed_phrase as under the real instruction is "
+            "reading image salience."
+        ),
+    },
     "fair_comparisons": {
         "soft_iou_vs_oracle_ratio": (
             "numerator and denominator are optimised for the same objective, so "
@@ -423,7 +502,16 @@ def attribution_section(metrics: Mapping[str, Any]) -> str:
         f"{body}\n\n"
         "写作要求：结论段落里每出现一次 `local_soft_iou_median`，必须同时给出\n"
         "`grid_boundary_f1` / `center_prior_delta_*` / instruction-shuffle 与 null 两个 delta 的对应数字；\n"
-        "不得只用前者作结。\n"
+        "不得只用前者作结。\n\n"
+        "### 已知盲区（每块板都必须带着走，不是 NOTES 里的一次性说明）\n\n"
+        "- **单看 grid boundary F1 会漏判**：它分不出「紧凑但位置错」与「散点噪声」。\n"
+        "  实测（偏心 GT）：位移的紧凑场与中心先验都是 **0.0000**，而散点噪声是 **0.0357**——\n"
+        "  也就是说噪声在这一列上反而『赢』了那个位置错的紧凑场。补位的是覆盖列（hard-IoU）\n"
+        "  与中心先验列：**三列缺一不可**，任何一列单独都会被骗。\n"
+        "- **单看任何一块上下文板都证明不了指令跟随**：三条负控制\n"
+        "  （`shuffled` / `irrelevant_words` / `fixed_phrase`）与同图配对差分要**合起来读**。\n"
+        "  一个在 `fixed_phrase` 下与真实指令得分相同的场，读的是图像显著性而不是指令——\n"
+        "  红线里那句对全体样本相同的 `\"the main subject\"` 拿到 AUC 0.907 就是这么来的。\n"
     )
 
 

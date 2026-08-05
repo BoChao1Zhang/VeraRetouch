@@ -14,7 +14,7 @@ import pytest
 import torch
 
 from q3vl.whereb.config import GATES, ConnectorConfig, TrainConfig, arm_config
-from q3vl.whereb.context import ShuffleIndex
+from q3vl.whereb.context import CONTEXT_MODES, ShuffleIndex
 from q3vl.whereb.evaluate import evaluate_arm, evaluate_context, strata_report
 from q3vl.whereb.model import WhereBModel
 from q3vl.whereb.trainer import WhereBTrainer
@@ -109,7 +109,7 @@ def test_evaluate_arm_reports_four_contexts_and_the_gate_board(tmp_path):
     builder = FakeBuilder(ds, ShuffleIndex(records, seed=0))
     m = evaluate_arm(WhereBModel(cfg), builder, ds, cfg, batch_size=3,
                      out_dir=tmp_path)
-    assert set(m["per_context"]) == {"gt", "generated", "null", "shuffled"}
+    assert set(m["per_context"]) == set(CONTEXT_MODES)
     assert m["main_context"] == "generated"
     assert "gt_generated_iou_gap" in m and "instruction_shuffle_iou_drop" in m
     assert "null_context_gap" in m
