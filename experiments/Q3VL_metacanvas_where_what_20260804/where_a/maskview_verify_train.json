@@ -1,0 +1,38 @@
+{
+  "split": "train",
+  "maskview_root": "/mnt/nfs/bc/data/datasets/where_a-20260805/maskviews/train",
+  "elapsed_s": 31.2,
+  "published": {
+    "root": "/mnt/nfs/bc/data/datasets/where_a-20260805/maskviews/train",
+    "status": "complete",
+    "member_count": 226632,
+    "sample_count": 75544,
+    "shard_count": 2,
+    "index_rows": 226632,
+    "n_random_checked": 128,
+    "checksum_failures": [],
+    "ok": true
+  },
+  "n_shard_samples": 75544,
+  "n_eligible_in_split": 75544,
+  "n_missing_from_shards": 0,
+  "missing_examples": [],
+  "n_extra_in_shards": 0,
+  "extra_examples": [],
+  "n_compared_against_live": 200,
+  "max_abs_diff_mask_low": {
+    "n": 200,
+    "max": 0.000244140625,
+    "median": 0.00024318695068359375,
+    "mean": 0.00024209707975387574
+  },
+  "max_abs_diff_mask_hi": {
+    "n": 200,
+    "max": 0.0019608139991760254,
+    "median": 0.0019608139991760254,
+    "mean": 0.0019608134776353836
+  },
+  "n_mismatched": 0,
+  "mismatches": [],
+  "ok": true
+}

@@ -1,0 +1,36 @@
+{
+  "split": "T_lut_unseen",
+  "out_root": "/mnt/nfs/bc/data/datasets/where_a-20260805/maskviews/T_lut_unseen",
+  "elapsed_s": 33.6,
+  "manifest": {
+    "dataset_id": "indexed_tar_cea33cdb633cd1a6ae9bc42c776f254f",
+    "sample_count": 198,
+    "member_count": 594,
+    "shard_count": 1,
+    "payload_bytes": 3672729,
+    "status": "complete"
+  },
+  "n_rejected": 0,
+  "rejection_reasons": {},
+  "degenerate": 0,
+  "upscaled": 36,
+  "by_build": {
+    "l1": 35,
+    "l2": 36,
+    "l3": 23,
+    "l4": 29,
+    "l5": 38,
+    "l6": 37
+  },
+  "verify": {
+    "root": "/mnt/nfs/bc/data/datasets/where_a-20260805/maskviews/T_lut_unseen",
+    "status": "complete",
+    "member_count": 594,
+    "sample_count": 198,
+    "shard_count": 1,
+    "index_rows": 594,
+    "n_random_checked": 64,
+    "checksum_failures": [],
+    "ok": true
+  }
+}

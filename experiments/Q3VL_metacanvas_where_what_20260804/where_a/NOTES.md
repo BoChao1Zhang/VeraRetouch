@@ -40,7 +40,7 @@
 | 与 EXIF 校正图宽高比一致 | 100.0%（相对误差中位 2.54e-5，最大 3.66e-4） | 100.0%（中位 1.51e-4，最大 3.91e-4） |
 | 退化（低分辨率视图 std<1e-4） | 0.0% | 0.0% |
 | 软边像素占比（0.04<v<0.96）中位 | 0.2334 | 0.2741 |
-| `image.upscaled` 占比 | 15.0% | 10.4% |
+| `image.upscaled` 占比（**抽样值，已被全量取代**，见 §四之五） | 15.0% | 10.4% |
 | EXIF orientation | 199×1, 1×8 | 249×1, 1×8 |
 | `winner_confidence` | normal 200 | normal 148 / low 102 |
 | 定位来源 | catalog 100%，jsonl 回退 0 | 同 |
@@ -482,18 +482,47 @@ BA-0 ~5 min｜BA-1、BA-2 各 ~3.3 h｜BA-3 ~4.9 h｜**四臂串行 ~11.8 h**。
 （sha256 随机读、mask_low/mask_hi 数值、元数据 grid/locator、以及"split 里每个 eligible
 样本都在 shard 里、shard 里没有不该在的样本"）。
 
-`V_where` 已验（S1 该 split 已发布）：
+**五个 split 全部已发布并验完**（`maskview_verify_{train,V_where}.json`）：
 
-| 项 | 结果 |
-|---|---|
-| shard 随机读 + sha256（128 次） | 0 失败 |
-| shard 样本数 vs split eligible 数 | 400 / 400，缺 0、多 0 |
-| 与 live resolver 对拍 | 60 个样本，0 不一致 |
-| `mask_low` 最大差 | **2.44e-4**（float16 存储量化，符合预期） |
-| `mask_hi` 最大差 | **1.96e-3 = 0.5/255**（uint8 PNG 舍入，符合预期） |
+| 项 | `train` | `V_where` |
+|---|---|---|
+| manifest `status` | complete | complete |
+| shard 样本数 / split eligible 数 | **75,544 / 75,544** | 400 / 400 |
+| member 数（= 样本 × 3） | 226,632（2 个 shard） | 1,200（1 个 shard） |
+| 缺 / 多 | **0 / 0** | 0 / 0 |
+| shard 随机读 + sha256 | 128 次 0 失败 | 128 次 0 失败 |
+| 与 live resolver 对拍 | **200 样本，0 不一致** | 60 样本，0 不一致 |
+| `mask_low` 最大差 | **2.441e-4** | 2.441e-4 |
+| `mask_hi` 最大差 | **1.9608e-3 = 0.5/255** | 1.9608e-3 |
+| 判定 | `ok: true` | `ok: true` |
 
-`train` 仍在写（`.train.partial.*`），发布后用同一命令验：
-`python -m q3vl.where.scripts.verify_maskviews --split train --sample 200`
+两个差值恰好落在**存储精度**上（`mask_low` 存 float16、`mask_hi` 存 uint8 PNG），
+不是逻辑差异——换句话说 published shard 与逐张重解 `.cgt.png` 给出的是同一份数据。
+
+**一个独立交叉验证**：S1 打包侧的 eligibility 过滤独立数出 `sample_count = 75,544`，
+与我这边 `count_eligible()` 数出的 75,544 **精确相等**，且逐 build 分布
+（l1 12,975 / l2 11,866 / l3 12,676 / l4 12,625 / l5 12,792 / l6 12,610）与最初从冻结 split
+索引读到的数字**逐个对上**。两条互不相干的代码路径给出同一个population。
+
+### S1 全量统计取代此前的抽样值
+
+S1 的打包报告给出了**全量** population 数字，`§二` 表里的 15.0% / 10.4% 是 200/250 样本的
+抽样值，以下列为准（分层报告用这一组）：
+
+| split | 样本数 | `image.upscaled` | 退化 mask | 打包 rejected |
+|---|---:|---:|---:|---:|
+| `train` | 75,544 | **10,741（14.22%）** | 0 | 0 |
+| `V_where` | 400 | 54（13.50%） | 0 | 0 |
+| `V_what` | 408 | 74（18.14%） | 0 | 0 |
+| `T_final` | 424 | 63（14.86%） | 0 | 0 |
+| `T_lut_unseen` | 198 | 36（18.18%） | 0 | 0 |
+
+train 的 14.22% 与任务卡最初引用的 14.2% 一致（此前 250 样本抽出 10.4%，是抽样误差）。
+**退化 mask 全量 0 例**，所以 D8「只统计不剔除」在实际数据上不影响任何数字。
+打包 rejected 全部为 0：eligibility 之后没有一个样本在 mask IO 或宽高比上掉队。
+
+`--maskview-root` 指父目录后，**五个 split 全部从 shard 读**（train 75,544 / V_where 400 /
+V_what 408 / T_final 424 / T_lut_unseen 198），无一退回 live resolver。
 
 ### maskview root 现在按 split 解析
 
@@ -529,8 +558,8 @@ bash q3vl/where/scripts/run_where_a_arms.sh BA-3-Joint     # 单臂
 | 项 | 状态 |
 |---|---|
 | 训练口径 75,544 | ✅ 实测确认，计数已缓存共用 |
-| S1 `V_where` / `V_what` / `T_final` / `T_lut_unseen` | ✅ 已发布；`V_where` 数据面已验 |
-| S1 `train` | ⏳ 仍在写，发布后跑一次 `verify_maskviews --split train` |
+| S1 五个 split | ✅ 全部发布，`train`（75,544）与 `V_where` 数据面已验，0 不一致 |
+| 序列脚本入口门 | ✅ 已放行（checkpoint + train shards + 计数 75,544 三项齐备），DRY_RUN 走通 |
 | 序列脚本 | ✅ 已写、语法校验、DRY_RUN 全流程走通、门禁实测会拦 |
 | 20-step 带 maskview 基准 | ⏳ 随 BA-0 一起做（BA-0 只 5 min，本身就是预热） |
 | GPU 占用 | 本轮全程 0（两卡在跑 genctx） |

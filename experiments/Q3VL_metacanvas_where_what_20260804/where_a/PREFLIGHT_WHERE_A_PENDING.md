@@ -2,8 +2,10 @@
 
 生成 2026-08-05，**两轮审阅后修订**：初审 6 个 BLOCKER 已全部关闭（复审确认 6/6），
 复审新增 B-7（`r*(z)` 网格 121 → 257）与 10 项 nit，本轮一并清完。
-**当前放行状态：S2 已完成（8/8 PASS，checkpoint-4976）、D5 已定档、D12 吞吐已实测；
-S4 / S5 就绪待跑（S4 单臂 ~1.9–2.8 h，四臂串行 ~6.7 h）。S1 仍待 Base SFT 之后执行。**
+**当前放行状态：S1 五个 split 已发布并验完（train 75,544，与 live 0 不一致）、
+S2 已完成（8/8 PASS）、D5 已定档、D12 吞吐已实测、序列脚本入口门已放行。
+S4 就绪，等 18:15 触发：`GPU=0 bash q3vl/where/scripts/run_where_a_arms.sh`，
+四臂串行 ~11.8 h（75,544 口径）。**
 **以下每一项都未执行。** 阻塞原因：两张 H100 被 Base SFT 占用（rank PID 3395226 / 3395227），
 全量 mask 作业与训练读写同一套 NFS build 树与本地盘。
 
@@ -234,8 +236,8 @@ fit 阶段几乎翻倍，总时长几乎不变却多占一张卡。串行一晚�
   被拒集合单独出 `n_rejected` + `reject_reasons`。
 
 必须在报告里出现的分层：
-- **`image.upscaled`**：抽样实测 V_where 本地 **15.0%**、train 本地 **10.4%** 被上采样到短边 512。
-  这些样本的 GT 边缘是插值出来的，边缘类指标**虚高**，两层必须分开报。
+- **`image.upscaled`**：S1 全量统计——train **14.22%**（10,741/75,544）、V_where **13.5%**、
+  V_what 18.14%、T_final 14.86%、T_lut_unseen 18.18%。GT 边缘是插值出来的，边缘类指标**虚高**，必须分层报。
 - **`winner_confidence`**：`normal`（headline）与 `low` 分开报——D1 放开的是训练，不是 headline。
 - build（l1–l6）：`run_calibration.py` 已产出 `strata.build`；每层都给 low/hi 两个分辨率档。
 
