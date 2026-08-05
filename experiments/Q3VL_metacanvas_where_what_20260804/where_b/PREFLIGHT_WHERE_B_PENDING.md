@@ -14,6 +14,12 @@ cd /home/bc/VeraRetouch
 
 > 没有这一行，`import sqlite3` 直接 `CXXABI_1.3.15 not found`；Where-B 在 Where-A 的
 > maskview shard 尚未发布时会回退到实时 mask 定位，那条路径要读 build 的 `catalog.sqlite3`。
+>
+> **战役 bug R6（2026-08-05 修复）**：三个入口脚本现在自带 `import sqlite3`-before-torch
+> guard（且 `q3vl/whereb/__init__.py` 改成惰性再导出，否则包链会先把 torch 装进来、guard
+> 形同虚设），所以**它们已经不再依赖这个环境变量**——`logs/r6_no_ld_library_path_smoke.log`
+> 是在 `LD_LIBRARY_PATH` 未设置的情况下跑通的。**但 pytest 仍然需要它**（测试模块级 import
+> shardio，而 pytest 进程会先经包链装进 torch），所以上面这一行对跑测试依然必要。
 
 **依赖顺序不能换**：Base SFT 完成 → Where-A（S1 maskviews、S4 `BA-3-Joint` 校准）→ **S1 → S2 → S3 → S4 → S5**。
 

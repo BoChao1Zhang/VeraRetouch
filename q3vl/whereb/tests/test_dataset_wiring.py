@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import os
 from pathlib import Path
 
 import pytest
@@ -138,3 +139,120 @@ def test_training_job_checks_generated_context_coverage():
 def test_shuffle_records_carry_both_halves_of_the_swap():
     src = inspect.getsource(WhereBDataset.shuffle_records)
     assert '"where"' in src and '"instruction"' in src
+
+
+# --- campaign bug R6: sqlite3 must be imported before torch -----------------
+
+def _first_import_lines(path: Path) -> dict[str, int]:
+    """``{top-level module: first line it is imported on}`` via AST, not regex."""
+    tree = ast.parse(path.read_text())
+    lines: dict[str, int] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                lines.setdefault(a.name.split(".")[0], node.lineno)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            lines.setdefault(node.module.split(".")[0], node.lineno)
+    return lines
+
+
+@pytest.mark.parametrize("script", ["run_where_b.py", "make_generated_context.py",
+                                    "make_oracle_latents.py"])
+def test_entry_points_import_sqlite3_before_torch(script):
+    """``import torch`` poisons ``import sqlite3`` in the campaign env.
+
+    Measured 2026-08-05 on ``/home/bc/envs/q3vl_sft``::
+
+        import sqlite3; import torch   -> fine
+        import torch;   import sqlite3 -> ImportError (libstdc++ CXXABI_1.3.15)
+
+    torch loads a libstdc++ that shadows the one ``_sqlite3``'s dependency chain
+    (libicui18n) needs.  Both of this package's routes to a published shard --
+    ``q3vl.data.shardio`` and ``q3vl.where.maskdata`` -- import sqlite3 at module
+    level, so a torch-first process cannot open a store at all.  The guard is one
+    import at the top of each entry point; this test is what stops someone
+    tidying it away.  Campaign bug R6 (found by WHAT-IMPL).
+    """
+    lines = _first_import_lines(SCRIPTS / script)
+    assert "sqlite3" in lines, f"{script} lost its sqlite3 guard (campaign bug R6)"
+    assert "torch" in lines, f"{script} no longer imports torch -- retune this test"
+    assert lines["sqlite3"] < lines["torch"], (
+        f"{script}: sqlite3 must be imported before torch "
+        f"(sqlite3 at line {lines['sqlite3']}, torch at {lines['torch']})"
+    )
+
+
+@pytest.mark.parametrize("script", ["run_where_b.py", "make_generated_context.py",
+                                    "make_oracle_latents.py"])
+def test_the_guard_precedes_every_first_party_import(script):
+    """A ``q3vl.*`` import can pull torch in transitively, so the guard has to
+    come before those too, not merely before the literal ``import torch``."""
+    lines = _first_import_lines(SCRIPTS / script)
+    first_party = {m: n for m, n in lines.items() if m == "q3vl"}
+    assert first_party, script
+    for mod, lineno in first_party.items():
+        assert lines["sqlite3"] < lineno, (
+            f"{script}: sqlite3 (line {lines['sqlite3']}) must precede "
+            f"{mod} (line {lineno})"
+        )
+
+
+def test_the_guard_is_not_applied_to_library_modules():
+    """A guard inside a library module is worse than the bug it fixes.
+
+    ``import sqlite3`` at the top of a library makes that library unimportable in
+    *any* torch-first process, instead of failing only where a store is actually
+    opened.  WHAT-IMPL tried it and reverted; this pins the boundary so nobody
+    re-adds it here.  ``q3vl/whereb/stores.py`` is deliberately absent from the
+    list: it reaches sqlite3 through ``q3vl.data.shardio``, which is the S0-DATA
+    task's module, not ours to guard.
+    """
+    pkg = SCRIPTS.parent
+    for path in sorted(pkg.glob("*.py")):
+        lines = _first_import_lines(path)
+        assert "sqlite3" not in lines, (
+            f"{path.name} is a library module and must not carry the guard "
+            "(it would make the module unimportable after torch)"
+        )
+
+
+def test_importing_the_scripts_package_does_not_load_torch():
+    """The guard is only reachable if the package chain has not loaded torch yet.
+
+    ``python -m q3vl.whereb.scripts.<job>`` imports ``q3vl`` -> ``q3vl.whereb``
+    -> ``q3vl.whereb.scripts`` before running the entry point's own body.  While
+    ``q3vl/whereb/__init__.py`` eagerly re-exported ``.model`` (which imports
+    torch), the sqlite3 guard at the top of each script was already too late and
+    the job still died on ``import sqlite3`` -- measured, not theorised.  The
+    re-exports are lazy (PEP 562) for exactly this reason.
+    """
+    import subprocess
+    import sys
+
+    env = {k: v for k, v in os.environ.items() if k != "LD_LIBRARY_PATH"}
+    probe = (
+        "import sys, importlib;"
+        "importlib.import_module('q3vl.whereb.scripts');"
+        "print('torch' in sys.modules)"
+    )
+    out = subprocess.run([sys.executable, "-c", probe], capture_output=True,
+                         text=True, cwd=Path(__file__).resolve().parents[3], env=env)
+    assert out.returncode == 0, out.stderr[-500:]
+    assert out.stdout.strip() == "False", (
+        "importing q3vl.whereb.scripts pulled torch in; the entry-point sqlite3 "
+        "guard can no longer run first (campaign bug R6)"
+    )
+
+
+def test_the_lazy_re_exports_still_work():
+    """Laziness must not cost the public API."""
+    import q3vl.whereb as wb
+
+    assert wb.arm_config("W01").structure == "MC8-Joint"
+    assert wb.WhereBModel is not None
+    assert set(wb.__all__) == {
+        "ARMS", "ARM_IDS", "STRUCTURES", "ArmConfig", "TrainConfig", "arm_config",
+        "WhereBModel", "WhereBOutput", "MODEL_INPUT_KEYS", "parameter_table",
+    }
+    with pytest.raises(AttributeError):
+        wb.no_such_symbol

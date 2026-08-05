@@ -19,7 +19,7 @@
     "WB-P8b-h-where-causal-independence"
   ],
   "env": {
-    "git_commit": "cf1708984daf0d66b272ae1a7d50b71b994cd108",
+    "git_commit": "5977dc5380744e92af01218b4b5914b78ded2739",
     "python": "3.12.12",
     "torch": "2.10.0+cu128",
     "cuda_available": true,

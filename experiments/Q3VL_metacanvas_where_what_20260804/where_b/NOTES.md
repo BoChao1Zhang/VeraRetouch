@@ -451,3 +451,104 @@ generated_tokens 25 = 1 个强制前缀 + 24 个生成
 `two_segment` 档下该值是 **0.0**（它从没见过这四个 special token，自己绝不会吐 `<color>`），
 forced 档下变成 1.0，说明**强制前缀确实落到了解码序列里**，而不是被 padding 或
 `generate` 的参数吃掉。`color_format_failure=1.0` 仍是 `--max-new-tokens 24` 的预期结果。
+
+---
+
+## 十、战役级环境 bug R6：`import torch` 之后 `import sqlite3` 必然失败
+
+日期：2026-08-05 ｜ 发现：WHAT-IMPL ｜ 本包同样暴露，且我此前**没能发现**（见 §10.4）
+
+### 10.1 现象与根因
+
+在战役环境 `/home/bc/envs/q3vl_sft` 实测：
+
+```
+import sqlite3; import torch   -> 正常
+import torch;   import sqlite3 -> ImportError:
+    /lib/x86_64-linux-gnu/libstdc++.so.6: version `CXXABI_1.3.15' not found
+    (required by .../llm_factory/lib/python3.12/lib-dynload/../.././libicui18n.so.78)
+```
+
+torch 加载的 libstdc++ 遮蔽了 `_sqlite3` 依赖链（libicui18n）需要的那一个。
+本包有**两条**独立的路径撞上它：
+
+| 路径 | 谁 import sqlite3 |
+|---|---|
+| 任何已发布 shard 的读写（`stores.py` / `packing` / `publish_generated` / `verify_published`） | `q3vl.data.shardio` |
+| 实时 mask 定位（`open_dataset` 的回退档，要开 build 的 `catalog.sqlite3`） | `q3vl.where.maskdata` |
+
+逐模块实测（`import torch` 之后再 import）：
+
+```
+q3vl.whereb.stores      FAILS      q3vl.whereb.preflight   OK
+q3vl.whereb.gencontext  FAILS      q3vl.whereb.data        OK
+q3vl.where.maskdata     FAILS      q3vl.train.shards       OK
+q3vl.data.shardio       FAILS
+```
+
+### 10.2 修复：只在**入口脚本**加 guard，且必须让 guard 真的跑在最前
+
+三个入口脚本 `run_where_b.py` / `make_generated_context.py` / `make_oracle_latents.py`
+在 `from __future__` 之后、任何其他 import 之前加：
+
+```python
+import sqlite3  # noqa: F401  (import order is the point)
+```
+
+**`preflight.py` 不加**：实测它整条链（含 `--with-model` 的 `open_dataset(need_mask=False)`）
+根本不碰 sqlite3，而它又被三个脚本与测试当库 import——加了反而会把它变成
+"torch-first 进程里不可 import"。这正是主 agent 转达的、WHAT-IMPL 试过并回退的坑：
+**库模块加 guard 比 bug 本身更糟**（把"用到 store 时才失败"升级成"import 就失败"）。
+
+**光加 guard 还不够——第一次修完仍然崩。** `python -m q3vl.whereb.scripts.<job>` 会先走
+包链 `q3vl` → `q3vl.whereb` → `q3vl.whereb.scripts`，而我的 `q3vl/whereb/__init__.py`
+当时**急切地** `from .model import ...`（model import torch），于是 torch 在脚本体执行**之前**
+就已经装进来了，guard 形同虚设。对照 `q3vl/what/__init__.py`（只有一个 `__all__` 名单）：
+
+```
+import q3vl.what.scripts    -> torch loaded = False
+import q3vl.whereb.scripts  -> torch loaded = True   ← 病根
+```
+
+改法：`q3vl/whereb/__init__.py` 改成 **PEP 562 惰性再导出**（`__getattr__`），
+公开 API 一个不变（`from q3vl.whereb import WhereBModel` 照常），但 import 包不再拖进 torch。
+这不是"给库模块加 guard"，而是**去掉一个急切 import**，没有上面那个副作用。
+
+### 10.3 单测（`test_dataset_wiring.py`，AST 而非正则）
+
+| 测试 | 钉住的东西 |
+|---|---|
+| `test_entry_points_import_sqlite3_before_torch`（参数化 3 个脚本） | AST 取每个顶层模块的首次 import 行号，断言 `sqlite3 < torch` |
+| `test_the_guard_precedes_every_first_party_import` | guard 还必须早于任何 `q3vl.*`——一手 import 也会传递地拖进 torch |
+| `test_the_guard_is_not_applied_to_library_modules` | 扫 `q3vl/whereb/*.py`，**断言库模块里没有 guard**（防止有人"顺手补全"）|
+| `test_importing_the_scripts_package_does_not_load_torch` | 子进程（且**剥掉 `LD_LIBRARY_PATH`**）实测 `import q3vl.whereb.scripts` 后 `'torch' not in sys.modules` |
+| `test_the_lazy_re_exports_still_work` | 惰性化没有代价：`__all__` 十个名字可用，未知属性仍 `AttributeError` |
+
+### 10.4 CPU 验证：**不设 `LD_LIBRARY_PATH`** 跑真实索引
+
+`logs/r6_no_ld_library_path_smoke.log`（exit **0**）：
+
+```
+LD_LIBRARY_PATH=<unset>            ← 工作区惯用的绕过手段被刻意拿掉
+make_oracle_latents --split V_where --limit 2 --device cpu
+  dataset.mask_source = "live_mask_resolver"   ← 走了 q3vl.where.maskdata → sqlite3
+  n_ok = {band: 2, cband12: 2}
+  manifest.status = complete, sample_count = 2 ← 走了 q3vl.data.shardio → sqlite3
+  verify.checksum_failures = [], ok = true
+```
+
+同一条命令在修复前是 `ImportError ... CXXABI_1.3.15`（日志里保留了这次失败的 traceback 之前的版本对照）。
+三个入口 `--help` 在无 `LD_LIBRARY_PATH` 下也都能走完整条 import 链。
+
+### 10.5 为什么我之前没发现（值得记）
+
+**我此前所有的 CPU 冒烟都 `export LD_LIBRARY_PATH=/home/bc/miniconda3/envs/llm_factory/lib`**——
+那是 Where-A 的 NOTES V9 留下的绕过手段，也写在我自己的 PENDING 环境前置里。
+它把这个 bug 完整地遮住了：脚本"跑通了"，但跑通的前提是一个**必须由操作员记得手动 export
+的环境变量**。真正的作业提交路径（`run_where_b.sh`）确实 export 了它，所以生产不一定会炸；
+但任何人手敲 `python -m q3vl.whereb.scripts....` 就会炸，而且炸在 import 阶段、看不出和 sqlite3 有关。
+
+**遗留（不在本次范围，已上报）**：本包的**测试**在不设 `LD_LIBRARY_PATH` 时仍然收集失败
+（`test_stores.py` / `test_gencontext.py` 在模块级 import shardio，而 pytest 进程会先经
+包链装进 torch）。对测试而言唯一干净的解是仓库根 `conftest.py` 里一行 `import sqlite3`，
+那会同时影响 Where-A 与 Stage-What 的套件，属于跨包决定，未擅自改。

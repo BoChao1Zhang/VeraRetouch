@@ -26,6 +26,22 @@ both cards, and run it after Where-A has published its basis.**
 
 from __future__ import annotations
 
+# --- environment guard: sqlite3 must be imported BEFORE torch ---------------
+# Verified 2026-08-05 in the campaign env (/home/bc/envs/q3vl_sft):
+#   import torch; import sqlite3  -> ImportError, libstdc++ CXXABI_1.3.15 not found
+#   import sqlite3; import torch  -> fine
+# torch loads a libstdc++ that shadows the one `_sqlite3`'s dependency chain
+# (libicui18n) needs, so any process that touches torch first can never open a
+# published shard afterwards.  This job reaches sqlite3 twice over --
+# `q3vl.data.shardio` (every published store and every packer) and
+# `q3vl.where.maskdata` (the live mask locator opens a build catalog) -- so it
+# would die on its first store access without this line.  Importing it first
+# costs nothing and inoculates the whole process.  Campaign-wide bug R6, found
+# by WHAT-IMPL; the guard belongs in entry points only (a guard inside a library
+# module makes that module unimportable in any torch-first process, which is
+# strictly worse -- tried and reverted).
+import sqlite3  # noqa: F401  (import order is the point)
+
 import argparse
 import json
 import time
