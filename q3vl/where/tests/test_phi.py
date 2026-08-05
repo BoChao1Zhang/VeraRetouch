@@ -190,3 +190,80 @@ def test_float32_path_matches_float64_closely():
     p64 = build_phi_dir(sem, img, gh, gw)
     p32 = build_phi_dir(sem.float(), img.float(), gh, gw)
     assert np.allclose(p32.phi_dir.double().numpy(), p64.phi_dir.numpy(), atol=1e-4)
+
+
+# --- S2 GPU preflight regression: WA-P5 "phi Gram condition number inf" -----
+
+def test_greyscale_image_does_not_make_the_condition_number_infinite():
+    """3.3-3.8% of the local pool is black-and-white photography, which makes HSV
+    saturation identically 0.  After per-image standardisation that is an all-zero
+    column, so the Gram is exactly singular -- a structurally absent dimension,
+    not an ill-conditioned one.  The sample is kept (the oracle fit is unaffected,
+    and dropping it would bias the ceiling against B&W images); the reported
+    conditioning is that of the effective subspace."""
+    gh, gw = 8, 12
+    g = torch.Generator().manual_seed(21)
+    grey = torch.rand(1, gh, gw, generator=g, dtype=DT).repeat(3, 1, 1)  # R==G==B
+    sem = torch.randn(gh * gw, SEM_DIM, generator=g, dtype=DT)
+
+    L, S = range_channels(grey)
+    assert float(S.std(unbiased=False)) == 0.0, "fixture must really be greyscale"
+    assert float(L.std(unbiased=False)) > 0.0
+
+    parts = build_phi_dir(sem, grey, gh, gw)
+    assert parts.diag["n_dead_range"] == 1
+    assert parts.diag["dead_range_names"] == ["S"]
+    assert np.isfinite(parts.diag["phi_gram_cond"]), "effective cond must be finite"
+    assert np.isfinite(parts.diag["design_gram_cond"])
+    assert parts.diag["phi_dropped_columns"] == 1
+    assert parts.diag["design_dropped_columns"] == 1
+    # the full number is kept for transparency and is astronomically worse
+    # (inf, or ~1e15 depending on where the round-off lands)
+    assert parts.diag["phi_gram_cond_full"] > 1e6 * parts.diag["phi_gram_cond"]
+    # the dead channel is exactly zero, never amplified round-off
+    assert float(parts.S.abs().max()) == 0.0
+    assert torch.isfinite(parts.phi_dir).all()
+
+
+def test_colour_image_reports_no_dead_range_channel():
+    sem, img, gh, gw = _fake_inputs(seed=22)
+    parts = build_phi_dir(sem, img, gh, gw)
+    assert parts.diag["n_dead_range"] == 0
+    assert parts.diag["dead_range_names"] == []
+    assert parts.diag["phi_dropped_columns"] == 0
+    assert np.isfinite(parts.diag["phi_gram_cond_full"])
+
+
+def test_effective_gram_cond_drops_only_zero_columns():
+    from q3vl.where.phi import effective_gram_cond
+
+    g = torch.Generator().manual_seed(23)
+    M = torch.randn(200, 5, generator=g, dtype=DT)
+    full = effective_gram_cond(M)
+    assert full["n_dropped_columns"] == 0
+    assert full["rank"] == 5
+    assert np.isfinite(full["cond"]) and np.isfinite(full["cond_full"])
+
+    M2 = M.clone()
+    M2[:, 2] = 0.0
+    part = effective_gram_cond(M2)
+    assert part["n_dropped_columns"] == 1
+    assert part["rank"] == 4
+    assert np.isfinite(part["cond"])
+    assert part["cond_full"] > 1e6 * part["cond"]
+    # dropping the zero column must not change the conditioning of the rest
+    keep = torch.cat([M[:, :2], M[:, 3:]], dim=1)
+    assert part["cond"] == pytest.approx(effective_gram_cond(keep)["cond"], rel=1e-9)
+
+
+def test_a_real_rank_collapse_is_still_reported_as_infinite():
+    """The fix must not paper over genuine collinearity: a duplicated (non-zero)
+    column is a real degeneracy and has to stay visible."""
+    from q3vl.where.phi import effective_gram_cond
+
+    g = torch.Generator().manual_seed(24)
+    M = torch.randn(200, 4, generator=g, dtype=DT)
+    M[:, 3] = M[:, 1]                        # exact duplicate, both non-zero
+    rep = effective_gram_cond(M)
+    assert rep["n_dropped_columns"] == 0, "nothing is a zero column here"
+    assert rep["cond"] > 1e12 or not np.isfinite(rep["cond"])

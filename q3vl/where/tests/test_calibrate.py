@@ -447,3 +447,48 @@ def test_headline_summaries_carry_their_sample_count():
     band = cal.evaluate(samples)["per_readout"]["band"]
     assert band["headline_low"]["n"] == 1
     assert band["all_ok_low"]["n"] == 3
+
+
+# --- S2 GPU preflight: D11, the inner fit runs where we tell it -------------
+
+def test_fit_device_is_configurable_and_defaults_to_cpu():
+    """The first S2 run measured 6.35 s/fit on an H100 vs 1.82 s/fit on CPU --
+    3.5x slower on the accelerator, because a float64 L-BFGS over (1536, 71) with
+    a strong-Wolfe line search is thousands of tiny kernels with no arithmetic
+    intensity.  266 GPU-hours per arm x 4 arms is not a schedule."""
+    from q3vl.where.config import FIT_DEVICE
+
+    assert FIT_DEVICE == "cpu"
+    assert FitConfig().device == "cpu"
+    cal = Calibrator(_cfg("BA-1-Band"))
+    s = _mock_sample(0)
+    parts = cal.phi_for(s)
+    fit = cal.fit_sample(s, parts.phi_dir, "band")
+    assert fit.usable
+    # the latent comes back on the calibrator's device, so the outer graph is
+    # unaffected by where the fit ran
+    assert fit.latent.w_raw.device.type == torch.device(cal.device).type
+
+
+def test_fit_device_empty_string_means_follow_the_caller():
+    cal = Calibrator(_cfg("BA-1-Band"))
+    s = _mock_sample(0)
+    parts = cal.phi_for(s)
+    fit = cal.fit_sample(s, parts.phi_dir, "band",
+                         fit_cfg=FitConfig(device="", n_random=1, max_iter=20))
+    assert fit.usable
+    assert fit.latent.w_raw.device.type == torch.device(cal.device).type
+
+
+def test_fit_result_is_identical_whichever_device_it_ran_on():
+    """float64 is float64: moving the fit off the accelerator must not move the
+    numbers, or the D11 switch would be a silent change of experiment."""
+    cal = Calibrator(_cfg("BA-1-Band"))
+    s = _mock_sample(3)
+    parts = cal.phi_for(s)
+    a = cal.fit_sample(s, parts.phi_dir, "band",
+                       fit_cfg=FitConfig(device="cpu", n_random=1, max_iter=30))
+    b = cal.fit_sample(s, parts.phi_dir, "band",
+                       fit_cfg=FitConfig(device="", n_random=1, max_iter=30))
+    assert a.loss == pytest.approx(b.loss, abs=1e-12)
+    assert torch.allclose(a.latent.w_raw, b.latent.w_raw, atol=1e-12)

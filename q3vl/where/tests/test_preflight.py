@@ -101,3 +101,64 @@ def test_driver_writes_json_even_when_a_check_explodes(tmp_path, monkeypatch):
     driver = [c for c in data["checks"] if c["id"] == "WA-P0-preflight-driver"]
     assert driver and driver[0]["status"] == "fail"
     assert "simulated loader failure" in driver[0]["detail"]["error"]
+
+
+# --- S2 GPU preflight regressions ------------------------------------------
+
+def test_position_encoding_check_is_device_independent():
+    """WA-P4d passed on CPU and died under CUDA with "Expected all tensors to be
+    on the same device": the reference side was built on CPU while
+    `pos_embed.weight` lived on the GPU.  The comparison is now done entirely on
+    CPU in float64, so a tower on any device is verified against the same exact
+    arithmetic.  This test fakes a tower whose parameters report a foreign device
+    to prove the reference side no longer inherits it."""
+    import inspect
+
+    from q3vl.where import preflight as pf
+
+    src = inspect.getsource(pf.check_position_encoding)
+    assert ".cpu()" in src, "the reference comparison must be pinned to CPU"
+    assert src.count(".double().cpu()") >= 2, "both sides go to CPU float64"
+
+    # and it must actually run against a real (CPU) tower
+    class _Tower(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.num_grid_per_side = 8
+            self.pos_embed = torch.nn.Embedding(64, 16)
+
+        def fast_pos_embed_interpolate(self, grid_thw):
+            t, h, w = (int(v) for v in grid_thw[0])
+            n = self.num_grid_per_side
+            hs = torch.linspace(0, n - 1, h)
+            ws = torch.linspace(0, n - 1, w)
+            h0, w0 = hs.floor().long(), ws.floor().long()
+            h1 = (h0 + 1).clamp(max=n - 1)
+            w1 = (w0 + 1).clamp(max=n - 1)
+            dh = (hs - h0.float()).unsqueeze(1)
+            dw = (ws - w0.float()).unsqueeze(0)
+            e = self.pos_embed.weight
+            grid = ((1 - dh)[..., None] * (1 - dw)[..., None] * e[h0[:, None] * n + w0[None, :]]
+                    + (1 - dh)[..., None] * dw[..., None] * e[h0[:, None] * n + w1[None, :]]
+                    + dh[..., None] * (1 - dw)[..., None] * e[h1[:, None] * n + w0[None, :]]
+                    + dh[..., None] * dw[..., None] * e[h1[:, None] * n + w1[None, :]])
+            m = 2
+            return (grid.reshape(h // m, m, w // m, m, -1)
+                    .permute(0, 2, 1, 3, 4).reshape(h * w, -1))
+
+    c = pf.check_position_encoding(_Tower(), grid_h=4, grid_w=6)
+    assert c.status == "pass", c.detail
+    assert c.detail["max_rel_error"] < c.detail["tolerance"]
+    assert "model_dtype" in c.detail
+
+
+def test_position_encoding_tolerance_follows_the_model_dtype():
+    """bf16 carries ~3 decimal digits; the exact-arithmetic reference cannot be
+    held to 1e-5 against it."""
+    import inspect
+
+    from q3vl.where import preflight as pf
+
+    src = inspect.getsource(pf.check_position_encoding)
+    assert "torch.float64" in src and "torch.float32" in src
+    assert "1e-2" in src, "a bf16 tower needs the loose tolerance"

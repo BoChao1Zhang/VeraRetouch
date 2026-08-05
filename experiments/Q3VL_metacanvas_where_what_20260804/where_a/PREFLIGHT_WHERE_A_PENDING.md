@@ -2,7 +2,7 @@
 
 生成 2026-08-05，**两轮审阅后修订**：初审 6 个 BLOCKER 已全部关闭（复审确认 6/6），
 复审新增 B-7（`r*(z)` 网格 121 → 257）与 10 项 nit，本轮一并清完。
-**当前放行状态：S2 / S4 已准入；B-7 关闭后 S5 亦解锁。**
+**当前放行状态：S1 已完成、S2 已完成（8/8 PASS，checkpoint-4976）、D5 已定档；S4 / S5 就绪待跑。**
 **以下每一项都未执行。** 阻塞原因：两张 H100 被 Base SFT 占用（rank PID 3395226 / 3395227），
 全量 mask 作业与训练读写同一套 NFS build 树与本地盘。
 
@@ -64,7 +64,26 @@ D1 已裁定，样本量为 **local train 75,544**（含 low）。宽高比不�
 
 ---
 
-## S2 · 协议 §14 项 4/5/6 的 GPU 级 preflight（1 GPU，约 5–10 分钟）
+## S2 · 协议 §14 项 4/5/6 的 GPU 级 preflight —— ✅ **已完成，8/8 PASS**
+
+首跑 5 PASS / 3 FAIL（WA-P4d 设备 bug、WA-P5 灰度样本、WA-P6b 闭区间），三项均已修复，
+诊断见 NOTES §四之三。复跑结果（GPU1，checkpoint-4976，limit 32，D5 定档配置）：
+
+| 检查 | 结果 |
+|---|---|
+| `WA-P4a` | PASS |
+| `WA-P4d` | PASS，`max_rel_error = 4.04e-3`（bf16 塔，容差 1e-2） |
+| `WA-P4c` | PASS |
+| `WA-P4e` | PASS，band hi soft-IoU 0.9497 / cband12 0.9541；越域中位 0、最大 0.079%（门槛 1%） |
+| `WA-P4b` | **PASS，`max_abs_weight_diff = 0`、`n_tensors_changed = 0`** —— 冻结无泄漏 |
+| `WA-P5` | PASS，design cond 中位 19.8 / phi cond 中位 8.87e4；退化样本 2/32 已列出并保留 |
+| `WA-P6a` | PASS |
+| `WA-P6b` | PASS，64/64 规范，1 个带 `saturated` 标志 |
+
+**吞吐已实测（D11）**：内层拟合改跑 CPU 后 **1.629 s/拟合 → 38.7 / 68.4 小时每臂**；
+跟随 GPU 时是 6.349 s/拟合 → 150.8 / 266.5 小时每臂（慢 3.5 倍）。S4 排期按 CPU 口径算。
+
+原始命令（如需复跑）：
 
 ```bash
 bash q3vl/where/scripts/run_where_a.sh preflight
@@ -122,7 +141,11 @@ bash q3vl/where/scripts/run_where_a.sh preflight
 
 ### S2 的两项硬性输出（不是"建议"）
 
-**(a) D5 定档 —— `sweep-upsample`（审阅 B-4 要求 3 / N-16）**
+**(a) D5 定档 —— ✅ 已完成**：`radius_low=1, eps=1e-2`（9 个组合全部通过越域门槛，
+字典序选出；`d5_upsample_sweep.json`），已写入 `config.py`。相对旧的 r=2/eps=1e-3：
+band hi soft-IoU 0.9053 → **0.9497**，cband12 0.9237 → **0.9541**，且 cband12 的
+low→hi 落差变为 **−0.0095**（交付分辨率反而更好）。`GUIDED_PARAMS_PROVISIONAL` 仍为 `True`，
+按 N-27 需在 S4 校准出 B 后复跑确认才翻 `False`。原始命令：
 
 ```bash
 bash q3vl/where/scripts/run_where_a.sh sweep-upsample
@@ -135,12 +158,18 @@ soft-IoU、low→hi 落差、越域比例。**选择是字典序：先过 `S_OOD
 **当前 `radius_low=2, eps=1e-3` 是临时值**：它们来自 E2 的**全分辨率逐通道** `r=32` 用法
 （`experiments/E2_basis_fit_20260803/prep_data.py:149`），正是 §4.2 现在禁止的顺序，先例不可迁移。
 
-**(b) 内层 L-BFGS 吞吐 —— 已内建进 `WA-P5` 的 `throughput` 字段（审阅 N-15）**
+**(b) 内层 L-BFGS 吞吐 —— ✅ 已实测，并据此改了配置（D11）**
 
-CPU 实测（1 核，float64，`n_random=3, max_iter=80`，1536 点，8 次）：**1.816 s / 拟合**，
-外推 **43.1 CPU-小时/臂**（42,752 × 2 readout）或 **76.2 CPU-小时/臂**（75,544，即 D1 裁定后的口径）。
-**GPU 数字必须在 S2 现测**（同一字段会自动填 `device: cuda`）：它是 §11 排期唯一还没有实测支撑的量，
-也直接决定 D3 是否需要改用离线 latent 表。
+S2 实测（64 次拟合，float64，`n_random=3, max_iter=80`，1536 点）：
+
+| fit 设备 | s/拟合 | 每臂小时（42,752×2） | 每臂小时（75,544×2） |
+|---|---:|---:|---:|
+| H100（跟随模型） | 6.349 | 150.8 | 266.5 |
+| **CPU（现配置）** | **1.629** | **38.7** | **68.4** |
+
+float64 的 L-BFGS + strong-Wolfe 是几千个无算术强度的小 kernel，H100 的 fp64 又只有 1/64 速率，
+所以它在加速器上慢 3.5 倍。`FIT_DEVICE = "cpu"` 已定档，单测断言两种设备下数值逐位一致。
+**D3 不需要改用离线 latent 表**：68 CPU-小时/臂可与下一臂的视觉前向重叠。
 
 ---
 

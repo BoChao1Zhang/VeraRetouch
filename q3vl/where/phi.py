@@ -27,6 +27,7 @@ from .config import (
     GEO_NAMES,
     PHI_DIR_DIM,
     PHI_DIR_NAMES,
+    RANGE_NAMES,
     RESID_BLOCK_DIM,
     SEM_DIM,
     PhiConfig,
@@ -141,6 +142,39 @@ def design_block(geo5: torch.Tensor, L: torch.Tensor, S: torch.Tensor) -> torch.
     return torch.cat([ones, geo5, L.unsqueeze(1), S.unsqueeze(1)], dim=1)
 
 
+def effective_gram_cond(M: torch.Tensor, tol: float = 1e-12) -> dict[str, Any]:
+    """Condition number of ``M^T M`` over the columns that actually carry signal.
+
+    A perfectly flat channel -- a **greyscale photograph** makes HSV saturation
+    identically 0, and 3.3-3.8% of the local pool is greyscale -- becomes an
+    all-zero column after per-image standardisation, so the Gram is exactly
+    singular and ``cond`` is ``inf``.  That is a true statement about a
+    structurally absent dimension, not a defect in the sample: the oracle fit is
+    unaffected (the ridge solve ignores the column) and the image is a perfectly
+    ordinary black-and-white photo that Where has to handle anyway.
+
+    So the reported number is the conditioning of the *effective* subspace, with
+    the dropped dimensions counted next to it and the full (possibly infinite)
+    value kept for transparency.
+    """
+    with torch.no_grad():
+        Md = M.double()
+        norms = Md.norm(dim=0)
+        keep = norms > tol * float(norms.max().clamp_min(1e-30))
+        n_dropped = int((~keep).sum())
+        full = float(torch.linalg.cond(Md.transpose(0, 1) @ Md))
+        sub = Md[:, keep]
+        eff = (float(torch.linalg.cond(sub.transpose(0, 1) @ sub))
+               if sub.shape[1] else float("inf"))
+        return {
+            "cond": eff,
+            "cond_full": full,
+            "n_dropped_columns": n_dropped,
+            "n_columns": int(M.shape[1]),
+            "rank": int(torch.linalg.matrix_rank(sub)) if sub.shape[1] else 0,
+        }
+
+
 def _ridge_lstsq(A: torch.Tensor, E: torch.Tensor) -> tuple[torch.Tensor, float]:
     """Least squares ``argmin ||A c - E||`` via the normal equations.
 
@@ -178,14 +212,17 @@ def residualize(
     E: torch.Tensor, A: torch.Tensor, eps: float
 ) -> tuple[torch.Tensor, dict[str, Any]]:
     """Project ``E`` (P,K) onto the orthogonal complement of ``A`` (P,J)."""
-    coef, cond = _ridge_lstsq(A, E)
+    coef, _ = _ridge_lstsq(A, E)
     before = _max_abs_corr(A, E, eps)
     Er = E - A @ coef
     after = _max_abs_corr(A, Er, eps)
+    g = effective_gram_cond(A)
     return Er, {
         "resid_corr_before": before,
         "resid_corr_after": after,
-        "design_gram_cond": cond,
+        "design_gram_cond": g["cond"],
+        "design_gram_cond_full": g["cond_full"],
+        "design_dropped_columns": g["n_dropped_columns"],
     }
 
 
@@ -239,9 +276,17 @@ def build_phi_dir(
     L, S = range_channels(
         img_low.to(dtype), luma=cfg.luma, saturation=cfg.saturation
     )
+    dead_range: list[str] = []
     if cfg.standardize_range:
-        L = standardize(L.unsqueeze(1), cfg.std_eps).squeeze(1)
-        S = standardize(S.unsqueeze(1), cfg.std_eps).squeeze(1)
+        # Same rule as the semantic block: a channel that carries no variation
+        # (greyscale photo -> S is identically 0) is set to exactly zero and
+        # counted, rather than having its round-off amplified by 1/(0 + eps)
+        # into a unit-variance "feature".
+        rng = torch.stack([L, S], dim=1)
+        rng_z, live = standardize_live(rng, rng.detach().std(dim=0, unbiased=False),
+                                       cfg.std_eps)
+        L, S = rng_z[:, 0], rng_z[:, 1]
+        dead_range = [n for n, ok in zip(RANGE_NAMES, live.tolist()) if not ok]
 
     A = design_block(geo5, L, S)
     if A.shape[1] != RESID_BLOCK_DIM:
@@ -256,16 +301,20 @@ def build_phi_dir(
     sem, live = standardize_live(sem, std_before, cfg.std_eps)
     diag = dict(diag)
     diag["n_dead_semantic"] = int((~live).sum())
+    diag["n_dead_range"] = len(dead_range)
+    diag["dead_range_names"] = dead_range
 
     phi = torch.cat([geo5, L.unsqueeze(1), S.unsqueeze(1), sem], dim=1)
     if phi.shape[1] != PHI_DIR_DIM:
         raise AssertionError(f"phi_dir is {phi.shape[1]}-dim, protocol 4.2 says {PHI_DIR_DIM}")
 
     with torch.no_grad():
-        gram = (phi.double().transpose(0, 1) @ phi.double()) / phi.shape[0]
+        g = effective_gram_cond(phi)
         diag = dict(diag)
-        diag["phi_gram_cond"] = float(torch.linalg.cond(gram))
-        diag["phi_rank"] = int(torch.linalg.matrix_rank(gram).item())
+        diag["phi_gram_cond"] = g["cond"]
+        diag["phi_gram_cond_full"] = g["cond_full"]
+        diag["phi_dropped_columns"] = g["n_dropped_columns"]
+        diag["phi_rank"] = g["rank"]
         diag["n_points"] = int(phi.shape[0])
     return PhiParts(
         phi_dir=phi, geo5=geo5, L=L, S=S, semantic=sem,

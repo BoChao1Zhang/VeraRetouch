@@ -214,10 +214,19 @@ class Calibrator:
                 f"functional (REVIEW-impl-WhereA B-6/N-18)"
             )
         cfg = type(cfg)(**{**cfg.__dict__, "seed": cfg.seed + seed_offset})
-        return fit_latent(
-            phi_dir.detach().double(), sample.mask_low.to(self.device).double(),
-            readout, cfg,
+        # D11: the L-BFGS runs where `cfg.device` says, independently of where
+        # the vision tower lives.  Measured 3.5x faster on CPU than on an H100 --
+        # float64 over (1536, 71) with a strong-Wolfe line search is thousands of
+        # tiny kernels with no arithmetic intensity.  The result is moved back to
+        # the calibrator's device so the outer graph is unaffected.
+        dev = cfg.device or self.device
+        res = fit_latent(
+            phi_dir.detach().double().to(dev),
+            sample.mask_low.to(dev).double(), readout, cfg,
         )
+        if res.latent is not None and dev != self.device:
+            res.latent = res.latent.to(self.device)
+        return res
 
     def freeze_projector(self) -> None:
         """Make "B is never touched" structural: drop the optimiser/scheduler and

@@ -63,7 +63,7 @@
 
 ## 三、CPU 级验证结果
 
-### 3.1 单元测试：**142 个全部通过**（`q3vl/where/tests/`，用时 48 s；初审前 97，一审后 134，复审后 142）
+### 3.1 单元测试：**162 个全部通过**（`q3vl/where/tests/`，用时 63 s；初审前 97 → 一审 134 → 复审 142 → S2 修复 162）
 
 | 文件 | 数量 | 覆盖 |
 |---|---:|---|
@@ -272,6 +272,103 @@ vision tower 单独加载：415.3M 参数，CPU float32 加载 3.0 s，512×768 
 
 ---
 
+## 四之三、S2 GPU preflight 的三个 FAIL（2026-08-05，checkpoint-4976，--limit 32）
+
+首次 S2 跑出 5 PASS / 3 FAIL。三个都在 CPU 上复现并定位，修复后 **8/8 PASS**
+（归档 `preflight_where_a.json`）。三个都不是公式问题——两个是诊断代码本身的缺陷，
+一个是真实数据的合法形态被误判。
+
+### WA-P4d「could not verify the position encoding」—— 检查代码的设备 bug
+
+`RuntimeError: Expected all tensors to be on the same device, cuda:0 and cpu`。
+我写的参照侧（`torch.linspace` 建的插值权重）在 CPU 上，而 `pos_embed.weight` 在 GPU 上，
+两者相乘即报错。CPU 干跑时两侧恰好同在 CPU，所以从未暴露。
+
+- 修复：**整个比对搬到 CPU float64**（`got` 与 `w` 都 `.double().cpu()`）。参照侧是精确算术，
+  模型侧是任意 device/dtype，二者本就不该在同一个表达式里混设备。
+- 顺带修了一个会在 GPU 上误判的问题：容差原为固定 `1e-5`，而线上塔跑 **bf16**（约 3 位十进制），
+  精确参照根本达不到 1e-5。容差改为按 `model_dtype` 取值（fp32/fp64 → 1e-5，其余 → 1e-2）。
+- 实测：`max_rel_error = 4.04e-3`，容差 1e-2，**PASS**。bf16 下 4e-3 正是该有的量级。
+
+### WA-P5「phi Gram condition number inf」—— 3.3~3.8% 的样本是黑白照片
+
+在 CPU 上用同一批 32 个样本复现（无需模型，L/S 只依赖图像）：**32 个里有 2 个 `cond = inf`**，
+就是 `sft_0715ee31…`（l2）与 `sft_0945d9d0…`（l3），两张都是 **std(S) 恰好 = 0** 的
+**纯灰度照片**。HSV 饱和度处处为 0 → 逐图标准化后 `S` 成为**全零列** →
+`[1, geo5, L, S]` 的 Gram 精确奇异 → cond = inf，phi 随之继承。
+
+扩样统计（V_where 400 + train 400，纯 CPU）：**V_where 3.75%、train 3.25%**，
+六个 build 均匀分布（l1–l6 都有），`L` 退化 0 例。换算到本地 train 池约 **2,500 个样本**。
+
+**裁定：保留样本，只在报告侧剔除退化维。** 理由三条：
+1. **拟合完全不受影响**——首次 S2 的 `success_rate` 就是 1.0（32/32，两个 readout 都是），
+   ridge 解本来就忽略零列；
+2. 这些是**合法的黑白摄影作品**，不是坏数据，Where 上线后照样要处理；
+3. 丢掉它们等于让天花板**系统性回避黑白图**，population 被改动（与 D8 对退化 mask 的裁定同理）。
+
+实现：`effective_gram_cond()` 先丢掉零列再算条件数，同时保留 `*_cond_full`（可能是 inf）
+与 `n_dropped_columns`；L/S 与语义块统一走 `standardize_live`（退化通道置**精确零**而不是把
+1e-17 的舍入放大成单位方差）；`WA-P5` 的门槛改判**有效子空间**的条件数，并把退化样本 id
+列进 `degenerate_range`。**真正的秩塌陷仍会被抓到**——单测用"非零但完全重复的列"验证了这一点。
+
+- 实测：design cond 中位 19.8 / 最大 95.7，phi cond 中位 8.87e4 / 最大 1.69e5，**PASS**。
+
+### WA-P6b「sft_09bbce…/band: readout out of bounds」—— 闭区间 vs 开区间
+
+不是 bf16 噪声，也不是规范化 bug（64/64 latent 规范、‖w_dir‖ 误差 9.9e-13）。
+根因：float64 下 **`sigmoid(x)` 在 x ≥ 37 时精确返回 `1.0`**，而 `bounds_report` 用的是
+**严格**不等式 `pi < 1`。L-BFGS 一旦选定硬极性就会把 `pi_raw` 推到 37 以上，于是
+"参数取到了有界 sigmoid **保证**的端点"被报成"越界"。
+
+`m(z)` 在 `pi = 1` 处完全良定义（纯带通，无极性混合），所以**是检查太严，不是模型出界**。
+
+- 修复：区间按**闭区间**检查（这正是有界 sigmoid 保证的东西），另出 `*_saturated` 标志
+  ——参数顶到边界是**有信息量的诊断**（说明拟合选了硬极性），不是失败。
+  `h > 0`（协议 4.3 明文要求）仍单独严格检查。
+- 同时让报错带上参数名与实测区间：上一轮"out of bounds"不带任何数字，白白花掉一轮诊断。
+- 实测：64/64 latent 全部 in bounds，其中 **1 个**带 `saturated` 标志——正是原先失败的那个。
+
+### 顺带：D11 · 内层 L-BFGS 必须跑在 CPU 上
+
+首次 S2 的吞吐字段（N-15 埋的）暴露了一个更要命的问题：
+
+| fit 所在设备 | s/拟合 | 每臂小时数（42,752 × 2） | （75,544 × 2） |
+|---|---:|---:|---:|
+| H100（跟随模型） | **6.349** | 150.8 | **266.5** |
+| CPU | **1.629** | 38.7 | **68.4** |
+
+同一批 64 次拟合，**GPU 比 CPU 慢 3.5 倍**。原因是这活儿本来就不该上 GPU：float64、
+(1536, 71) 的设计矩阵、~120 次 L-BFGS 迭代加 strong-Wolfe 线搜——几千个毫无算术强度的
+小 kernel，而 H100 的 fp64 在张量核之外只有 1/64 速率。它只是**继承了模型的 device**。
+
+266 GPU-小时/臂 × 4 臂 = 44 GPU-天，不是排期；68 CPU-小时/臂则可与下一臂的视觉前向重叠。
+落地：`FIT_DEVICE = "cpu"`（`FitConfig.device`，空串表示跟随调用方），latent 结果搬回
+calibrator 的 device，外层图不受影响。单测断言两种 device 下**数值逐位一致**
+（float64 就是 float64），所以这不是"偷偷换了实验"。
+
+### D5 定档写入配置
+
+S2 的 sweep（`d5_upsample_sweep.json`，24 个真实样本 / 48 个 latent）9 个组合全部通过越域门槛，
+字典序选出 **`radius_low=1, eps=1e-2`**，已写进 `config.py`。用它重跑 preflight 的对比：
+
+| | band hi soft-IoU | low→hi 落差 | cband12 hi | low→hi 落差 | 越域中位/最大 |
+|---|---:|---:|---:|---:|---|
+| r=2, eps=1e-3（旧） | 0.9053 | +0.0484 | 0.9237 | +0.0210 | 0 / 0.11% |
+| **r=1, eps=1e-2（定档）** | **0.9497** | **+0.0039** | **0.9541** | **−0.0095** | 0 / 0.079% |
+
+cband12 的落差**为负**——交付分辨率比低分辨率还好，说明这次 guided upsample 确实在恢复
+低分辨率网格表达不了的边缘细节，而不只是在放大。
+`GUIDED_PARAMS_PROVISIONAL` 仍为 `True`：按 N-27，要等 S4 校准出 B 之后用
+`--basis .../BA-3-Joint/B.npy` 复跑一次 sweep 确认，才能翻 `False`。
+
+### S2 最终状态
+
+**8/8 PASS**（`preflight_where_a.json`，checkpoint-4976，limit 32，GPU1）。
+`WA-P4b` 维持 PASS：`max_abs_weight_diff = 0`、`n_tensors_changed = 0`
+——冻结无泄漏，`F_pre` 对 Base SFT 不变这条推论**在真实 checkpoint 上得到确认**。
+
+---
+
 ## 五、代码地图
 
 ```
@@ -296,7 +393,7 @@ q3vl/where/
     run_calibration.py     ⏸ 单臂全量校准，未跑
     make_oracle_latents.py ⏸ train split oracle latent（Where-B 前置），未跑
     run_where_a.sh         ⏸ 提交入口，内置 D-20 四步
-  tests/                   142 个用例，全绿（+ test_scripts.py：待跑作业的接口契约）
+  tests/                   162 个用例，全绿（+ test_scripts.py：待跑作业的接口契约）
 ```
 
 ---

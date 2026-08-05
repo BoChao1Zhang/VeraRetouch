@@ -103,9 +103,16 @@ CURVE_Z_N = 257
 # the order protocol 4.2 now forbids, so it is not transferable.  The values
 # below must be re-fixed from the S2 sweep (`scripts/sweep_upsample.py`) before
 # any arm runs.
-GUIDED_RADIUS_LOW = 2
-GUIDED_EPS = 1e-3
-GUIDED_PARAMS_PROVISIONAL = True        # flipped to False when S2 fixes D5
+# FIXED BY THE S2 SWEEP (2026-08-05, `d5_upsample_sweep.json`, 48 latents over 24
+# real V_where samples): all 9 settings passed the domain gate, and
+# (radius_low=1, eps=1e-2) won on delivered-resolution soft-IoU (mean median
+# 0.9586) with an out-of-domain median of 0.
+GUIDED_RADIUS_LOW = 1
+GUIDED_EPS = 1e-2
+# Still provisional per N-27: the sweep ran against the *uncalibrated* seeded B,
+# and the s field changes shape once BA-3-Joint calibrates B.  Re-run the sweep
+# with `--basis .../BA-3-Joint/B.npy` after S4 and only then flip this to False.
+GUIDED_PARAMS_PROVISIONAL = True
 # PRE-REGISTERED (provisional, REVIEW-impl-WhereA N-20): the median per-sample
 # fraction of pixels the guided upsample pushes outside `S_DOMAIN` before the
 # clamp.  Above this, the clamp stops being a boundary repair and starts being
@@ -151,6 +158,18 @@ FIT_REJECT_ALPHA = 1e-6                 # collapsed direction (s is constant)
 # (dg/dlatent)(dlatent*/dB) is O(1), not O(inner residual).
 FIT_OBJECTIVE = "soft_iou_minmax"
 CALIB_OBJECTIVE = "soft_iou_minmax"
+
+# D11 (2026-08-05, forced by the S2 GPU preflight): run the inner L-BFGS on the
+# CPU even when the vision tower is on a GPU.  Measured on the same 4x32 samples:
+#   CPU 1.816 s/fit -> 43.1 / 76.2 hours per arm
+#   GPU 6.349 s/fit -> 150.8 / 266.5 hours per arm      (3.5x SLOWER)
+# The fit is float64 over a (1536, 71) design with ~120 L-BFGS iterations and a
+# strong-Wolfe line search: thousands of tiny kernels, no arithmetic intensity,
+# and fp64 on an H100 is 1/64 rate outside the tensor cores.  It is a CPU
+# workload that happened to inherit the model's device.  266 GPU-hours per arm
+# x 4 arms is not a schedule; 76 CPU-hours per arm overlaps with the next arm's
+# vision forward.
+FIT_DEVICE = "cpu"
 
 # --- protocol 4.4: the four arms -------------------------------------------
 ARMS = ("BA-0-Fixed", "BA-1-Band", "BA-2-CBand12", "BA-3-Joint")
@@ -252,6 +271,9 @@ class FitConfig:
     reject_loss: float = FIT_REJECT_LOSS
     reject_alpha: float = FIT_REJECT_ALPHA
     seed: int = 0
+    # where the L-BFGS itself runs; see FIT_DEVICE.  "" means "same device as
+    # the caller", which is what the first S2 run did -- and paid 3.5x for.
+    device: str = FIT_DEVICE
 
 
 @dataclass(frozen=True)

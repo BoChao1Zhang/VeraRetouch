@@ -135,7 +135,11 @@ def test_guided_upsample_pushes_s_out_of_domain_and_reports_it():
     s_low = torch.where(torch.rand(1, 1, 8, 8, generator=torch.Generator().manual_seed(4), dtype=DT) > 0.5,
                         torch.tensor(3.0, dtype=DT), torch.tensor(-3.0, dtype=DT))
 
-    raw_cfg = UpsampleConfig(clamp_domain=False)
+    # eps controls how aggressively the filter extrapolates from the guide, so
+    # it also controls how far past the domain it can throw s.  A small eps makes
+    # the overshoot reproducible; the D5 winner (eps=1e-2) is deliberately
+    # gentler, which is part of why the sweep's domain gate selected it.
+    raw_cfg = UpsampleConfig(radius_low=2, eps=1e-3, clamp_domain=False)
     s_raw, rep_raw = guided_upsample(s_low, guide, raw_cfg, return_domain_report=True)
     assert rep_raw["raw_max"] > 3.0 or rep_raw["raw_min"] < -3.0, \
         "the filter is expected to overshoot on an uncorrelated guide"
@@ -143,13 +147,19 @@ def test_guided_upsample_pushes_s_out_of_domain_and_reports_it():
     assert rep_raw["clamped"] is False
     assert float(s_raw.max()) == pytest.approx(rep_raw["raw_max"])
 
-    s_clamped, rep = guided_upsample(s_low, guide, UpsampleConfig(), return_domain_report=True)
+    clamped_cfg = UpsampleConfig(radius_low=2, eps=1e-3, clamp_domain=True)
+    s_clamped, rep = guided_upsample(s_low, guide, clamped_cfg, return_domain_report=True)
     assert rep["clamped"] is True
     # the report still shows the *pre-clamp* truth
     assert rep["raw_max"] == pytest.approx(rep_raw["raw_max"])
     assert rep["frac_out_of_domain"] == pytest.approx(rep_raw["frac_out_of_domain"])
     assert float(s_clamped.max()) <= 3.0 + 1e-12
     assert float(s_clamped.min()) >= -3.0 - 1e-12
+
+    # whatever the parameters, the domain fields are always reported
+    _, rep_default = guided_upsample(s_low, guide, UpsampleConfig(),
+                                     return_domain_report=True)
+    assert set(rep_default) >= {"raw_min", "raw_max", "frac_out_of_domain", "clamped"}
 
 
 def test_clamping_leaves_in_domain_values_untouched():

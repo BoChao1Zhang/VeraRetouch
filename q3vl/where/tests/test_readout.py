@@ -277,3 +277,58 @@ def test_mirror_still_exact_under_logsumexp():
         a = apply_readout("cband12", z, raw)
         b = apply_readout("cband12", -z, mirror_params("cband12", raw))
         assert torch.allclose(a, b, atol=1e-12)
+
+
+# --- S2 GPU preflight regression: WA-P6b "readout out of bounds" ------------
+
+def test_saturated_sigmoid_is_in_bounds_not_out_of_bounds():
+    """`sigmoid(x) == 1.0` exactly in float64 once x >= 37, and an L-BFGS fit
+    reaches that whenever it commits to a hard polarity.  A strict `pi < 1` then
+    reports the *guaranteed* endpoint as a bound violation -- which is what failed
+    sft_09bbce5c.../band in the first S2 run.  Hitting the endpoint is what a
+    bounded sigmoid is for; m(z) at pi=1 is a pure band-pass."""
+    assert float(torch.sigmoid(torch.tensor(37.0, dtype=DT))) == 1.0
+    for pi_raw in (37.0, 50.0, 800.0):
+        raw = {"mu": _t(0.0), "h_raw": _t(0.0), "k_raw": _t(0.0), "pi_raw": _t(pi_raw)}
+        rep = bounds_report("band", raw)
+        assert rep["pi_in_bounds"], f"pi_raw={pi_raw} must count as in bounds"
+        assert rep["pi_saturated"], "…but it must be reported as saturated"
+        assert rep["h_positive"], "protocol 4.3 h > 0 is still checked separately"
+        # the mask is perfectly well defined there
+        m = apply_readout("band", torch.linspace(-3, 3, 41, dtype=DT), raw)
+        assert bool(torch.isfinite(m).all())
+        assert float(m.min()) >= 0.0 and float(m.max()) <= 1.0
+
+
+def test_saturated_opacity_and_payload_are_in_bounds():
+    for raw_val in (37.0, 800.0):
+        raw = {k: torch.full((CBAND_M,), raw_val, dtype=DT)
+               for k in ("sig_raw", "o_raw", "c_raw")}
+        rep = bounds_report("cband12", raw)
+        assert rep["o_in_bounds"] and rep["c_in_bounds"] and rep["sigma_in_bounds"]
+        assert rep["o_saturated"] and rep["c_saturated"]
+
+
+def test_bounds_still_catch_a_genuine_violation():
+    """The closed-interval test must not become vacuous: a value outside the
+    declared interval still fails."""
+    raw = {"mu": _t(0.0), "h_raw": _t(0.0), "k_raw": _t(0.0), "pi_raw": _t(0.0)}
+    rep = bounds_report("band", raw)
+    assert all(v for k, v in rep.items() if k.endswith("in_bounds"))
+    assert not rep["pi_saturated"]
+
+    class _Fake:
+        """A parameterisation that ignores the bounds -- stands in for a future
+        edit that drops the bounded sigmoid."""
+
+    import q3vl.where.readout as ro
+    real = ro.band_params
+    try:
+        ro.band_params = lambda raw: {"mu": raw["mu"], "h": _t(9.0), "k": _t(99.0),
+                                      "pi": _t(1.5)}
+        rep_bad = ro.bounds_report("band", raw)
+        assert not rep_bad["h_in_bounds"]
+        assert not rep_bad["k_in_bounds"]
+        assert not rep_bad["pi_in_bounds"]
+    finally:
+        ro.band_params = real

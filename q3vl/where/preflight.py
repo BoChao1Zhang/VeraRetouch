@@ -276,11 +276,15 @@ def check_position_encoding(visual, grid_h: int = 8, grid_w: int = 12) -> Check:
     try:
         with torch.no_grad():
             grid_thw = torch.tensor([[1, grid_h, grid_w]], device=next(visual.parameters()).device)
-            got = visual.fast_pos_embed_interpolate(grid_thw).double()
+            # The whole comparison is done on CPU in float64: the reference side
+            # is exact arithmetic, the model side is whatever device/dtype the
+            # tower runs in, and mixing the two devices in one expression is what
+            # made this check die under CUDA while passing on CPU.
+            got = visual.fast_pos_embed_interpolate(grid_thw).detach().double().cpu()
             got_grid = unshuffle_to_grid(got, grid_h, grid_w)
 
             n = visual.num_grid_per_side
-            w = visual.pos_embed.weight.double()
+            w = visual.pos_embed.weight.detach().double().cpu()
             hs = torch.linspace(0, n - 1, grid_h, dtype=torch.float64)
             ws = torch.linspace(0, n - 1, grid_w, dtype=torch.float64)
             h0 = hs.floor().long()
@@ -297,13 +301,20 @@ def check_position_encoding(visual, grid_h: int = 8, grid_w: int = 12) -> Check:
             )
             err = float((got_grid - want).abs().max())
             rel = err / float(want.abs().max().clamp_min(1e-30))
+            dtype_name = str(visual.pos_embed.weight.dtype)
     except Exception as exc:                           # noqa: BLE001
         return Check("WA-P4d-position-encoding", "fail",
                      {"error": f"{type(exc).__name__}: {exc}"},
                      "could not verify the position encoding")
     detail = {"grid": [grid_h, grid_w], "num_grid_per_side": int(visual.num_grid_per_side),
-              "max_abs_error": err, "max_rel_error": rel}
-    ok = rel < 1e-5
+              "max_abs_error": err, "max_rel_error": rel,
+              "model_dtype": dtype_name,
+              "tolerance": 1e-5 if "float" in dtype_name and "32" not in dtype_name else 1e-2}
+    # bf16 carries ~3 decimal digits, so the same exact-arithmetic reference is
+    # compared against a much looser tolerance when the tower runs in bf16.
+    tol = 1e-5 if dtype_name in ("torch.float64", "torch.float32") else 1e-2
+    detail["tolerance"] = tol
+    ok = rel < tol
     return Check("WA-P4d-position-encoding", "pass" if ok else "fail", detail,
                  "" if ok else "independent bilinear recomputation disagrees "
                                "with fast_pos_embed_interpolate after unshuffle")
@@ -327,6 +338,14 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
     cond_design = [d["design_gram_cond"] for d in diags]
     cond_phi = [d["phi_gram_cond"] for d in diags]
     dead = [d["n_dead_semantic"] for d in diags]
+    degenerate = sorted({
+        r["sample_id"] for r in report["rows"]
+        if r.get("phi_diag", {}).get("n_dead_range")
+    })
+    dead_range_names = sorted({
+        n for r in report["rows"]
+        for n in (r.get("phi_diag", {}).get("dead_range_names") or [])
+    })
     detail5 = {
         "arm": arm,
         "n_samples": report["n_samples"],
@@ -337,12 +356,25 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
         "projector": report["projector"],
         # N-8: these are condition numbers of the GRAM matrix, i.e. the square of
         # the matrix condition number.  The 1e10 gate is 1e5 on phi itself.
-        "condition_number_basis": "gram_matrix (= matrix cond ^ 2)",
+        # They are measured on the *effective* subspace: a greyscale photo makes
+        # HSV saturation identically 0, which is a structurally absent dimension
+        # (cond = inf), not an ill-conditioned one.  See `degenerate_range`.
+        "condition_number_basis": "gram_matrix of the effective subspace (= matrix cond ^ 2)",
         "residual_corr_after": {"max": max(corr) if corr else None,
                                 "median": float(np.median(corr)) if corr else None},
         "design_gram_cond": {"max": max(cond_design), "median": float(np.median(cond_design))},
         "phi_gram_cond": {"max": max(cond_phi), "median": float(np.median(cond_phi))},
         "n_dead_semantic": {"max": max(dead), "median": float(np.median(dead))},
+        "degenerate_range": {
+            "n_samples": len(degenerate),
+            "frac": len(degenerate) / max(1, report["n_samples"]),
+            "channels": dead_range_names,
+            "sample_ids": degenerate[:20],
+            "note": "greyscale photographs: HSV saturation is identically 0, so "
+                    "that column of [1, geo5, L, S] is structurally absent. The "
+                    "samples are kept -- the oracle fit is unaffected and dropping "
+                    "them would bias the ceiling against black-and-white images.",
+        },
         "fit": {r: {"success_rate": v["fit_success_rate"],
                     "n_ok": v["n_ok"], "n_rejected": v["n_rejected"],
                     "reject_reasons": v["reject_reasons"],
@@ -358,6 +390,7 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
         # had no measurement at all.  This is the number the S4 schedule needs.
         "throughput": {
             "device": device,
+            "fit_device": (fit_cfg.device or device),
             "n_fits": n_fits,
             "elapsed_s": round(elapsed, 2),
             "s_per_fit": round(elapsed / n_fits, 3),
@@ -369,7 +402,10 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
     bad5 = []
     if corr and max(corr) > 1e-4:
         bad5.append(f"residualisation leaves correlation {max(corr):.2e}")
-    if max(cond_phi) > 1e10:
+    if not np.isfinite(max(cond_phi)):
+        bad5.append("phi Gram condition number is not finite even on the effective "
+                    "subspace -- a real rank collapse, not a flat channel")
+    elif max(cond_phi) > 1e10:
         bad5.append(f"phi Gram condition number {max(cond_phi):.2e}")
     for r, v in report["per_readout"].items():
         if v["fit_success_rate"] < 0.90:
@@ -425,6 +461,7 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
 
     bad6, worst_norm, worst_alpha = [], 0.0, float("inf")
     n_canon = 0
+    n_saturated = 0
     for row in report["rows"]:
         lat = row.get("latent")
         if lat is None:                     # a rejected fit has no latent (B-1)
@@ -443,8 +480,17 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
         b = bounds_report(row["readout"],
                           {k: torch.tensor(v, dtype=torch.float64)
                            for k, v in lat["rho_raw"].items()})
-        if not all(v for k, v in b.items() if k.endswith("in_bounds")):
-            bad6.append(f"{row['sample_id']}/{row['readout']}: readout out of bounds")
+        offending = [k for k, v in b.items() if k.endswith("in_bounds") and not v]
+        if b.get("h_positive") is False:
+            offending.append("h_positive")
+        if offending:
+            # name the parameter and print its value: "out of bounds" with no
+            # number behind it cost a diagnosis round last time
+            ranges = {k: v for k, v in b.items() if k.endswith("_range")}
+            bad6.append(
+                f"{row['sample_id']}/{row['readout']}: {','.join(offending)} {ranges}"
+            )
+        n_saturated += int(any(v for k, v in b.items() if k.endswith("_saturated")))
     n_latents = sum(1 for r in report["rows"] if r.get("latent") is not None)
     detail6 = {
         "n_rows": len(report["rows"]),
@@ -452,6 +498,9 @@ def check_calibration_health(prepared: list, arm: str, fit_cfg: FitConfig,
         "n_canonical": n_canon,
         "max_unit_norm_error": worst_norm,
         "min_alpha": worst_alpha if worst_alpha != float("inf") else None,
+        # a parameter pinned at its bound is information, not a failure: it means
+        # the fit committed to a hard polarity / fully-open primitive
+        "n_latents_with_saturated_param": n_saturated,
     }
     if worst_norm > 1e-9:
         bad6.append(f"||w_dir|| off by {worst_norm:.2e}")
