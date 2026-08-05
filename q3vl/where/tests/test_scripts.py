@@ -156,3 +156,56 @@ def test_count_eligible_declares_itself_an_upper_bound():
     assert "late_drops" in src
     # the fatal branch must be conditional on the gap being unexplained
     assert 'if gap != explained:' in src
+
+
+# --- BA-0 must not run an epoch that fits nothing --------------------------
+
+def test_ba0_has_no_readouts_so_a_training_pass_would_be_empty():
+    """Caught at S4 launch: BA-0-Fixed's ARM_READOUTS is (), so `step()` fits
+    nothing, computes no loss and takes no gradient.  Running the epoch anyway
+    is a full pass over 75,544 samples (~4.6 h of data loading) that leaves B
+    exactly at its seeded-orthogonal initialisation."""
+    from q3vl.where.calibrate import Calibrator, arm_readouts
+    from q3vl.where.config import CalibConfig, FitConfig
+    from q3vl.where.tests.test_calibrate import _mock_sample
+
+    assert arm_readouts("BA-0-Fixed") == ()
+    cal = Calibrator(CalibConfig(arm="BA-0-Fixed",
+                                 inner_fit=FitConfig(n_random=1, max_iter=5)))
+    assert cal.trains_projector is False
+    before = cal.projector.digest()
+    out = cal.step([_mock_sample(0)])
+    assert out["n_used_per_readout"] == {}
+    assert out["grad_norm"] is None
+    assert cal.n_fits == 0, "an epoch step for BA-0 performs no fit at all"
+    assert cal.projector.digest() == before
+
+
+def test_driver_skips_the_epoch_for_a_non_training_arm():
+    import inspect
+
+    from q3vl.where.scripts import run_calibration
+
+    src = inspect.getsource(run_calibration.main)
+    assert "skip_epoch = not cal.trains_projector" in src
+    assert "[] if skip_epoch else _batched" in src, \
+        "the epoch loop must be short-circuited, not merely logged"
+    assert '"epoch_skipped": skip_epoch' in src
+    # and the pool self-check must still happen, on the readouts evaluation uses
+    assert '("band", "cband12")' in src, \
+        "a skipped epoch must still check the pool, with non-empty readouts"
+
+
+def test_self_check_on_empty_readouts_would_be_vacuous():
+    """Why the check moved: with no readouts it compares two empty dicts."""
+    from q3vl.where.fitpool import FitPool, FitTask
+    from q3vl.where.config import FitConfig
+
+    task = FitTask(key="s", phi=torch.zeros(4, 71, dtype=torch.float64),
+                   target=torch.zeros(4, dtype=torch.float64),
+                   readouts=(), cfg=FitConfig(n_random=1, max_iter=5))
+    with FitPool(n_workers=1) as pool:
+        rep = pool.self_check(task)
+    assert rep["checked"] is True and rep["losses"] == {}, (
+        "an empty-readout self-check passes without testing anything -- which is "
+        "exactly what BA-0 was doing at launch")

@@ -63,7 +63,7 @@
 
 ## 三、CPU 级验证结果
 
-### 3.1 单元测试：**178 个全部通过**（`q3vl/where/tests/`；初审前 97 → 一审 134 → 复审 142 → S2 修复 162 → fit 池 176）
+### 3.1 单元测试：**181 个全部通过**（`q3vl/where/tests/`；初审前 97 → 一审 134 → 复审 142 → S2 修复 162 → fit 池 176）
 
 | 文件 | 数量 | 覆盖 |
 |---|---:|---|
@@ -566,6 +566,58 @@ bash q3vl/where/scripts/run_where_a_arms.sh BA-3-Joint     # 单臂
 
 ---
 
+## 四之六、S4 启动（2026-08-05 20:16）与启动时抓到的两个 bug
+
+### BA-0 的"训练 epoch"是 4.6 小时的空转（启动 40 s 内抓到）
+
+`ARM_READOUTS["BA-0-Fixed"] = ()`（协议 4.4：seeded orthogonal B，不训练），于是
+`step()` 里 `for r in self.readouts:` 一次都不进：**0 次拟合、0 loss、0 梯度**。
+但 `run_calibration.py` 无条件跑那一遍 epoch —— 75,544 个样本、2,361 步、约 **4.6 小时**
+纯数据加载，末了 B 与它的初始化逐位相同。首次启动 40 s 内从日志看出 `readouts=[]`
+后立刻停掉（产物先 `mv` 进 `_aborted/` 再重来，没有直接删）。
+
+修复：`skip_epoch = not cal.trains_projector` 时短路整个 epoch 循环，直接进最终评测
+（这个臂的全部产出本来就来自评测），并把 `epoch_skipped` 落进 `schedule.json`、
+把调度缺口核对一并跳过。
+
+**连带发现**：BA-0 的 fit 池 self-check 是**空转的**——它用 `cal.readouts`（对 BA-0 是空），
+于是比较两个空字典，必然通过。跳过 epoch 后 self-check 移到评测前并显式用
+`("band","cband12")`，现在返回真实 loss（band 0.0124 / cband12 0.0192）。
+单测 `test_self_check_on_empty_readouts_would_be_vacuous` 把这个陷阱钉死。
+
+### 序列脚本把跑成功的 BA-0 判成失败
+
+完成判据写的是 `grep -q '"basis"\|verify' "$log"` —— 而 driver 从不打印这两个字符串
+（basis meta 是写文件不是打印）。于是 BA-0 **实际全部成功**（产物齐全、oracle shard
+400/400 校验通过）却被判 `FAILED` 并 `ABORTING`，把后面三个臂一起挡掉。
+改为按**产物**判：`projector_final.pt` + `eval_V_where.json` + `calibration_<arm>.json`
+（最后一条是 driver 最末一句写的），缺哪个报哪个。
+
+教训与之前那次同源：**判据要盯产物，不要盯日志里碰巧出现过的字符串。**
+
+### BA-0 结果（预热基准，未校准的 seeded orthogonal B = no-calibration 对照）
+
+| 项 | 数值 |
+|---|---|
+| 评测耗时 | **222.1 s**（400 样本 × 2 readout = 800 次全档拟合，32 worker → **0.278 s/拟合**） |
+| mask 来源 | maskview shard **hits 401 / misses 0**（零次退回 live 解码） |
+| 拟合成功率 | **800/800**，0 拒绝 |
+| headline n | 224（normal 层，D1 口径正确） |
+| `band` soft-IoU | low **0.9669** / hi **0.9611** |
+| `cband12` soft-IoU | low **0.9749** / hi **0.9714** |
+| s 越域 | 最大 3.45%（单样本），中位 0，远低于 1% 门槛的整体水平 |
+
+这是**没有任何校准**时的天花板；BA-1/2/3 要证明的就是训练 B 能把它推高多少。
+
+### 实测步速好于保守估计
+
+BA-1（单 readout）step 50 时 elapsed 146 s → **2.92 s/step**（保守估计是 5 s）。
+分解：fit 1.67 s、phi_gpu 0.45 s、outer 0.065 s、backward 0.049 s。
+按此外推：BA-1 / BA-2 各 **~1.9 h**，BA-3（双 readout，fit 约翻倍）**~3.0 h**，
+加 BA-0 的 4 min，**四臂串行约 7 h**（此前保守估 11.8 h）。
+
+---
+
 ## 五、代码地图
 
 ```
@@ -591,7 +643,7 @@ q3vl/where/
     make_oracle_latents.py ⏸ train split oracle latent（Where-B 前置），未跑
     run_where_a.sh         ⏸ 提交入口，内置 D-20 四步
   fitpool.py    D12  常驻单线程 CPU 进程池（spawn；self_check；逐位一致）
-  tests/                   178 个用例，全绿（+ test_fitpool.py：池与串行逐位一致）
+  tests/                   181 个用例，全绿（+ test_fitpool.py：池与串行逐位一致）
 ```
 
 ---

@@ -158,21 +158,37 @@ def main() -> int:
     print(json.dumps(setup, indent=2), flush=True)
 
     # --- 1 epoch over the eligible local train samples ---------------------
+    # BA-0-Fixed has no readouts (protocol 4.4: seeded orthogonal B, never
+    # trained), so `step()` would fit nothing, compute no loss and take no
+    # gradient.  Running the epoch anyway costs a full pass over 75,544 samples
+    # -- ~4.6 h of data loading -- to produce a projector identical to its own
+    # initialisation.  The arm exists to answer "how much of the ceiling is
+    # there before any calibration?", which is the *evaluation*, so it skips
+    # straight to it.
     t0 = time.time()
     log_path = run_dir / "steps.jsonl"
     rej_path = run_dir / "fit_rejections.jsonl"
     n_seen = 0
     rej_before = len(source.rejections)
+    skip_epoch = not cal.trains_projector
+    if skip_epoch:
+        print(json.dumps({
+            "epoch": "skipped",
+            "reason": f"{args.arm} trains no projector (readouts={list(cal.readouts)}); "
+                      "a training pass would do zero fits and leave B at its "
+                      "seeded-orthogonal initialisation",
+            "n_planned_samples": n_planned,
+        }), flush=True)
     with log_path.open("a") as log, rej_path.open("a") as rej:
         stream = (p.sample for p in source.iter_split("train", limit=args.train_limit))
         if args.prefetch:
             stream = prefetch(stream, depth=args.prefetch * args.batch_size)
         first = True
-        for batch in _batched(stream, args.batch_size):
+        for batch in ([] if skip_epoch else _batched(stream, args.batch_size)):
             if first:
                 # one real fit, worker vs parent, before the epoch: a broken
                 # worker fails every start and reports it as an ordinary
-                # rejection, which would look like a data problem for 1,336 steps
+                # rejection, which would look like a data problem for 2,361 steps
                 check = pool.self_check(cal.fit_tasks(batch[:1], cal.readouts, step=0)[0])
                 setup["fit_pool_self_check"] = check
                 (run_dir / "run_setup.json").write_text(json.dumps(setup, indent=2))
@@ -202,7 +218,9 @@ def main() -> int:
     gap = n_planned - n_seen
     explained = len(late_drops)
     schedule = {
-        "planned_total_steps": total_steps, "actual_steps": cal.step_count,
+        "epoch_skipped": skip_epoch,
+        "planned_total_steps": 0 if skip_epoch else total_steps,
+        "actual_steps": cal.step_count,
         "warmup_steps": cal.warmup_steps, "n_planned_samples": n_planned,
         "n_seen_samples": n_seen, "sample_gap": gap,
         "late_drops": explained,
@@ -213,6 +231,11 @@ def main() -> int:
         "final_lr": cal.optimizer.param_groups[0]["lr"] if cal.optimizer else 0.0,
         "rejections": cal.rejection_summary(),
     }
+    if skip_epoch:
+        # nothing was scheduled, so there is nothing to reconcile
+        schedule["sample_gap"] = 0
+        schedule["gap_explained"] = True
+        gap = explained = 0
     (run_dir / "schedule.json").write_text(json.dumps(schedule, indent=2))
     print(json.dumps({k: v for k, v in schedule.items()
                       if k != "late_drop_examples"}, indent=2), flush=True)
@@ -235,6 +258,19 @@ def main() -> int:
     # resolution, through the one guided upsample (B-4).
     source.attach_hi = True
     final_fit = FitConfig(n_random=6, max_iter=120)
+    if skip_epoch:
+        # the epoch never ran, so the pool has not been checked yet -- and this
+        # arm's whole output comes from the refit below.  Use the readouts the
+        # evaluation actually uses, not cal.readouts (empty for BA-0, which would
+        # make the check compare two empty dicts and pass vacuously).
+        for probe in source.iter_split("V_where", limit=1):
+            check = pool.self_check(
+                cal.fit_tasks([probe.sample], ("band", "cband12"),
+                              fit_cfg=final_fit, step=0)[0])
+            setup["fit_pool_self_check"] = check
+            (run_dir / "run_setup.json").write_text(json.dumps(setup, indent=2))
+            print(json.dumps({"fit_pool_self_check": check}), flush=True)
+            break
     report = cal.evaluate(
         (p.sample for p in source.iter_split("V_where", limit=args.eval_limit)),
         readouts=("band", "cband12"), fit_cfg=final_fit, record_fits=True,

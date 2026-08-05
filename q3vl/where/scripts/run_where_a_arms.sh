@@ -132,10 +132,18 @@ run_arm() {
   while ps -p "$pid" > /dev/null 2>&1; do sleep 60; done
   wait "$pid" 2>/dev/null || true
 
-  if ! grep -q '"basis"\|verify' "$log" 2>/dev/null || \
-     [[ ! -f "$dir/projector_final.pt" ]]; then
-    echo "FAILED: $arm finished without projector_final.pt; last log lines:"
-    tail -40 "$log"; return 1
+  # Completion is judged by the artifacts a successful run leaves behind, not by
+  # grepping the log for strings the driver never prints (the first version did
+  # exactly that and declared a perfectly good BA-0 a failure).
+  # `calibration_<arm>.json` is written by the very last statement of main().
+  local report="$REPO/experiments/Q3VL_metacanvas_where_what_20260804/where_a/calibration_$arm.json"
+  local missing=()
+  [[ -f "$dir/projector_final.pt" ]]   || missing+=("projector_final.pt")
+  [[ -f "$dir/eval_V_where.json" ]]    || missing+=("eval_V_where.json")
+  [[ -f "$report" ]]                   || missing+=("$(basename "$report")")
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "FAILED: $arm finished without: ${missing[*]}"
+    echo "last log lines:"; tail -40 "$log"; return 1
   fi
   date -Is > "$dir/DONE"
   echo "   $arm finished  $(date -Is)"
