@@ -214,6 +214,11 @@ GATES: tuple[tuple[str, str, float], ...] = (
     ("global_soft_iou", ">=", 0.98),
     ("gt_generated_iou_gap", "<=", 0.05),
 )
+#: Pre-registered threshold for the ANTONYM INVARIANCE control (main-agent
+#: ruling on S5.5).  Reported as a negative-control column, deliberately NOT a
+#: gate: an invariance stated as a hard gate would punish a tie-break as harshly
+#: as genuinely reading colour-direction words.
+ANTONYM_INVARIANCE_MAX = 0.05
 #: thresholding rule for every spatial field, no exceptions (red line)
 TOPK_RULE = "match_gt_area"
 #: tolerance for the grid-level boundary F1, in GRID CELLS (not pixels)

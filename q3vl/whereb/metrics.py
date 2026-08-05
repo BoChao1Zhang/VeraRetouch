@@ -42,6 +42,7 @@ import torch
 from .config import (
     GATES,
     GATE_FAILED_TAG,
+    ANTONYM_INVARIANCE_MAX,
     GRID_BOUNDARY_TOL_CELLS,
     SELECTION_ORDER,
 )
@@ -49,7 +50,8 @@ from .losses import _EPS, boundary_map, soft_iou
 
 __all__ = ["percentile", "soft_iou_value", "boundary_f1", "topk_mask",
            "gt_area_k", "center_prior_field", "hard_iou", "grid_boundary_f1",
-           "paired_delta", "instruction_paired_delta", "sample_metrics", "summarise", "arm_metrics",
+           "paired_delta", "instruction_paired_delta", "antonym_invariance",
+           "sample_metrics", "summarise", "arm_metrics",
            "evaluate_gates", "lexicographic_best", "ATTRIBUTION_NOTE",
            "attribution_section", "context_deltas"]
 
@@ -215,6 +217,51 @@ def paired_delta(a: Sequence[float], b: Sequence[float], *, n_perm: int = 10000,
     return {"n": n, "delta": obs, "p_value": min(1.0, p),
             "ci95": [boots[49], boots[1949]], "n_perm": n_perm,
             "test": "sign_flip_permutation"}
+
+
+def antonym_invariance(
+    rows: Sequence[Mapping[str, Any]], *, reference: str = "gt",
+    control: str = "antonym", key: str = "grid_hard_iou", seed: int = 0,
+) -> dict[str, Any]:
+    """Invariance under a colour-direction flip (main-agent ruling on S5.5).
+
+    Joins the reference board and the antonym board **per sample** and reports
+    the median ``|delta|`` -- a paired quantity, which is what the pre-registered
+    ``|delta| <= 0.05`` threshold is stated against.  Where's mask is a function
+    of the subject, so flipping ``darker`` <-> ``brighter`` must not move it; a
+    field that does move is reading colour words.
+
+    This is a **reported negative-control column, not a gate**: the ruling is
+    explicit about that, and a hard gate on an invariance would be the wrong
+    instrument anyway (it would punish a field for a tie-break as harshly as for
+    genuinely reading colour).
+    """
+    by: dict[str, dict[str, Mapping[str, Any]]] = {}
+    for r in rows:
+        ctx = str(r.get("context"))
+        if ctx in (reference, control) and r.get(key) is not None:
+            by.setdefault(str(r.get("sample_id")), {})[ctx] = r
+    paired = [(v[reference], v[control]) for v in by.values()
+              if reference in v and control in v]
+    if not paired:
+        return {"n": 0, "median_abs_delta": None, "max_abs_delta": None,
+                "signed_delta": None, "threshold": ANTONYM_INVARIANCE_MAX,
+                "within_threshold": None}
+    deltas = [float(a[key]) - float(b[key]) for a, b in paired]
+    abs_d = sorted(abs(d) for d in deltas)
+    med = abs_d[len(abs_d) // 2]
+    signed = paired_delta([float(a[key]) for a, _ in paired],
+                          [float(b[key]) for _, b in paired], seed=seed)
+    return {
+        "n": len(paired), "key": key,
+        "median_abs_delta": med,
+        "p90_abs_delta": abs_d[min(len(abs_d) - 1, int(0.9 * (len(abs_d) - 1)))],
+        "max_abs_delta": abs_d[-1],
+        "signed_delta": signed["delta"], "signed_p_value": signed["p_value"],
+        "threshold": ANTONYM_INVARIANCE_MAX,
+        "within_threshold": med <= ANTONYM_INVARIANCE_MAX,
+        "note": "negative-control column, not a gate (main-agent ruling)",
+    }
 
 
 def instruction_paired_delta(
@@ -436,6 +483,12 @@ ATTRIBUTION_NOTE: dict[str, Any] = {
             "scattered noise scores 0.0357. The coverage column (hard-IoU) and "
             "the centre-prior column are what close that gap -- no single column "
             "is a criterion, which is why the red line demands all three."
+        ),
+        "antonym_invariance": (
+            "small |delta| is the PASS here, not a large one -- this control is "
+            "the mirror image of the directional paired difference. A field that "
+            "moves when only darker<->brighter flips is reading colour words it "
+            "should not; reported, never gated (main-agent ruling)."
         ),
         "instruction_conditionality": (
             "no single context board proves instruction following. The three "

@@ -697,3 +697,50 @@ d_A = IoU(field_A, GT_A) − IoU(field_A, GT_B)      （对称地算 d_B）
 `test_viz.py` +1（`valid=None` 对称拒绝）；迁移 `test_context.py` / `test_evaluate_and_trainer.py`。
 
 `q3vl/whereb` 全套 **279 → 295 passed**。
+
+### 12.4 antonym 不变性控制（主 agent 裁定 S5.5 开放项：**两类控制都进**）
+
+裁定：方向性配对 Δ 与 antonym 不变性**方向相反、各司其职**，都进评测。
+
+| 控制 | 构造 | 期望 | 角色 |
+|---|---|---|---:|
+| 方向性配对 Δ | 同图不同指令（目标区域不同）：`IoU(自 GT) − IoU(伙伴 GT)` | Δ > 0，sign-flip p | **主判据 / gate** |
+| **antonym 不变性** | 固定反义词表翻转指令里的颜色方向词，**主体短语不变** | 中位 `|Δ_IoU| ≤ 0.05`（预注册宽松阈值） | **负控制列，非 gate** |
+
+抓的是「**Where 场偷读颜色方向词**」：Where 的输出应当只由主体决定，
+把 darker↔brighter 翻过来不该让 mask 动。之所以**不设 gate**：不变性做成硬门会把一次
+tie-break 罚得和真的读了颜色词一样重，仪器选错了；裁定里也明确写的是「负控制列」。
+
+**词表固定落盘**：`q3vl/whereb/antonyms.py` —— 版本控制的常量 + `table_digest()`（sha256
+`2e83bc48e4d2…`），**非生成 ⇒ 无编造风险**，报告可以指名道姓引用是哪张表产生的数字。
+覆盖裁定要求的三轴：luminance / temperature / saturation。
+
+替换规则里三处不是小事（都有单测）：
+- **同时替换**（单次正则遍历），否则 `darker→brighter` 会被 `brighter` 规则再翻回去；
+- **最长优先**，否则 `desaturated` 会被 `saturated` 规则吃掉半截；
+- **词边界 + 保留大小写**，所以 `unsaturated` 不动、`Brighter` 仍大写。
+
+**实测（V_where 本地 400 条，跑在真实语料上而不是构造样例）**：
+
+| 项 | 数值 |
+|---|---:|
+| 指令含可翻转词的比例 | **98.5%**（394/400） |
+| 逐轴命中 | luma 352 / temp 341 / sat 253 |
+| **`<where>` 段含可翻转词的比例** | **1.0%**（4/400） |
+| 全语料翻转对合（flip∘flip = 原文） | **400/400** |
+
+`<where>` 段几乎不含颜色词，这正是该控制干净的原因：**翻指令、留主体**，
+两边的差异只有颜色方向这一个自由度。逐样本记录 `control_detail`
+（翻了哪些词、指令是否真的变了、where 文本未变、表 digest）。
+
+**指标是逐样本配对的**（`metrics.antonym_invariance`）：按 `sample_id` join `gt` 与
+`antonym` 两块板，取 `median |Δ|`。有一条单测专门钉住这一点——两个样本一个 +0.30、
+一个 −0.30 时，**中位 |Δ| 必须是 0.30 而不是 0**（有符号均值才会抵消）。
+差之毫厘的实现会把「场乱动」报成「场很稳」。
+
+`evaluate_arm` 现在出**七块**上下文板：`gt` / `generated` / `null` / `shuffled` /
+`irrelevant_words` / `fixed_phrase` / `antonym`。
+
+**开放项 S5.5 关闭**（协议 §17.2 与 `PREFLIGHT_WHERE_B_PENDING.md` 已同步为最终状态）。
+
+单测：`test_antonyms.py` **20 条**；`q3vl/whereb` 全套 **295 → 315 passed**。

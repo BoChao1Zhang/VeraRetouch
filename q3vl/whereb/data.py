@@ -40,6 +40,7 @@ from .config import (
     SPLIT_DIR,
 )
 from .context import (
+    ANTONYM,
     FIXED_PHRASE,
     GENERATED,
     GT,
@@ -49,6 +50,7 @@ from .context import (
     FormatStats,
     ShuffleIndex,
     WhereContext,
+    antonym_context,
     fixed_phrase_context,
     generated_context,
     gt_context,
@@ -379,6 +381,9 @@ class BatchBuilder:
                 sample.sample_id, rec["generated_ids"], self.close_id,
                 text=rec.get("generated_text", ""), eos_id=self.eos_id,
             )
+        elif mode == ANTONYM:
+            ctx = antonym_context(self.tokenizer, sample.sample_id,
+                                  sample.instruction, sample.where_text)
         elif mode == IRRELEVANT_WORDS:
             ctx = irrelevant_words_context(self.tokenizer, sample.sample_id,
                                            seed=self.control_seed)

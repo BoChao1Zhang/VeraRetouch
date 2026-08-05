@@ -29,6 +29,7 @@ from .fields import predict_fields
 from .metrics import (
     arm_metrics,
     attribution_section,
+    antonym_invariance,
     evaluate_gates,
     gt_area_k,
     hard_iou,
@@ -250,6 +251,8 @@ def evaluate_arm(
     metrics["structure"] = arm_cfg.structure
     metrics["readout"] = arm_cfg.readout
     metrics["gate"] = evaluate_gates(metrics)
+    # invariance control: joined per sample across the gt and antonym boards
+    metrics["antonym_invariance"] = antonym_invariance(all_rows)
     metrics["strata"] = {
         mode: strata_report([r for r in all_rows if r["context"] == mode])
         for mode in per_context

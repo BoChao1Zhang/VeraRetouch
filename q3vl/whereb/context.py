@@ -31,7 +31,8 @@ __all__ = [
     "GT", "GENERATED", "NULL", "SHUFFLED", "CONTEXT_MODES",
     "WhereContext", "FormatStats", "SegmentSpan", "extract_segment",
     "gt_context", "generated_context", "null_context", "shuffled_context",
-    "irrelevant_words_context", "fixed_phrase_context", "ShuffleIndex",
+    "irrelevant_words_context", "fixed_phrase_context", "antonym_context",
+    "ANTONYM", "ShuffleIndex",
     "BalancedContextSampler", "NEGATIVE_CONTROL_MODES", "IRRELEVANT_WORDS",
     "FIXED_PHRASE", "FIXED_PHRASE_TEXT", "IRRELEVANT_VOCAB",
 ]
@@ -45,11 +46,15 @@ SHUFFLED = "shuffled"
 #: image; these two swap in text that carries no instruction at all.
 IRRELEVANT_WORDS = "irrelevant_words"
 FIXED_PHRASE = "fixed_phrase"
-CONTEXT_MODES = (GT, GENERATED, NULL, SHUFFLED, IRRELEVANT_WORDS, FIXED_PHRASE)
+#: invariance control (main-agent ruling on S5.5): flip only the colour-direction
+#: words in the instruction, keep the subject phrase.  The mask must NOT move.
+ANTONYM = "antonym"
+CONTEXT_MODES = (GT, GENERATED, NULL, SHUFFLED, IRRELEVANT_WORDS, FIXED_PHRASE,
+                 ANTONYM)
 #: the three negative controls, in the order the red line lists them
 NEGATIVE_CONTROL_MODES = (SHUFFLED, IRRELEVANT_WORDS, FIXED_PHRASE)
 #: modes allowed to override the prompt's instruction (see WhereContext)
-INSTRUCTION_OVERRIDE_MODES = (SHUFFLED, IRRELEVANT_WORDS, FIXED_PHRASE)
+INSTRUCTION_OVERRIDE_MODES = (SHUFFLED, IRRELEVANT_WORDS, FIXED_PHRASE, ANTONYM)
 
 #: The red line's own example of a phrase that fools a ranking metric: a single
 #: constant string scored AUC 0.907 while `AUC_target` was 0.523 (RO-X1).  Using
@@ -86,7 +91,9 @@ class WhereContext:
     truncated: bool = False
     stop_reason: str = ""           # closed | max_tokens | eos | empty
     n_generated_tokens: int = 0
-    instruction: str | None = None  # prompt override; set by `shuffled` only
+    instruction: str | None = None  # prompt override; negative controls only
+    #: free-form provenance for a control (e.g. which antonyms were swapped)
+    control_detail: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.mode not in CONTEXT_MODES:
@@ -110,6 +117,8 @@ class WhereContext:
             "stop_reason": self.stop_reason,
             "n_generated_tokens": self.n_generated_tokens,
             "instruction_swapped": self.instruction is not None,
+            **({"control_detail": dict(self.control_detail)}
+               if self.control_detail else {}),
         }
 
 
@@ -326,6 +335,41 @@ def fixed_phrase_context(tokenizer, sample_id: str, *,
     return WhereContext(mode=FIXED_PHRASE, token_ids=ids, text=phrase,
                         provenance=f"fixed:{phrase}", stop_reason="closed",
                         instruction=phrase)
+
+
+def antonym_context(tokenizer, sample_id: str, instruction: str, where_text: str,
+                    max_tokens: int = WHERE_CONTEXT_MAX_TOKENS) -> WhereContext:
+    """Invariance control: flip the colour direction, keep the subject.
+
+    Where-B's mask is supposed to be a function of the *subject*, not of whether
+    the edit makes things darker or brighter.  So this swaps ``darker`` <->
+    ``brighter``, ``warmer`` <-> ``cooler``, ``saturated`` <-> ``desaturated``
+    (:mod:`q3vl.whereb.antonyms`, a fixed committed table) in the **instruction
+    only**, and leaves the ``<where>`` segment byte-identical.  Measured on
+    V_where local: 98.5% of instructions carry a flippable term across all three
+    axes, while only 1% of ``<where>`` segments do -- the subject text simply
+    does not talk about colour, which is what makes the control clean.
+
+    A field whose mask moves under this swap is reading colour-direction words.
+    Pass is a *small* ``|delta|`` (pre-registered ``<= 0.05`` median), the mirror
+    image of the directional paired difference; it is a reported negative-control
+    column, not a gate.
+    """
+    from .antonyms import flip_text, flipped_terms, table_digest
+
+    flipped = flip_text(instruction)
+    ids = encode_where_span(tokenizer, where_text)[:max_tokens]
+    ctx = WhereContext(mode=ANTONYM, token_ids=ids, text=where_text,
+                       provenance=sample_id, stop_reason="closed",
+                       instruction=flipped)
+    ctx.control_detail = {
+        "flipped_terms": flipped_terms(instruction),
+        "n_flipped": len(flipped_terms(instruction)),
+        "instruction_changed": flipped != instruction,
+        "where_text_unchanged": True,
+        "antonym_table_digest": table_digest(),
+    }
+    return ctx
 
 
 # --- shuffling --------------------------------------------------------------

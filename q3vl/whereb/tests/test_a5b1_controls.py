@@ -87,15 +87,19 @@ def test_a_non_control_mode_still_cannot_override_the_instruction():
 
 def test_batch_builder_has_a_branch_for_every_context_mode():
     """The failure mode being prevented: a mode named in CONTEXT_MODES that
-    falls through to `raise ValueError(unknown context mode)`."""
+    falls through to `raise ValueError(unknown context mode)`.
+
+    The constant name is derived from the context module rather than hardcoded,
+    so adding a seventh mode cannot make this test silently stop covering it.
+    """
+    from q3vl.whereb import context as ctx_mod
     from q3vl.whereb.data import BatchBuilder
 
     src = inspect.getsource(BatchBuilder.context_for)
     for m in CONTEXT_MODES:
-        const = {"gt": "GT", "generated": "GENERATED", "null": "NULL",
-                 "shuffled": "SHUFFLED", "irrelevant_words": "IRRELEVANT_WORDS",
-                 "fixed_phrase": "FIXED_PHRASE"}[m]
-        assert f"== {const}" in src, f"context_for has no branch for {m}"
+        const = next(n for n, v in vars(ctx_mod).items()
+                     if isinstance(v, str) and v == m and n.isupper())
+        assert f"== {const}" in src, f"context_for has no branch for {m} ({const})"
 
 
 # --- the same-image paired difference ---------------------------------------
