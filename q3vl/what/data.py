@@ -60,10 +60,45 @@ from .lut import LutBank
 from .model import MODEL_INPUT_KEYS
 from .queries import natural_query_points, query_kind_index, sample_seed, uniform_query_points
 from .srht import encode_z_gt, u_of_table
-from .wc import WhereSignals
+from .wc import W_VECTOR_DIM, WhereSignals
 
 __all__ = ["META_KEYS", "WhatSample", "WhatDataset", "open_dataset", "Batch",
-           "WhatBatchBuilder", "WhereRunner", "split_index_path"]
+           "WhatBatchBuilder", "WhereRunner", "split_index_path",
+           "NATURAL_MASK_SOURCES", "ORACLE_MISSING_POLICIES"]
+
+# ===========================================================================
+# deviation D-EXEC4 (2026-08-10, main-agent ruling on task card EXEC-4)
+# ===========================================================================
+# Amendment A-3 makes the frozen Where checkpoint's ``m_pred`` the natural-half
+# query weighting of **all twelve** arms.  The C wave is being run *before* a
+# Where checkpoint exists (the Where-B main wave was halted; a new Where design
+# is pending), so for the four control arms the main agent ruled:
+#
+#   C03/C04 (oracle ceiling)  -> weight by the GT mask they are already given;
+#   C01/C02 (strict no-where) -> whole-image sampling, the natural reading of an
+#                                arm that has no where information at all.
+#
+# This is a *declared* deviation, not a fallback: ``frozen_m_pred`` still
+# refuses to run without a checkpoint, the chosen source is written into
+# ``run_setup.json`` and into every per-sample row, and D-W10's twelve-arm
+# unification is re-calibrated once the new Where stage is frozen (re-running
+# the C wave at that point is a known, accepted cost).
+NATURAL_MASK_FROZEN = "frozen_m_pred"
+NATURAL_MASK_ORACLE_GT = "oracle_gt_mask"
+NATURAL_MASK_GLOBAL = "global_uniform"
+NATURAL_MASK_SOURCES = (NATURAL_MASK_FROZEN, NATURAL_MASK_ORACLE_GT,
+                        NATURAL_MASK_GLOBAL)
+
+# What an oracle arm does with a sample that has no Where-A oracle fit.  By
+# construction that is exactly the global samples (verified 2026-08-10: the S5
+# oracle covers 75,544/75,544 local train samples and 0 global ones) -- a global
+# edit has no ROI, so there is no latent to fit.  ``reject`` is the original
+# behaviour (raise); ``null_global`` keeps the twelve arms on one population by
+# giving those samples the all-ones GT mask they already deserve plus a constant
+# zero latent, and counts them.
+ORACLE_MISSING_REJECT = "reject"
+ORACLE_MISSING_NULL_GLOBAL = "null_global"
+ORACLE_MISSING_POLICIES = (ORACLE_MISSING_REJECT, ORACLE_MISSING_NULL_GLOBAL)
 
 #: the only record fields a sample object keeps.  ``image`` is deliberately
 #: absent: the record's ``image.baked`` entry is the ``I_tar`` locator.
@@ -352,7 +387,9 @@ class WhatBatchBuilder:
                  where_runner: WhereRunner | None = None,
                  oracle_store=None, color_genctx=None,
                  device: str | torch.device = "cpu",
-                 gt_interp: str = GT_LUT_INTERP, seed: int = 0):
+                 gt_interp: str = GT_LUT_INTERP, seed: int = 0,
+                 natural_mask_source: str = NATURAL_MASK_FROZEN,
+                 oracle_missing_latent: str = ORACLE_MISSING_REJECT):
         self.collator = collator
         self.tokenizer = collator.tokenizer
         self.vlm = vlm
@@ -374,6 +411,32 @@ class WhatBatchBuilder:
         self.d_func_scale = float(d_func_scale)
         self.where_runner = where_runner
         self.oracle_store = oracle_store
+        # --- deviation D-EXEC4 (see below and the run's NOTES) ---------------
+        if natural_mask_source not in NATURAL_MASK_SOURCES:
+            raise ValueError(
+                f"unknown natural_mask_source {natural_mask_source!r}; "
+                f"have {NATURAL_MASK_SOURCES}")
+        if oracle_missing_latent not in ORACLE_MISSING_POLICIES:
+            raise ValueError(
+                f"unknown oracle_missing_latent {oracle_missing_latent!r}; "
+                f"have {ORACLE_MISSING_POLICIES}")
+        if natural_mask_source == NATURAL_MASK_FROZEN and where_runner is None:
+            raise RuntimeError(
+                f"{cfg.arm}: natural_mask_source='frozen_m_pred' (amendment A-3) "
+                "needs the frozen Where checkpoint, but no WhereRunner was "
+                "attached.  Either supply one, or declare the deviation "
+                "explicitly with natural_mask_source in "
+                f"{NATURAL_MASK_SOURCES[1:]} -- silently changing the query "
+                "colour distribution is what A-3 exists to prevent.")
+        if natural_mask_source == NATURAL_MASK_ORACLE_GT and cfg.where_source != "oracle":
+            raise ValueError(
+                f"{cfg.arm}: natural_mask_source='oracle_gt_mask' is only "
+                "defined for the oracle ceiling arms (C03/C04), whose model "
+                "input already carries the GT mask")
+        self.natural_mask_source = natural_mask_source
+        self.oracle_missing_latent = oracle_missing_latent
+        #: how many samples got the null (all-zero) oracle latent, and why
+        self.oracle_latent_stats: dict[str, int] = {"fitted": 0, "null_global": 0}
         #: amendment A-4: the published generated ``<color>`` context.  ``None``
         #: means this builder can only serve teacher batches, which is legal for
         #: a GT-context evaluation pass and illegal for training.
@@ -442,13 +505,19 @@ class WhatBatchBuilder:
         if sample.is_global:
             weighting = "global_uniform"           # protocol 9.1, global samples
             w = None
+        elif self.natural_mask_source == NATURAL_MASK_GLOBAL:
+            # declared deviation D-EXEC4 (C01/C02, no Where checkpoint exists)
+            weighting, w = "global_uniform_declared", None
         elif m_hi is None:
             raise RuntimeError(
-                f"{sample.sample_id}: local sample has no frozen m_pred for the "
-                "natural query half.  Amendment A-3 makes this mask mandatory for "
-                "every arm including C01-C04; falling back to whole-image "
-                "sampling would silently change the loss for two of twelve arms."
+                f"{sample.sample_id}: local sample has no {self.natural_mask_source} "
+                "mask for the natural query half.  Amendment A-3 makes this mask "
+                "mandatory for every arm including C01-C04; falling back to "
+                "whole-image sampling would silently change the loss for two of "
+                "twelve arms."
             )
+        elif self.natural_mask_source == NATURAL_MASK_ORACLE_GT:
+            weighting, w = "gt_mask", m_hi
         else:
             weighting, w = "frozen_m_pred", m_hi
         nat = natural_query_points(
@@ -501,7 +570,9 @@ class WhatBatchBuilder:
             # supervision forward is a second, shorter one (prompt + <where>, no
             # colour body).  Two of twelve arms pay one extra forward; the
             # alternative is twelve arms optimising two different losses.
-            if not self.cfg.where_prefix:
+            # Under deviation D-EXEC4 there is no frozen checkpoint to feed, so
+            # the extra forward has no consumer and is skipped.
+            if not self.cfg.where_prefix and self.where_runner is not None:
                 sup_items.append(ColorEncodeItem(
                     sample_id=s.sample_id, image=s.image, prompt_ids=prompt_ids,
                     where_ids=gt_where_ids, color_ids=[]))
@@ -538,14 +609,22 @@ class WhatBatchBuilder:
         }
         # amendment A-3: run the frozen Where checkpoint for every arm.  Its
         # output is the *supervision* mask; whether it also reaches the model is
-        # decided one line below, by the arm's interface.
-        frozen = self._frozen_where(sup_encoded, f_pre, f_flat, f_pos,
-                                    inputs["f_pre_mask"], guides, grids)
+        # decided one line below, by the arm's interface.  Under the declared
+        # deviation D-EXEC4 there is no checkpoint and the supervision mask comes
+        # from the arm's own declared source instead.
+        frozen = (self._frozen_where(sup_encoded, f_pre, f_flat, f_pos,
+                                     inputs["f_pre_mask"], guides, grids)
+                  if self.natural_mask_source == NATURAL_MASK_FROZEN
+                  else WhereSignals(source="none"))
         inputs["where"] = self._model_signals(samples, frozen, grids)
 
+        # which signal set carries the supervision mask for the natural half
+        sup_signals = (inputs["where"]
+                       if self.natural_mask_source == NATURAL_MASK_ORACLE_GT
+                       else frozen)
         targets = []
         for i, s in enumerate(samples):
-            m_hi = None if frozen.m_hi is None else frozen.m_hi[i]
+            m_hi = None if sup_signals.m_hi is None else sup_signals.m_hi[i]
             x, weighting = self.query_points(s, m_hi)
             targets.append(self.targets_for(s, x, weighting))
         batch = Batch(inputs=inputs, targets=targets,
@@ -588,19 +667,28 @@ class WhatBatchBuilder:
             raise RuntimeError("the oracle arms need the Where-A OracleStore")
         from q3vl.where.upsample import area_resize as _ar
 
+        from q3vl.whereb.heads import rho_numel
+
+        n_rho = rho_numel(self.cfg.where_readout)
         m_low, m_hi, w_vecs, rho_vecs = [], [], [], []
         for s, (gh, gw) in zip(samples, grids):
             mask = (torch.ones(s.geometry.out_h, s.geometry.out_w)
                     if s.mask_hi is None else s.mask_hi)
             m_hi.append(mask)
             m_low.append(_ar(mask[None, None], (gh, gw))[0, 0].reshape(-1))
-            lat = self.oracle_store.latent(s.sample_id, self.cfg.where_readout)
+            lat = self._oracle_latent(s)
             if lat is None:
-                raise KeyError(
-                    f"{s.sample_id}: no usable Where-A oracle latent; an oracle "
-                    "ceiling arm must reject the sample, not fabricate a latent")
+                # policy ``null_global`` only; ``reject`` raised inside the helper.
+                # A global edit has no ROI, so the Where-A fit has nothing to say
+                # about it: the mask above is honestly all-ones and the latent is
+                # a constant, recorded per sample rather than imputed silently.
+                self.oracle_latent_stats["null_global"] += 1
+                w_vecs.append(torch.zeros(W_VECTOR_DIM))
+                rho_vecs.append(torch.zeros(n_rho))
+                continue
             from q3vl.where.basis import alpha_of, w_dir_of
 
+            self.oracle_latent_stats["fitted"] += 1
             w_vecs.append(torch.cat([lat.w0.reshape(1), w_dir_of(lat.w_raw),
                                      alpha_of(lat.alpha_raw).reshape(1)]))
             rho_vecs.append(torch.cat([v.reshape(-1) for v in lat.rho.values()]))
@@ -611,6 +699,26 @@ class WhatBatchBuilder:
             meta={"mask": "gt", "latent": "where_a_oracle"},
         )
 
+    def _oracle_latent(self, s: WhatSample):
+        """The Where-A oracle latent, or ``None`` under the ``null_global`` policy.
+
+        A sample with no published oracle payload at all (every global sample)
+        raises out of the store, so both "no record" and "record with no usable
+        fit" have to funnel through one place.
+        """
+        try:
+            lat = self.oracle_store.latent(s.sample_id, self.cfg.where_readout)
+        except (KeyError, FileNotFoundError):
+            lat = None
+        if lat is not None:
+            return lat
+        if self.oracle_missing_latent == ORACLE_MISSING_NULL_GLOBAL and s.is_global:
+            return None
+        raise KeyError(
+            f"{s.sample_id}: no usable Where-A oracle latent (readout "
+            f"{self.cfg.where_readout!r}, policy {self.oracle_missing_latent!r}); "
+            "an oracle ceiling arm must reject the sample, not fabricate a latent")
+
     def facts(self) -> dict[str, Any]:
         return {
             "gt_interp": self.gt_interp, "lut_bank": self.bank.facts(),
@@ -618,11 +726,25 @@ class WhatBatchBuilder:
             "d_func_scale": self.d_func_scale,
             "zgt_center_sha256": __import__("hashlib").sha256(
                 self.zgt_center.detach().cpu().numpy().tobytes()).hexdigest(),
-            # amendment A-3: true for all twelve arms, including C01-C04
-            "natural_weighting": "frozen_m_pred (global samples: global_uniform)",
-            "supervision_forward": ("shared with the model forward"
-                                    if self.cfg.where_prefix
-                                    else "separate prompt+<where> forward"),
+            # amendment A-3: true for all twelve arms, including C01-C04 --
+            # unless deviation D-EXEC4 is declared (no frozen Where checkpoint)
+            "natural_weighting": (
+                "frozen_m_pred (global samples: global_uniform)"
+                if self.natural_mask_source == NATURAL_MASK_FROZEN
+                else f"{self.natural_mask_source} (deviation D-EXEC4; "
+                     "global samples: global_uniform)"),
+            "natural_mask_source": self.natural_mask_source,
+            "a3_unified_natural_sampling": (
+                self.natural_mask_source == NATURAL_MASK_FROZEN),
+            "oracle_missing_latent": (self.oracle_missing_latent
+                                      if self.cfg.where_source == "oracle" else None),
+            "oracle_latent_stats": (dict(self.oracle_latent_stats)
+                                    if self.cfg.where_source == "oracle" else None),
+            "supervision_forward": (
+                "not run (deviation D-EXEC4: no frozen Where checkpoint)"
+                if self.natural_mask_source != NATURAL_MASK_FROZEN
+                else ("shared with the model forward" if self.cfg.where_prefix
+                      else "separate prompt+<where> forward")),
             # amendment A-4
             "genctx_mode": self.cfg.genctx_mode,
             "color_genctx": (self.color_genctx.summary()

@@ -218,29 +218,84 @@ def test_b5_the_query_points_do_not_depend_on_the_arm():
             assert torch.equal(ref, xs), arm
 
 
-def test_b5_a_local_sample_without_a_frozen_mask_is_refused():
-    """Silently falling back to whole-image sampling is what B-5 was."""
+def _bare_builder(natural_mask_source="frozen_m_pred"):
     from q3vl.what.data import WhatBatchBuilder
 
     builder = WhatBatchBuilder.__new__(WhatBatchBuilder)
     builder.seed = 0
     builder._x_uniform = torch.zeros(4, 3)
-    sample = type("S", (), {"is_global": False, "sample_id": "s0",
-                            "image_tensor": lambda self: torch.rand(3, 8, 8)})()
+    builder.natural_mask_source = natural_mask_source
+    return builder
+
+
+def _fake_sample(is_global, sid):
+    return type("S", (), {"is_global": is_global, "sample_id": sid,
+                          "image_tensor": lambda self: torch.rand(3, 8, 8)})()
+
+
+def test_b5_a_local_sample_without_a_frozen_mask_is_refused():
+    """Silently falling back to whole-image sampling is what B-5 was."""
+    from q3vl.what.data import WhatBatchBuilder
+
     with pytest.raises(RuntimeError, match="A-3"):
-        WhatBatchBuilder.query_points(builder, sample, None)
+        WhatBatchBuilder.query_points(_bare_builder(), _fake_sample(False, "s0"), None)
 
 
 def test_b5_a_global_sample_samples_the_whole_image():
     from q3vl.what.data import WhatBatchBuilder
 
-    builder = WhatBatchBuilder.__new__(WhatBatchBuilder)
-    builder.seed = 0
-    builder._x_uniform = torch.zeros(4, 3)
-    sample = type("S", (), {"is_global": True, "sample_id": "g0",
-                            "image_tensor": lambda self: torch.rand(3, 8, 8)})()
-    _x, weighting = WhatBatchBuilder.query_points(builder, sample, None)
+    _x, weighting = WhatBatchBuilder.query_points(
+        _bare_builder(), _fake_sample(True, "g0"), None)
     assert weighting == "global_uniform"
+
+
+# --- deviation D-EXEC4 -----------------------------------------------------
+
+def test_dexec4_declared_global_sampling_is_labelled_differently():
+    """The deviation must be visible in the per-sample row, not silent."""
+    from q3vl.what.data import WhatBatchBuilder
+
+    _x, weighting = WhatBatchBuilder.query_points(
+        _bare_builder("global_uniform"), _fake_sample(False, "s0"), None)
+    assert weighting == "global_uniform_declared"
+
+
+def test_dexec4_oracle_gt_mask_is_labelled_gt_mask():
+    from q3vl.what.data import WhatBatchBuilder
+
+    m_hi = torch.rand(8, 8)
+    _x, weighting = WhatBatchBuilder.query_points(
+        _bare_builder("oracle_gt_mask"), _fake_sample(False, "s0"), m_hi)
+    assert weighting == "gt_mask"
+
+
+def test_dexec4_oracle_gt_mask_still_needs_a_mask():
+    """`oracle_gt_mask` is a different source, not a licence to drop the mask."""
+    from q3vl.what.data import WhatBatchBuilder
+
+    with pytest.raises(RuntimeError, match="A-3"):
+        WhatBatchBuilder.query_points(
+            _bare_builder("oracle_gt_mask"), _fake_sample(False, "s0"), None)
+
+
+def test_dexec4_frozen_source_still_refuses_a_missing_where_runner():
+    """The A-3 default may never degrade into the deviation by accident."""
+    import inspect
+
+    from q3vl.what.data import WhatBatchBuilder
+
+    src = inspect.getsource(WhatBatchBuilder.__init__)
+    assert "natural_mask_source == NATURAL_MASK_FROZEN and where_runner is None" in src
+
+
+def test_dexec4_run_what_refuses_an_undeclared_deviation():
+    """No checkpoint + default mask source must be a hard stop, not a default."""
+    from pathlib import Path
+
+    src = Path("q3vl/what/scripts/run_what.py").read_text(encoding="utf-8")
+    assert "Declare the deviation explicitly with --natural-mask-source" in src
+    # and a predicted arm can never take that route
+    assert 'if cfg.where_source == "predicted":' in src
 
 
 def test_n14_a_main_arm_rejects_an_oracle_where_signal():

@@ -59,7 +59,17 @@ from q3vl.what.config import (
 )
 from q3vl.what.stores import ColorGenContextStore
 from q3vl.what.boundary import require_color_boundary_scan
-from q3vl.what.data import WhatBatchBuilder, WhereRunner, open_dataset
+from q3vl.what.data import (
+    NATURAL_MASK_FROZEN,
+    NATURAL_MASK_GLOBAL,
+    NATURAL_MASK_ORACLE_GT,
+    NATURAL_MASK_SOURCES,
+    ORACLE_MISSING_POLICIES,
+    ORACLE_MISSING_REJECT,
+    WhatBatchBuilder,
+    WhereRunner,
+    open_dataset,
+)
 from q3vl.what.evalloop import build_eval_subset, eval_subset_rows, make_eval_fn
 from q3vl.what.hiddens import WhatVLM
 from q3vl.what.lut import LutBank
@@ -103,11 +113,40 @@ def _config_digest(setup: dict, subset_manifest: dict) -> str:
                   for k in ("checkpoint_sha256", "where_arm", "step")},
         "d_func_scale": setup.get("d_func_scale"),
         "genctx_mode": setup.get("builder", {}).get("genctx_mode"),
+        # a run whose supervision mask came from somewhere else did not measure
+        # the same thing, so it must not share a digest (deviation D-EXEC4)
+        "natural_mask_source": setup.get("builder", {}).get("natural_mask_source"),
+        "oracle_missing_latent": setup.get("builder", {}).get("oracle_missing_latent"),
         "eval_subset_digest": subset_manifest.get("digest"),
         "eval_subset_strata": subset_manifest.get("strata_keys"),
     }
     blob = json.dumps(material, ensure_ascii=False, sort_keys=True).encode()
     return hashlib.sha256(blob).hexdigest()
+
+
+def _env_facts() -> dict:
+    """git commit + interpreter + GPU -- the campaign's delivery spec asks every
+    run to carry them, and an arm that started four hours after its wave partner
+    is exactly the one whose code version nobody can reconstruct later."""
+    import platform
+    import subprocess
+
+    def _git(*a: str) -> str | None:
+        try:
+            return subprocess.run(["git", *a], cwd=Path(__file__).resolve().parents[3],
+                                  capture_output=True, text=True,
+                                  timeout=10).stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):        # pragma: no cover
+            return None
+
+    return {
+        "git_commit": _git("rev-parse", "HEAD"),
+        "git_dirty": bool(_git("status", "--porcelain")),
+        "python": platform.python_version(),
+        "torch": torch.__version__,
+        "gpu": (torch.cuda.get_device_name(0) if torch.cuda.is_available() else None),
+        "hostname": platform.node(),
+    }
 
 
 def build_bank(gtluts: Path, dataset) -> LutBank:
@@ -144,6 +183,26 @@ def main() -> int:
                     help="the <color> boundary full-corpus scan report (N-24); "
                          "defaults to the published location")
     ap.add_argument("--skip-preflight", action="store_true")
+    # --- deviation D-EXEC4: running the C wave before a Where checkpoint ----
+    ap.add_argument("--natural-mask-source", default=NATURAL_MASK_FROZEN,
+                    choices=list(NATURAL_MASK_SOURCES),
+                    help="which mask weights the natural query half (protocol "
+                         "9.1 / amendment A-3).  Anything but the default is a "
+                         "declared deviation and is written into run_setup.json")
+    ap.add_argument("--oracle-missing-latent", default=ORACLE_MISSING_REJECT,
+                    choices=list(ORACLE_MISSING_POLICIES),
+                    help="what an oracle arm does with a sample that has no "
+                         "Where-A fit (by construction: the global samples)")
+    ap.add_argument("--where-readout", default=None,
+                    help="Where readout that sizes the rho token / selects the "
+                         "oracle fit.  Taken from the checkpoint when there is "
+                         "one; required to be explicit when there is not")
+    ap.add_argument("--oracle-root", default=None,
+                    help="Where-A oracle latents; defaults to "
+                         "<ORACLE_DIR>/<basis arm>/<namespace>")
+    ap.add_argument("--keep-last", default=None,
+                    help="rolling checkpoint budget; 'none' disables deletion "
+                         "entirely (review N-26 recommends it for the real runs)")
     args = ap.parse_args()
 
     cfg = arm_config(args.arm)
@@ -168,37 +227,93 @@ def main() -> int:
     # Amendment A-3: the frozen Where checkpoint is needed by **every** arm, not
     # only the `predicted` ones -- its m_pred weights the natural query half of
     # the loss for all twelve.  C01/C02 simply do not pass its output to the model.
+    deviation = None
     if not args.where_checkpoint:
-        raise SystemExit(
-            f"{args.arm} needs --where-checkpoint.  Protocol 6 freezes one Where "
-            "checkpoint for every What arm, and amendment A-3 makes its m_pred the "
-            "supervision mask of all twelve arms including C01-C04."
-        )
-    where_runner = WhereRunner.from_checkpoint(Path(args.where_checkpoint),
-                                               device=args.device)
-    ck = torch.load(args.where_checkpoint, map_location="cpu", weights_only=False)
-    digest = file_sha256(args.where_checkpoint)
-    # B-6: hard stop before anything expensive happens
-    provenance = assert_where_consistency(
-        Path(args.run_root), args.arm, digest, args.where_checkpoint)
-    where_facts = {
-        "source": cfg.where_source, "path": args.where_checkpoint,
-        "where_arm": ck["arm"], "step": ck.get("step"),
-        "basis_digest": ck.get("basis_digest"),
-        "checkpoint_sha256": digest,
-        "used_for": ("model input + supervision mask" if cfg.where_source == "predicted"
-                     else "supervision mask only (amendment A-3)"),
-        **provenance,
-    }
-    cfg = arm_config(args.arm, where_readout=where_runner.readout)
+        # D-EXEC4: the C wave runs before a Where checkpoint exists.  Only the
+        # four control arms can: a `predicted` arm has no model input without one.
+        if cfg.where_source == "predicted":
+            raise SystemExit(
+                f"{args.arm} needs --where-checkpoint.  Protocol 6 freezes one "
+                "Where checkpoint for every What arm and a WC-conditioned main "
+                "arm has no Where input without it."
+            )
+        if args.natural_mask_source == NATURAL_MASK_FROZEN:
+            raise SystemExit(
+                f"{args.arm}: no --where-checkpoint, so amendment A-3's "
+                "natural_mask_source='frozen_m_pred' cannot be honoured.  "
+                "Declare the deviation explicitly with --natural-mask-source "
+                f"{{{NATURAL_MASK_ORACLE_GT}|{NATURAL_MASK_GLOBAL}}} -- it is "
+                "written into run_setup.json and every per-sample row."
+            )
+        if not args.where_readout:
+            raise SystemExit(
+                f"{args.arm}: --where-readout is required without a checkpoint "
+                "(it sizes the rho token and selects which Where-A oracle fit "
+                "C03/C04 read); do not let it default silently."
+            )
+        where_runner = None
+        digest = None
+        provenance = assert_where_consistency(
+            Path(args.run_root), args.arm, None, None)
+        deviation = {
+            "id": "D-EXEC4",
+            "ruling": "main agent, task card EXEC-4 item 3 (2026-08-10)",
+            "what": ("amendment A-3's twelve-arm unified natural sampling is "
+                     "suspended for the C wave: no Where checkpoint exists "
+                     "(Where-B main wave halted, new Where design pending)"),
+            "natural_mask_source": args.natural_mask_source,
+            "consequence": ("the C arms' loss query-colour distribution is not "
+                            "the one the T arms will get; if the re-calibrated "
+                            "D-W10 rule requires it, the C wave is re-run"),
+        }
+        where_facts = {
+            "source": cfg.where_source, "path": None, "where_arm": None,
+            "step": None, "basis_digest": None, "checkpoint_sha256": None,
+            "used_for": "not used (deviation D-EXEC4)",
+            "readout": args.where_readout,
+            **provenance,
+        }
+        cfg = arm_config(args.arm, where_readout=args.where_readout)
+    else:
+        where_runner = WhereRunner.from_checkpoint(Path(args.where_checkpoint),
+                                                   device=args.device)
+        ck = torch.load(args.where_checkpoint, map_location="cpu", weights_only=False)
+        digest = file_sha256(args.where_checkpoint)
+        # B-6: hard stop before anything expensive happens
+        provenance = assert_where_consistency(
+            Path(args.run_root), args.arm, digest, args.where_checkpoint)
+        where_facts = {
+            "source": cfg.where_source, "path": args.where_checkpoint,
+            "where_arm": ck["arm"], "step": ck.get("step"),
+            "basis_digest": ck.get("basis_digest"),
+            "checkpoint_sha256": digest,
+            "readout": where_runner.readout,
+            "used_for": ("model input + supervision mask"
+                         if cfg.where_source == "predicted"
+                         else "supervision mask only (amendment A-3)"),
+            **provenance,
+        }
+        cfg = arm_config(args.arm, where_readout=where_runner.readout)
 
     oracle_store = None
     if cfg.where_source == "oracle":
-        from q3vl.whereb.config import WHERE_A_ORACLE_DIR
+        from q3vl.whereb.config import (
+            BASIS_ARM,
+            ORACLE_NAMESPACE,
+            WHERE_A_ORACLE_DIR,
+        )
         from q3vl.whereb.stores import OracleStore
 
-        oracle_store = OracleStore(Path(WHERE_A_ORACLE_DIR) / args.split)
-        where_facts["oracle_root"] = str(WHERE_A_ORACLE_DIR)
+        # VERIFIED 2026-08-10: the published layout is
+        # <oracle>/<basis arm>/<namespace>/<split> (q3vl.whereb.config's own
+        # comment, and run_where_b.py reads it that way).  The previous
+        # <oracle>/<split> here resolved to nothing.
+        oracle_root = Path(args.oracle_root
+                           or (Path(WHERE_A_ORACLE_DIR) / BASIS_ARM / ORACLE_NAMESPACE))
+        oracle_store = OracleStore(oracle_root / args.split)
+        where_facts["oracle_root"] = str(oracle_root)
+        where_facts["oracle_readout"] = cfg.where_readout
+        where_facts["oracle_missing_latent"] = args.oracle_missing_latent
 
     from transformers import AutoProcessor
     from transformers.models.qwen3_vl import Qwen3VLForConditionalGeneration
@@ -229,12 +344,21 @@ def main() -> int:
         collator, vlm, cfg, build_bank(Path(args.gtluts), dataset),
         center, d_func_scale, where_runner=where_runner,
         oracle_store=oracle_store, color_genctx=color_genctx,
-        device=args.device, seed=cfg.seed)
+        device=args.device, seed=cfg.seed,
+        natural_mask_source=args.natural_mask_source,
+        oracle_missing_latent=args.oracle_missing_latent)
 
     model = WhatModel(cfg)
     tcfg = TrainConfig(arm=args.arm, micro_batch=args.micro_batch)
     if args.eval_subset_size is not None:
         tcfg = replace(tcfg, eval_subset_size=args.eval_subset_size)
+    if args.keep_last is not None:
+        # review N-26: `none` keeps every checkpoint (~44 GB/arm) and removes the
+        # last way the online proxy's ranking can drop a checkpoint the offline
+        # board would have chosen.
+        keep = None if str(args.keep_last).lower() in ("none", "null", "0") \
+            else int(args.keep_last)
+        tcfg = replace(tcfg, keep_last=keep)
 
     # --- NF-2: the in-loop evaluation -------------------------------------
     # A fixed deterministic subset of V_what, both contexts, LUT-function metrics
@@ -248,11 +372,22 @@ def main() -> int:
         mode=cfg.genctx_mode)
     eval_genctx.assert_covers(
         [eval_dataset.refs[i].sample_id for i in range(len(eval_dataset))])
+    # the oracle store is keyed by sample_id inside ONE split's publication, so
+    # the eval split needs its own -- reusing the train store would raise on
+    # every V_what sample (found 2026-08-10 while wiring the C wave).
+    eval_oracle_store = None
+    if cfg.where_source == "oracle":
+        from q3vl.whereb.stores import OracleStore as _OracleStore
+
+        eval_oracle_store = _OracleStore(
+            Path(where_facts["oracle_root"]) / args.eval_split)
     eval_builder = WhatBatchBuilder(
         collator, vlm, cfg, build_bank(Path(args.gtluts), eval_dataset),
         center, d_func_scale, where_runner=where_runner,
-        oracle_store=oracle_store, color_genctx=eval_genctx,
-        device=args.device, seed=cfg.seed)
+        oracle_store=eval_oracle_store, color_genctx=eval_genctx,
+        device=args.device, seed=cfg.seed,
+        natural_mask_source=args.natural_mask_source,
+        oracle_missing_latent=args.oracle_missing_latent)
     subset_idx, subset_manifest = build_eval_subset(
         eval_subset_rows(eval_dataset, getattr(eval_dataset, "maskviews", None)),
         n=tcfg.eval_subset_size)
@@ -268,6 +403,7 @@ def main() -> int:
 
     setup = trainer.setup()
     setup.update({"dataset": ds_info, "where": where_facts,
+                  "deviation": deviation,
                   "sft_checkpoint": args.sft_checkpoint,
                   "gtluts": args.gtluts, "zgt": args.zgt,
                   "color_genctx": {"root": str(genctx_root),
@@ -283,14 +419,29 @@ def main() -> int:
                            "note": ("LUT-function metrics only; the full V_what "
                                     "with image metrics is scripts/evaluate_what.py "
                                     "and is what selection reads")},
-                  "started_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+                  "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                  "env": _env_facts()})
     # the subset content is part of the run's identity (NF-2 ruling item 1)
     setup["config_digest"] = _config_digest(setup, subset_manifest)
     (run_dir / "run_setup.json").write_text(
         json.dumps(setup, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(setup, ensure_ascii=False, indent=1), flush=True)
 
-    trainer.train()
+    state = trainer.train()
+
+    # run_setup.json is written before the first batch, so its builder facts are
+    # the *declared* ones.  The same facts after the epoch carry the measured
+    # counters -- the teacher/generated format stats and, for C03/C04, how many
+    # samples took the null oracle latent.  Declared and measured are two files
+    # on purpose: a silent divergence between them is the thing worth seeing.
+    (run_dir / "run_facts_final.json").write_text(json.dumps({
+        "arm": args.arm,
+        "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "steps": getattr(state, "step", None),
+        "builder": builder.facts(),
+        "eval_builder": eval_builder.facts(),
+        "config_digest": setup["config_digest"],
+    }, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0
 
 

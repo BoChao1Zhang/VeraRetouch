@@ -183,10 +183,18 @@ def main() -> int:
                               for i in range(len(dataset))])
         oracle_store = None
         if cfg.where_source == "oracle":
-            from q3vl.whereb.config import WHERE_A_ORACLE_DIR
+            from q3vl.whereb.config import (
+                BASIS_ARM,
+                ORACLE_NAMESPACE,
+                WHERE_A_ORACLE_DIR,
+            )
             from q3vl.whereb.stores import OracleStore
 
-            oracle_store = OracleStore(Path(WHERE_A_ORACLE_DIR) / args.split)
+            # published layout is <oracle>/<basis arm>/<namespace>/<split>
+            # (q3vl.whereb.config; run_where_b.py reads it that way).  The old
+            # <oracle>/<split> resolved to nothing -- fixed 2026-08-10.
+            oracle_store = OracleStore(
+                Path(WHERE_A_ORACLE_DIR) / BASIS_ARM / ORACLE_NAMESPACE / args.split)
         builder = WhatBatchBuilder(
             collator, vlm, cfg, build_bank(Path(args.gtluts), dataset),
             center, d_func_scale, where_runner=where_runner,
