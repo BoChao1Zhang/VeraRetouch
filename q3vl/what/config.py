@@ -74,6 +74,12 @@ TEACHER_FRACTION = 0.5
 # against a measured max of 79.)  ``gt_color_context`` *raises* rather than
 # truncating, so a corpus sample past the boundary surfaces immediately instead
 # of silently shortening a teacher context; full-corpus verification is ``WT-J9``.
+#
+# ``WT-J9`` RAN (2026-08-10, 162,359 records, 0 over the boundary) and moved the
+# true max from the sampled 324 to **361**: headroom is now **21 tokens**, not
+# 58.  Main-agent ruling D-EXEC4-3: raise the shared constant to **448 before
+# producing any new build**, not now -- see the comment on the producer side,
+# ``q3vl/whereb/config.py::COLOR_CONTEXT_MAX_TOKENS``, which is where it lives.
 from q3vl.whereb.config import (  # noqa: E402
     COLOR_CONTEXT_MAX_TOKENS,
     GENCTX_MODES,

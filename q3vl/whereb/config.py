@@ -108,6 +108,17 @@ WHERE_CONTEXT_MAX_TOKENS = 96
 # Same rule for the <color> segment (amendment A-4).  Measured on the same 2711
 # records (``tokens.color``): min 108, p50 178, p95 244, p99 283, **max 324**;
 # 324 + <color> + </color> = 326, so 384 never truncates a GT colour segment.
+#
+# !! RAISE TO 448 BEFORE PRODUCING ANY NEW BUILD (main-agent ruling D-EXEC4-3,
+# 2026-08-10).  WT-J9 scanned the WHOLE corpus (162,359 records across the five
+# splits, `experiments/.../what/preflight/color_boundary_scan.json`): 0 samples
+# over the boundary, but the true max is **361** (+ the two tags = 363), not the
+# 324 this line was derived from.  Headroom is therefore **21 tokens**, not 58.
+# The teacher path *raises* past the boundary rather than truncating, so a new
+# build whose colour prose runs 22 tokens longer would kill an arm mid-epoch.
+# The current corpus is safe and the constant is deliberately NOT changed now:
+# it is shared by Where-B and Stage-What, and moving it means republishing both
+# sides' generated context.  Any new build is the moment to move it to 448.
 COLOR_CONTEXT_MAX_TOKENS = 384
 # Generation budget.  A two-segment continuation is where + colour + 4 tags:
 # measured ``tokens.where + tokens.color`` max 332, p99 296 -> 336 with tags.
