@@ -1,0 +1,69 @@
+[waiter] 2026-08-05T12:51:46+08:00 waiting for Where-A bench_calibration pid=1961216 (ps -p, never pgrep)
+[waiter] 2026-08-05T12:51:46+08:00 bench pid=1961216 has exited
+[waiter] GPU1 still at 2751 MiB, waiting
+[waiter] GPU1 still at 2751 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] GPU1 still at 2753 MiB, waiting
+[waiter] 2026-08-05T12:54:47+08:00 GPU1 at 4 MiB -- handing it to task slice 1/2
+[2026-08-05T12:54:47+08:00] DRIVER START pid=1964758 host=h3c
+[2026-08-05T12:54:47+08:00] MODE=two_segment SPLITS='V_where V_what train' GPUS='1' batch=64 max_new=512
+[2026-08-05T12:54:47+08:00] checkpoint=/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976
+[2026-08-05T12:54:47+08:00] checkpoint weight shards: 2
+[2026-08-05T12:54:47+08:00] split V_where: 896 samples, 2 shards, final -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/V_where
+[2026-08-05T12:54:47+08:00] split V_what: 897 samples, 2 shards, final -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/V_what
+[2026-08-05T12:54:47+08:00] split train: 159215 samples, 8 shards, final -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/train
+[2026-08-05T12:54:47+08:00] GPU 1: 4 MiB in use
+[2026-08-05T12:54:47+08:00] PROBE-OK genctx_dual ready: interpreter, checkpoint, V_where V_what train indexes, free GPUs, stage root
+[2026-08-05T12:54:47+08:00] TASK SLICE 1/2: 6 of 12 shard jobs
+[2026-08-05T12:54:47+08:00]   (the other slice belongs to another driver; DO_MERGE must be 0 on both)
+[2026-08-05T12:54:47+08:00] PLAN: 6 shard jobs over 1 card(s)
+[2026-08-05T12:54:47+08:00]   GPU 1 <- V_where:1:2 V_what:1:2 train:1:8 train:3:8 train:5:8 train:7:8
+[2026-08-05T12:54:47+08:00] workers: 1969843
+[2026-08-05T12:54:47+08:00] [gpu1] two_segment_V_where_shard01of02: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/V_where/shard01of02/V_where
+1969849       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split V_where --shard 1 --num-shards 2 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/V_where --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/two_segment/V_where --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 64 --max-new-tokens 512
+[2026-08-05T12:55:02+08:00] [gpu1] two_segment_V_where_shard01of02: RUNNING pid=1969849 (setup JSON after 10s)
+[2026-08-05T12:57:49+08:00] [gpu1] two_segment_V_where_shard01of02: END rc=0
+[2026-08-05T12:57:49+08:00] [gpu1] two_segment_V_what_shard01of02: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/V_what/shard01of02/V_what
+1974491       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split V_what --shard 1 --num-shards 2 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/V_what --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/two_segment/V_what --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 64 --max-new-tokens 512
+[2026-08-05T12:58:04+08:00] [gpu1] two_segment_V_what_shard01of02: RUNNING pid=1974491 (setup JSON after 10s)
+[2026-08-05T13:00:59+08:00] [gpu1] two_segment_V_what_shard01of02: END rc=0
+[2026-08-05T13:00:59+08:00] [gpu1] two_segment_train_shard01of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/train/shard01of08/train
+1978484       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 1 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/two_segment/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 64 --max-new-tokens 512
+[2026-08-05T13:01:14+08:00] [gpu1] two_segment_train_shard01of08: RUNNING pid=1978484 (setup JSON after 10s)
+[2026-08-05T13:05:49+08:00] [gpu1] two_segment_train_shard01of08: END rc=143
+    "split": "train",
+    "need_mask": false,
+    "mask_source": null,
+    "n_samples": 19902,
+    "shard": 1,
+    "num_shards": 8,
+    "shard_mode": "interleave",
+    "shard_tag": "shard01of08",
+    "n_samples_before_shard": 159215,
+    "shard_first_sample_id": "sft_00005f61ef0c91023c3f5913104b2a98",
+    "shard_last_sample_id": "sft_fffbc15fc7d49e7bec6720f7ce6fc77d"
+  },
+  "n_samples": 19902,
+  "batch_size": 64,
+  "max_new_tokens": 512,
+  "max_context_tokens": 96,
+  "where_max_tokens": 96,
+  "color_max_tokens": 384,
+  "schema_version": "q3vl.where_b.genwhere/2",
+  "out_root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/train/shard01of08/train"
+}
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+{"done": 256, "of": 19902, "samples_per_s": 2.3, "eta_s": 8528}
+{"done": 448, "of": 19902, "samples_per_s": 2.38, "eta_s": 8186}
+{"done": 640, "of": 19902, "samples_per_s": 2.48, "eta_s": 7778}
+[2026-08-05T13:05:49+08:00] [gpu1] two_segment_train_shard03of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/train/shard03of08/train
+1984356       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 3 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/two_segment/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 64 --max-new-tokens 512
+[2026-08-05T13:06:14+08:00] [gpu1] two_segment_train_shard03of08: RUNNING pid=1984356 (setup JSON after 20s)

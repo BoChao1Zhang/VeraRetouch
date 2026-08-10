@@ -1,0 +1,54 @@
+[2026-08-05T20:30:30+08:00] DRIVER START pid=2711342 host=h3c
+[2026-08-05T20:30:30+08:00] MODE=forced_color SPLITS='V_what train' GPUS='1' batch=128 max_new=512
+[2026-08-05T20:30:30+08:00] checkpoint=/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976
+[2026-08-05T20:30:30+08:00] checkpoint weight shards: 2
+[2026-08-05T20:30:30+08:00] split V_what: 897 samples, 2 shards, final -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/V_what-forced_color
+[2026-08-05T20:30:30+08:00] split train: 159215 samples, 8 shards, final -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/train-forced_color
+[2026-08-05T20:30:30+08:00] GPU 1: 4 MiB in use
+[2026-08-05T20:30:30+08:00] PROBE-OK genctx_dual ready: interpreter, checkpoint, V_what train indexes, free GPUs, stage root
+[2026-08-05T20:30:30+08:00] PLAN: 10 shard jobs over 1 card(s)
+[2026-08-05T20:30:30+08:00]   GPU 1 <- V_what:0:2 V_what:1:2 train:0:8 train:1:8 train:2:8 train:3:8 train:4:8 train:5:8 train:6:8 train:7:8
+[2026-08-05T20:30:30+08:00] workers: 2711388
+[2026-08-05T20:30:30+08:00] [gpu1] forced_color_V_what_shard00of02: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/V_what/shard00of02/V_what-forced_color
+2711394       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split V_what --shard 0 --num-shards 2 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/V_what --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/V_what --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-05T20:31:15+08:00] [gpu1] forced_color_V_what_shard00of02: RUNNING pid=2711394 (setup JSON after 40s)
+[2026-08-05T20:33:35+08:00] [gpu1] forced_color_V_what_shard00of02: END rc=0
+[2026-08-05T20:33:35+08:00] [gpu1] forced_color_V_what_shard01of02: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/V_what/shard01of02/V_what-forced_color
+2724123       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split V_what --shard 1 --num-shards 2 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/V_what --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/V_what --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-05T20:33:50+08:00] [gpu1] forced_color_V_what_shard01of02: RUNNING pid=2724123 (setup JSON after 10s)
+[2026-08-05T20:36:04+08:00] [gpu1] forced_color_V_what_shard01of02: END rc=0
+[2026-08-05T20:36:04+08:00] [gpu1] forced_color_train_shard00of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard00of08/train-forced_color
+2727251       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 0 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-05T20:36:19+08:00] [gpu1] forced_color_train_shard00of08: RUNNING pid=2727251 (setup JSON after 10s)
+[2026-08-05T22:10:23+08:00] [gpu1] forced_color_train_shard00of08: END rc=0
+[2026-08-05T22:10:23+08:00] [gpu1] forced_color_train_shard01of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard01of08/train-forced_color
+2899111       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 1 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-05T22:10:38+08:00] [gpu1] forced_color_train_shard01of08: RUNNING pid=2899111 (setup JSON after 10s)
+[2026-08-05T23:46:15+08:00] [gpu1] forced_color_train_shard01of08: END rc=0
+[2026-08-05T23:46:15+08:00] [gpu1] forced_color_train_shard02of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard02of08/train-forced_color
+3009444       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 2 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-05T23:46:40+08:00] [gpu1] forced_color_train_shard02of08: RUNNING pid=3009444 (setup JSON after 20s)
+[2026-08-06T01:23:47+08:00] [gpu1] forced_color_train_shard02of08: END rc=0
+[2026-08-06T01:23:47+08:00] [gpu1] forced_color_train_shard03of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard03of08/train-forced_color
+3122864       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 3 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-06T01:24:12+08:00] [gpu1] forced_color_train_shard03of08: RUNNING pid=3122864 (setup JSON after 20s)
+[2026-08-06T03:06:44+08:00] [gpu1] forced_color_train_shard03of08: END rc=0
+[2026-08-06T03:06:44+08:00] [gpu1] forced_color_train_shard04of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard04of08/train-forced_color
+3248957       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 4 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-06T03:07:40+08:00] [gpu1] forced_color_train_shard04of08: RUNNING pid=3248957 (setup JSON after 50s)
+[2026-08-06T05:05:45+08:00] [gpu1] forced_color_train_shard04of08: END rc=0
+[2026-08-06T05:05:45+08:00] [gpu1] forced_color_train_shard05of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard05of08/train-forced_color
+3390149       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 5 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-06T05:06:11+08:00] [gpu1] forced_color_train_shard05of08: RUNNING pid=3390149 (setup JSON after 20s)
+[2026-08-06T07:01:50+08:00] [gpu1] forced_color_train_shard05of08: END rc=0
+[2026-08-06T07:01:50+08:00] [gpu1] forced_color_train_shard06of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard06of08/train-forced_color
+3523762       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 6 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-06T07:02:15+08:00] [gpu1] forced_color_train_shard06of08: RUNNING pid=3523762 (setup JSON after 20s)
+[2026-08-06T08:56:39+08:00] [gpu1] forced_color_train_shard06of08: END rc=0
+[2026-08-06T08:56:39+08:00] [gpu1] forced_color_train_shard07of08: START -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard07of08/train-forced_color
+3660942       00:05 /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/genctx_shard.py --split train --shard 7 --num-shards 8 --shard-mode interleave --out-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --report-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/reports/forced_color/train --checkpoint /home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976 --batch-size 128 --max-new-tokens 512 --forced-color-prefix
+[2026-08-06T08:57:04+08:00] [gpu1] forced_color_train_shard07of08: RUNNING pid=3660942 (setup JSON after 20s)
+[2026-08-06T10:55:28+08:00] [gpu1] forced_color_train_shard07of08: END rc=0
+[2026-08-06T10:55:28+08:00] [gpu1] worker done rc=0
+[2026-08-06T10:55:28+08:00] all workers finished; worst worker rc=0
+[2026-08-06T10:55:29+08:00] DRIVER EXIT rc=0

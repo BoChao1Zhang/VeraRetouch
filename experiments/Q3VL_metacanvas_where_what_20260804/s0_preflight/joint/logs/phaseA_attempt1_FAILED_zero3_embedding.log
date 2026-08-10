@@ -1,0 +1,103 @@
+
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+2026-08-05 01:53:19,328 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpxxzmk4fe/test.c -o /tmp/tmpxxzmk4fe/test.o
+2026-08-05 01:53:19,353 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpo3jlgs33/test.c -o /tmp/tmpo3jlgs33/test.o
+2026-08-05 01:53:19,364 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpxxzmk4fe/test.o -laio -o /tmp/tmpxxzmk4fe/a.out
+2026-08-05 01:53:19,382 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpo3jlgs33/test.o -laio -o /tmp/tmpo3jlgs33/a.out
+2026-08-05 01:53:19,395 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmplg2cj9qq/test.c -o /tmp/tmplg2cj9qq/test.o
+2026-08-05 01:53:19,409 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmp2wklkw1z/test.c -o /tmp/tmp2wklkw1z/test.o
+2026-08-05 01:53:19,433 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmplg2cj9qq/test.o -L/usr/local/cuda -L/usr/local/cuda/lib64 -lcufile -o /tmp/tmplg2cj9qq/a.out
+2026-08-05 01:53:19,443 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmp2wklkw1z/test.o -L/usr/local/cuda -L/usr/local/cuda/lib64 -lcufile -o /tmp/tmp2wklkw1z/a.out
+2026-08-05 01:53:19,500 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpm7qz2xcd/test.c -o /tmp/tmpm7qz2xcd/test.o
+2026-08-05 01:53:19,512 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpud5llskz/test.c -o /tmp/tmpud5llskz/test.o
+2026-08-05 01:53:19,528 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpm7qz2xcd/test.o -laio -o /tmp/tmpm7qz2xcd/a.out
+2026-08-05 01:53:19,549 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpud5llskz/test.o -laio -o /tmp/tmpud5llskz/a.out
+NCCL version 2.27.5+cuda12.9
+2026-08-05 01:53:20,904 INFO [__main__] transformers 4.57.1 | torch 2.10.0+cu128
+2026-08-05 01:53:20,904 INFO [__main__] batch plan: {'spec_violations': [], 'effective_global_batch': 32, 'per_device_train_batch_size': 4, 'gradient_accumulation_steps': 4, 'world_size': 2}
+2026-08-05 01:54:33,366 INFO [__main__] shard verification PASSED (2 shards)
+2026-08-05 01:54:34,304 INFO [__main__] special token ids: {'<where>': 151669, '</where>': 151670, '<color>': 151671, '</color>': 151672}
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  2.17it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:01<00:01,  1.41s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:01<00:00,  1.03it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:01<00:00,  1.12it/s]
+Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.32s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.33s/it]
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank0]:   File "<frozen runpy>", line 88, in _run_code
+[rank0]:   File "/home/bc/VeraRetouch/q3vl/train/train_sft.py", line 265, in <module>
+[rank0]:     raise SystemExit(main())
+[rank0]:                      ^^^^^^
+[rank0]:   File "/home/bc/VeraRetouch/q3vl/train/train_sft.py", line 165, in main
+[rank0]:     model, freeze_report, emb_info = setup_model(
+[rank0]:                                      ^^^^^^^^^^^^
+[rank0]:   File "/home/bc/VeraRetouch/q3vl/train/modeling.py", line 180, in setup_model
+[rank0]:     emb_info = prepare_embeddings(
+[rank0]:                ^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/bc/VeraRetouch/q3vl/train/tokens.py", line 148, in prepare_embeddings
+[rank0]:     info["reinit"] = _mean_init_rows(weight.data, target_rows, ref_upper, gen)
+[rank0]:                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/home/bc/VeraRetouch/q3vl/train/tokens.py", line 97, in _mean_init_rows
+[rank0]:     noise = torch.randn(mean.shape, generator=generator, dtype=torch.float32) * std * noise_scale
+[rank0]:             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~
+[rank0]: RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!
+[rank1]: Traceback (most recent call last):
+[rank1]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank1]:   File "<frozen runpy>", line 88, in _run_code
+[rank1]:   File "/home/bc/VeraRetouch/q3vl/train/train_sft.py", line 265, in <module>
+[rank1]:     raise SystemExit(main())
+[rank1]:                      ^^^^^^
+[rank1]:   File "/home/bc/VeraRetouch/q3vl/train/train_sft.py", line 165, in main
+[rank1]:     model, freeze_report, emb_info = setup_model(
+[rank1]:                                      ^^^^^^^^^^^^
+[rank1]:   File "/home/bc/VeraRetouch/q3vl/train/modeling.py", line 180, in setup_model
+[rank1]:     emb_info = prepare_embeddings(
+[rank1]:                ^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/bc/VeraRetouch/q3vl/train/tokens.py", line 148, in prepare_embeddings
+[rank1]:     info["reinit"] = _mean_init_rows(weight.data, target_rows, ref_upper, gen)
+[rank1]:                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank1]:   File "/home/bc/VeraRetouch/q3vl/train/tokens.py", line 97, in _mean_init_rows
+[rank1]:     noise = torch.randn(mean.shape, generator=generator, dtype=torch.float32) * std * noise_scale
+[rank1]:             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~
+[rank1]: RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:1 and cpu!
+[rank0]:[W805 01:54:38.127476292 ProcessGroupNCCL.cpp:1553] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+W0805 01:54:40.141000 3282362 site-packages/torch/distributed/elastic/multiprocessing/api.py:1010] Sending process 3282479 closing signal SIGTERM
+E0805 01:54:40.257000 3282362 site-packages/torch/distributed/elastic/multiprocessing/api.py:984] failed (exitcode: 1) local_rank: 0 (pid: 3282478) of binary: /home/bc/envs/q3vl_sft/bin/python
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/run.py", line 995, in <module>
+    main()
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 362, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/run.py", line 991, in main
+    run(args)
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/run.py", line 982, in run
+    elastic_launch(
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 170, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 317, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+q3vl.train.train_sft FAILED
+------------------------------------------------------------
+Failures:
+[1]:
+  time      : 2026-08-05_01:54:40
+  host      : h3c
+  rank      : 1 (local_rank: 1)
+  exitcode  : 1 (pid: 3282479)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2026-08-05_01:54:40
+  host      : h3c
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 3282478)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

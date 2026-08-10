@@ -1,0 +1,52 @@
+{
+  "task": "EXEC-1 -- zero-idle GPU hand-off after the Base SFT",
+  "pid": 1460136,
+  "command": "nohup bash ./chain_after_sft.sh > logs/chain.log 2>&1 < /dev/null &",
+  "cwd": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain",
+  "log": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/chain.log",
+  "started_at": "2026-08-05T10:15:09+08:00",
+  "host": "h3c",
+  "liveness_ps_p": {
+    "1460136": true
+  },
+  "substantive_output_seen": "still training: ranks_alive=2 progress=4023/4976",
+  "waits_on": {
+    "rank_pids": [
+      3395226,
+      3395227
+    ],
+    "launcher_pid": 3395099,
+    "cmdline_pattern": "q3vl.train.train_sft",
+    "poll_seconds": 60
+  },
+  "dispatches": {
+    "gpu0_ckpt_verify": {
+      "gpu": 0,
+      "script": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/job_gpu0_ckpt_verify.sh",
+      "log": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/gpu0_ckpt_verify.log",
+      "eta": "8-15 min"
+    },
+    "gpu1_wherea_s2": {
+      "gpu": 1,
+      "script": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/job_gpu1_wherea_s2.sh",
+      "log": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/gpu1_wherea_s2.log",
+      "eta": "30-60 min (unmeasured)"
+    },
+    "cpu_sync_maskviews": {
+      "gpu": null,
+      "script": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/job_cpu_sync_maskviews.sh",
+      "log": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/cpu_sync_maskviews.log",
+      "eta": "sync 40-60 min, then maskviews 1-4 h"
+    }
+  },
+  "abort_conditions": [
+    "checkpoint-4976 missing or incomplete (model/tokenizer/processor/trainer_state)",
+    "checkpoint-4976 trainer_state.json global_step != 4976",
+    "output_dir root trainer_state.json missing (final save_state never ran)",
+    "train.log tail carries Traceback / CUDA OOM / Killed / SIGKILL / segfault"
+  ],
+  "on_abort": "no job is started; both GPUs are left idle and a human must look",
+  "dry_run_record": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/dryrun/DRYRUN_RESULT.md",
+  "dry_run_result": "43 passed / 0 failed (9 cases)",
+  "git_commit": "80a507892f1c5675da277b4a21ebe4815566cd8f"
+}

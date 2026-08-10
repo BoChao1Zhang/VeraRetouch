@@ -1,0 +1,154 @@
+{
+  "setup": {
+    "split": "train",
+    "mode": "forced_color",
+    "checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+    "env": {
+      "git_commit": "2c41e3c285bb6bbf48d3ea4e155363c24b1dcef4",
+      "python": "3.12.12",
+      "torch": "2.10.0+cu128",
+      "cuda_available": true
+    },
+    "special_token_ids": {
+      "<where>": 151669,
+      "</where>": 151670,
+      "<color>": 151671,
+      "</color>": 151672
+    },
+    "vlm": {
+      "layer": -1,
+      "final_norm": true,
+      "use_hook": true,
+      "text_hidden": 2560,
+      "n_text_layers": 36,
+      "n_vision_blocks": 24,
+      "dtype": "torch.bfloat16",
+      "device": "cuda",
+      "any_param_requires_grad": false
+    },
+    "dataset": {
+      "split": "train",
+      "need_mask": false,
+      "mask_source": null,
+      "n_samples": 19902,
+      "shard": 1,
+      "num_shards": 8,
+      "shard_mode": "interleave",
+      "shard_tag": "shard01of08",
+      "n_samples_before_shard": 159215,
+      "shard_first_sample_id": "sft_00005f61ef0c91023c3f5913104b2a98",
+      "shard_last_sample_id": "sft_fffbc15fc7d49e7bec6720f7ce6fc77d"
+    },
+    "n_samples": 19902,
+    "batch_size": 128,
+    "max_new_tokens": 512,
+    "max_context_tokens": 96,
+    "where_max_tokens": 96,
+    "color_max_tokens": 384,
+    "schema_version": "q3vl.where_b.genwhere/2",
+    "out_root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard01of08/train-forced_color"
+  },
+  "generation_seconds": 5663.3,
+  "samples_per_second": 3.514,
+  "summary": {
+    "n": 19902,
+    "modes": [
+      "forced_color"
+    ],
+    "schema_versions": [
+      "q3vl.where_b.genwhere/2"
+    ],
+    "format_failure_rate": 0.0,
+    "truncation_rate": 0.0,
+    "starts_with_where_open_rate": 0.0,
+    "stop_reasons": {
+      "suppressed_by_mode": 19902
+    },
+    "where_tokens": {
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "generated_tokens": {
+      "min": 243,
+      "p50": 272,
+      "p95": 301,
+      "max": 326
+    },
+    "segments_overlap_rate": 0.0,
+    "color": {
+      "n": 19902,
+      "format_failure_rate": 0.0,
+      "truncation_rate": 0.0,
+      "starts_with_color_open_rate": 1.0,
+      "stop_reasons": {
+        "closed": 19902
+      },
+      "color_tokens": {
+        "min": 114,
+        "p50": 195,
+        "p95": 237,
+        "max": 325
+      }
+    },
+    "both_segments_well_formed_rate": 1.0
+  },
+  "manifest": {
+    "status": "complete",
+    "member_count": 19902,
+    "sample_count": 19902,
+    "shard_count": 1
+  },
+  "store": {
+    "n": 19902,
+    "modes": [
+      "forced_color"
+    ],
+    "schema_versions": [
+      "q3vl.where_b.genwhere/2"
+    ],
+    "format_failure_rate": 0.0,
+    "truncation_rate": 0.0,
+    "starts_with_where_open_rate": 0.0,
+    "stop_reasons": {
+      "suppressed_by_mode": 19902
+    },
+    "where_tokens": {
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "generated_tokens": {
+      "min": 243,
+      "p50": 272,
+      "p95": 301,
+      "max": 326
+    },
+    "segments_overlap_rate": 0.0,
+    "color": {
+      "n": 19902,
+      "format_failure_rate": 0.0,
+      "truncation_rate": 0.0,
+      "starts_with_color_open_rate": 1.0,
+      "stop_reasons": {
+        "closed": 19902
+      },
+      "color_tokens": {
+        "min": 114,
+        "p50": 195,
+        "p95": 237,
+        "max": 325
+      }
+    },
+    "both_segments_well_formed_rate": 1.0,
+    "root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard01of08/train-forced_color",
+    "status": "complete",
+    "member_count": 19902,
+    "sample_count": 19902,
+    "shard_count": 1,
+    "index_rows": 19902
+  },
+  "peak_memory_gib": 34.17
+}

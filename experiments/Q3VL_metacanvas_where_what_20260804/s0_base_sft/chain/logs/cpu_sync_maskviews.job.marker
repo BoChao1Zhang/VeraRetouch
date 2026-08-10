@@ -1,0 +1,8 @@
+pid=1581655
+cmd=bash /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/job_cpu_sync_maskviews.sh
+log=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/cpu_sync_maskviews.log
+rc_file=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/cpu_sync_maskviews.rc
+phase_dir=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/phase_cpu_sync_maskviews
+started_at=2026-08-05T11:49:59+08:00
+liveness_ps_p=true
+dispatched_by=./chain_after_sft.sh

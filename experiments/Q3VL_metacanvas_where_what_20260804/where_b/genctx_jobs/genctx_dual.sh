@@ -55,6 +55,17 @@ else
   SPLITS="${SPLITS:-V_where V_what train}"
 fi
 GPUS="${GPUS:-0 1}"
+# Staggered start: when one card is still busy, launch one driver per card over
+# DISJOINT slices of the same deterministic task list instead of waiting for both
+# (`TASK_STRIDE=2 TASK_OFFSET=0 GPUS=0` and `TASK_STRIDE=2 TASK_OFFSET=1 GPUS=1`
+# hand each card exactly the queue the two-card driver would have given it).
+# Set DO_MERGE=0 on both and run merge_genctx.py once, after all shards are done:
+# neither driver can see the other's shards, so neither may merge.
+TASK_STRIDE="${TASK_STRIDE:-1}"
+TASK_OFFSET="${TASK_OFFSET:-0}"
+# keeps two concurrent drivers from writing the same driver-level rc file
+TASK_TAG=""
+[ "${TASK_STRIDE}" -ne 1 ] && TASK_TAG="_slice${TASK_OFFSET}of${TASK_STRIDE}"
 NUM_SHARDS="${NUM_SHARDS:-8}"               # shards for a big split (train)
 SMALL_SPLIT_MAX="${SMALL_SPLIT_MAX:-5000}"  # below this, use SMALL_NUM_SHARDS
 SMALL_NUM_SHARDS="${SMALL_NUM_SHARDS:-2}"
@@ -271,15 +282,27 @@ gpu_worker() {
 
 # ----------------------------------------------------------------- main ------
 say "DRIVER START pid=$$ host=$(hostname)"
-if ! probe; then say "PROBE FAILED -- nothing started"; printf '1\n' > "${LOG_DIR}/genctx_dual_${MODE}.rc"; exit 1; fi
+if ! probe; then say "PROBE FAILED -- nothing started"; printf '1\n' > "${LOG_DIR}/genctx_dual_${MODE}${TASK_TAG}.rc"; exit 1; fi
 
 # build the task list: shards round-robin over the cards, small splits first so
 # the cheap consumers (V_where / V_what boards) are unblocked within the hour
-declare -a TASKS=()
+declare -a ALL_TASKS=() TASKS=()
 for split in ${SPLITS}; do
   n=$(shards_for "$(n_samples_of "${split}")")
-  for ((i = 0; i < n; i++)); do TASKS+=("${split}:${i}:${n}"); done
+  for ((i = 0; i < n; i++)); do ALL_TASKS+=("${split}:${i}:${n}"); done
 done
+for ((k = 0; k < ${#ALL_TASKS[@]}; k++)); do
+  [ $((k % TASK_STRIDE)) -eq "${TASK_OFFSET}" ] && TASKS+=("${ALL_TASKS[k]}")
+done
+if [ "${TASK_STRIDE}" -ne 1 ]; then
+  say "TASK SLICE ${TASK_OFFSET}/${TASK_STRIDE}: ${#TASKS[@]} of ${#ALL_TASKS[@]} shard jobs"
+  say "  (the other slice belongs to another driver; DO_MERGE must be 0 on both)"
+  if [ "${DO_MERGE}" = "1" ]; then
+    say "REFUSING: DO_MERGE=1 with TASK_STRIDE=${TASK_STRIDE} -- this driver cannot see the other slice's shards"
+    printf '2\n' > "${LOG_DIR}/genctx_dual_${MODE}${TASK_TAG}.rc"; exit 2
+  fi
+fi
+[ "${#TASKS[@]}" -gt 0 ] || { say "task slice is empty -- nothing to do"; exit 2; }
 read -r -a GPU_ARR <<< "${GPUS}"
 NG=${#GPU_ARR[@]}
 if [ "${NG}" -lt 1 ] || [ "${NG}" -gt 4 ]; then
@@ -298,7 +321,7 @@ done
 
 if [ "${DRY_RUN}" = "1" ]; then
   say "DRY_RUN=1 -- plan printed, no process started, no GPU touched"
-  printf '0\n' > "${LOG_DIR}/genctx_dual_${MODE}.rc"; exit 0
+  printf '0\n' > "${LOG_DIR}/genctx_dual_${MODE}${TASK_TAG}.rc"; exit 0
 fi
 
 declare -a WPIDS=()
@@ -333,5 +356,5 @@ elif [ "${DO_MERGE}" = "1" ]; then
 fi
 
 say "DRIVER EXIT rc=${DRIVER_RC}"
-printf '%s\n' "${DRIVER_RC}" > "${LOG_DIR}/genctx_dual_${MODE}.rc"
+printf '%s\n' "${DRIVER_RC}" > "${LOG_DIR}/genctx_dual_${MODE}${TASK_TAG}.rc"
 exit "${DRIVER_RC}"

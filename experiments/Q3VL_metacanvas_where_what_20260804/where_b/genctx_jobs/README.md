@@ -74,3 +74,57 @@ LIMIT=256 NUM_SHARDS=2 DO_MERGE=0 bash genctx_dual.sh "$CKPT"   # 吞吐标定�
 已完成的分片（`manifest.status == complete`）自动跳过，只补没跑完的。
 **任何目标目录已存在但不完整时，脚本一律拒绝而不是删除**——按 CLAUDE.md 先挪走、再重跑。
 标定跑（`LIMIT=…`）的分片必须先挪走，否则会被当成已完成的正式产物跳过。
+
+---
+
+## 本次运行（2026-08-05 12:51 起，错峰双卡）
+
+启动时 GPU1 仍在跑 Where-A `bench_calibration`，双卡驱动被自己的 busy-GPU 门拦下
+（留档 `logs/driver_two_segment.refused-gpu1-busy.log`，未起任何进程），改为两个单卡驱动
+各取任务表的一半（`TASK_STRIDE=2` / `TASK_OFFSET=0|1`，切法与双卡驱动逐条相同）：
+
+```
+阶段一 B=64  (12:51-13:04)  V_where:0/1 + V_what:0/1 四个分片全部 rc=0，已完成，保留
+阶段二 B=128 (13:07-)       train 八个分片重跑（主 agent 裁定，验证见 NOTES §4-quater）
+  GPU0  driver pid 1986659  logs/driver_gpu0_b128.log   train:0,2,4,6
+  GPU1  driver pid 1987066  logs/driver_gpu1_b128.log   train:1,3,5,7
+```
+
+> 停作业时注意：`kill` driver **不会**停 worker 子 shell，它会接着起下一个分片。
+> 先杀 worker 子 shell，再杀 python，都按 PID + `ps -p` 复核（禁 pgrep）。
+
+**两个驱动都 `DO_MERGE=0`**——谁都看不到对方的分片。12 个分片全部 rc=0 之后，
+必须手工跑一次合并（见 NOTES.md §4-ter 的三行循环），它会顺带建 CX-1 软链、
+写 CX-2 审计字段。
+
+监控：
+
+```bash
+grep -E 'START|RUNNING|END rc=' logs/driver_gpu*.log | tail
+cat logs/*.rc                                    # 每个分片的退出码，0 = 好
+grep -o '"samples_per_s": [0-9.]*' logs/two_segment_train_shard0*.log | tail
+```
+
+---
+
+## 状态（2026-08-05 20:36）
+
+**`two_segment` 已完工并合并**——Where-B 八臂、Stage-What 十臂（T01–T08 + C03/C04）的 genctx 前置解除。
+
+```
+/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/
+  train/   V_where/   V_what/           ← 已发布，manifest complete，含 two_segment 软链
+  交付报告：../genctx_train.json  ../genctx_V_where.json  ../genctx_V_what.json
+```
+
+**`forced_color` 进行中（单卡 GPU1，B=128，2026-08-05 20:30 起，ETA 08-06 ~08:25）。**
+日志路径固定不再改名：
+
+```bash
+tail -f logs/driver_forced_color.log                      # driver（pid 见 logs/driver_forced_color.pid）
+grep -E 'START|RUNNING|END rc=' logs/driver_forced_color.log
+grep -o '"samples_per_s": [0-9.]*' logs/forced_color_train_shard0*.log | tail
+cat logs/forced_color_*.rc                                # 每片退出码
+```
+
+10 片全 rc=0 后由主 agent 触发合并（命令见 NOTES.md §4-sexies）。

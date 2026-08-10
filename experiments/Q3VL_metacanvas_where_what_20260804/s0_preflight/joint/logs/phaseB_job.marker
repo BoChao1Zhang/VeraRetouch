@@ -1,0 +1,10 @@
+{
+  "pid": 3304288,
+  "command": "/home/bc/envs/q3vl_sft/bin/python -m torch.distributed.run --nproc_per_node=2 --master_port=29519 -m q3vl.train.train_sft --config /home/bc/VeraRetouch/q3vl/train/configs/sft_base.yaml --output_dir /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseB --max_steps 8 --eval_steps 4 --save_steps 2 --save_total_limit 1",
+  "log": "/mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseB/train.log",
+  "config": "/home/bc/VeraRetouch/q3vl/train/configs/sft_base.yaml",
+  "started_at": "2026-08-05T02:10:14+08:00",
+  "host": "h3c",
+  "cuda_visible_devices": "0,1",
+  "role": "S0-JOINT preflight smoke (not production training)"
+}

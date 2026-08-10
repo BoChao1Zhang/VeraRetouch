@@ -1,0 +1,11 @@
+[2026-08-05T12:49:19+08:00] DRIVER START pid=1961258 host=h3c
+[2026-08-05T12:49:19+08:00] MODE=two_segment SPLITS='V_where V_what train' GPUS='0 1' batch=64 max_new=512
+[2026-08-05T12:49:19+08:00] checkpoint=/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976
+[2026-08-05T12:49:19+08:00] checkpoint weight shards: 2
+[2026-08-05T12:49:19+08:00] split V_where: 896 samples, 2 shards, final -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/V_where
+[2026-08-05T12:49:19+08:00] split V_what: 897 samples, 2 shards, final -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/V_what
+[2026-08-05T12:49:23+08:00] split train: 159215 samples, 8 shards, final -> /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/train
+[2026-08-05T12:49:23+08:00] GPU 0: 0 MiB in use
+[2026-08-05T12:49:23+08:00] GPU 1: 2255 MiB in use
+[2026-08-05T12:49:23+08:00] GPU 1 is busy (2255 MiB >= 2000); refusing to start (FORCE_BUSY_GPU=1 overrides)
+[2026-08-05T12:49:23+08:00] PROBE FAILED -- nothing started

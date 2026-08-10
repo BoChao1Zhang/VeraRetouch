@@ -1,0 +1,257 @@
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 14.39it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 14.35it/s]
+{"shard_plan": {"shard": 6, "num_shards": 8, "shard_mode": "interleave", "shard_tag": "shard06of08", "n_samples_before_shard": 159215, "n_samples": 19902, "shard_first_sample_id": "sft_0002cc632ce8e55794d5e57586a6d625", "shard_last_sample_id": "sft_fffff0ae4745bd41bed257c4c050d47a"}}
+{
+  "split": "train",
+  "mode": "forced_color",
+  "checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+  "env": {
+    "git_commit": "af99fa3ac64af6ef42a4f3856b5d7a428aafaf7d",
+    "python": "3.12.12",
+    "torch": "2.10.0+cu128",
+    "cuda_available": true
+  },
+  "special_token_ids": {
+    "<where>": 151669,
+    "</where>": 151670,
+    "<color>": 151671,
+    "</color>": 151672
+  },
+  "vlm": {
+    "layer": -1,
+    "final_norm": true,
+    "use_hook": true,
+    "text_hidden": 2560,
+    "n_text_layers": 36,
+    "n_vision_blocks": 24,
+    "dtype": "torch.bfloat16",
+    "device": "cuda",
+    "any_param_requires_grad": false
+  },
+  "dataset": {
+    "split": "train",
+    "need_mask": false,
+    "mask_source": null,
+    "n_samples": 19902,
+    "shard": 6,
+    "num_shards": 8,
+    "shard_mode": "interleave",
+    "shard_tag": "shard06of08",
+    "n_samples_before_shard": 159215,
+    "shard_first_sample_id": "sft_0002cc632ce8e55794d5e57586a6d625",
+    "shard_last_sample_id": "sft_fffff0ae4745bd41bed257c4c050d47a"
+  },
+  "n_samples": 19902,
+  "batch_size": 128,
+  "max_new_tokens": 512,
+  "max_context_tokens": 96,
+  "where_max_tokens": 96,
+  "color_max_tokens": 384,
+  "schema_version": "q3vl.where_b.genwhere/2",
+  "out_root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard06of08/train-forced_color"
+}
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+{"done": 256, "of": 19902, "samples_per_s": 3.09, "eta_s": 6349}
+{"done": 512, "of": 19902, "samples_per_s": 3.2, "eta_s": 6066}
+{"done": 640, "of": 19902, "samples_per_s": 3.07, "eta_s": 6267}
+{"done": 896, "of": 19902, "samples_per_s": 2.97, "eta_s": 6396}
+{"done": 1024, "of": 19902, "samples_per_s": 2.97, "eta_s": 6367}
+{"done": 1280, "of": 19902, "samples_per_s": 2.93, "eta_s": 6356}
+{"done": 1408, "of": 19902, "samples_per_s": 2.91, "eta_s": 6350}
+{"done": 1664, "of": 19902, "samples_per_s": 2.95, "eta_s": 6191}
+{"done": 1920, "of": 19902, "samples_per_s": 2.93, "eta_s": 6138}
+{"done": 2048, "of": 19902, "samples_per_s": 2.92, "eta_s": 6117}
+{"done": 2304, "of": 19902, "samples_per_s": 2.92, "eta_s": 6027}
+{"done": 2432, "of": 19902, "samples_per_s": 2.89, "eta_s": 6053}
+{"done": 2688, "of": 19902, "samples_per_s": 2.89, "eta_s": 5951}
+{"done": 2816, "of": 19902, "samples_per_s": 2.92, "eta_s": 5860}
+{"done": 3072, "of": 19902, "samples_per_s": 2.91, "eta_s": 5777}
+{"done": 3200, "of": 19902, "samples_per_s": 2.91, "eta_s": 5748}
+{"done": 3456, "of": 19902, "samples_per_s": 2.9, "eta_s": 5669}
+{"done": 3712, "of": 19902, "samples_per_s": 2.87, "eta_s": 5647}
+{"done": 3840, "of": 19902, "samples_per_s": 2.88, "eta_s": 5575}
+{"done": 4096, "of": 19902, "samples_per_s": 2.89, "eta_s": 5463}
+{"done": 4224, "of": 19902, "samples_per_s": 2.9, "eta_s": 5403}
+{"done": 4480, "of": 19902, "samples_per_s": 2.93, "eta_s": 5264}
+{"done": 4608, "of": 19902, "samples_per_s": 2.94, "eta_s": 5208}
+{"done": 4864, "of": 19902, "samples_per_s": 2.94, "eta_s": 5111}
+{"done": 5120, "of": 19902, "samples_per_s": 2.94, "eta_s": 5033}
+{"done": 5248, "of": 19902, "samples_per_s": 2.93, "eta_s": 4996}
+{"done": 5504, "of": 19902, "samples_per_s": 2.94, "eta_s": 4897}
+{"done": 5632, "of": 19902, "samples_per_s": 2.94, "eta_s": 4851}
+{"done": 5888, "of": 19902, "samples_per_s": 2.95, "eta_s": 4758}
+{"done": 6016, "of": 19902, "samples_per_s": 2.93, "eta_s": 4734}
+{"done": 6272, "of": 19902, "samples_per_s": 2.95, "eta_s": 4620}
+{"done": 6400, "of": 19902, "samples_per_s": 2.95, "eta_s": 4581}
+{"done": 6656, "of": 19902, "samples_per_s": 2.96, "eta_s": 4468}
+{"done": 6912, "of": 19902, "samples_per_s": 2.97, "eta_s": 4376}
+{"done": 7040, "of": 19902, "samples_per_s": 2.97, "eta_s": 4325}
+{"done": 7296, "of": 19902, "samples_per_s": 2.98, "eta_s": 4226}
+{"done": 7424, "of": 19902, "samples_per_s": 2.99, "eta_s": 4172}
+{"done": 7680, "of": 19902, "samples_per_s": 2.99, "eta_s": 4093}
+{"done": 7808, "of": 19902, "samples_per_s": 2.98, "eta_s": 4057}
+{"done": 8064, "of": 19902, "samples_per_s": 2.98, "eta_s": 3971}
+{"done": 8320, "of": 19902, "samples_per_s": 2.98, "eta_s": 3882}
+{"done": 8448, "of": 19902, "samples_per_s": 2.99, "eta_s": 3834}
+{"done": 8704, "of": 19902, "samples_per_s": 2.99, "eta_s": 3748}
+{"done": 8832, "of": 19902, "samples_per_s": 2.99, "eta_s": 3707}
+{"done": 9088, "of": 19902, "samples_per_s": 2.98, "eta_s": 3631}
+{"done": 9216, "of": 19902, "samples_per_s": 2.97, "eta_s": 3593}
+{"done": 9472, "of": 19902, "samples_per_s": 2.97, "eta_s": 3508}
+{"done": 9600, "of": 19902, "samples_per_s": 2.97, "eta_s": 3465}
+{"done": 9856, "of": 19902, "samples_per_s": 2.96, "eta_s": 3390}
+{"done": 10112, "of": 19902, "samples_per_s": 2.96, "eta_s": 3306}
+{"done": 10240, "of": 19902, "samples_per_s": 2.96, "eta_s": 3264}
+{"done": 10496, "of": 19902, "samples_per_s": 2.94, "eta_s": 3196}
+{"done": 10624, "of": 19902, "samples_per_s": 2.94, "eta_s": 3160}
+{"done": 10880, "of": 19902, "samples_per_s": 2.93, "eta_s": 3083}
+{"done": 11008, "of": 19902, "samples_per_s": 2.92, "eta_s": 3044}
+{"done": 11264, "of": 19902, "samples_per_s": 2.92, "eta_s": 2962}
+{"done": 11520, "of": 19902, "samples_per_s": 2.92, "eta_s": 2875}
+{"done": 11648, "of": 19902, "samples_per_s": 2.92, "eta_s": 2830}
+{"done": 11904, "of": 19902, "samples_per_s": 2.92, "eta_s": 2736}
+{"done": 12032, "of": 19902, "samples_per_s": 2.92, "eta_s": 2695}
+{"done": 12288, "of": 19902, "samples_per_s": 2.92, "eta_s": 2611}
+{"done": 12416, "of": 19902, "samples_per_s": 2.92, "eta_s": 2563}
+{"done": 12672, "of": 19902, "samples_per_s": 2.93, "eta_s": 2469}
+{"done": 12800, "of": 19902, "samples_per_s": 2.93, "eta_s": 2421}
+{"done": 13056, "of": 19902, "samples_per_s": 2.93, "eta_s": 2337}
+{"done": 13312, "of": 19902, "samples_per_s": 2.93, "eta_s": 2248}
+{"done": 13440, "of": 19902, "samples_per_s": 2.93, "eta_s": 2206}
+{"done": 13696, "of": 19902, "samples_per_s": 2.94, "eta_s": 2112}
+{"done": 13824, "of": 19902, "samples_per_s": 2.94, "eta_s": 2066}
+{"done": 14080, "of": 19902, "samples_per_s": 2.94, "eta_s": 1980}
+{"done": 14208, "of": 19902, "samples_per_s": 2.94, "eta_s": 1937}
+{"done": 14464, "of": 19902, "samples_per_s": 2.94, "eta_s": 1847}
+{"done": 14720, "of": 19902, "samples_per_s": 2.95, "eta_s": 1759}
+{"done": 14848, "of": 19902, "samples_per_s": 2.95, "eta_s": 1715}
+{"done": 15104, "of": 19902, "samples_per_s": 2.95, "eta_s": 1626}
+{"done": 15232, "of": 19902, "samples_per_s": 2.95, "eta_s": 1584}
+{"done": 15488, "of": 19902, "samples_per_s": 2.95, "eta_s": 1498}
+{"done": 15616, "of": 19902, "samples_per_s": 2.95, "eta_s": 1454}
+{"done": 15872, "of": 19902, "samples_per_s": 2.94, "eta_s": 1370}
+{"done": 16000, "of": 19902, "samples_per_s": 2.94, "eta_s": 1326}
+{"done": 16256, "of": 19902, "samples_per_s": 2.94, "eta_s": 1240}
+{"done": 16512, "of": 19902, "samples_per_s": 2.93, "eta_s": 1157}
+{"done": 16640, "of": 19902, "samples_per_s": 2.93, "eta_s": 1113}
+{"done": 16896, "of": 19902, "samples_per_s": 2.94, "eta_s": 1024}
+{"done": 17024, "of": 19902, "samples_per_s": 2.94, "eta_s": 980}
+{"done": 17280, "of": 19902, "samples_per_s": 2.94, "eta_s": 891}
+{"done": 17408, "of": 19902, "samples_per_s": 2.94, "eta_s": 847}
+{"done": 17664, "of": 19902, "samples_per_s": 2.95, "eta_s": 759}
+{"done": 17920, "of": 19902, "samples_per_s": 2.95, "eta_s": 672}
+{"done": 18048, "of": 19902, "samples_per_s": 2.94, "eta_s": 630}
+{"done": 18304, "of": 19902, "samples_per_s": 2.94, "eta_s": 544}
+{"done": 18432, "of": 19902, "samples_per_s": 2.94, "eta_s": 500}
+{"done": 18688, "of": 19902, "samples_per_s": 2.94, "eta_s": 413}
+{"done": 18816, "of": 19902, "samples_per_s": 2.93, "eta_s": 370}
+{"done": 19072, "of": 19902, "samples_per_s": 2.93, "eta_s": 283}
+{"done": 19200, "of": 19902, "samples_per_s": 2.93, "eta_s": 239}
+{"done": 19456, "of": 19902, "samples_per_s": 2.94, "eta_s": 152}
+{"done": 19712, "of": 19902, "samples_per_s": 2.93, "eta_s": 65}
+{"done": 19840, "of": 19902, "samples_per_s": 2.94, "eta_s": 21}
+{"done": 19902, "of": 19902, "samples_per_s": 2.93, "eta_s": 0}
+{
+  "generation_seconds": 6795.7,
+  "samples_per_second": 2.929,
+  "summary": {
+    "n": 19902,
+    "modes": [
+      "forced_color"
+    ],
+    "schema_versions": [
+      "q3vl.where_b.genwhere/2"
+    ],
+    "format_failure_rate": 0.0,
+    "truncation_rate": 0.0,
+    "starts_with_where_open_rate": 0.0,
+    "stop_reasons": {
+      "suppressed_by_mode": 19902
+    },
+    "where_tokens": {
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "generated_tokens": {
+      "min": 241,
+      "p50": 272,
+      "p95": 309,
+      "max": 330
+    },
+    "segments_overlap_rate": 0.0,
+    "color": {
+      "n": 19902,
+      "format_failure_rate": 0.0,
+      "truncation_rate": 0.0,
+      "starts_with_color_open_rate": 1.0,
+      "stop_reasons": {
+        "closed": 19902
+      },
+      "color_tokens": {
+        "min": 117,
+        "p50": 194,
+        "p95": 237,
+        "max": 329
+      }
+    },
+    "both_segments_well_formed_rate": 1.0
+  },
+  "manifest": {
+    "status": "complete",
+    "member_count": 19902,
+    "sample_count": 19902,
+    "shard_count": 1
+  },
+  "store": {
+    "n": 19902,
+    "modes": [
+      "forced_color"
+    ],
+    "schema_versions": [
+      "q3vl.where_b.genwhere/2"
+    ],
+    "format_failure_rate": 0.0,
+    "truncation_rate": 0.0,
+    "starts_with_where_open_rate": 0.0,
+    "stop_reasons": {
+      "suppressed_by_mode": 19902
+    },
+    "where_tokens": {
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "generated_tokens": {
+      "min": 241,
+      "p50": 272,
+      "p95": 309,
+      "max": 330
+    },
+    "segments_overlap_rate": 0.0,
+    "color": {
+      "n": 19902,
+      "format_failure_rate": 0.0,
+      "truncation_rate": 0.0,
+      "starts_with_color_open_rate": 1.0,
+      "stop_reasons": {
+        "closed": 19902
+      },
+      "color_tokens": {
+        "min": 117,
+        "p50": 194,
+        "p95": 237,
+        "max": 329
+      }
+    },
+    "both_segments_well_formed_rate": 1.0,
+    "root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard06of08/train-forced_color",
+    "status": "complete",
+    "member_count": 19902,
+    "sample_count": 19902,
+    "shard_count": 1,
+    "index_rows": 19902
+  },
+  "peak_memory_gib": 34.01
+}

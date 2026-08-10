@@ -1,0 +1,257 @@
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 27.47it/s]
+{"shard_plan": {"shard": 3, "num_shards": 8, "shard_mode": "interleave", "shard_tag": "shard03of08", "n_samples_before_shard": 159215, "n_samples": 19902, "shard_first_sample_id": "sft_0001a2d7fc2417dd0883e3d5ff3d7c31", "shard_last_sample_id": "sft_fffdc270f86d17f0edf327515fc09b77"}}
+{
+  "split": "train",
+  "mode": "two_segment",
+  "checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+  "env": {
+    "git_commit": "a8d10a6460c8be0748dd6aea1e17cdb7a96f1add",
+    "python": "3.12.12",
+    "torch": "2.10.0+cu128",
+    "cuda_available": true
+  },
+  "special_token_ids": {
+    "<where>": 151669,
+    "</where>": 151670,
+    "<color>": 151671,
+    "</color>": 151672
+  },
+  "vlm": {
+    "layer": -1,
+    "final_norm": true,
+    "use_hook": true,
+    "text_hidden": 2560,
+    "n_text_layers": 36,
+    "n_vision_blocks": 24,
+    "dtype": "torch.bfloat16",
+    "device": "cuda",
+    "any_param_requires_grad": false
+  },
+  "dataset": {
+    "split": "train",
+    "need_mask": false,
+    "mask_source": null,
+    "n_samples": 19902,
+    "shard": 3,
+    "num_shards": 8,
+    "shard_mode": "interleave",
+    "shard_tag": "shard03of08",
+    "n_samples_before_shard": 159215,
+    "shard_first_sample_id": "sft_0001a2d7fc2417dd0883e3d5ff3d7c31",
+    "shard_last_sample_id": "sft_fffdc270f86d17f0edf327515fc09b77"
+  },
+  "n_samples": 19902,
+  "batch_size": 128,
+  "max_new_tokens": 512,
+  "max_context_tokens": 96,
+  "where_max_tokens": 96,
+  "color_max_tokens": 384,
+  "schema_version": "q3vl.where_b.genwhere/2",
+  "out_root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/train/shard03of08/train"
+}
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+{"done": 256, "of": 19902, "samples_per_s": 3.52, "eta_s": 5586}
+{"done": 512, "of": 19902, "samples_per_s": 3.66, "eta_s": 5296}
+{"done": 640, "of": 19902, "samples_per_s": 3.71, "eta_s": 5189}
+{"done": 896, "of": 19902, "samples_per_s": 3.81, "eta_s": 4991}
+{"done": 1024, "of": 19902, "samples_per_s": 3.77, "eta_s": 5009}
+{"done": 1280, "of": 19902, "samples_per_s": 3.79, "eta_s": 4920}
+{"done": 1408, "of": 19902, "samples_per_s": 3.78, "eta_s": 4890}
+{"done": 1664, "of": 19902, "samples_per_s": 3.82, "eta_s": 4768}
+{"done": 1920, "of": 19902, "samples_per_s": 3.84, "eta_s": 4684}
+{"done": 2048, "of": 19902, "samples_per_s": 3.83, "eta_s": 4660}
+{"done": 2304, "of": 19902, "samples_per_s": 3.82, "eta_s": 4603}
+{"done": 2432, "of": 19902, "samples_per_s": 3.83, "eta_s": 4564}
+{"done": 2688, "of": 19902, "samples_per_s": 3.83, "eta_s": 4491}
+{"done": 2816, "of": 19902, "samples_per_s": 3.85, "eta_s": 4437}
+{"done": 3072, "of": 19902, "samples_per_s": 3.87, "eta_s": 4351}
+{"done": 3200, "of": 19902, "samples_per_s": 3.86, "eta_s": 4327}
+{"done": 3456, "of": 19902, "samples_per_s": 3.83, "eta_s": 4291}
+{"done": 3712, "of": 19902, "samples_per_s": 3.79, "eta_s": 4275}
+{"done": 3840, "of": 19902, "samples_per_s": 3.78, "eta_s": 4252}
+{"done": 4096, "of": 19902, "samples_per_s": 3.78, "eta_s": 4186}
+{"done": 4224, "of": 19902, "samples_per_s": 3.79, "eta_s": 4139}
+{"done": 4480, "of": 19902, "samples_per_s": 3.8, "eta_s": 4063}
+{"done": 4608, "of": 19902, "samples_per_s": 3.8, "eta_s": 4023}
+{"done": 4864, "of": 19902, "samples_per_s": 3.81, "eta_s": 3946}
+{"done": 5120, "of": 19902, "samples_per_s": 3.82, "eta_s": 3867}
+{"done": 5248, "of": 19902, "samples_per_s": 3.83, "eta_s": 3829}
+{"done": 5504, "of": 19902, "samples_per_s": 3.83, "eta_s": 3762}
+{"done": 5632, "of": 19902, "samples_per_s": 3.84, "eta_s": 3720}
+{"done": 5888, "of": 19902, "samples_per_s": 3.84, "eta_s": 3650}
+{"done": 6016, "of": 19902, "samples_per_s": 3.84, "eta_s": 3613}
+{"done": 6272, "of": 19902, "samples_per_s": 3.84, "eta_s": 3550}
+{"done": 6400, "of": 19902, "samples_per_s": 3.84, "eta_s": 3514}
+{"done": 6656, "of": 19902, "samples_per_s": 3.84, "eta_s": 3447}
+{"done": 6912, "of": 19902, "samples_per_s": 3.85, "eta_s": 3376}
+{"done": 7040, "of": 19902, "samples_per_s": 3.85, "eta_s": 3340}
+{"done": 7296, "of": 19902, "samples_per_s": 3.85, "eta_s": 3270}
+{"done": 7424, "of": 19902, "samples_per_s": 3.85, "eta_s": 3237}
+{"done": 7680, "of": 19902, "samples_per_s": 3.85, "eta_s": 3174}
+{"done": 7808, "of": 19902, "samples_per_s": 3.85, "eta_s": 3140}
+{"done": 8064, "of": 19902, "samples_per_s": 3.86, "eta_s": 3066}
+{"done": 8320, "of": 19902, "samples_per_s": 3.86, "eta_s": 2999}
+{"done": 8448, "of": 19902, "samples_per_s": 3.87, "eta_s": 2962}
+{"done": 8704, "of": 19902, "samples_per_s": 3.87, "eta_s": 2890}
+{"done": 8832, "of": 19902, "samples_per_s": 3.88, "eta_s": 2853}
+{"done": 9088, "of": 19902, "samples_per_s": 3.88, "eta_s": 2784}
+{"done": 9216, "of": 19902, "samples_per_s": 3.88, "eta_s": 2753}
+{"done": 9472, "of": 19902, "samples_per_s": 3.89, "eta_s": 2684}
+{"done": 9600, "of": 19902, "samples_per_s": 3.88, "eta_s": 2653}
+{"done": 9856, "of": 19902, "samples_per_s": 3.87, "eta_s": 2594}
+{"done": 10112, "of": 19902, "samples_per_s": 3.88, "eta_s": 2525}
+{"done": 10240, "of": 19902, "samples_per_s": 3.88, "eta_s": 2490}
+{"done": 10496, "of": 19902, "samples_per_s": 3.88, "eta_s": 2423}
+{"done": 10624, "of": 19902, "samples_per_s": 3.89, "eta_s": 2388}
+{"done": 10880, "of": 19902, "samples_per_s": 3.89, "eta_s": 2320}
+{"done": 11008, "of": 19902, "samples_per_s": 3.89, "eta_s": 2286}
+{"done": 11264, "of": 19902, "samples_per_s": 3.89, "eta_s": 2222}
+{"done": 11520, "of": 19902, "samples_per_s": 3.89, "eta_s": 2154}
+{"done": 11648, "of": 19902, "samples_per_s": 3.89, "eta_s": 2122}
+{"done": 11904, "of": 19902, "samples_per_s": 3.9, "eta_s": 2053}
+{"done": 12032, "of": 19902, "samples_per_s": 3.9, "eta_s": 2020}
+{"done": 12288, "of": 19902, "samples_per_s": 3.9, "eta_s": 1951}
+{"done": 12416, "of": 19902, "samples_per_s": 3.9, "eta_s": 1917}
+{"done": 12672, "of": 19902, "samples_per_s": 3.91, "eta_s": 1850}
+{"done": 12800, "of": 19902, "samples_per_s": 3.91, "eta_s": 1816}
+{"done": 13056, "of": 19902, "samples_per_s": 3.91, "eta_s": 1749}
+{"done": 13312, "of": 19902, "samples_per_s": 3.91, "eta_s": 1684}
+{"done": 13440, "of": 19902, "samples_per_s": 3.92, "eta_s": 1651}
+{"done": 13696, "of": 19902, "samples_per_s": 3.92, "eta_s": 1585}
+{"done": 13824, "of": 19902, "samples_per_s": 3.92, "eta_s": 1550}
+{"done": 14080, "of": 19902, "samples_per_s": 3.92, "eta_s": 1487}
+{"done": 14208, "of": 19902, "samples_per_s": 3.91, "eta_s": 1455}
+{"done": 14464, "of": 19902, "samples_per_s": 3.92, "eta_s": 1389}
+{"done": 14720, "of": 19902, "samples_per_s": 3.92, "eta_s": 1323}
+{"done": 14848, "of": 19902, "samples_per_s": 3.92, "eta_s": 1289}
+{"done": 15104, "of": 19902, "samples_per_s": 3.92, "eta_s": 1225}
+{"done": 15232, "of": 19902, "samples_per_s": 3.91, "eta_s": 1193}
+{"done": 15488, "of": 19902, "samples_per_s": 3.92, "eta_s": 1126}
+{"done": 15616, "of": 19902, "samples_per_s": 3.92, "eta_s": 1094}
+{"done": 15872, "of": 19902, "samples_per_s": 3.92, "eta_s": 1029}
+{"done": 16000, "of": 19902, "samples_per_s": 3.92, "eta_s": 996}
+{"done": 16256, "of": 19902, "samples_per_s": 3.92, "eta_s": 931}
+{"done": 16512, "of": 19902, "samples_per_s": 3.92, "eta_s": 866}
+{"done": 16640, "of": 19902, "samples_per_s": 3.91, "eta_s": 833}
+{"done": 16896, "of": 19902, "samples_per_s": 3.92, "eta_s": 767}
+{"done": 17024, "of": 19902, "samples_per_s": 3.92, "eta_s": 734}
+{"done": 17280, "of": 19902, "samples_per_s": 3.92, "eta_s": 668}
+{"done": 17408, "of": 19902, "samples_per_s": 3.92, "eta_s": 635}
+{"done": 17664, "of": 19902, "samples_per_s": 3.92, "eta_s": 571}
+{"done": 17920, "of": 19902, "samples_per_s": 3.92, "eta_s": 505}
+{"done": 18048, "of": 19902, "samples_per_s": 3.92, "eta_s": 473}
+{"done": 18304, "of": 19902, "samples_per_s": 3.92, "eta_s": 408}
+{"done": 18432, "of": 19902, "samples_per_s": 3.92, "eta_s": 375}
+{"done": 18688, "of": 19902, "samples_per_s": 3.92, "eta_s": 310}
+{"done": 18816, "of": 19902, "samples_per_s": 3.92, "eta_s": 277}
+{"done": 19072, "of": 19902, "samples_per_s": 3.92, "eta_s": 212}
+{"done": 19200, "of": 19902, "samples_per_s": 3.92, "eta_s": 179}
+{"done": 19456, "of": 19902, "samples_per_s": 3.92, "eta_s": 114}
+{"done": 19712, "of": 19902, "samples_per_s": 3.92, "eta_s": 48}
+{"done": 19840, "of": 19902, "samples_per_s": 3.92, "eta_s": 16}
+{"done": 19902, "of": 19902, "samples_per_s": 3.92, "eta_s": 0}
+{
+  "generation_seconds": 5083.4,
+  "samples_per_second": 3.915,
+  "summary": {
+    "n": 19902,
+    "modes": [
+      "two_segment"
+    ],
+    "schema_versions": [
+      "q3vl.where_b.genwhere/2"
+    ],
+    "format_failure_rate": 0.0,
+    "truncation_rate": 0.0,
+    "starts_with_where_open_rate": 1.0,
+    "stop_reasons": {
+      "closed": 19902
+    },
+    "where_tokens": {
+      "min": 8,
+      "p50": 8,
+      "p95": 52,
+      "max": 69
+    },
+    "generated_tokens": {
+      "min": 245,
+      "p50": 269,
+      "p95": 301,
+      "max": 327
+    },
+    "segments_overlap_rate": 0.0,
+    "color": {
+      "n": 19902,
+      "format_failure_rate": 0.0,
+      "truncation_rate": 0.0,
+      "starts_with_color_open_rate": 1.0,
+      "stop_reasons": {
+        "closed": 19902
+      },
+      "color_tokens": {
+        "min": 104,
+        "p50": 170,
+        "p95": 221,
+        "max": 318
+      }
+    },
+    "both_segments_well_formed_rate": 1.0
+  },
+  "manifest": {
+    "status": "complete",
+    "member_count": 19902,
+    "sample_count": 19902,
+    "shard_count": 1
+  },
+  "store": {
+    "n": 19902,
+    "modes": [
+      "two_segment"
+    ],
+    "schema_versions": [
+      "q3vl.where_b.genwhere/2"
+    ],
+    "format_failure_rate": 0.0,
+    "truncation_rate": 0.0,
+    "starts_with_where_open_rate": 1.0,
+    "stop_reasons": {
+      "closed": 19902
+    },
+    "where_tokens": {
+      "min": 8,
+      "p50": 8,
+      "p95": 52,
+      "max": 69
+    },
+    "generated_tokens": {
+      "min": 245,
+      "p50": 269,
+      "p95": 301,
+      "max": 327
+    },
+    "segments_overlap_rate": 0.0,
+    "color": {
+      "n": 19902,
+      "format_failure_rate": 0.0,
+      "truncation_rate": 0.0,
+      "starts_with_color_open_rate": 1.0,
+      "stop_reasons": {
+        "closed": 19902
+      },
+      "color_tokens": {
+        "min": 104,
+        "p50": 170,
+        "p95": 221,
+        "max": 318
+      }
+    },
+    "both_segments_well_formed_rate": 1.0,
+    "root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/train/shard03of08/train",
+    "status": "complete",
+    "member_count": 19902,
+    "sample_count": 19902,
+    "shard_count": 1,
+    "index_rows": 19902
+  },
+  "peak_memory_gib": 34.21
+}

@@ -1,0 +1,165 @@
+[2026-08-05T11:49:48+08:00] JOB gpu0_ckpt_verify START pid=1580925 host=h3c
+[2026-08-05T11:49:48+08:00]   job_dir=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs
+[2026-08-05T11:49:48+08:00]   phase_dir=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/phase_gpu0_ckpt_verify
+[2026-08-05T11:49:48+08:00] PHASE probe BEGIN: probe
+[2026-08-05T11:49:48+08:00] CUDA_VISIBLE_DEVICES=0
+python=/home/bc/envs/q3vl_sft/bin/python
+torch=2.10.0+cu128 transformers=4.57.1
+checkpoint-2488: exists=True weight_shards=2 weight_gib=8.27
+checkpoint-4976: exists=True weight_shards=2 weight_gib=8.27
+cuda_available=True n_devices=1
+cuda_device_0=NVIDIA H100 total_mem_gib=95.1
+[2026-08-05T11:49:51+08:00] PROBE-OK gpu0 ready; checkpoints readable
+[2026-08-05T11:49:51+08:00] PHASE probe END rc=0 seconds=3
+[2026-08-05T11:49:51+08:00] PHASE verify BEGIN: env PYTHONPATH=/home/bc/VeraRetouch /home/bc/envs/q3vl_sft/bin/python /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/verify_checkpoints.py --run-dir /home/bc/data/runs/q3vl_base_sft_20260804 --steps 2488,4976 --n 64 --seed 42 --max-new-tokens 448 --batch-size 8 --device cuda:0 --out-dir /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft
+[verify] repo=/home/bc/VeraRetouch run_dir=/home/bc/data/runs/q3vl_base_sft_20260804 checkpoints=['checkpoint-2488', 'checkpoint-4976']
+[verify] eval_index=/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_where.index.jsonl
+[verify] eval split has 896 samples; drew 64 with seed 42
+[verify] === checkpoint-2488 ===
+[verify] checkpoint-2488: global_step=2488 integrity_ok=True
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:04<00:04,  4.53s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:08<00:00,  3.91s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:08<00:00,  4.00s/it]
+[verify] checkpoint-2488: model loaded in 134.5s (attn=flash_attention_2) special_ids={'<where>': 151669, '</where>': 151670, '<color>': 151671, '</color>': 151672}
+[verify] checkpoint-2488: 64 samples decoded, 0 dataset errors
+[verify] checkpoint-2488: LEFT-PADDING MISMATCH 1/4 -- falling back to batch_size=1
+[verify] checkpoint-2488: 1/64 generated (9.1s this batch)
+[verify] checkpoint-2488: 2/64 generated (12.5s this batch)
+[verify] checkpoint-2488: 3/64 generated (10.0s this batch)
+[verify] checkpoint-2488: 4/64 generated (9.6s this batch)
+[verify] checkpoint-2488: 5/64 generated (9.8s this batch)
+[verify] checkpoint-2488: 6/64 generated (8.9s this batch)
+[verify] checkpoint-2488: 7/64 generated (8.1s this batch)
+[verify] checkpoint-2488: 8/64 generated (11.2s this batch)
+[verify] checkpoint-2488: 9/64 generated (9.8s this batch)
+[verify] checkpoint-2488: 10/64 generated (9.8s this batch)
+[verify] checkpoint-2488: 11/64 generated (9.4s this batch)
+[verify] checkpoint-2488: 12/64 generated (10.7s this batch)
+[verify] checkpoint-2488: 13/64 generated (8.8s this batch)
+[verify] checkpoint-2488: 14/64 generated (10.7s this batch)
+[verify] checkpoint-2488: 15/64 generated (11.1s this batch)
+[verify] checkpoint-2488: 16/64 generated (8.9s this batch)
+[verify] checkpoint-2488: 17/64 generated (9.3s this batch)
+[verify] checkpoint-2488: 18/64 generated (9.4s this batch)
+[verify] checkpoint-2488: 19/64 generated (10.2s this batch)
+[verify] checkpoint-2488: 20/64 generated (10.4s this batch)
+[verify] checkpoint-2488: 21/64 generated (11.8s this batch)
+[verify] checkpoint-2488: 22/64 generated (11.0s this batch)
+[verify] checkpoint-2488: 23/64 generated (10.5s this batch)
+[verify] checkpoint-2488: 24/64 generated (9.3s this batch)
+[verify] checkpoint-2488: 25/64 generated (11.0s this batch)
+[verify] checkpoint-2488: 26/64 generated (9.6s this batch)
+[verify] checkpoint-2488: 27/64 generated (7.5s this batch)
+[verify] checkpoint-2488: 28/64 generated (11.3s this batch)
+[verify] checkpoint-2488: 29/64 generated (9.8s this batch)
+[verify] checkpoint-2488: 30/64 generated (11.1s this batch)
+[verify] checkpoint-2488: 31/64 generated (9.7s this batch)
+[verify] checkpoint-2488: 32/64 generated (8.7s this batch)
+[verify] checkpoint-2488: 33/64 generated (10.1s this batch)
+[verify] checkpoint-2488: 34/64 generated (8.5s this batch)
+[verify] checkpoint-2488: 35/64 generated (10.7s this batch)
+[verify] checkpoint-2488: 36/64 generated (10.7s this batch)
+[verify] checkpoint-2488: 37/64 generated (9.9s this batch)
+[verify] checkpoint-2488: 38/64 generated (11.0s this batch)
+[verify] checkpoint-2488: 39/64 generated (10.4s this batch)
+[verify] checkpoint-2488: 40/64 generated (9.3s this batch)
+[verify] checkpoint-2488: 41/64 generated (9.7s this batch)
+[verify] checkpoint-2488: 42/64 generated (9.6s this batch)
+[verify] checkpoint-2488: 43/64 generated (10.8s this batch)
+[verify] checkpoint-2488: 44/64 generated (12.1s this batch)
+[verify] checkpoint-2488: 45/64 generated (8.8s this batch)
+[verify] checkpoint-2488: 46/64 generated (9.2s this batch)
+[verify] checkpoint-2488: 47/64 generated (9.1s this batch)
+[verify] checkpoint-2488: 48/64 generated (10.1s this batch)
+[verify] checkpoint-2488: 49/64 generated (11.4s this batch)
+[verify] checkpoint-2488: 50/64 generated (10.7s this batch)
+[verify] checkpoint-2488: 51/64 generated (12.0s this batch)
+[verify] checkpoint-2488: 52/64 generated (9.2s this batch)
+[verify] checkpoint-2488: 53/64 generated (9.4s this batch)
+[verify] checkpoint-2488: 54/64 generated (8.6s this batch)
+[verify] checkpoint-2488: 55/64 generated (10.2s this batch)
+[verify] checkpoint-2488: 56/64 generated (9.3s this batch)
+[verify] checkpoint-2488: 57/64 generated (10.7s this batch)
+[verify] checkpoint-2488: 58/64 generated (9.3s this batch)
+[verify] checkpoint-2488: 59/64 generated (8.7s this batch)
+[verify] checkpoint-2488: 60/64 generated (9.0s this batch)
+[verify] checkpoint-2488: 61/64 generated (10.4s this batch)
+[verify] checkpoint-2488: 62/64 generated (10.4s this batch)
+[verify] checkpoint-2488: 63/64 generated (9.1s this batch)
+[verify] checkpoint-2488: 64/64 generated (8.2s this batch)
+[verify] === checkpoint-4976 ===
+[verify] checkpoint-4976: global_step=4976 integrity_ok=True
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00,  3.38it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00,  3.37it/s]
+[verify] checkpoint-4976: model loaded in 12.3s (attn=flash_attention_2) special_ids={'<where>': 151669, '</where>': 151670, '<color>': 151671, '</color>': 151672}
+[verify] checkpoint-4976: 64 samples decoded, 0 dataset errors
+[verify] checkpoint-4976: LEFT-PADDING MISMATCH 1/4 -- falling back to batch_size=1
+[verify] checkpoint-4976: 1/64 generated (10.2s this batch)
+[verify] checkpoint-4976: 2/64 generated (9.5s this batch)
+[verify] checkpoint-4976: 3/64 generated (9.0s this batch)
+[verify] checkpoint-4976: 4/64 generated (9.4s this batch)
+[verify] checkpoint-4976: 5/64 generated (9.8s this batch)
+[verify] checkpoint-4976: 6/64 generated (8.0s this batch)
+[verify] checkpoint-4976: 7/64 generated (9.2s this batch)
+[verify] checkpoint-4976: 8/64 generated (11.5s this batch)
+[verify] checkpoint-4976: 9/64 generated (9.0s this batch)
+[verify] checkpoint-4976: 10/64 generated (11.5s this batch)
+[verify] checkpoint-4976: 11/64 generated (10.1s this batch)
+[verify] checkpoint-4976: 12/64 generated (11.6s this batch)
+[verify] checkpoint-4976: 13/64 generated (8.8s this batch)
+[verify] checkpoint-4976: 14/64 generated (9.2s this batch)
+[verify] checkpoint-4976: 15/64 generated (9.6s this batch)
+[verify] checkpoint-4976: 16/64 generated (9.7s this batch)
+[verify] checkpoint-4976: 17/64 generated (9.0s this batch)
+[verify] checkpoint-4976: 18/64 generated (8.6s this batch)
+[verify] checkpoint-4976: 19/64 generated (12.2s this batch)
+[verify] checkpoint-4976: 20/64 generated (10.8s this batch)
+[verify] checkpoint-4976: 21/64 generated (8.3s this batch)
+[verify] checkpoint-4976: 22/64 generated (11.2s this batch)
+[verify] checkpoint-4976: 23/64 generated (11.2s this batch)
+[verify] checkpoint-4976: 24/64 generated (9.8s this batch)
+[verify] checkpoint-4976: 25/64 generated (10.9s this batch)
+[verify] checkpoint-4976: 26/64 generated (9.5s this batch)
+[verify] checkpoint-4976: 27/64 generated (7.7s this batch)
+[verify] checkpoint-4976: 28/64 generated (10.6s this batch)
+[verify] checkpoint-4976: 29/64 generated (10.2s this batch)
+[verify] checkpoint-4976: 30/64 generated (10.6s this batch)
+[verify] checkpoint-4976: 31/64 generated (9.2s this batch)
+[verify] checkpoint-4976: 32/64 generated (9.0s this batch)
+[verify] checkpoint-4976: 33/64 generated (11.1s this batch)
+[verify] checkpoint-4976: 34/64 generated (11.2s this batch)
+[verify] checkpoint-4976: 35/64 generated (13.5s this batch)
+[verify] checkpoint-4976: 36/64 generated (11.2s this batch)
+[verify] checkpoint-4976: 37/64 generated (12.1s this batch)
+[verify] checkpoint-4976: 38/64 generated (11.1s this batch)
+[verify] checkpoint-4976: 39/64 generated (12.2s this batch)
+[verify] checkpoint-4976: 40/64 generated (9.2s this batch)
+[verify] checkpoint-4976: 41/64 generated (10.0s this batch)
+[verify] checkpoint-4976: 42/64 generated (9.2s this batch)
+[verify] checkpoint-4976: 43/64 generated (11.5s this batch)
+[verify] checkpoint-4976: 44/64 generated (10.2s this batch)
+[verify] checkpoint-4976: 45/64 generated (9.0s this batch)
+[verify] checkpoint-4976: 46/64 generated (10.0s this batch)
+[verify] checkpoint-4976: 47/64 generated (9.7s this batch)
+[verify] checkpoint-4976: 48/64 generated (9.4s this batch)
+[verify] checkpoint-4976: 49/64 generated (9.5s this batch)
+[verify] checkpoint-4976: 50/64 generated (10.6s this batch)
+[verify] checkpoint-4976: 51/64 generated (11.1s this batch)
+[verify] checkpoint-4976: 52/64 generated (9.0s this batch)
+[verify] checkpoint-4976: 53/64 generated (10.6s this batch)
+[verify] checkpoint-4976: 54/64 generated (8.7s this batch)
+[verify] checkpoint-4976: 55/64 generated (10.5s this batch)
+[verify] checkpoint-4976: 56/64 generated (8.7s this batch)
+[verify] checkpoint-4976: 57/64 generated (10.5s this batch)
+[verify] checkpoint-4976: 58/64 generated (9.4s this batch)
+[verify] checkpoint-4976: 59/64 generated (9.7s this batch)
+[verify] checkpoint-4976: 60/64 generated (9.3s this batch)
+[verify] checkpoint-4976: 61/64 generated (8.7s this batch)
+[verify] checkpoint-4976: 62/64 generated (9.6s this batch)
+[verify] checkpoint-4976: 63/64 generated (9.9s this batch)
+[verify] checkpoint-4976: 64/64 generated (8.4s this batch)
+[verify] wrote /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/CHECKPOINT_VERIFICATION.md
+[verify] wrote /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/checkpoint_verification.json
+[2026-08-05T12:15:41+08:00] PHASE verify END rc=0 seconds=1550
+[2026-08-05T12:15:41+08:00] deliverables:
+-rw-rw-r-- 1 bc bc  46576 Aug  5 12:15 /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/checkpoint_verification.json
+-rw-rw-r-- 1 bc bc   6306 Aug  5 12:15 /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/CHECKPOINT_VERIFICATION.md
+-rw-rw-r-- 1 bc bc 480272 Aug  5 12:15 /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/checkpoint_verification_samples.jsonl
+[2026-08-05T12:15:41+08:00] JOB gpu0_ckpt_verify EXIT rc=0

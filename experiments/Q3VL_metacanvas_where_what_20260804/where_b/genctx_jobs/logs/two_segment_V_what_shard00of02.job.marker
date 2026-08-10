@@ -1,0 +1,12 @@
+pid=1969703
+gpu=0
+mode=two_segment
+split=V_what
+shard=0/2
+checkpoint=/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976
+batch_size=64
+max_new_tokens=512
+out_root=/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/V_what/shard00of02/V_what
+log=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/logs/two_segment_V_what_shard00of02.log
+started_at=2026-08-05T12:54:59+08:00
+verified=/"vlm"/ after 10s

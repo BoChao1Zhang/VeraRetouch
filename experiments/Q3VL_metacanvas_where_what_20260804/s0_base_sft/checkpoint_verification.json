@@ -1,0 +1,1321 @@
+{
+  "schema": "q3vl.s0_base_sft.checkpoint_verification/1",
+  "generated_at": "2026-08-05T11:49:54+08:00",
+  "host": "h3c",
+  "git_commit": "80a507892f1c5675da277b4a21ebe4815566cd8f",
+  "env": {
+    "python": "3.12.12",
+    "executable": "/home/bc/envs/q3vl_sft/bin/python",
+    "torch": "2.10.0+cu128",
+    "transformers": "4.57.1",
+    "cuda_available": true,
+    "cuda_device_count": 1,
+    "cuda_device_name": "NVIDIA H100",
+    "CUDA_VISIBLE_DEVICES": "0"
+  },
+  "dry_run": false,
+  "settings": {
+    "config": "/home/bc/VeraRetouch/q3vl/train/configs/sft_base.yaml",
+    "run_dir": "/home/bc/data/runs/q3vl_base_sft_20260804",
+    "eval_index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_where.index.jsonl",
+    "eval_split_size": 896,
+    "n_samples": 64,
+    "seed": 42,
+    "max_new_tokens": 448,
+    "batch_size": 8,
+    "consistency_k": 4,
+    "dtype": "bfloat16",
+    "attn_implementation": "flash_attention_2",
+    "device": "cuda:0",
+    "decoding": "greedy (do_sample=False), KV cache on, left padding",
+    "sample_indices": [
+      6,
+      25,
+      27,
+      30,
+      32,
+      44,
+      80,
+      89,
+      94,
+      95,
+      99,
+      104,
+      114,
+      127,
+      142,
+      159,
+      163,
+      203,
+      220,
+      223,
+      225,
+      228,
+      238,
+      250,
+      270,
+      281,
+      284,
+      300,
+      344,
+      348,
+      352,
+      367,
+      387,
+      389,
+      429,
+      432,
+      459,
+      470,
+      517,
+      549,
+      558,
+      565,
+      574,
+      603,
+      604,
+      616,
+      618,
+      654,
+      665,
+      692,
+      714,
+      718,
+      733,
+      747,
+      754,
+      758,
+      759,
+      777,
+      781,
+      825,
+      826,
+      828,
+      867,
+      890
+    ]
+  },
+  "red_lines": [
+    "checkpoint selection must NOT use val loss (CLAUDE.md 红线速查); the eval_loss column here is book-keeping only",
+    "checkpoints are loaded with plain from_pretrained -- setup_model would re-init the four special-token embedding rows"
+  ],
+  "artifacts": {
+    "metrics_json": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/checkpoint_verification.json",
+    "samples_jsonl": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/checkpoint_verification_samples.jsonl",
+    "markdown": "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/CHECKPOINT_VERIFICATION.md"
+  },
+  "checkpoints": {
+    "checkpoint-2488": {
+      "path": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-2488",
+      "integrity": {
+        "path": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-2488",
+        "required_files_present": {
+          "config.json": true,
+          "generation_config.json": true,
+          "model.safetensors.index.json": true,
+          "tokenizer.json": true,
+          "tokenizer_config.json": true,
+          "special_tokens_map.json": true,
+          "added_tokens.json": true,
+          "preprocessor_config.json": true,
+          "chat_template.jinja": true,
+          "trainer_state.json": true
+        },
+        "missing_files": [],
+        "weight_shards": [
+          "model-00001-of-00002.safetensors",
+          "model-00002-of-00002.safetensors"
+        ],
+        "weight_shards_expected_by_index": [
+          "model-00001-of-00002.safetensors",
+          "model-00002-of-00002.safetensors"
+        ],
+        "weight_bytes": 8875719328,
+        "weights_complete": true,
+        "ok": true
+      },
+      "state": {
+        "global_step": 2488,
+        "max_steps": 4976,
+        "epoch": 0.5000502462064114,
+        "num_input_tokens_seen": 0,
+        "total_flos": 190005598158848.0,
+        "best_metric_recorded_by_trainer": 0.7055721282958984,
+        "best_model_checkpoint_recorded_by_trainer": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-2488",
+        "eval_history": [
+          {
+            "step": 500,
+            "epoch": 0.10049241282283188,
+            "eval_loss": 0.8212423920631409,
+            "eval_runtime": 48.1925,
+            "eval_samples_per_second": 18.592,
+            "eval_steps_per_second": 2.324,
+            "eval_seg_assistant_acc": 0.737374916434097,
+            "eval_seg_assistant_loss": 0.8200009327906039,
+            "eval_seg_color_acc": 0.7143389378297499,
+            "eval_seg_color_loss": 0.8929932923575813,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 2.6244441983180877e-05,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9032958358002763,
+            "eval_seg_where_loss": 0.2931825055428127,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 1000,
+            "epoch": 0.20098482564566375,
+            "eval_loss": 0.7753464579582214,
+            "eval_runtime": 53.9203,
+            "eval_samples_per_second": 16.617,
+            "eval_steps_per_second": 2.077,
+            "eval_seg_assistant_acc": 0.7479227904114095,
+            "eval_seg_assistant_loss": 0.7746607431390988,
+            "eval_seg_color_acc": 0.7265254125253885,
+            "eval_seg_color_loss": 0.8433572707112654,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 1.1762341776894963e-05,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9013222814288534,
+            "eval_seg_where_loss": 0.27910652141984993,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 1500,
+            "epoch": 0.3014772384684956,
+            "eval_loss": 0.7434349060058594,
+            "eval_runtime": 49.9854,
+            "eval_samples_per_second": 17.925,
+            "eval_steps_per_second": 2.241,
+            "eval_seg_assistant_acc": 0.7541942124643187,
+            "eval_seg_assistant_loss": 0.7426636020584632,
+            "eval_seg_color_acc": 0.7329311235833523,
+            "eval_seg_color_loss": 0.8088265058119124,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 5.137292376389269e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9070455891059799,
+            "eval_seg_where_loss": 0.2650836979551636,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 2000,
+            "epoch": 0.4019696512913275,
+            "eval_loss": 0.7216858267784119,
+            "eval_runtime": 49.2595,
+            "eval_samples_per_second": 18.189,
+            "eval_steps_per_second": 2.274,
+            "eval_seg_assistant_acc": 0.7609325424196441,
+            "eval_seg_assistant_loss": 0.7209783469505597,
+            "eval_seg_color_acc": 0.7404064561875804,
+            "eval_seg_color_loss": 0.7851490778721714,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 4.870928640749688e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9083283994474047,
+            "eval_seg_where_loss": 0.25783824696250957,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 2488,
+            "epoch": 0.5000502462064114,
+            "eval_loss": 0.7055721282958984,
+            "eval_runtime": 52.9657,
+            "eval_samples_per_second": 16.917,
+            "eval_steps_per_second": 2.115,
+            "eval_seg_assistant_acc": 0.7649224826766556,
+            "eval_seg_assistant_loss": 0.7038156310602486,
+            "eval_seg_color_acc": 0.7445887966156693,
+            "eval_seg_color_loss": 0.7657869210093595,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 3.38288860431492e-05,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9110913755673968,
+            "eval_seg_where_loss": 0.2572144244244101,
+            "eval_seg_where_tokens": 10134.0
+          }
+        ],
+        "eval_at_this_step": {
+          "step": 2488,
+          "epoch": 0.5000502462064114,
+          "eval_loss": 0.7055721282958984,
+          "eval_runtime": 52.9657,
+          "eval_samples_per_second": 16.917,
+          "eval_steps_per_second": 2.115,
+          "eval_seg_assistant_acc": 0.7649224826766556,
+          "eval_seg_assistant_loss": 0.7038156310602486,
+          "eval_seg_color_acc": 0.7445887966156693,
+          "eval_seg_color_loss": 0.7657869210093595,
+          "eval_seg_color_tokens": 83207.0,
+          "eval_seg_eos_acc": 1.0,
+          "eval_seg_eos_loss": 3.38288860431492e-05,
+          "eval_seg_eos_tokens": 896.0,
+          "eval_seg_where_acc": 0.9110913755673968,
+          "eval_seg_where_loss": 0.2572144244244101,
+          "eval_seg_where_tokens": 10134.0
+        },
+        "protected_marker": {
+          "global_step": 2488,
+          "epoch": 0.5000502462064114,
+          "protected": true,
+          "milestone": "0.5_epoch",
+          "special_token_ids": {
+            "<where>": 151669,
+            "</where>": 151670,
+            "<color>": 151671,
+            "</color>": 151672
+          },
+          "data_manifest": {
+            "path": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/manifest/terminal_manifest.json",
+            "schema_version": "q3vl.sft2seg.splits/1",
+            "digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840",
+            "top_level_keys": [
+              "audit",
+              "counts",
+              "created_at",
+              "datasets",
+              "digest",
+              "distributions",
+              "eval_group_counts",
+              "model_dir",
+              "model_max_length",
+              "n_effective",
+              "producer",
+              "reserve",
+              "schema_version",
+              "source_builds",
+              "split_authority",
+              "splits",
+              "status"
+            ],
+            "n_effective_train": 159215,
+            "n_eval": 896,
+            "expected_steps_per_epoch": 4976,
+            "train_index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl",
+            "index_layout": "nested"
+          },
+          "freeze_report": {
+            "total_params": 4437815808,
+            "trainable_params": 4131573248,
+            "frozen_params": 306242560,
+            "trainable_ratio": 0.9309925032382056,
+            "trainable_groups": {
+              "model.visual.merger.norm.weight": {
+                "tensors": 1,
+                "params": 1024
+              },
+              "model.visual.merger.norm.bias": {
+                "tensors": 1,
+                "params": 1024
+              },
+              "model.visual.merger.linear_fc1.weight": {
+                "tensors": 1,
+                "params": 16777216
+              },
+              "model.visual.merger.linear_fc1.bias": {
+                "tensors": 1,
+                "params": 4096
+              },
+              "model.visual.merger.linear_fc2.weight": {
+                "tensors": 1,
+                "params": 10485760
+              },
+              "model.visual.merger.linear_fc2.bias": {
+                "tensors": 1,
+                "params": 2560
+              },
+              "model.visual.deepstack_merger_list.{i}.norm.weight": {
+                "tensors": 3,
+                "params": 12288
+              },
+              "model.visual.deepstack_merger_list.{i}.norm.bias": {
+                "tensors": 3,
+                "params": 12288
+              },
+              "model.visual.deepstack_merger_list.{i}.linear_fc1.weight": {
+                "tensors": 3,
+                "params": 50331648
+              },
+              "model.visual.deepstack_merger_list.{i}.linear_fc1.bias": {
+                "tensors": 3,
+                "params": 12288
+              },
+              "model.visual.deepstack_merger_list.{i}.linear_fc2.weight": {
+                "tensors": 3,
+                "params": 31457280
+              },
+              "model.visual.deepstack_merger_list.{i}.linear_fc2.bias": {
+                "tensors": 3,
+                "params": 7680
+              },
+              "model.language_model.embed_tokens.weight": {
+                "tensors": 1,
+                "params": 388956160
+              },
+              "model.language_model.layers.{i}.self_attn.q_proj.weight": {
+                "tensors": 36,
+                "params": 377487360
+              },
+              "model.language_model.layers.{i}.self_attn.k_proj.weight": {
+                "tensors": 36,
+                "params": 94371840
+              },
+              "model.language_model.layers.{i}.self_attn.v_proj.weight": {
+                "tensors": 36,
+                "params": 94371840
+              },
+              "model.language_model.layers.{i}.self_attn.o_proj.weight": {
+                "tensors": 36,
+                "params": 377487360
+              },
+              "model.language_model.layers.{i}.self_attn.q_norm.weight": {
+                "tensors": 36,
+                "params": 4608
+              },
+              "model.language_model.layers.{i}.self_attn.k_norm.weight": {
+                "tensors": 36,
+                "params": 4608
+              },
+              "model.language_model.layers.{i}.mlp.gate_proj.weight": {
+                "tensors": 36,
+                "params": 896532480
+              },
+              "model.language_model.layers.{i}.mlp.up_proj.weight": {
+                "tensors": 36,
+                "params": 896532480
+              },
+              "model.language_model.layers.{i}.mlp.down_proj.weight": {
+                "tensors": 36,
+                "params": 896532480
+              },
+              "model.language_model.layers.{i}.input_layernorm.weight": {
+                "tensors": 36,
+                "params": 92160
+              },
+              "model.language_model.layers.{i}.post_attention_layernorm.weight": {
+                "tensors": 36,
+                "params": 92160
+              },
+              "model.language_model.norm.weight": {
+                "tensors": 1,
+                "params": 2560
+              }
+            },
+            "frozen_groups": {
+              "model.visual.patch_embed.proj.weight": {
+                "tensors": 1,
+                "params": 1572864
+              },
+              "model.visual.patch_embed.proj.bias": {
+                "tensors": 1,
+                "params": 1024
+              },
+              "model.visual.pos_embed.weight": {
+                "tensors": 1,
+                "params": 2359296
+              },
+              "model.visual.blocks.{i}.norm1.weight": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.norm1.bias": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.norm2.weight": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.norm2.bias": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.attn.qkv.weight": {
+                "tensors": 24,
+                "params": 75497472
+              },
+              "model.visual.blocks.{i}.attn.qkv.bias": {
+                "tensors": 24,
+                "params": 73728
+              },
+              "model.visual.blocks.{i}.attn.proj.weight": {
+                "tensors": 24,
+                "params": 25165824
+              },
+              "model.visual.blocks.{i}.attn.proj.bias": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.mlp.linear_fc1.weight": {
+                "tensors": 24,
+                "params": 100663296
+              },
+              "model.visual.blocks.{i}.mlp.linear_fc1.bias": {
+                "tensors": 24,
+                "params": 98304
+              },
+              "model.visual.blocks.{i}.mlp.linear_fc2.weight": {
+                "tensors": 24,
+                "params": 100663296
+              },
+              "model.visual.blocks.{i}.mlp.linear_fc2.bias": {
+                "tensors": 24,
+                "params": 24576
+              }
+            },
+            "subtree_counts": {
+              "vision_blocks": {
+                "params": 302309376,
+                "tensors": 288,
+                "trainable_params": 0,
+                "frozen_params": 302309376
+              },
+              "vision_patch_embed": {
+                "params": 1573888,
+                "tensors": 2,
+                "trainable_params": 0,
+                "frozen_params": 1573888
+              },
+              "vision_pos_embed": {
+                "params": 2359296,
+                "tensors": 1,
+                "trainable_params": 0,
+                "frozen_params": 2359296
+              },
+              "vision_merger": {
+                "params": 27271680,
+                "tensors": 6,
+                "trainable_params": 27271680,
+                "frozen_params": 0
+              },
+              "vision_deepstack_mergers": {
+                "params": 81833472,
+                "tensors": 18,
+                "trainable_params": 81833472,
+                "frozen_params": 0
+              },
+              "language_embed_tokens": {
+                "params": 388956160,
+                "tensors": 1,
+                "trainable_params": 388956160,
+                "frozen_params": 0
+              },
+              "language_layers": {
+                "params": 3633509376,
+                "tensors": 396,
+                "trainable_params": 3633509376,
+                "frozen_params": 0
+              },
+              "language_norm": {
+                "params": 2560,
+                "tensors": 1,
+                "trainable_params": 2560,
+                "frozen_params": 0
+              },
+              "lm_head": {
+                "params": 0,
+                "tensors": 0,
+                "trainable_params": 0,
+                "frozen_params": 0
+              }
+            },
+            "n_trainable_tensors": 422,
+            "n_frozen_tensors": 291
+          },
+          "protected_steps": [
+            2488,
+            4976
+          ],
+          "best_metric": 0.7055721282958984,
+          "best_model_checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-2488"
+        }
+      },
+      "generation": {
+        "n_samples_requested": 64,
+        "n_samples_generated": 64,
+        "n_dataset_errors": 0,
+        "dataset_errors": [],
+        "attn_implementation": "flash_attention_2",
+        "batch_size_used": 1,
+        "max_new_tokens": 448,
+        "left_padding_consistency": {
+          "ran": true,
+          "checked": 4,
+          "identical": 1,
+          "identical_rate": 0.25,
+          "seconds": 60.6,
+          "batch_size_probed": 4,
+          "fallback_to_batch_size_1": true
+        },
+        "special_token_ids": {
+          "<where>": 151669,
+          "</where>": 151670,
+          "<color>": 151671,
+          "</color>": 151672
+        },
+        "structural": {
+          "n": 64.0,
+          "tag_completeness": 1.0,
+          "order_accuracy": 1.0,
+          "where_nonempty_rate": 1.0,
+          "color_nonempty_rate": 1.0,
+          "where_copied_into_color_rate": 0.0,
+          "legacy_tag_leak_rate": 0.0,
+          "duplicate_where_rate": 0.0,
+          "duplicate_color_rate": 0.0
+        },
+        "termination": {
+          "eos_terminated_rate": 1.0,
+          "truncated_rate": 0.0,
+          "generated_tokens": {
+            "p50": 200.0,
+            "p90": 226.0,
+            "min": 153.0,
+            "max": 253.0,
+            "mean": 201.390625
+          },
+          "prompt_tokens": {
+            "p50": 459.0,
+            "p90": 468.0,
+            "min": 311.0,
+            "max": 546.0,
+            "mean": 448.03125
+          }
+        },
+        "alignment": {
+          "n_parsable": 64,
+          "note": "rough alignment only -- token overlap, never a headline metric",
+          "where": {
+            "token_f1": {
+              "p50": 1.0,
+              "p90": 1.0,
+              "min": 0.44155844155844154,
+              "max": 1.0,
+              "mean": 0.845254845754666
+            },
+            "exact_match_rate": 0.53125,
+            "len_ratio_pred_over_gt": {
+              "p50": 1.0,
+              "p90": 1.2142857142857142,
+              "min": 0.7567567567567568,
+              "max": 1.4827586206896552,
+              "mean": 1.0149729332689663
+            }
+          },
+          "color": {
+            "token_f1": {
+              "p50": 0.6384180790960451,
+              "p90": 0.7062937062937064,
+              "min": 0.5251989389920424,
+              "max": 0.744,
+              "mean": 0.6335614075739653
+            },
+            "per_line_token_f1": {
+              "p50": 0.5090909090909091,
+              "p90": 0.6808510638297872,
+              "min": 0.05714285714285715,
+              "max": 0.9523809523809523,
+              "mean": 0.5066161129084871
+            },
+            "pred_line_count": {
+              "p50": 6.0,
+              "p90": 6.0,
+              "min": 6.0,
+              "max": 6.0,
+              "mean": 6.0
+            },
+            "gt_line_count": {
+              "p50": 6.0,
+              "p90": 6.0,
+              "min": 6.0,
+              "max": 6.0,
+              "mean": 6.0
+            },
+            "pred_is_six_bodies_rate": 1.0,
+            "gt_is_six_bodies_rate": 1.0,
+            "line_count_matches_gt_rate": 1.0,
+            "len_ratio_pred_over_gt": {
+              "p50": 0.9530201342281879,
+              "p90": 1.1238938053097345,
+              "min": 0.6180257510729614,
+              "max": 1.4444444444444444,
+              "mean": 0.95542226957101
+            }
+          }
+        },
+        "seconds": {
+          "model_load": 134.5,
+          "generation": 635.6
+        },
+        "peak_memory_gib": 8.8
+      }
+    },
+    "checkpoint-4976": {
+      "path": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+      "integrity": {
+        "path": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+        "required_files_present": {
+          "config.json": true,
+          "generation_config.json": true,
+          "model.safetensors.index.json": true,
+          "tokenizer.json": true,
+          "tokenizer_config.json": true,
+          "special_tokens_map.json": true,
+          "added_tokens.json": true,
+          "preprocessor_config.json": true,
+          "chat_template.jinja": true,
+          "trainer_state.json": true
+        },
+        "missing_files": [],
+        "weight_shards": [
+          "model-00001-of-00002.safetensors",
+          "model-00002-of-00002.safetensors"
+        ],
+        "weight_shards_expected_by_index": [
+          "model-00001-of-00002.safetensors",
+          "model-00002-of-00002.safetensors"
+        ],
+        "weight_bytes": 8875719328,
+        "weights_complete": true,
+        "ok": true
+      },
+      "state": {
+        "global_step": 4976,
+        "max_steps": 4976,
+        "epoch": 1.0,
+        "num_input_tokens_seen": 0,
+        "total_flos": 379801331646464.0,
+        "best_metric_recorded_by_trainer": 0.6645931601524353,
+        "best_model_checkpoint_recorded_by_trainer": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+        "eval_history": [
+          {
+            "step": 500,
+            "epoch": 0.10049241282283188,
+            "eval_loss": 0.8212423920631409,
+            "eval_runtime": 48.1925,
+            "eval_samples_per_second": 18.592,
+            "eval_steps_per_second": 2.324,
+            "eval_seg_assistant_acc": 0.737374916434097,
+            "eval_seg_assistant_loss": 0.8200009327906039,
+            "eval_seg_color_acc": 0.7143389378297499,
+            "eval_seg_color_loss": 0.8929932923575813,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 2.6244441983180877e-05,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9032958358002763,
+            "eval_seg_where_loss": 0.2931825055428127,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 1000,
+            "epoch": 0.20098482564566375,
+            "eval_loss": 0.7753464579582214,
+            "eval_runtime": 53.9203,
+            "eval_samples_per_second": 16.617,
+            "eval_steps_per_second": 2.077,
+            "eval_seg_assistant_acc": 0.7479227904114095,
+            "eval_seg_assistant_loss": 0.7746607431390988,
+            "eval_seg_color_acc": 0.7265254125253885,
+            "eval_seg_color_loss": 0.8433572707112654,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 1.1762341776894963e-05,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9013222814288534,
+            "eval_seg_where_loss": 0.27910652141984993,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 1500,
+            "epoch": 0.3014772384684956,
+            "eval_loss": 0.7434349060058594,
+            "eval_runtime": 49.9854,
+            "eval_samples_per_second": 17.925,
+            "eval_steps_per_second": 2.241,
+            "eval_seg_assistant_acc": 0.7541942124643187,
+            "eval_seg_assistant_loss": 0.7426636020584632,
+            "eval_seg_color_acc": 0.7329311235833523,
+            "eval_seg_color_loss": 0.8088265058119124,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 5.137292376389269e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9070455891059799,
+            "eval_seg_where_loss": 0.2650836979551636,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 2000,
+            "epoch": 0.4019696512913275,
+            "eval_loss": 0.7216858267784119,
+            "eval_runtime": 49.2595,
+            "eval_samples_per_second": 18.189,
+            "eval_steps_per_second": 2.274,
+            "eval_seg_assistant_acc": 0.7609325424196441,
+            "eval_seg_assistant_loss": 0.7209783469505597,
+            "eval_seg_color_acc": 0.7404064561875804,
+            "eval_seg_color_loss": 0.7851490778721714,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 4.870928640749688e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9083283994474047,
+            "eval_seg_where_loss": 0.25783824696250957,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 2488,
+            "epoch": 0.5000502462064114,
+            "eval_loss": 0.7055721282958984,
+            "eval_runtime": 52.9657,
+            "eval_samples_per_second": 16.917,
+            "eval_steps_per_second": 2.115,
+            "eval_seg_assistant_acc": 0.7649224826766556,
+            "eval_seg_assistant_loss": 0.7038156310602486,
+            "eval_seg_color_acc": 0.7445887966156693,
+            "eval_seg_color_loss": 0.7657869210093595,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 3.38288860431492e-05,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9110913755673968,
+            "eval_seg_where_loss": 0.2572144244244101,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 2500,
+            "epoch": 0.5024620641141594,
+            "eval_loss": 0.7059646844863892,
+            "eval_runtime": 52.0403,
+            "eval_samples_per_second": 17.217,
+            "eval_steps_per_second": 2.152,
+            "eval_seg_assistant_acc": 0.7655803983573332,
+            "eval_seg_assistant_loss": 0.7045856734893948,
+            "eval_seg_color_acc": 0.7454661266479984,
+            "eval_seg_color_loss": 0.76682150017356,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 2.971220307504804e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9100059206631143,
+            "eval_seg_where_loss": 0.25588325295690684,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 3000,
+            "epoch": 0.6029544769369912,
+            "eval_loss": 0.6897963285446167,
+            "eval_runtime": 49.515,
+            "eval_samples_per_second": 18.096,
+            "eval_steps_per_second": 2.262,
+            "eval_seg_assistant_acc": 0.7694217770090305,
+            "eval_seg_assistant_loss": 0.6881712190886632,
+            "eval_seg_color_acc": 0.7497566310526759,
+            "eval_seg_color_loss": 0.7487818488394813,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 2.661440440476781e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.91049930925597,
+            "eval_seg_where_loss": 0.2513615050543712,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 3500,
+            "epoch": 0.7034468897598232,
+            "eval_loss": 0.6792152523994446,
+            "eval_runtime": 53.0829,
+            "eval_samples_per_second": 16.879,
+            "eval_steps_per_second": 2.11,
+            "eval_seg_assistant_acc": 0.7719261012128994,
+            "eval_seg_assistant_loss": 0.6780488660752029,
+            "eval_seg_color_acc": 0.7526770584205655,
+            "eval_seg_color_loss": 0.7373787498517674,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 1.3445616226752982e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.909808565225972,
+            "eval_seg_where_loss": 0.2508600896670282,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 4000,
+            "epoch": 0.803939302582655,
+            "eval_loss": 0.6702333092689514,
+            "eval_runtime": 60.1709,
+            "eval_samples_per_second": 14.891,
+            "eval_steps_per_second": 1.861,
+            "eval_seg_assistant_acc": 0.7750140602947887,
+            "eval_seg_assistant_loss": 0.6689595062846481,
+            "eval_seg_color_acc": 0.755885923059358,
+            "eval_seg_color_loss": 0.727516308644804,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 1.4701566217110797e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9121768304716795,
+            "eval_seg_where_loss": 0.2473146026325086,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 4500,
+            "epoch": 0.9044317154054868,
+            "eval_loss": 0.6654263734817505,
+            "eval_runtime": 50.2679,
+            "eval_samples_per_second": 17.825,
+            "eval_steps_per_second": 2.228,
+            "eval_seg_assistant_acc": 0.7759478760996211,
+            "eval_seg_assistant_loss": 0.6643632019503044,
+            "eval_seg_color_acc": 0.7569194899467593,
+            "eval_seg_color_loss": 0.7225480541146863,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 1.143795287816829e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9123741859088218,
+            "eval_seg_where_loss": 0.24536590671300218,
+            "eval_seg_where_tokens": 10134.0
+          },
+          {
+            "step": 4976,
+            "epoch": 1.0,
+            "eval_loss": 0.6645931601524353,
+            "eval_runtime": 63.5684,
+            "eval_samples_per_second": 14.095,
+            "eval_steps_per_second": 1.762,
+            "eval_seg_assistant_acc": 0.7762131646805395,
+            "eval_seg_assistant_loss": 0.6635051563274293,
+            "eval_seg_color_acc": 0.7571718725587991,
+            "eval_seg_color_loss": 0.7216027742686819,
+            "eval_seg_color_tokens": 83207.0,
+            "eval_seg_eos_acc": 1.0,
+            "eval_seg_eos_loss": 1.121443605407129e-06,
+            "eval_seg_eos_tokens": 896.0,
+            "eval_seg_where_acc": 0.9127688967831064,
+            "eval_seg_where_loss": 0.2451482507835273,
+            "eval_seg_where_tokens": 10134.0
+          }
+        ],
+        "eval_at_this_step": {
+          "step": 4976,
+          "epoch": 1.0,
+          "eval_loss": 0.6645931601524353,
+          "eval_runtime": 63.5684,
+          "eval_samples_per_second": 14.095,
+          "eval_steps_per_second": 1.762,
+          "eval_seg_assistant_acc": 0.7762131646805395,
+          "eval_seg_assistant_loss": 0.6635051563274293,
+          "eval_seg_color_acc": 0.7571718725587991,
+          "eval_seg_color_loss": 0.7216027742686819,
+          "eval_seg_color_tokens": 83207.0,
+          "eval_seg_eos_acc": 1.0,
+          "eval_seg_eos_loss": 1.121443605407129e-06,
+          "eval_seg_eos_tokens": 896.0,
+          "eval_seg_where_acc": 0.9127688967831064,
+          "eval_seg_where_loss": 0.2451482507835273,
+          "eval_seg_where_tokens": 10134.0
+        },
+        "protected_marker": {
+          "global_step": 4976,
+          "epoch": 1.0,
+          "protected": true,
+          "milestone": "1.0_epoch",
+          "special_token_ids": {
+            "<where>": 151669,
+            "</where>": 151670,
+            "<color>": 151671,
+            "</color>": 151672
+          },
+          "data_manifest": {
+            "path": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/manifest/terminal_manifest.json",
+            "schema_version": "q3vl.sft2seg.splits/1",
+            "digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840",
+            "top_level_keys": [
+              "audit",
+              "counts",
+              "created_at",
+              "datasets",
+              "digest",
+              "distributions",
+              "eval_group_counts",
+              "model_dir",
+              "model_max_length",
+              "n_effective",
+              "producer",
+              "reserve",
+              "schema_version",
+              "source_builds",
+              "split_authority",
+              "splits",
+              "status"
+            ],
+            "n_effective_train": 159215,
+            "n_eval": 896,
+            "expected_steps_per_epoch": 4976,
+            "train_index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl",
+            "index_layout": "nested"
+          },
+          "freeze_report": {
+            "total_params": 4437815808,
+            "trainable_params": 4131573248,
+            "frozen_params": 306242560,
+            "trainable_ratio": 0.9309925032382056,
+            "trainable_groups": {
+              "model.visual.merger.norm.weight": {
+                "tensors": 1,
+                "params": 1024
+              },
+              "model.visual.merger.norm.bias": {
+                "tensors": 1,
+                "params": 1024
+              },
+              "model.visual.merger.linear_fc1.weight": {
+                "tensors": 1,
+                "params": 16777216
+              },
+              "model.visual.merger.linear_fc1.bias": {
+                "tensors": 1,
+                "params": 4096
+              },
+              "model.visual.merger.linear_fc2.weight": {
+                "tensors": 1,
+                "params": 10485760
+              },
+              "model.visual.merger.linear_fc2.bias": {
+                "tensors": 1,
+                "params": 2560
+              },
+              "model.visual.deepstack_merger_list.{i}.norm.weight": {
+                "tensors": 3,
+                "params": 12288
+              },
+              "model.visual.deepstack_merger_list.{i}.norm.bias": {
+                "tensors": 3,
+                "params": 12288
+              },
+              "model.visual.deepstack_merger_list.{i}.linear_fc1.weight": {
+                "tensors": 3,
+                "params": 50331648
+              },
+              "model.visual.deepstack_merger_list.{i}.linear_fc1.bias": {
+                "tensors": 3,
+                "params": 12288
+              },
+              "model.visual.deepstack_merger_list.{i}.linear_fc2.weight": {
+                "tensors": 3,
+                "params": 31457280
+              },
+              "model.visual.deepstack_merger_list.{i}.linear_fc2.bias": {
+                "tensors": 3,
+                "params": 7680
+              },
+              "model.language_model.embed_tokens.weight": {
+                "tensors": 1,
+                "params": 388956160
+              },
+              "model.language_model.layers.{i}.self_attn.q_proj.weight": {
+                "tensors": 36,
+                "params": 377487360
+              },
+              "model.language_model.layers.{i}.self_attn.k_proj.weight": {
+                "tensors": 36,
+                "params": 94371840
+              },
+              "model.language_model.layers.{i}.self_attn.v_proj.weight": {
+                "tensors": 36,
+                "params": 94371840
+              },
+              "model.language_model.layers.{i}.self_attn.o_proj.weight": {
+                "tensors": 36,
+                "params": 377487360
+              },
+              "model.language_model.layers.{i}.self_attn.q_norm.weight": {
+                "tensors": 36,
+                "params": 4608
+              },
+              "model.language_model.layers.{i}.self_attn.k_norm.weight": {
+                "tensors": 36,
+                "params": 4608
+              },
+              "model.language_model.layers.{i}.mlp.gate_proj.weight": {
+                "tensors": 36,
+                "params": 896532480
+              },
+              "model.language_model.layers.{i}.mlp.up_proj.weight": {
+                "tensors": 36,
+                "params": 896532480
+              },
+              "model.language_model.layers.{i}.mlp.down_proj.weight": {
+                "tensors": 36,
+                "params": 896532480
+              },
+              "model.language_model.layers.{i}.input_layernorm.weight": {
+                "tensors": 36,
+                "params": 92160
+              },
+              "model.language_model.layers.{i}.post_attention_layernorm.weight": {
+                "tensors": 36,
+                "params": 92160
+              },
+              "model.language_model.norm.weight": {
+                "tensors": 1,
+                "params": 2560
+              }
+            },
+            "frozen_groups": {
+              "model.visual.patch_embed.proj.weight": {
+                "tensors": 1,
+                "params": 1572864
+              },
+              "model.visual.patch_embed.proj.bias": {
+                "tensors": 1,
+                "params": 1024
+              },
+              "model.visual.pos_embed.weight": {
+                "tensors": 1,
+                "params": 2359296
+              },
+              "model.visual.blocks.{i}.norm1.weight": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.norm1.bias": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.norm2.weight": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.norm2.bias": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.attn.qkv.weight": {
+                "tensors": 24,
+                "params": 75497472
+              },
+              "model.visual.blocks.{i}.attn.qkv.bias": {
+                "tensors": 24,
+                "params": 73728
+              },
+              "model.visual.blocks.{i}.attn.proj.weight": {
+                "tensors": 24,
+                "params": 25165824
+              },
+              "model.visual.blocks.{i}.attn.proj.bias": {
+                "tensors": 24,
+                "params": 24576
+              },
+              "model.visual.blocks.{i}.mlp.linear_fc1.weight": {
+                "tensors": 24,
+                "params": 100663296
+              },
+              "model.visual.blocks.{i}.mlp.linear_fc1.bias": {
+                "tensors": 24,
+                "params": 98304
+              },
+              "model.visual.blocks.{i}.mlp.linear_fc2.weight": {
+                "tensors": 24,
+                "params": 100663296
+              },
+              "model.visual.blocks.{i}.mlp.linear_fc2.bias": {
+                "tensors": 24,
+                "params": 24576
+              }
+            },
+            "subtree_counts": {
+              "vision_blocks": {
+                "params": 302309376,
+                "tensors": 288,
+                "trainable_params": 0,
+                "frozen_params": 302309376
+              },
+              "vision_patch_embed": {
+                "params": 1573888,
+                "tensors": 2,
+                "trainable_params": 0,
+                "frozen_params": 1573888
+              },
+              "vision_pos_embed": {
+                "params": 2359296,
+                "tensors": 1,
+                "trainable_params": 0,
+                "frozen_params": 2359296
+              },
+              "vision_merger": {
+                "params": 27271680,
+                "tensors": 6,
+                "trainable_params": 27271680,
+                "frozen_params": 0
+              },
+              "vision_deepstack_mergers": {
+                "params": 81833472,
+                "tensors": 18,
+                "trainable_params": 81833472,
+                "frozen_params": 0
+              },
+              "language_embed_tokens": {
+                "params": 388956160,
+                "tensors": 1,
+                "trainable_params": 388956160,
+                "frozen_params": 0
+              },
+              "language_layers": {
+                "params": 3633509376,
+                "tensors": 396,
+                "trainable_params": 3633509376,
+                "frozen_params": 0
+              },
+              "language_norm": {
+                "params": 2560,
+                "tensors": 1,
+                "trainable_params": 2560,
+                "frozen_params": 0
+              },
+              "lm_head": {
+                "params": 0,
+                "tensors": 0,
+                "trainable_params": 0,
+                "frozen_params": 0
+              }
+            },
+            "n_trainable_tensors": 422,
+            "n_frozen_tensors": 291
+          },
+          "protected_steps": [
+            2488,
+            4976
+          ],
+          "best_metric": 0.6645931601524353,
+          "best_model_checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976"
+        }
+      },
+      "generation": {
+        "n_samples_requested": 64,
+        "n_samples_generated": 64,
+        "n_dataset_errors": 0,
+        "dataset_errors": [],
+        "attn_implementation": "flash_attention_2",
+        "batch_size_used": 1,
+        "max_new_tokens": 448,
+        "left_padding_consistency": {
+          "ran": true,
+          "checked": 4,
+          "identical": 1,
+          "identical_rate": 0.25,
+          "seconds": 52.3,
+          "batch_size_probed": 4,
+          "fallback_to_batch_size_1": true
+        },
+        "special_token_ids": {
+          "<where>": 151669,
+          "</where>": 151670,
+          "<color>": 151671,
+          "</color>": 151672
+        },
+        "structural": {
+          "n": 64.0,
+          "tag_completeness": 1.0,
+          "order_accuracy": 1.0,
+          "where_nonempty_rate": 1.0,
+          "color_nonempty_rate": 1.0,
+          "where_copied_into_color_rate": 0.0,
+          "legacy_tag_leak_rate": 0.0,
+          "duplicate_where_rate": 0.0,
+          "duplicate_color_rate": 0.0
+        },
+        "termination": {
+          "eos_terminated_rate": 1.0,
+          "truncated_rate": 0.0,
+          "generated_tokens": {
+            "p50": 194.0,
+            "p90": 228.0,
+            "min": 149.0,
+            "max": 272.0,
+            "mean": 197.703125
+          },
+          "prompt_tokens": {
+            "p50": 459.0,
+            "p90": 468.0,
+            "min": 311.0,
+            "max": 546.0,
+            "mean": 448.03125
+          }
+        },
+        "alignment": {
+          "n_parsable": 64,
+          "note": "rough alignment only -- token overlap, never a headline metric",
+          "where": {
+            "token_f1": {
+              "p50": 1.0,
+              "p90": 1.0,
+              "min": 0.42622950819672134,
+              "max": 1.0,
+              "mean": 0.8543264331083036
+            },
+            "exact_match_rate": 0.53125,
+            "len_ratio_pred_over_gt": {
+              "p50": 1.0,
+              "p90": 1.1785714285714286,
+              "min": 0.7428571428571429,
+              "max": 1.4827586206896552,
+              "mean": 1.0076490953787223
+            }
+          },
+          "color": {
+            "token_f1": {
+              "p50": 0.6324110671936759,
+              "p90": 0.6936026936026936,
+              "min": 0.5161290322580646,
+              "max": 0.743801652892562,
+              "mean": 0.6317650696263459
+            },
+            "per_line_token_f1": {
+              "p50": 0.5,
+              "p90": 0.7169811320754716,
+              "min": 0.1111111111111111,
+              "max": 0.9523809523809523,
+              "mean": 0.5117697868797255
+            },
+            "pred_line_count": {
+              "p50": 6.0,
+              "p90": 6.0,
+              "min": 6.0,
+              "max": 6.0,
+              "mean": 6.0
+            },
+            "gt_line_count": {
+              "p50": 6.0,
+              "p90": 6.0,
+              "min": 6.0,
+              "max": 6.0,
+              "mean": 6.0
+            },
+            "pred_is_six_bodies_rate": 1.0,
+            "gt_is_six_bodies_rate": 1.0,
+            "line_count_matches_gt_rate": 1.0,
+            "len_ratio_pred_over_gt": {
+              "p50": 0.9539473684210527,
+              "p90": 1.1079136690647482,
+              "min": 0.630901287553648,
+              "max": 1.2409638554216869,
+              "mean": 0.9383590306266313
+            }
+          }
+        },
+        "seconds": {
+          "model_load": 12.3,
+          "generation": 639.7
+        },
+        "peak_memory_gib": 8.8
+      }
+    }
+  }
+}

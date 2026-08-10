@@ -1,0 +1,12 @@
+pid=2727251
+gpu=1
+mode=forced_color
+split=train
+shard=0/8
+checkpoint=/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976
+batch_size=128
+max_new_tokens=512
+out_root=/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard00of08/train-forced_color
+log=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/logs/forced_color_train_shard00of08.log
+started_at=2026-08-05T20:36:19+08:00
+verified=/"vlm"/ after 10s

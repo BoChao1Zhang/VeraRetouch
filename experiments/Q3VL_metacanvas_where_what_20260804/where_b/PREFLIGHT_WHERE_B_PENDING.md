@@ -1,5 +1,16 @@
 # Where-B · 待执行清单（GPU / 重 IO）
 
+> **状态更新 2026-08-10（EXEC-3）**：S1 / S2 / S3 **全部完成**，**W1 波已开跑**。
+> - S1 oracle latent：五个 split 已由 Where-A 的 `run_s5_oracle_latents.sh` 发布到
+>   `oracle/BA-3-Joint/**s5**/<split>`（train 75,544，`status=complete`）——
+>   **注意命名空间是 `s5`**，详见下方 S5 段的 ⚠ 与 NOTES §16.3。
+> - S2 genctx：`genwhere/{train,V_where,V_what}` 已发布（two_segment + forced_color），
+>   CX-1 兼容软链已建；train 覆盖 159,215/159,215。
+> - S3 preflight：**`preflight_where_b.json` 的 `complete == true`**，7/7 pass、0 skip。
+> - S5 W1 波：W01 (GPU 0) / W02 (GPU 1) 已按 D-20 四步提交，micro-batch 8 / GAS 4。
+>
+> 下面 2026-08-05 的原文保留，仅供追溯当时的阻塞与判据。
+
 生成于 2026-08-05。**以下每一项都未执行。** 阻塞原因：两张 H100 被 Base SFT 正式训练占用
 （launcher PID 3395099 / rank 3395226、3395227；本文件生成时进度 583/4976，ETA 11:29），
 且 Where-B 的全部前置作业都要读同一套 NFS build 树。
@@ -116,11 +127,16 @@ Where-B 的消费路径一行未动。`<color>` 缺闭合标签与 `<where>` **�
 
 ---
 
-## S3 · §14 项 7b / 8b（1 GPU，约 5 分钟）
+## S3 · §14 项 7b / 8b（1 GPU，约 5 分钟）—— ✅ 2026-08-10 已跑，`complete == true`
 
 ```bash
 bash q3vl/whereb/scripts/run_where_b.sh preflight 0     # 前台，退出码即门
 ```
+
+**实测**：7 项 REQUIRED 全 PASS，`n_fail=0`、`n_skip=0`、`missing_required=[]`。
+`WB-P7b` 与 `WB-P8b` 的 `max_abs_diff` **均为 0**（41 tok × 2560）。
+micro-batch 探测：`{2,4,8}` 全过，峰值 8.77 → 9.93 GiB，取 **8** → GAS **4**
+（`micro_batch_probe_W1.json`）；`MASK_LOSS_SPACE="hi"` 显存代价可忽略，**不需要退 `"low"`**。
 
 | 检查 id | 协议项 | 断言 |
 |---|---|---|
@@ -160,11 +176,24 @@ bash q3vl/whereb/scripts/run_where_b.sh preflight 0     # 前台，退出码即�
 ## S5 · 8 个主臂（每臂 1 GPU；本机可并行 2 臂 = §11 的 W1–W4 四个 wave）
 
 ```bash
-bash q3vl/whereb/scripts/run_where_b.sh train W01 0 &   # wave W1, GPU 0
-bash q3vl/whereb/scripts/run_where_b.sh train W02 1 &   # wave W1, GPU 1
+# 一波两臂必须钉同一个 --micro-batch（第 4 个参数起原样转发给 run_where_b.py）：
+# micro-batch 不改样本次序，但改 len(sampler) → total_optimizer_steps → LR schedule 长度，
+# 两臂探出不同值就不再是 §11 要的配对比较。
+bash q3vl/whereb/scripts/run_where_b.sh train W01 0 --micro-batch 8 &   # wave W1, GPU 0
+bash q3vl/whereb/scripts/run_where_b.sh train W02 1 --micro-batch 8 &   # wave W1, GPU 1
 ...
-bash q3vl/whereb/scripts/run_where_b.sh train W08 1 &   # wave W4
+bash q3vl/whereb/scripts/run_where_b.sh train W08 1 --micro-batch <probe> &   # wave W4
 ```
+
+⚠ **oracle latent 的命名空间是 `s5`**（2026-08-10 修复，NOTES §16.3）：
+`run_where_b.py` 现在读 `<oracle-root>/<basis-arm>/<--oracle-namespace>/<split>`，
+默认 `s5`。臂自己 `evaluate()` 发布的 `oracle/<arm>/V_where` **不带 `curve` /
+`cband_normalization`**，误读它不会报错、只会让 `L_curve` 两侧不是同一个函数 ——
+`assert_oracle_contract()` 就是为拦这条加的。
+
+⚠ **W2–W4 排期请用实测而非估计**：W01 单臂实测 **≈4.1 s/optimizer-step**
+（micro 8 × GAS 4 = 32 样本/步，≈7.9 samples/s），4,975 步 → 训练纯口径 **≈5.7 h**，
+按 §S5.5 的 1.39× 计入七块板评测 → 单臂 **≈7.9 h**，两臂并行一波即约 8 h，四波约 32 h。
 
 启动时会先断言 **genctx 覆盖率 100%**（nit N2）：`BalancedContextSampler` 是先按索引分池、
 后取 genwhere 记录的，缺一条就会在训练数小时后炸 `KeyError`，而按 §5.4 又不允许回退 GT，

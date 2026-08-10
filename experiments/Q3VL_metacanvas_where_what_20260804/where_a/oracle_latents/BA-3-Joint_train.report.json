@@ -1,0 +1,72 @@
+{
+  "arm": "BA-3-Joint",
+  "split": "train",
+  "basis": "/mnt/nfs/bc/data/datasets/where_a-20260805/basis/BA-3-Joint/B.npy",
+  "basis_sha256_of_npy": "67de832ab1da1b7c8576a43c63389f8532e8aabe0c2e76fbd93278fafd937455",
+  "env": {
+    "git_commit": "0695e0ab119844fe5f54df66b077dc810bd977d8",
+    "python": "3.12.12",
+    "torch": "2.10.0+cu128",
+    "cuda_available": true,
+    "device_count": 1
+  },
+  "fpre": {
+    "depth": 24,
+    "hidden_size": 1024,
+    "patch_size": 16,
+    "spatial_merge_size": 2,
+    "n_blocks": 24,
+    "hook_block": 23,
+    "attn_implementation": "sdpa"
+  },
+  "n_samples": 75544,
+  "n_rejected_fits": 1,
+  "elapsed_s": 31806.6,
+  "soft_iou_low": {
+    "band": {
+      "n": 75544,
+      "mean": 0.9490531962309735,
+      "p10": 0.8581517614244007,
+      "median": 0.9748786250074304,
+      "p90": 0.9878730060343803,
+      "min": 0.24447251795997807,
+      "max": 0.9941589880359457
+    },
+    "cband12": {
+      "n": 75543,
+      "mean": 0.9570674652058898,
+      "p10": 0.8682556816432563,
+      "median": 0.9842820682964222,
+      "p90": 0.9921579388321183,
+      "min": 0.1513841874104973,
+      "max": 0.9983271081755627
+    }
+  },
+  "manifest": {
+    "dataset_id": "indexed_tar_27e8947e3d7756f6b7efd8187e77c44d",
+    "sample_count": 75544,
+    "member_count": 75544,
+    "shard_count": 3,
+    "status": "complete"
+  },
+  "verify": {
+    "root": "/mnt/nfs/bc/data/datasets/where_a-20260805/oracle/BA-3-Joint/s5/train",
+    "status": "complete",
+    "member_count": 75544,
+    "sample_count": 75544,
+    "shard_count": 3,
+    "index_rows": 75544,
+    "n_random_checked": 64,
+    "checksum_failures": [],
+    "ok": true
+  },
+  "curve_z_grid": {
+    "lo": -3.0,
+    "hi": 3.0,
+    "n": 257,
+    "source": "protocol 5.5: z = linspace(-3, 3, 257)"
+  },
+  "cband_normalization": "logsumexp",
+  "b_digest": "d234634fd43353bd765165d9584bc07fefbbd319eb25247bb61b7759e507ade9",
+  "b_unchanged": true
+}

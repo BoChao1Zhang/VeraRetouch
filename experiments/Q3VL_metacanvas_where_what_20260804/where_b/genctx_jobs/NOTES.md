@@ -86,8 +86,33 @@
 
 | 场景 | 每样本 | train 分两卡 | + V_where/V_what |
 |---|---|---|---|
-| 乐观（S=420、单步 25 ms） | 0.20 s | **约 4.5 h** | +6 min |
-| 悲观（S=512、单步 35 ms） | 0.31 s | **约 7 h** | +9 min |
+| 乐观（S=420、单步 25 ms） | 0.20 s | 约 4.5 h | +6 min |
+| 悲观（S=512、单步 35 ms） | 0.31 s | 约 7 h | +9 min |
+
+### 4-bis · 上线后的实测（2026-08-05 12:54，第一个分片跑完）
+
+**推算偏乐观，实测约慢 1.3–2 倍**，以实测为准：
+
+| 量 | 实测 | 备注 |
+|---|---|---|
+| 吞吐 | **2.452 samples/s/卡**（B=64） | `reports/two_segment/V_where/shard00of02/genctx_V_where.json` |
+| 每批 | 26.1 s / 64 条 | 448 条 / 7 批 / 182.7 s |
+| 解码步数 | 259–279（p50 264） | 模型正常吐 EOS，**没有跑满 512**（CX-5 的悲观档没发生） |
+| 单步 | **约 99 ms** | 比推算的 25–35 ms 慢 3 倍；CPU 装配只占 8%，主因是 HF `DynamicCache` 每步整块重拼 + python 开销 |
+| 峰值显存 | **16.43 GiB / 94 GB** | B=128 完全放得下 |
+| 每分片模型加载 | 20 s（页缓存热） | 比冷加载的 134 s 好得多 |
+| 端到端（含加载/发布） | 213 s / 448 条 = 2.10 samples/s | 排期按这个算 |
+
+**当时的 ETA**：每卡 4 个 train 分片 × 19,902 条 ≈ 9.1 h ⇒ 全量约 22:00 完成。
+**已被 §4-quater 的 B=128 切换取代（新 ETA 18:10–18:20）。**
+
+**质量（第一个分片 448 条，checkpoint-4976）全部满分**：
+`format_failure_rate 0.0`、`starts_with_where_open_rate 1.0`、
+`color_format_failure_rate 0.0`、`starts_with_color_open_rate 1.0`、
+`both_segments_well_formed_rate 1.0`、`stop_reasons` 全 `closed`、`segments_overlap_rate 0.0`。
+段长：`where` p50 **8** tok / p95 52 / max 60（远短于 GT 的 p50 41——V_where 55% 是 global 样本，
+其 `<where>` 本来就极短）；`color` p50 173 / p95 222 / max 259，都在 96/384 的固定边界内。
+`generated_tokens` p50 264 是"该批解码步数"（CX-6 口径，不是段长）。
 
 * `two_segment`（train + V_where + V_what，161,008 条）：**两卡 ~4–7 h**；
 * `forced_color`（train + V_what，160,112 条）：**再来一遍 ~4–7 h**；
@@ -107,6 +132,146 @@
 B=128 估 ~40 GiB 也进得去。默认取 **64**（保守），标定后可上调；作业报告里有 `peak_memory_gib`。
 
 ---
+
+### 4-quater · B=128 验证与切换（主 agent 裁定，2026-08-05 13:00–13:07）
+
+判据（主 agent 预注册）：**七项结构率全满分 且 `where_ids` 一致率 ≥ 0.90 → 切 B=128**。
+
+方法：同一批 **train 头部 256 条**（`--limit 256 --num-shards 1`），先 B=64 再 B=128，
+**同一张卡、同一 checkpoint、同样与生产作业争用**，逐样本比 ids。
+
+| 项 | B=64 | B=128 | 判据 |
+|---|---|---|---|
+| `starts_with_where_open_rate` | 1.0 | **1.0** | 满分 |
+| `starts_with_color_open_rate` | 1.0 | **1.0** | 满分 |
+| `format_failure_rate` | 0.0 | **0.0** | 满分 |
+| `color_format_failure_rate` | 0.0 | **0.0** | 满分 |
+| `truncation_rate` | 0.0 | **0.0** | 满分 |
+| `color_truncation_rate` | 0.0 | **0.0** | 满分 |
+| `both_segments_well_formed_rate` | 1.0 | **1.0** | 满分 |
+| （附）`segments_overlap_rate` | 0.0 | 0.0 | — |
+| （附）`stop_reasons` | 全 `closed` | 全 `closed` | — |
+| 段长 `where` / `color` | p50 8 / 171 | **完全相同** | — |
+| 吞吐（争用下） | 1.707 /s | **2.69 /s（1.58×）** | — |
+| 峰值显存 | 17.1 GiB | **25.8 GiB** | 94 GB 卡 |
+
+**逐样本一致率（256 条相同样本）：`where_ids` 256/256 = 1.0000、`where_text` 1.0000、
+`color_ids` 256/256 = 1.0000。** 即在 B=64↔B=128 这一对上，bf16 平票一次都没掷到不同面
+（比 commit bdf93d3 测的 B=32 vs B=1 的 0.9688 还干净——那是与 B=1 比，跨度更大）。
+
+⇒ **两项判据都过，执行切换**：13:04 停掉两卡 train 分片（**当时 0 个 train 分片已发布，
+不丢任何产物**），13:07 以 B=128 重启全部 8 个 train 分片。
+V_where / V_what 的 4 个 B=64 分片**已完成，不动**（记录自带 `gen.batch_size`，口径自述清晰）。
+
+**切换后实测（两卡，无争用）：GPU0 4.37 /s、GPU1 4.48 /s ⇒ 相对 B=64 的 2.45 /s 提速 1.79×。**
+每个 train 分片 eta ≈ 4,400–4,500 s（1.24 h），每卡 4 片 ⇒ **约 5.1 h，预计 18:10–18:20 完成**
+（比 B=64 的 22:00 早约 3.8 h）。显存 33.8 / 37.6 GiB（nvidia-smi 口径，含分配器保留）。
+
+**停作业时踩到并已记录的坑**：`kill` 掉 driver **不会**停下它的 worker 子 shell——worker 当时
+正 `wait` 在 python 上，python 一死它就**接着起了队列里的下一个分片**（shard02/03）。
+正确顺序是**先杀 worker 子 shell、再杀 python**（都按 PID，`ps -p` 复核，禁 pgrep）。
+中止的 B=64 train 日志/marker 归档在 `logs/aborted_b64_train/`。
+
+## 4-ter · 实际启动方式（2026-08-05 12:51 / 12:54，错峰起卡）
+
+主 agent 裁定：checkpoint-4976、只跑 `two_segment`、B=64 放行。启动时 GPU0 空闲、
+**GPU1 仍在跑 Where-A `bench_calibration`**，于是：
+
+* 双卡驱动第一次提交在 12:49:23 被自己的 busy-GPU 门**正确拦下**（`GPU 1: 2255 MiB`，
+  比我人工看到 0 MiB 晚 4 秒——正是这个门存在的理由）。日志留档为
+  `logs/driver_two_segment.refused-gpu1-busy.log`，**一个进程都没起**；
+* 给驱动加了 `TASK_STRIDE`/`TASK_OFFSET`（错峰起卡用）：两个单卡驱动各取任务表的一半，
+  **切出来与双卡驱动分配的队列逐条相同**（已 DRY_RUN 双向验证）。
+  两个驱动都 `DO_MERGE=0`——谁都看不到对方的分片，谁都不许合并；
+* GPU0 12:51:11 起 slice 0/2（pid 1963934）；GPU1 挂一个等待器（`ps -p` 盯 bench PID +
+  轮询显存，**禁 pgrep**），bench 一退就在 12:54:47 起 slice 1/2（pid 1964758）。
+
+⇒ **全部 12 个分片跑完后，必须手工执行一次合并**（驱动不会自动做）：
+
+```bash
+cd /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs
+for s in V_where V_what train; do
+  n=2; [ "$s" = train ] && n=8
+  /home/bc/envs/q3vl_sft/bin/python merge_genctx.py --split "$s" --mode two_segment \
+    --shard-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/two_segment/"$s" \
+    --num-shards "$n" 2>&1 | tail -5
+done
+```
+
+合并会顺带建好 CX-1 兼容软链并把 checkpoint 写进交付报告顶层（CX-2 审计字段）。
+
+## 4-quinquies · two_segment 合并结果（2026-08-05 20:09–20:28，CPU）
+
+12/12 分片 rc=0 后按 §4-ter 合并，三个 split 全部 `MERGE-OK`：
+
+| split | n_samples | 覆盖 | manifest | shard 文件 | 大小 | 合并耗时 |
+|---|---|---|---|---|---|---|
+| `V_where` | 896/896 | 1.0 | complete | 1 | 6 MiB | 21 s |
+| `V_what` | 897/897 | 1.0 | complete | 1 | 6 MiB | 13 s |
+| `train` | **159,215/159,215** | 1.0 | complete | 2 | 1,116 MiB | 1,077 s |
+
+四类断言全过：每个分片的 sample 集**恰好等于**它该分到的那一片（train 是 7×19,902 + 19,901）、
+并集精确覆盖、schema 全 `genwhere/2`、mode 全 `two_segment`、
+**checkpoint 全 split 唯一 = `/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976`**（CX-2 审计字段，
+写在三份交付报告顶层）。
+
+合并后全量统计（159,215 条 train）**依然全满分**：`format_failure 0.0`、`color_format_failure 0.0`、
+`both_segments_well_formed 1.0`、`starts_with_where_open 1.0`、`starts_with_color_open 1.0`、
+`truncation 0.0/0.0`、`segments_overlap 0.0`、`stop_reasons` 全 `closed`。
+段长 `where` p50 8 / p95 52 / max 72，`color` p50 171 / p95 222 / **max 325**
+（固定边界 96 / 384，都没碰到，即**一条都没被截断**）。
+
+**CX-1 软链已建**（`<split>/two_segment -> ../<split>`，三个 split 各一条；
+`forced_color` 那条报 `skipped_target_missing`，因为当时还没产出，合并 forced_color 时会补上）。
+
+**两个真实消费方在生产产物上实测读通**（不是 mock）：
+
+```
+Where-B   run_where_b.assert_genctx_coverage   train 159215/159215 missing=0（V_where/V_what 同）
+Stage-What ColorGenContextStore.assert_covers  train coverage=1.0，走的就是 CX-1 软链，
+                                               probe schema=genwhere/2 mode=two_segment
+```
+
+⇒ **Where-B 八臂与 Stage-What 十臂（T01–T08 + C03/C04）的 genctx 前置已解除。**
+
+## 4-sexies · forced_color 作业（2026-08-05 20:30 起，单卡 GPU1）
+
+GPU0 被 Where-A `run_calibration --arm BA-1-Band` 四臂序列占用（**未触碰**），
+故 forced_color 单卡跑：`BATCH_SIZE=128 GPUS=1 DO_MERGE=0`，10 个分片（V_what 2 + train 8）。
+范围依 WT-J10 = `train` + `V_what`（Where-B 不读 forced-prefix 档，V_where 不产）。
+
+**日志路径已固定，不会再改名**（B=128 那次改名让主 agent 监控失联半小时）：
+
+| 用途 | 路径（都在 `genctx_jobs/`） |
+|---|---|
+| driver 日志 | `logs/driver_forced_color.log` |
+| driver PID | `logs/driver_forced_color.pid`（= **2711342**） |
+| 分片日志 | `logs/forced_color_<split>_shard<i>of<n>.log` |
+| 分片 marker / rc | `logs/forced_color_<split>_shard<i>of<n>.job.marker` / `.rc` |
+| 分片报告 | `reports/forced_color/<split>/shard<i>of<n>/genctx_<leaf>.json` |
+
+实测：V_what 两片已 rc=0（897 条）；train shard00of08 **3.77 samples/s**、单片 eta 5,213 s。
+⇒ 8 片 × 5,213 s ≈ **11.8 h，预计 2026-08-06 08:20–08:30 完成**（单卡；比 two_segment 的
+4.4 /s 慢，是 forced-prefix 下 color 段自身的长度分布所致）。
+
+**若 GPU0 的 Where-A 序列提前结束、想减半**：先按正确顺序停当前 driver
+（**先杀 worker 子 shell、再杀 python**，按 PID + `ps -p`），再起两个
+`TASK_STRIDE=2 TASK_OFFSET=0|1` 的 driver——**已发布的分片会自动跳过，不重跑**。
+
+**合并命令（待主 agent 触发）**：
+
+```bash
+cd /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs
+for s in V_what train; do
+  n=2; [ "$s" = train ] && n=8
+  /home/bc/envs/q3vl_sft/bin/python merge_genctx.py --split "$s" --mode forced_color \
+    --shard-root /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/"$s" \
+    --num-shards "$n"
+done
+```
+
+它会把 `<split>/forced_color -> ../<split>-forced_color` 这条 CX-1 软链补上
+（two_segment 合并时它报的是 `skipped_target_missing`）。
 
 ## 5 · 发现的问题
 

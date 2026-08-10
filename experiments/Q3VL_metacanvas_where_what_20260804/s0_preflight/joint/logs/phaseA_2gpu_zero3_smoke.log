@@ -1,0 +1,128 @@
+
+*****************************************
+Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+*****************************************
+2026-08-05 02:01:35,526 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpe20a7d0v/test.c -o /tmp/tmpe20a7d0v/test.o
+2026-08-05 02:01:35,563 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpe20a7d0v/test.o -laio -o /tmp/tmpe20a7d0v/a.out
+2026-08-05 02:01:35,572 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpscfbx4ws/test.c -o /tmp/tmpscfbx4ws/test.o
+2026-08-05 02:01:35,593 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpb5q5vj2f/test.c -o /tmp/tmpb5q5vj2f/test.o
+2026-08-05 02:01:35,610 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpscfbx4ws/test.o -laio -o /tmp/tmpscfbx4ws/a.out
+2026-08-05 02:01:35,631 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpb5q5vj2f/test.o -L/usr/local/cuda -L/usr/local/cuda/lib64 -lcufile -o /tmp/tmpb5q5vj2f/a.out
+2026-08-05 02:01:35,643 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmp6l4fanxg/test.c -o /tmp/tmp6l4fanxg/test.o
+2026-08-05 02:01:35,686 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmp6l4fanxg/test.o -L/usr/local/cuda -L/usr/local/cuda/lib64 -lcufile -o /tmp/tmp6l4fanxg/a.out
+2026-08-05 02:01:35,702 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpv61yapth/test.c -o /tmp/tmpv61yapth/test.o
+2026-08-05 02:01:35,738 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpv61yapth/test.o -laio -o /tmp/tmpv61yapth/a.out
+2026-08-05 02:01:35,752 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpdzl203r2/test.c -o /tmp/tmpdzl203r2/test.o
+2026-08-05 02:01:35,775 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpdzl203r2/test.o -laio -o /tmp/tmpdzl203r2/a.out
+NCCL version 2.27.5+cuda12.9
+2026-08-05 02:01:37,181 INFO [__main__] transformers 4.57.1 | torch 2.10.0+cu128
+2026-08-05 02:01:37,181 INFO [__main__] batch plan: {'spec_violations': [], 'effective_global_batch': 32, 'per_device_train_batch_size': 4, 'gradient_accumulation_steps': 4, 'world_size': 2}
+2026-08-05 02:01:47,782 INFO [__main__] shard verification PASSED (2 shards)
+2026-08-05 02:01:48,510 INFO [__main__] special token ids: {'<where>': 151669, '</where>': 151670, '<color>': 151671, '</color>': 151672}
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  1.91it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:01<00:01,  1.55s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:01<00:00,  1.05s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:01<00:00,  1.03it/s]
+Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.36s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.39s/it]
+2026-08-05 02:01:52,501 INFO [__main__] embeddings: {"tokenizer_len": 151673, "embedding_rows_before": 151936, "zero3_partitioned": true, "tie_word_embeddings": true, "resize_action": "kept", "embedding_rows_after": 151936, "reinit": {"ref_rows": 151669, "mean_row_l2": 0.3362230658531189, "ref_mean_row_l2": 1.0807218551635742, "per_dim_std_mean": 0.02054288052022457, "noise_scale": 0.001, "rows": [151669, 151670, 151671, 151672], "min_pairwise_distance": 0.0016162680694833398}, "tied_ok": true}
+2026-08-05 02:01:52,502 INFO [__main__] 
+total params      : 4,437,815,808
+trainable params  : 4,131,573,248 (93.0993%)
+frozen params     : 306,242,560 (6.9007%)
+
+| subtree | tensors | params | trainable | frozen |
+|---|---:|---:|---:|---:|
+| `vision_blocks` | 288 | 302,309,376 | 0 | 302,309,376 |
+| `vision_patch_embed` | 2 | 1,573,888 | 0 | 1,573,888 |
+| `vision_pos_embed` | 1 | 2,359,296 | 0 | 2,359,296 |
+| `vision_merger` | 6 | 27,271,680 | 27,271,680 | 0 |
+| `vision_deepstack_mergers` | 18 | 81,833,472 | 81,833,472 | 0 |
+| `language_embed_tokens` | 1 | 388,956,160 | 388,956,160 | 0 |
+| `language_layers` | 396 | 3,633,509,376 | 3,633,509,376 | 0 |
+| `language_norm` | 1 | 2,560 | 2,560 | 0 |
+
+TRAINABLE parameter groups:
+  + model.visual.merger.norm.weight  [x1]  1,024
+  + model.visual.merger.norm.bias  [x1]  1,024
+  + model.visual.merger.linear_fc1.weight  [x1]  16,777,216
+  + model.visual.merger.linear_fc1.bias  [x1]  4,096
+  + model.visual.merger.linear_fc2.weight  [x1]  10,485,760
+  + model.visual.merger.linear_fc2.bias  [x1]  2,560
+  + model.visual.deepstack_merger_list.{i}.norm.weight  [x3]  12,288
+  + model.visual.deepstack_merger_list.{i}.norm.bias  [x3]  12,288
+  + model.visual.deepstack_merger_list.{i}.linear_fc1.weight  [x3]  50,331,648
+  + model.visual.deepstack_merger_list.{i}.linear_fc1.bias  [x3]  12,288
+  + model.visual.deepstack_merger_list.{i}.linear_fc2.weight  [x3]  31,457,280
+  + model.visual.deepstack_merger_list.{i}.linear_fc2.bias  [x3]  7,680
+  + model.language_model.embed_tokens.weight  [x1]  388,956,160
+  + model.language_model.layers.{i}.self_attn.q_proj.weight  [x36]  377,487,360
+  + model.language_model.layers.{i}.self_attn.k_proj.weight  [x36]  94,371,840
+  + model.language_model.layers.{i}.self_attn.v_proj.weight  [x36]  94,371,840
+  + model.language_model.layers.{i}.self_attn.o_proj.weight  [x36]  377,487,360
+  + model.language_model.layers.{i}.self_attn.q_norm.weight  [x36]  4,608
+  + model.language_model.layers.{i}.self_attn.k_norm.weight  [x36]  4,608
+  + model.language_model.layers.{i}.mlp.gate_proj.weight  [x36]  896,532,480
+  + model.language_model.layers.{i}.mlp.up_proj.weight  [x36]  896,532,480
+  + model.language_model.layers.{i}.mlp.down_proj.weight  [x36]  896,532,480
+  + model.language_model.layers.{i}.input_layernorm.weight  [x36]  92,160
+  + model.language_model.layers.{i}.post_attention_layernorm.weight  [x36]  92,160
+  + model.language_model.norm.weight  [x1]  2,560
+FROZEN parameter groups:
+  - model.visual.patch_embed.proj.weight  [x1]  1,572,864
+  - model.visual.patch_embed.proj.bias  [x1]  1,024
+  - model.visual.pos_embed.weight  [x1]  2,359,296
+  - model.visual.blocks.{i}.norm1.weight  [x24]  24,576
+  - model.visual.blocks.{i}.norm1.bias  [x24]  24,576
+  - model.visual.blocks.{i}.norm2.weight  [x24]  24,576
+  - model.visual.blocks.{i}.norm2.bias  [x24]  24,576
+  - model.visual.blocks.{i}.attn.qkv.weight  [x24]  75,497,472
+  - model.visual.blocks.{i}.attn.qkv.bias  [x24]  73,728
+  - model.visual.blocks.{i}.attn.proj.weight  [x24]  25,165,824
+  - model.visual.blocks.{i}.attn.proj.bias  [x24]  24,576
+  - model.visual.blocks.{i}.mlp.linear_fc1.weight  [x24]  100,663,296
+  - model.visual.blocks.{i}.mlp.linear_fc1.bias  [x24]  98,304
+  - model.visual.blocks.{i}.mlp.linear_fc2.weight  [x24]  100,663,296
+  - model.visual.blocks.{i}.mlp.linear_fc2.bias  [x24]  24,576
+The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'eos_token_id': 151645, 'bos_token_id': None, 'pad_token_id': 151643}.
+2026-08-05 02:01:56,937 INFO [__main__] data manifest: {"path": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/manifest/terminal_manifest.json", "schema_version": "q3vl.sft2seg.splits/1", "digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840", "top_level_keys": ["audit", "counts", "created_at", "datasets", "digest", "distributions", "eval_group_counts", "model_dir", "model_max_length", "n_effective", "producer", "reserve", "schema_version", "source_builds", "split_authority", "splits", "status"], "n_effective_train": 159215, "n_eval": 896, "expected_steps_per_epoch": 4976, "train_index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl", "index_layout": "nested"}
+The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'eos_token_id': 151645, 'bos_token_id': None, 'pad_token_id': 151643}.
+2026-08-05 02:01:57,293 WARNING [accelerate.accelerator] Gradient accumulation steps mismatch: GradientAccumulationPlugin has 1, DeepSpeed config has 4. Using DeepSpeed's value.
+Parameter Offload - Persistent parameters statistics: param_count = 354, numel = 569856
+2026-08-05 02:02:04,350 WARNING [q3vl.train.trainer] [protected-checkpoints] steps_per_epoch(from trainer state)=4976 -> half_epoch_step=2488, full_epoch_step=4976
+  0%|          | 0/4976 [00:00<?, ?it/s]2026-08-05 02:02:04,596 WARNING [q3vl.train.trainer] [protected-checkpoints] steps_per_epoch(from trainer state)=4976 -> half_epoch_step=2488, full_epoch_step=4976
+  0%|          | 1/4976 [00:16<22:14:30, 16.09s/it]  0%|          | 2/4976 [00:21<13:13:40,  9.57s/it]  0%|          | 3/4976 [00:26<10:31:14,  7.62s/it]  0%|          | 4/4976 [00:33<9:58:36,  7.22s/it]   0%|          | 5/4976 [00:38<8:59:37,  6.51s/it]  0%|          | 6/4976 [00:44<8:38:41,  6.26s/it]  0%|          | 7/4976 [00:48<8:02:57,  5.83s/it]  0%|          | 8/4976 [00:55<8:31:43,  6.18s/it]  0%|          | 9/4976 [01:02<8:35:54,  6.23s/it]  0%|          | 10/4976 [01:08<8:26:56,  6.13s/it]                                                   {'loss': 3.4211, 'grad_norm': 33.217242237307595, 'learning_rate': 6.000000000000001e-07, 'train_seg_where_loss': 5.3867722515281775, 'train_seg_where_acc': 0.38702928870292885, 'train_seg_where_tokens': 478.0, 'train_seg_color_loss': 3.111699878541591, 'train_seg_color_acc': 0.4297130403196513, 'train_seg_color_tokens': 2753.0, 'train_seg_eos_loss': 1.4482915699481964, 'train_seg_eos_acc': 0.5, 'train_seg_eos_tokens': 32.0, 'train_seg_assistant_loss': 3.428664490375057, 'train_seg_assistant_acc': 0.4241495556236592, 'epoch': 0.0}
+  0%|          | 10/4976 [01:08<8:26:56,  6.13s/it]  0%|          | 11/4976 [01:12<7:54:08,  5.73s/it]  0%|          | 12/4976 [01:17<7:32:46,  5.47s/it]  0%|          | 13/4976 [01:22<7:19:37,  5.31s/it]  0%|          | 14/4976 [01:27<7:07:36,  5.17s/it]  0%|          | 15/4976 [01:32<7:09:12,  5.19s/it]  0%|          | 16/4976 [01:39<7:37:17,  5.53s/it]  0%|          | 17/4976 [01:44<7:20:00,  5.32s/it]  0%|          | 18/4976 [01:48<7:07:19,  5.17s/it]  0%|          | 19/4976 [01:53<6:57:51,  5.06s/it]  0%|          | 20/4976 [01:58<6:54:11,  5.01s/it]                                                   {'loss': 3.1362, 'grad_norm': 13.271141590640147, 'learning_rate': 1.2666666666666669e-06, 'epoch': 0.0}
+  0%|          | 20/4976 [01:58<6:54:11,  5.01s/it]  0%|          | 21/4976 [02:03<6:49:54,  4.96s/it]  0%|          | 22/4976 [02:09<7:16:38,  5.29s/it]  0%|          | 23/4976 [02:14<7:13:25,  5.25s/it]  0%|          | 24/4976 [02:19<7:11:17,  5.23s/it]  1%|          | 25/4976 [02:24<7:02:51,  5.12s/it]  1%|          | 26/4976 [02:29<6:56:19,  5.05s/it]  1%|          | 27/4976 [02:34<6:55:41,  5.04s/it]  1%|          | 28/4976 [02:40<7:05:13,  5.16s/it]  1%|          | 29/4976 [02:45<7:18:11,  5.31s/it]  1%|          | 30/4976 [02:50<7:05:59,  5.17s/it]                                                   {'loss': 2.6362, 'grad_norm': 7.667176194667638, 'learning_rate': 1.9333333333333336e-06, 'epoch': 0.01}
+  1%|          | 30/4976 [02:50<7:05:59,  5.17s/it]  1%|          | 31/4976 [02:55<7:05:48,  5.17s/it]  1%|          | 32/4976 [03:00<6:56:16,  5.05s/it]  1%|          | 33/4976 [03:05<6:49:42,  4.97s/it]  1%|          | 34/4976 [03:10<6:46:56,  4.94s/it]  1%|          | 35/4976 [03:15<6:48:07,  4.96s/it]  1%|          | 36/4976 [03:20<7:04:53,  5.16s/it]  1%|          | 37/4976 [03:25<6:55:55,  5.05s/it]  1%|          | 38/4976 [03:30<6:50:23,  4.99s/it]  1%|          | 39/4976 [03:35<7:02:15,  5.13s/it]  1%|          | 40/4976 [03:40<6:53:46,  5.03s/it]                                                   {'loss': 2.0339, 'grad_norm': 4.631852927937727, 'learning_rate': 2.6e-06, 'epoch': 0.01}
+  1%|          | 40/4976 [03:40<6:53:46,  5.03s/it]  1%|          | 41/4976 [03:45<6:55:44,  5.05s/it]  1%|          | 42/4976 [03:50<6:50:12,  4.99s/it]  1%|          | 43/4976 [03:56<7:08:02,  5.21s/it]  1%|          | 44/4976 [04:01<6:59:17,  5.10s/it]  1%|          | 45/4976 [04:05<6:52:20,  5.02s/it]  1%|          | 46/4976 [04:10<6:47:28,  4.96s/it]  1%|          | 47/4976 [04:16<7:00:07,  5.11s/it]  1%|          | 48/4976 [04:21<6:53:53,  5.04s/it]  1%|          | 49/4976 [04:26<7:00:05,  5.12s/it]  1%|          | 50/4976 [04:31<7:01:44,  5.14s/it]                                                   {'loss': 1.6522, 'grad_norm': 3.6639621014528476, 'learning_rate': 3.266666666666667e-06, 'epoch': 0.01}
+  1%|          | 50/4976 [04:31<7:01:44,  5.14s/it]  1%|          | 51/4976 [04:36<6:55:43,  5.06s/it]  1%|          | 52/4976 [04:41<6:50:05,  5.00s/it]  1%|          | 53/4976 [04:46<6:45:29,  4.94s/it]  1%|          | 54/4976 [04:51<6:50:50,  5.01s/it]  1%|          | 55/4976 [04:56<7:02:08,  5.15s/it]  1%|          | 56/4976 [05:02<7:13:42,  5.29s/it]  1%|          | 57/4976 [05:07<7:03:22,  5.16s/it]  1%|          | 58/4976 [05:12<6:54:17,  5.05s/it]  1%|          | 59/4976 [05:16<6:49:43,  5.00s/it]  1%|          | 60/4976 [05:22<6:53:18,  5.04s/it]                                                   {'loss': 1.4589, 'grad_norm': 3.273319451459203, 'learning_rate': 3.9333333333333335e-06, 'train_seg_where_loss': 2.092429820048451, 'train_seg_where_acc': 0.7725321888412017, 'train_seg_where_tokens': 233.0, 'train_seg_color_loss': 1.5622717013700378, 'train_seg_color_acc': 0.606671299513551, 'train_seg_color_tokens': 2878.0, 'train_seg_eos_loss': 0.027403285261243582, 'train_seg_eos_acc': 1.0, 'train_seg_eos_tokens': 32.0, 'train_seg_assistant_loss': 1.585946869151326, 'train_seg_assistant_acc': 0.6229716831053134, 'epoch': 0.01}
+  1%|          | 60/4976 [05:22<6:53:18,  5.04s/it]  1%|          | 61/4976 [05:26<6:47:55,  4.98s/it]  1%|          | 62/4976 [05:31<6:43:30,  4.93s/it]  1%|▏         | 63/4976 [05:37<7:15:47,  5.32s/it]  1%|▏         | 64/4976 [05:42<7:04:37,  5.19s/it]  1%|▏         | 65/4976 [05:47<6:55:49,  5.08s/it]  1%|▏         | 66/4976 [05:52<6:48:40,  4.99s/it]  1%|▏         | 67/4976 [05:57<6:51:18,  5.03s/it]  1%|▏         | 68/4976 [06:02<6:45:35,  4.96s/it]  1%|▏         | 69/4976 [06:07<6:42:36,  4.92s/it]  1%|▏         | 70/4976 [06:13<7:08:36,  5.24s/it]                                                   {'loss': 1.3721, 'grad_norm': 3.2439233656501876, 'learning_rate': 4.600000000000001e-06, 'epoch': 0.01}
+  1%|▏         | 70/4976 [06:13<7:08:36,  5.24s/it]  1%|▏         | 71/4976 [06:18<7:06:06,  5.21s/it]  1%|▏         | 72/4976 [06:23<6:56:28,  5.10s/it]  1%|▏         | 73/4976 [06:28<6:57:39,  5.11s/it]  1%|▏         | 74/4976 [06:33<6:50:13,  5.02s/it]W0805 02:08:40.319000 3293798 site-packages/torch/distributed/elastic/agent/server/api.py:739] Received 15 death signal, shutting down workers
+W0805 02:08:40.322000 3293798 site-packages/torch/distributed/elastic/multiprocessing/api.py:1010] Sending process 3293893 closing signal SIGTERM
+W0805 02:08:40.323000 3293798 site-packages/torch/distributed/elastic/multiprocessing/api.py:1010] Sending process 3293894 closing signal SIGTERM
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/run.py", line 995, in <module>
+    main()
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 362, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/run.py", line 991, in main
+    run(args)
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/run.py", line 982, in run
+    elastic_launch(
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 170, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/launcher/api.py", line 308, in launch_agent
+    result = agent.run()
+             ^^^^^^^^^^^
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/elastic/metrics/api.py", line 134, in wrapper
+    result = f(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 731, in run
+    result = self._invoke_run(role)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/elastic/agent/server/api.py", line 908, in _invoke_run
+    time.sleep(monitor_interval)
+  File "/home/bc/miniconda3/envs/llm_factory/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/api.py", line 86, in _terminate_process_handler
+    raise SignalException(f"Process {os.getpid()} got signal: {sigval}", sigval=sigval)
+torch.distributed.elastic.multiprocessing.api.SignalException: Process 3293798 got signal: 15
