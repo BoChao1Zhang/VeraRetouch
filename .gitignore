@@ -109,10 +109,14 @@ experiments/**/*.safetensors
 experiments/**/*.npy
 # 作业链 dry-run 夹具（0 字节假 checkpoint / 假 trainer_state，只为回归 abort 路径）
 experiments/**/dryrun/cases/
-# 位图：只有交付物 viz/ 与 viz_mentor/ 下的入 git，其余中间图/调试图不入
+# WEVAL-1 的场缓存（`run_analysis --field-cache`，由 checkpoint + eval 目录确定性重算）
+experiments/**/analysis_*/fields/
+# 位图一律不入 git（任务卡 CLEAN-1 明列 viz PNG 为实验产物）。
+# 交付物规范要求的 viz/success_*、viz/failure_* 仍然在磁盘上，结果审阅读的是交付文件夹；
+# 确实要把某几张钉进版本库时用 `git add -f`（历史上已入库的 where_a/viz*、34 张，不受影响）。
 experiments/**/*.png
-!experiments/**/viz/**
-!experiments/**/viz_mentor/**
+experiments/**/*.jpg
+experiments/**/*.jpeg
 
 # 单文件超限（>1 MB 的非文档，CLEAN-1 逐个列名，不用通配，避免误伤）
 # train split 的 ID 旁表 5.9 MB，可由 s0_preflight 的 manifest 步骤重新导出
@@ -120,7 +124,7 @@ experiments/Q3VL_metacanvas_where_what_20260804/s0_preflight/data/manifest/train
 # 第三方 CLIP BPE 词表 1.3 MB（随 NACLIP 一并落地，来源与许可见同目录 VENDOR.md / LICENSE.NACLIP）
 tools/readout/clip_naclip/bpe_simple_vocab_16e6.txt.gz
 
-# 上面的 viz/viz_mentor 白名单**不得**回捞归档目录：ARCH-1 的 blanket 规则在此重新压住
+# 归档目录的 blanket 规则收尾重申一次：上面任何 `experiments/**` 白名单都不得回捞归档件
 # （.gitignore 后写的规则胜出；归档里仍然只有 *.md 留在 git）。
 experiments/_archive/**
 !experiments/_archive/**/
