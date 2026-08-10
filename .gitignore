@@ -81,3 +81,47 @@ experiments/tooling-wave1/T4_construct/cache/
 experiments/_archive/**
 !experiments/_archive/**/
 !experiments/_archive/**/*.md
+
+# ── CLEAN-1（2026-08-10）：清空工作区时补齐的规则 ─────────────────────────
+
+# AI 工作产物（subagent 的输入/输出/转录草稿），永不入 git
+.pi-subagents/
+
+# 汇报素材 docs/presentation_*：文字稿与作图脚本入 git，位图/打包/中间缓存不入
+docs/presentation_*/**/*.png
+docs/presentation_*/**/*.jpg
+docs/presentation_*/**/*.jpeg
+docs/presentation_*/**/*.npz
+docs/presentation_*/**/*.zip
+docs/presentation_*/**/*.log
+docs/presentation_*/**/_cache_*.json
+
+# 实验目录：进程控制残留与二进制大块不入 git。
+# 注意日志与 job.marker **仍然入 git**——它们是「长任务提交纪律」的证据，且是文本小文件。
+experiments/**/*.rc
+experiments/**/*.pid
+experiments/**/nohup.out
+experiments/**/*.pt
+experiments/**/*.pth
+experiments/**/*.ckpt
+experiments/**/*.bin
+experiments/**/*.safetensors
+experiments/**/*.npy
+# 作业链 dry-run 夹具（0 字节假 checkpoint / 假 trainer_state，只为回归 abort 路径）
+experiments/**/dryrun/cases/
+# 位图：只有交付物 viz/ 与 viz_mentor/ 下的入 git，其余中间图/调试图不入
+experiments/**/*.png
+!experiments/**/viz/**
+!experiments/**/viz_mentor/**
+
+# 单文件超限（>1 MB 的非文档，CLEAN-1 逐个列名，不用通配，避免误伤）
+# train split 的 ID 旁表 5.9 MB，可由 s0_preflight 的 manifest 步骤重新导出
+experiments/Q3VL_metacanvas_where_what_20260804/s0_preflight/data/manifest/train_sft_ids.txt
+# 第三方 CLIP BPE 词表 1.3 MB（随 NACLIP 一并落地，来源与许可见同目录 VENDOR.md / LICENSE.NACLIP）
+tools/readout/clip_naclip/bpe_simple_vocab_16e6.txt.gz
+
+# 上面的 viz/viz_mentor 白名单**不得**回捞归档目录：ARCH-1 的 blanket 规则在此重新压住
+# （.gitignore 后写的规则胜出；归档里仍然只有 *.md 留在 git）。
+experiments/_archive/**
+!experiments/_archive/**/
+!experiments/_archive/**/*.md
