@@ -1,25 +1,56 @@
 {
   "wave": "W1",
-  "arms": ["W01", "W02"],
+  "arms": [
+    "W01",
+    "W02"
+  ],
   "launched_at": "2026-08-10T11:51:29+08:00",
   "git_commit_recorded_in_run_setup": "0695e0ab119844fe5f54df66b077dc810bd977d8",
   "worktree_dirty": true,
   "worktree_diff": "config/W1_worktree_diff_vs_0695e0a.patch",
   "worktree_diff_sha256": "89b491d197c812bea82a2cb356bc2f29c50945f8c39cb6dea5a20dee939c3dda",
   "why_dirty": "EXEC-3 fixed the oracle-latent namespace blocker (NOTES 16.3) during the preflight stage. run_setup.json's env.git_commit therefore names a commit that does NOT contain the fix -- the same reproducibility defect Where-A review raised as N-1. This patch is the authoritative record until the main agent routes the change through implementation review and commits it.",
-  "files_changed": ["q3vl/whereb/config.py", "q3vl/whereb/scripts/run_where_b.py", "q3vl/whereb/scripts/run_where_b.sh"],
+  "files_changed": [
+    "q3vl/whereb/config.py",
+    "q3vl/whereb/scripts/run_where_b.py",
+    "q3vl/whereb/scripts/run_where_b.sh"
+  ],
   "tests_after_change": "q3vl/whereb/tests: 365 passed",
-  "preflight_gate": {"file": "preflight_where_b.json", "complete": true, "n_pass": 7, "n_fail": 0, "n_skip": 0},
+  "preflight_gate": {
+    "file": "preflight_where_b.json",
+    "complete": true,
+    "n_pass": 7,
+    "n_fail": 0,
+    "n_skip": 0
+  },
   "micro_batch": 8,
   "grad_accum": 4,
   "effective_batch": 32,
   "seed": 20260804,
   "total_optimizer_steps": 4975,
-  "basis": {"arm": "BA-3-Joint", "digest": "d234634fd43353bd765165d9584bc07fefbbd319eb25247bb61b7759e507ade9", "b_npy_sha256": "67de832ab1da1b7c8576a43c63389f8532e8aabe0c2e76fbd93278fafd937455"},
+  "basis": {
+    "arm": "BA-3-Joint",
+    "digest": "d234634fd43353bd765165d9584bc07fefbbd319eb25247bb61b7759e507ade9",
+    "b_npy_sha256": "67de832ab1da1b7c8576a43c63389f8532e8aabe0c2e76fbd93278fafd937455"
+  },
   "oracle_namespace": "/mnt/nfs/bc/data/datasets/where_a-20260805/oracle/BA-3-Joint/s5/<split>",
   "cband_normalization": "logsumexp",
   "jobs": [
-    {"arm": "W01", "gpu": 0, "marker_pid": 43354, "python_pid": 43355, "log": "/home/bc/data/runs/where_b/W01/train.log"},
-    {"arm": "W02", "gpu": 1, "marker_pid": 66289, "python_pid": 66290, "log": "/home/bc/data/runs/where_b/W02/train.log"}
-  ]
+    {
+      "arm": "W01",
+      "gpu": 0,
+      "marker_pid": 43354,
+      "python_pid": 43355,
+      "log": "/home/bc/data/runs/where_b/W01/train.log"
+    },
+    {
+      "arm": "W02",
+      "gpu": 1,
+      "marker_pid": 66289,
+      "python_pid": 66290,
+      "log": "/home/bc/data/runs/where_b/W02/train.log"
+    }
+  ],
+  "worktree_diff_committed_as": "d32ec601ceeb3f87177ad0dc44c1923e6f518b07",
+  "worktree_diff_committed_note": "The W1 oracle-namespace fix that made run_setup.json's env.git_commit (0695e0a) not describe the running code is now committed. W01/W02 still ran from the working tree; this commit is the authoritative source for W03-W08. It also moves data READS to /mnt/nfs-ro (D-B17), which W01/W02 do NOT have."
 }
