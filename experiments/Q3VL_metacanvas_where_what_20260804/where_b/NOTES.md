@@ -932,3 +932,230 @@ Where-B **预测同一个 ρ**，因此可能继承该脆弱性。若不分层�
 `L_mask` 三个权重不变 —— `test_the_stratum_changes_no_gate_and_no_loss` 逐条断言。
 
 单测：`test_active_primitives.py` **21 条**；`q3vl/whereb` **344 → 365 passed**。
+
+---
+
+## 十六、S3 GPU preflight 与 W1 波启动（EXEC-3，2026-08-10）
+
+### 16.1 S3 逐项结果 —— `complete == true`，7/7 pass，0 fail，0 skip
+
+`bash q3vl/whereb/scripts/run_where_b.sh preflight 0`，产物
+`preflight_where_b.json`（git commit `0695e0a`，torch 2.10.0+cu128，checkpoint-4976，
+bf16 / flash_attention_2 / V_where sample 0）：
+
+| 检查 id | 状态 | 实测 |
+|---|---|---|
+| `WB-P7-context-flows` | PASS | 四条上下文流不交叉；unclosed 生成不回退 GT |
+| `WB-P8-no-h-color` | PASS | 签名 + 标识符扫描 + `h_color` 关键字被拒 |
+| `WB-P9-no-target-leak` | PASS | 输入键与 forward 参数无目标量 |
+| `WB-P-zero-init-gates` | PASS | W01/W08 全部 cross-attn gate = 0，首步输出与输入无关 |
+| `WB-P-param-table` | PASS | 8 臂参数量单调（34.84M → 69.85M） |
+| **`WB-P7b-hidden-contract`** | **PASS** | teacher 路径 vs generated 路径 `H_where` **`max_abs_diff = 0`**，shape (41, 2560) |
+| **`WB-P8b-h-where-causal-independence`** | **PASS** | 只换 `<color>` 正文，`H_where` **`max_abs_diff = 0`**，41 tok × 2560 |
+
+放行条件按 §S3 绑定 `complete`（不是 `ok`、不是屏幕 `PASS`）：`n_skip=0`、`missing_required=[]`。
+
+### 16.2 启动前三项断言（全部落进 `run_setup.json`，不是口头保证）
+
+1. **genctx 覆盖**（`assert_genctx_coverage`）：train **159,215 / 159,215**、
+   V_where **896 / 896**，`n_missing = 0`。
+2. **`BA-3-Joint` 冻结校验**：`load_basis` 校验 `B.npy` sha256 ↔ `basis.json`
+   （`67de832a…`，实测一致）；`projector.digest = d234634fd43353bd…`，与 **五个 split 的
+   S5 run report 的 `b_digest` 全部一致**、`b_unchanged=true`。
+3. **oracle 消费方读通**（新增 `assert_oracle_contract`）：8 点抽样实读，
+   `cband_normalization = "logsumexp"`（与 `q3vl.where.config.CBAND_NORMALIZATION` 同约定）、
+   `curve` 257 点、`curve_z` = linspace(−3, 3, 257)。
+   覆盖率：train `n_present = n_ok = 75,544`（**47.45%** = local 占比），
+   V_where `400 / 896`（44.64%）。
+
+### 16.3 **BLOCKER（本次发现并修复）：oracle latent 的路径口径冲突，且失败是静默的**
+
+**产方**：`q3vl/where/scripts/run_s5_oracle_latents.sh` 把五个 split 全部发到
+`ORACLE_DIR/<arm>/**s5**/<split>`，并在脚本头明写：Where-A 各臂 `evaluate()` 另外发布的
+`ORACLE_DIR/<arm>/V_where` **不带 `curve`、不带 `cband_normalization`**，那是"臂的天花板证据，
+不是 Where-B 的监督"。
+
+**消方**：`run_where_b.py` 原来读 `ORACLE_DIR/<basis_arm>/<split>`（无 `s5`）。
+
+两个 split 的失败模式**不一样，这正是危险处**：
+
+- `<arm>/train` **不存在** → `FileNotFoundError`，吵闹、抓得住；
+- `<arm>/V_where` **存在** → 悄悄拿到**另一次 run 拟的 latent、且没有 `curve`**。
+  训练侧（train）与评测侧（V_where）的 oracle 从此来自两个不同的拟合，
+  而 `L_curve` 比的是"同一个函数"这一前提被无声破坏。孤儿检查与 manifest 校验全程沉默。
+
+**修复**（仅动 `q3vl/whereb/`，未碰其他包）：
+- `config.py` 新增 `ORACLE_NAMESPACE = "s5"`，注释写明上述两种失败模式；
+- `scripts/run_where_b.py` 读 `<oracle-root>/<basis-arm>/<namespace>/<split>`，
+  新增 `--oracle-root` / `--oracle-namespace`；
+- 新增 `assert_oracle_contract()`：断言 `curve` / `cband_normalization` 字段存在、
+  归一化约定与消费侧一致、z 网格 = 协议 5.5 的 linspace(−3,3,257)。
+  **缺字段时的报错直接指出"这是臂的 evaluate 载荷，不是 S5 监督命名空间"**。
+- `scripts/run_where_b.sh` 的 `train` 子命令转发第 4 个及以后的参数（`"${@:4}"`）。
+
+回归：`q3vl/whereb/tests` **365 passed**（无新增失败）。
+
+### 16.4 micro-batch 显存探测 → 一波一档，两臂同 GAS
+
+`micro_batch_probe_W1.json`（GPU 0，单进程内连测两臂）：
+
+| 臂 | micro=2 | micro=4 | micro=8 | chosen | GAS |
+|---|---|---|---|---|---|
+| W01 (band) | 8.77 GiB | 9.22 GiB | **9.93 GiB** | 8 | 4 |
+| W02 (cband12) | 8.86 GiB | 9.23 GiB | **9.93 GiB** | 8 | 4 |
+
+H100 97 GiB，峰值不到 10 GiB，`MASK_LOSS_SPACE="hi"`（512×768）**显存上完全不成问题**，
+不需要退 `"low"`。
+
+**为什么要一次探测、两臂显式钉同一个值**（而不是让每臂各自探）：
+`BalancedContextSampler` 的 teacher/generated 划分只由 `(n, seed, teacher_fraction)` 决定，
+micro-batch **不改样本次序**，但它改 `len(sampler)` → 改 `total_optimizer_steps` → 改 LR 余弦
+schedule 长度。两臂一旦探出不同值，§11 要的配对比较就不成立了。故 W01/W02 均显式传
+`--micro-batch 8`，`run_setup.json` 的 `micro_batch_probe` 为 `null`（探测证据单独落盘）。
+
+### 16.5 待主 agent 决策
+
+**D-B17 · 训练作业的 NFS 读路径仍走 hard 挂载 `/mnt/nfs`（已采保守默认：不改）。**
+CLAUDE.md 2026-08-10 定的"读数据一律走 `/mnt/nfs-ro`（soft）"目前**只在本 agent 自己的
+工具调用层面执行**；两个训练进程读的仍是 `/mnt/nfs`（`q3vl/where/config.py` 的
+`WHERE_A_ROOT`、`q3vl/data/config.py` 的 `BUILD_ROOT` / `DATASET_ROOT` 等硬编码常量）。
+改全会触及 `q3vl/data`、`q3vl/where` 两个包 —— 任务卡明令"不改 q3vl 其他包"，故未动。
+风险敞口：单臂约 8 h、四波共约 32 h 的窗口内若 NFS 服务端再停，训练进程会停在 D 状态，
+且**本机曾因此被迫 reboot**。实测两个 python 进程在数据读时确实间歇处于 `D` 态。
+建议：下一波之前决定是否给三个 root 加环境变量覆盖（一次性、可审阅的小改动）。
+
+**D-B18 · `run_where_b.sh:submit` 写进 `job.marker` 的 PID 不是 python，是包裹它的子 shell。**
+脚本注释自称"exec so `$!` is the python PID itself, not a wrapper shell's"，**实测不成立**：
+`( cd "$REPO" && nohup setsid "$@" > log 2>&1 & echo $! )` 里 `$!` 拿到的是那个 `cd && nohup`
+复合命令的 forked 子 shell。实测 W01 marker `pid=43354` = `bash run_where_b.sh`（子 shell），
+真正的 python 是 **43355**；W02 marker `pid=66289`，python 是 **66290**。
+**判活方向仍然是安全的**（子 shell 在 `wait` python，python 死则子 shell 死），
+但反过来会误报——子 shell 被杀时 python 因 `setsid` 仍在跑，而 marker 会显示"已死"。
+本次上报同时给出两个 PID。建议后续把 marker 改记 `ps --ppid $! -o pid=` 拿到的真实 PID。
+
+### 16.6 W1 波实测吞吐：**瓶颈是 NFS 读，不是 GPU**；落后臂白嫖页缓存
+
+两臂并发的同一个 360 s 窗口（11:53–11:59，W01 步 194→280、W02 步 60→207）：
+
+| 臂 | GPU | s/optimizer-step | samples/s | GPU util | 训练纯口径 | ×1.39（七块板） |
+|---|---|---|---|---|---|---|
+| W01 (band) | 0 | **4.17** | 7.67 | **45%** | 5.77 h | **8.01 h** |
+| W02 (cband12) | 1 | **2.45** | 13.08 | **90%** | 3.38 h | 4.70 h |
+
+**W02 的 readout 参数更多却快 1.7×，所以差异不是算力。** 机制：两臂按 §11 用同一 seed、
+同一数据次序，W01 早启动 6 分钟、始终领先约 70–140 步，于是**W01 每次都在拉冷数据、
+W02 读的是 W01 刚刚替它焐热的页缓存**。W01 的 GPU 只有 45% 占用即"被 IO 饿着"的直接证据。
+
+对 W2–W4 排期的三个推论：
+
+1. **一波的墙钟按领先臂算，约 8 h**，不是两臂平均；四波串行约 **32 h**。
+2. 落后臂会逐步追上领先臂，追平后角色互换、速率趋于收敛，**不要把 W02 的 2.45 s/step
+   当成单臂基准去外推**——它是缓存红利，单臂独跑拿不到。
+3. 这条与 **D-B17（NFS 读路径）** 是同一件事的两面：既然瓶颈在 NFS 读而非 H100，
+   读路径的处置（`/mnt/nfs-ro` 或本地缓存/预取）**同时是可靠性问题和 4× 排期问题**，
+   建议在 W2 开跑前一并裁决。
+
+**下一个风险闸口**（交接给监控 subagent）：第一次 eval 在 optimizer step **500**
+（W01 约 12:20、W02 约 12:15）。七块上下文板 × 896 条**从未在全尺寸跑过**，
+`evaluate_arm` 首次落 `eval_step500/` 是本波第一个真正的未知数；
+它若抛错会直接杀掉训练进程（`eval_fn` 在 trainer 主循环里，没有 try/except）。
+
+---
+
+## 十六、无人值守加固：D-B17（nfs-ro 读路径）/ eval 防御 / D-B18（PID 口径）
+
+日期：2026-08-10 ｜ W01/W02 正在两卡跑，**全程未动其进程与运行目录**
+
+### 16.1 D-B17 · 数据读取根切到 `/mnt/nfs-ro`
+
+**包冻结例外（必须记录）**：此前的派工纪律是「不改 `q3vl/data`、`q3vl/train`；
+`q3vl/where` 只读不改」。本次**经主 agent 明确裁定改动 `q3vl/where/config.py` 与
+`q3vl/data/config.py`**，依据是 `CLAUDE.md` 2026-08-10 新增的用户红线
+「读数据一律走 `/mnt/nfs-ro`」——**用户红线凌驾包冻结**。改动限于**路径常量与一个断言函数**，
+不触碰任何算法或数据语义。
+
+**为什么这条比包冻结更要紧**：`/mnt/nfs` 是 **hard** 挂载（`vers=4.1,hard`）。
+服务端一停，读就永久停在 **D 状态**，`timeout` 救不回来（它发完信号仍要 `wait()`）。
+已经发生过整机事故（5 个进程挂死，最久的 `tail -F` 挂了 14 天，最终靠 reboot 清场）。
+一个 W03–W08 的臂要无人值守跑约 10 小时并持续读 oracle/maskview/genctx——
+这是本战役**最大的单点无人值守风险**。`/mnt/nfs-ro` 是 `ro,soft,vers=3,timeo=100`，
+失联约 15 s 返 **EIO**，进程活着、报错、可被处理。
+
+**读写分流（只改读，写路径一律不动）**：
+
+| 用途 | 常量 | 挂载 |
+|---|---|---|
+| 读 | `data.BUILD_ROOT` / `data.DATASET_ROOT` / `where.SFT2SEG_ROOT`(→`SPLIT_DIR`) / `where.BUILD_DATASET_ROOT` | **`/mnt/nfs-ro`** |
+| 读（新增镜像） | `where.MASKVIEW_READ_DIR` / `ORACLE_READ_DIR` / `BASIS_READ_DIR`、`whereb.GENCTX_DIR` | **`/mnt/nfs-ro`** |
+| 写（不变） | `data.OUT_ROOT`、`where.WHERE_A_ROOT` 及 `MASKVIEW_DIR`/`ORACLE_DIR`/`BASIS_DIR`、`whereb.WHERE_B_ROOT`/`GENCTX_WRITE_DIR` | `/mnt/nfs`（+ `nfsx`） |
+
+关键设计点：**同一批常量原本既被生产者写、又被消费者读**。直接把它们翻到 ro 会让 Where-A 的
+三个 producer 脚本 EROFS 失败。所以保留写常量原样、**另加 `*_READ` 镜像**，
+只把 **Where-B 的消费入口**（`whereb/config.py` 的三个 re-export + `GENCTX_DIR`）指向镜像。
+两个挂载是**同一个 export**（`172.25.76.194:/rwq`），所以同一逻辑路径在两侧都存在。
+
+**启动断言 `where.config.assert_read_mount(*paths)`**：
+
+1. `/proc/mounts` 里必须有 `/mnt/nfs-ro`（本地读，无 IO）；
+2. 其挂载选项必须含 **`soft`**——hard 的读挂载等于没改（照样挂死）；
+3. 每个路径**打深路径 stat**。挂载点自身的 stat 由 dentry/属性缓存应答，
+   **服务端死了照样返回 OK**，探挂载点等于没探；
+4. 探测跑在 **daemon 线程 + join 超时**里，所以即使挂载病态卡死，
+   本函数也**不可能把训练进程拖住**——线程被丢弃、进程带清晰信息退出。
+
+`run_where_b.py` 启动时断言 `SPLIT_DIR` / `WHERE_A_ORACLE_DIR` / `GENCTX_DIR` 三条，
+结果写进 `run_setup.json` 的 `read_mount`。**实测**（2026-08-10）：
+
+```
+mount   /mnt/nfs-ro   options ro,noatime,vers=3,...,soft,...,timeo=100,retrans=3
+probed  .../sft2seg-20260804/splits            ok
+        .../where_a-20260805/oracle            ok
+        .../where_b-20260805/genwhere          ok
+        .../where_a-20260805/basis             ok
+        .../oracle/BA-3-Joint/s5/train         ok      ← EXEC-3 的 s5 命名空间
+        .../oracle/BA-3-Joint/s5/V_where       ok
+```
+
+**W01/W02 用旧路径跑完不动**；commit 后队列里的 **W03–W08 自动用新代码**。
+
+### 16.2 eval 无人值守防御
+
+一个臂约 10 h GPU 时间。此前 eval 里任何异常（读挂载卡住、genctx 缺记录、七块板 OOM）
+都会向上传播**杀掉整个 run**，把已经跑完的训练一起赔掉。而 eval 是**报告步骤**：
+§5.6 从 eval 记录里选 checkpoint，**没有记录的 checkpoint 自然不可选**——
+这是诚实的结果，且不是静默的。
+
+于是 `_eval_and_record` 现在：捕获异常 → 写 `EVAL_FAILED_step<N>.json`（含完整 traceback）
++ 日志打大写标记 `!!! EVAL FAILED ... TRAINING CONTINUES !!!` + 记进 `state.eval_failures`
+→ **继续训练**。`KeyboardInterrupt` / `SystemExit` **照常抛出**（那是操作员意图，不是故障）。
+
+**不是吞掉**：磁盘上的状态文件 + state 里的 `eval_failures` 让「eval 坏掉的 run」
+不可能被误当成健康 run；而 `best()` 返回 `None`、`eval.jsonl` 不存在，选型阶段自然落空。
+
+### 16.3 D-B18 · submit 的 PID 口径
+
+`( cd ... & echo $! )` 记的是**包装子 shell 的 PID**，不是 python 的。
+两者确实不同——EXEC-3 的 W1 marker 实录：wrapper `43354` vs python `43355`（W01）、
+`66289` vs `66290`（W02）。**wrapper 会先退出**，于是 `ps -p <wrapper>` 会报「已死」
+而臂其实在正常训练；一个据此行动的监控会去**重启一个正在跑的作业**。
+
+改为：用 `pgrep -P <wrapper> -n` 解析**直接子进程**（注意是 `-P` 按父 PID，
+**不是 `-f` 按命令行模式**——后者会匹配到执行 grep 的那条 shell 自己，本项目一天内被咬四次），
+解析失败才回退到 wrapper 并打 WARNING。`job.marker` 现在记
+`python_pid`（**权威**）、`wrapper_pid`（仅溯源）、`liveness_check=ps -p <python_pid>`。
+
+### 16.4 一并合入 EXEC-3 的 W1 launch fix（我作为本包作者的复核意见）
+
+EXEC-3 在 preflight 阶段修了 oracle namespace 阻塞，改动留在工作树里
+（快照 `config/W1_worktree_diff_vs_0695e0a.patch`，`W1_provenance.json` 记录了
+`worktree_dirty: true` 与 diff 的 sha256）。**复核结论：正确，同意合入。**
+
+| 改动 | 复核 |
+|---|---|
+| `ORACLE_NAMESPACE = "s5"` | **正确，且修的是一个静默错误**。S5 producer 把五个 split 统一发布在 `s5/` 下（带 257 点 `r*(z)` 与 `cband_normalization`）；Where-A 各臂自己的 `evaluate()` 另外发布了 `<arm>/V_where`，那批记录**没有** `curve`/`cband_normalization`。留空的话 `<arm>/train` 不存在会**响亮失败**，但 `<arm>/V_where` **存在**，会**悄悄**用另一次 run 拟的 latent 当 eval 监督——两个 split 只有一个会报错，正是最难发现的那种 |
+| `assert_oracle_contract` | **正确**，且正是 CLAUDE.md「s 缓存消费契约」要求的消费侧断言：显式声明期望的 `cband_normalization` 与 z 网格并断言生数据确实住在里面；同时证明 store 真的**读得出东西**（manifest complete 不等于 payload 命名空间对） |
+| `cfg` 赋值上移 | **必要且正确**：`make()` 闭包引用 `cfg.readout`，`cfg` 必须在 `make` **被调用前**绑定（定义在 206、赋值 215、调用 216，成立） |
+| `run_where_b.sh` 转发 `"${@:4}"` | 正确，且注释说明了一个真实约束：一个 wave 的两臂必须共用同一 `--micro-batch`，否则 `len(sampler)`→`total_optimizer_steps`→LR schedule 都变，两臂不再是 §11 要的配对比较 |
+
+与我本次改动的**相互作用**：EXEC-3 的 `--oracle-root` 默认值取 `WHERE_A_ORACLE_DIR`，
+而我把该常量指到了 ro 镜像 ⇒ **两者自动叠加**，S5 oracle 从 nfs-ro 读。已实测两个 split 均 `ok`。

@@ -10,6 +10,7 @@ down is marked ``# DECISION`` and is also listed in
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -189,9 +190,9 @@ JOINT_READOUT_WEIGHTS = {"band": 0.5, "cband12": 0.5}   # DECISION: equal
 PROJECTOR_SEED = 20260804                # seeded orthogonal init (BA-0 + all)
 
 # --- data -------------------------------------------------------------------
-SFT2SEG_ROOT = Path("/mnt/nfs/bc/data/datasets/sft2seg-20260804")
+SFT2SEG_ROOT = Path("/mnt/nfs-ro/bc/data/datasets/sft2seg-20260804")   # READ
 SPLIT_DIR = SFT2SEG_ROOT / "splits"
-BUILD_DATASET_ROOT = Path("/mnt/nfs/bc/data/datasets/sft")
+BUILD_DATASET_ROOT = Path("/mnt/nfs-ro/bc/data/datasets/sft")          # READ
 LOCAL_BUILDS = ("l1", "l2", "l3", "l4", "l5", "l6")
 MASK_SUFFIX = ".cgt.png"
 # D1, adjudicated by the main agent on 2026-08-05 (REVIEW-impl-WhereA section 10
@@ -210,10 +211,90 @@ DROP_DEGENERATE_MASKS = False
 DEGENERATE_STD = 1e-4
 
 # durable outputs (protocol 2.3: durable data on NFS, scratch is rebuildable)
+# WRITE root: publication (maskviews / oracle / basis) stays on the rw hard
+# mount and must go through `nfsx`.  Readers use WHERE_A_READ_ROOT below.
 WHERE_A_ROOT = Path("/mnt/nfs/bc/data/datasets/where_a-20260805")
+# READ mirror of the same export.  Both mounts are 172.25.76.194:/rwq, so every
+# published path exists under both; only the mount options differ.
+WHERE_A_READ_ROOT = Path("/mnt/nfs-ro/bc/data/datasets/where_a-20260805")
+# --- WRITE side (producers: extract_maskviews / run_calibration / make_oracle_latents)
 MASKVIEW_DIR = WHERE_A_ROOT / "maskviews"
 ORACLE_DIR = WHERE_A_ROOT / "oracle"
 BASIS_DIR = WHERE_A_ROOT / "basis"
+# --- READ side (consumers; Where-B's unattended arms stream from these for hours)
+MASKVIEW_READ_DIR = WHERE_A_READ_ROOT / "maskviews"
+ORACLE_READ_DIR = WHERE_A_READ_ROOT / "oracle"
+BASIS_READ_DIR = WHERE_A_READ_ROOT / "basis"
+
+#: the read mount every unattended job must reach its data through
+NFS_RO_ROOT = Path("/mnt/nfs-ro")
+NFS_RW_ROOT = Path("/mnt/nfs")
+
+
+class ReadMountError(RuntimeError):
+    """The nfs-ro read mount is absent or unreachable."""
+
+
+def assert_read_mount(*paths, timeout_s: float = 25.0) -> dict:
+    """Fail fast if the nfs-ro read mount is missing or its data is unreachable.
+
+    CLAUDE.md (2026-08-10, after a whole-machine incident): reads go through
+    ``/mnt/nfs-ro`` (ro, soft, v3 -- returns EIO in ~15 s when the server goes
+    away) and never through ``/mnt/nfs`` (hard, v4.1 -- a stalled read parks the
+    process in uninterruptible D state forever, which is the single largest
+    threat to an unattended multi-hour arm; ``timeout`` cannot rescue it).
+
+    Two things are checked, and the second is the one that matters:
+
+    1. ``/mnt/nfs-ro`` appears in ``/proc/mounts`` -- cheap, local, no IO;
+    2. each given path is **stat-ed at depth**.  A ``stat`` on the mount point
+       itself is answered from the dentry/attribute cache and returns OK long
+       after the server is gone, so probing the mount root proves nothing.
+
+    The probe runs in a daemon thread with a join deadline, so even a
+    pathologically wedged mount cannot make this function hang: the thread is
+    abandoned and the process exits with a clear message instead.
+    """
+    import threading
+
+    with open("/proc/mounts", "r", encoding="utf-8") as fh:
+        mounts = fh.read()
+    if f" {NFS_RO_ROOT} " not in mounts:
+        raise ReadMountError(
+            f"{NFS_RO_ROOT} is not mounted. Reads must not fall back to "
+            f"{NFS_RW_ROOT} (hard mount: a stalled read is an unkillable D-state "
+            "process). Mount it read-only/soft before starting."
+        )
+    opts = next((ln for ln in mounts.splitlines()
+                 if f" {NFS_RO_ROOT} " in ln), "")
+    if "soft" not in opts:
+        raise ReadMountError(
+            f"{NFS_RO_ROOT} is mounted without `soft`: {opts.strip()}. A hard "
+            "read mount defeats the point -- it hangs instead of returning EIO."
+        )
+
+    results: dict[str, str] = {}
+
+    def probe(p):
+        try:
+            os.stat(p)
+            results[str(p)] = "ok"
+        except Exception as exc:                      # noqa: BLE001
+            results[str(p)] = f"{type(exc).__name__}: {exc}"
+
+    for path in paths:
+        t = threading.Thread(target=probe, args=(path,), daemon=True)
+        t.start()
+        t.join(timeout_s)
+        if t.is_alive():
+            raise ReadMountError(
+                f"{path}: stat did not return within {timeout_s}s. The read "
+                "mount is wedged; refusing to start an unattended job on it."
+            )
+        if results.get(str(path)) != "ok":
+            raise ReadMountError(f"{path}: {results.get(str(path))}")
+    return {"mount": str(NFS_RO_ROOT), "options": opts.split()[3] if opts else "",
+            "probed": {str(p): results[str(p)] for p in paths}}
 MASKVIEW_SHARD_BYTES = 1 * 1024**3
 ORACLE_SHARD_BYTES = 1 * 1024**3
 

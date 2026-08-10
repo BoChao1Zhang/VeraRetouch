@@ -25,10 +25,11 @@ from q3vl.where.config import (  # noqa: F401
     PhiConfig,
     UpsampleConfig,
 )
-from q3vl.where.config import BASIS_DIR as WHERE_A_BASIS_DIR  # noqa: F401
-from q3vl.where.config import MASKVIEW_DIR as WHERE_A_MASKVIEW_DIR  # noqa: F401
-from q3vl.where.config import ORACLE_DIR as WHERE_A_ORACLE_DIR  # noqa: F401
+from q3vl.where.config import BASIS_READ_DIR as WHERE_A_BASIS_DIR  # noqa: F401
+from q3vl.where.config import MASKVIEW_READ_DIR as WHERE_A_MASKVIEW_DIR  # noqa: F401
+from q3vl.where.config import ORACLE_READ_DIR as WHERE_A_ORACLE_DIR  # noqa: F401
 from q3vl.where.config import SPLIT_DIR  # noqa: F401
+from q3vl.where.config import assert_read_mount  # noqa: F401
 
 #: v2 adds the ``<color>`` segment alongside the ``<where>`` one (amendment A-4:
 #: Stage-What adopts the same 50/50 teacher/generated context split as Where-B,
@@ -271,9 +272,28 @@ INCLUDE_GLOBAL = True
 # with Base SFT and Where-A.  It is always reported as its own stratum.
 EXCLUDE_WINNER_CONFIDENCE_LOW = False
 BASIS_ARM = "BA-3-Joint"        # protocol 4.4: the frozen projector for Where-B
+# The oracle-latent namespace Where-B is supervised from, i.e.
+# ``ORACLE_DIR/<basis_arm>/<ORACLE_NAMESPACE>/<split>``.
+#
+# S5 (``q3vl/where/scripts/run_s5_oracle_latents.sh``) publishes ALL FIVE splits
+# under ``s5/`` from one producer with one convention: a 257-point ``r*(z)`` grid
+# and a declared ``cband_normalization``.  The Where-A arms' own ``evaluate()``
+# separately published ``ORACLE_DIR/<arm>/V_where``, and those records carry
+# NEITHER ``curve`` NOR ``cband_normalization`` -- they are the arm's ceiling
+# evidence, not Where-B supervision.
+#
+# Leaving this at "" (the pre-2026-08-10 path) is a SILENT mis-read on exactly
+# one of the two splits Where-B opens: ``<arm>/train`` does not exist and fails
+# loudly, but ``<arm>/V_where`` *does* exist and would quietly supply eval
+# latents fit in a different run from the training ones.  ``assert_oracle_contract``
+# in ``scripts/run_where_b.py`` is the consumer-side assertion that closes it.
+ORACLE_NAMESPACE = "s5"
 
+# WRITE root (publication goes through nfsx); READ mirror for the arms.
 WHERE_B_ROOT = Path("/mnt/nfs/bc/data/datasets/where_b-20260805")
-GENCTX_DIR = WHERE_B_ROOT / "genwhere"
+WHERE_B_READ_ROOT = Path("/mnt/nfs-ro/bc/data/datasets/where_b-20260805")
+GENCTX_DIR = WHERE_B_READ_ROOT / "genwhere"        # READ: arms stream from this
+GENCTX_WRITE_DIR = WHERE_B_ROOT / "genwhere"       # WRITE: make_generated_context
 GENCTX_SHARD_BYTES = 1 * 1024**3
 RUN_ROOT = Path("/home/bc/data/runs/where_b")
 REPORT_DIR = Path(

@@ -125,6 +125,9 @@ class TrainState:
     total_steps: int = 0
     history: list[dict[str, Any]] = field(default_factory=list)
     checkpoints: list[dict[str, Any]] = field(default_factory=list)
+    #: evals that raised.  Non-empty => some checkpoints have no eval record and
+    #: cannot be selected; the run is still valid, just partially unmeasured.
+    eval_failures: list[dict[str, Any]] = field(default_factory=list)
 
 
 class WhereBTrainer:
@@ -255,9 +258,49 @@ class WhereBTrainer:
         return self.state
 
     def _eval_and_record(self) -> None:
+        """Run the eval callback, but never let it kill an unattended arm.
+
+        An arm is ~10 h of GPU time; an exception inside evaluation (a wedged
+        read mount, a missing genctx record, an OOM in a seven-board pass) used
+        to propagate and take the whole run with it, losing the training that had
+        already completed.  Evaluation is a *reporting* step -- protocol 5.6
+        selects from eval records, so a checkpoint with no record is simply not
+        selectable, which is the honest outcome and not a silent one.
+
+        So: record the failure loudly (status file with the traceback, an
+        upper-case log marker) and keep training.  What is NOT done is swallowing
+        it -- ``EVAL_FAILED_step*.json`` on disk and ``eval_failures`` in the
+        state make a run with broken evaluation impossible to mistake for a
+        healthy one.
+        """
+        import traceback
+
         self.model.eval()
         try:
             report = self.eval_fn(self.state.step)
+        except BaseException as exc:                  # noqa: BLE001
+            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                raise                                 # operator intent, not a fault
+            tb = traceback.format_exc()
+            marker = {
+                "step": self.state.step,
+                "epoch": round(self.state.epoch_float, 4),
+                "error": f"{type(exc).__name__}: {exc}",
+                "traceback": tb,
+                "arm": self.arm_cfg.arm,
+                "note": ("evaluation failed; TRAINING CONTINUED. This checkpoint "
+                         "has no eval record and is therefore not selectable "
+                         "under protocol 5.6."),
+            }
+            path = self.run_dir / f"EVAL_FAILED_step{self.state.step}.json"
+            path.write_text(json.dumps(marker, indent=2, ensure_ascii=False),
+                            encoding="utf-8")
+            print(f"!!! EVAL FAILED at step {self.state.step} -- TRAINING CONTINUES; "
+                  f"see {path} !!!\n{tb}", flush=True)
+            self.state.eval_failures.append(
+                {"step": self.state.step, "error": marker["error"],
+                 "marker": str(path)})
+            return
         finally:
             self.model.train()
         report["step"] = self.state.step

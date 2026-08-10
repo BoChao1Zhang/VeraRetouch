@@ -38,9 +38,9 @@ BUILDS: dict[str, str] = {
 }
 
 # ``sft.jsonl`` (instruction + seven-segment reasoning + recipe) lives here.
-BUILD_ROOT = Path("/mnt/nfs/bc/data/builds")
+BUILD_ROOT = Path("/mnt/nfs-ro/bc/data/builds")          # READ (see NFS_RO_ROOT)
 # the published indexed-tar projection (images + per-sample vrmeta) lives here.
-DATASET_ROOT = Path("/mnt/nfs/bc/data/datasets/sft")
+DATASET_ROOT = Path("/mnt/nfs-ro/bc/data/datasets/sft")  # READ
 # frozen split authority (SFT spec 3.1).
 SPLIT_ROOT = DATASET_ROOT / "splits-20260803"
 TRAIN_IDS = SPLIT_ROOT / "train_sft_ids.txt"
@@ -50,6 +50,7 @@ DEDUP_DROP_IDS = SPLIT_ROOT / "dedup_drop_sft_ids.txt"
 MODEL_DIR = Path("/home/bc/data/models/Qwen3-VL-4B-Instruct")
 
 # --- outputs --------------------------------------------------------------
+# WRITE: publication root stays on the rw (hard) mount; writes go through nfsx.
 OUT_ROOT = Path("/mnt/nfs/bc/data/datasets/sft2seg-20260804")
 WORK_DIR = OUT_ROOT / "work"          # a handful of large JSONL intermediates
 RECORDS_DIR = OUT_ROOT / "records"    # indexed tar dataset: <sft_id>.rec.json

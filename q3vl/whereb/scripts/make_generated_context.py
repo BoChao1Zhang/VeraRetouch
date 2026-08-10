@@ -65,7 +65,7 @@ from q3vl.train.collator import Sft2SegCollator
 from q3vl.train.modeling import load_model, load_processor
 from q3vl.whereb.config import (
     COLOR_CONTEXT_MAX_TOKENS,
-    GENCTX_DIR,
+    GENCTX_WRITE_DIR,
     GEN_MAX_NEW_TOKENS,
     MODEL_DIR,
     REPORT_DIR,
@@ -92,7 +92,7 @@ def main() -> int:
     ap.add_argument("--max-new-tokens", type=int, default=GEN_MAX_NEW_TOKENS)
     ap.add_argument("--color-max-tokens", type=int, default=COLOR_CONTEXT_MAX_TOKENS)
     ap.add_argument("--limit", type=int, default=None)
-    ap.add_argument("--out-root", default=str(GENCTX_DIR))
+    ap.add_argument("--out-root", default=str(GENCTX_WRITE_DIR))
     ap.add_argument("--report-dir", default=str(REPORT_DIR))
     ap.add_argument("--forced-color-prefix", action="store_true",
                     help="Stage-What controls C01/C02: force <color> as the "

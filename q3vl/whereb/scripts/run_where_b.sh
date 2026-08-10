@@ -38,15 +38,26 @@ submit() {
     nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader \
       | sed -n "$((gpu+1))p" | sed 's/^/  target GPU: /'
   fi
-  # exec so $! is the python PID itself, not a wrapper shell's
+  # D-B18: `( cd ... & echo $! )` records the PID of the SUBSHELL, not of python.
+  # The two differ (EXEC-3's W1 marker: wrapper 43354 vs python 43355), and the
+  # wrapper exits early -- so `ps -p <wrapper>` can report dead while the arm is
+  # happily training, and a supervisor acting on that would relaunch a running
+  # job. Record BOTH, with python's as the authoritative one.
   ( cd "$REPO" && nohup setsid "$@" > "$log" 2>&1 & echo $! > "$log.pid" )
-  local pid; pid=$(cat "$log.pid")
-
-  # step 2: prove liveness with `ps -p` and show the command line, so a wrong
-  # PID is visible instead of assumed.  NEVER pgrep.
-  sleep 5
-  ps -p "$pid" -o pid,etime,cmd --no-headers || {
-    echo "FAILED to start (no such pid $pid): $*"; sed -n '1,40p' "$log"; return 1; }
+  local wrapper_pid; wrapper_pid=$(cat "$log.pid")
+  # python is the setsid child; resolve it, and fall back to the wrapper only if
+  # the lookup fails (never silently treat the wrapper as the job).
+  local pid=""
+  for _ in 1 2 3 4 5; do
+    pid=$(pgrep -P "$wrapper_pid" -n 2>/dev/null || true)   # direct child lookup, NOT -f
+    [ -n "$pid" ] && break
+    sleep 1
+  done
+  if [ -z "$pid" ]; then
+    pid="$wrapper_pid"
+    echo "WARNING: could not resolve the python child of $wrapper_pid; "\
+         "job.marker will carry the wrapper PID and liveness checks are unreliable"
+  fi
 
   # step 3: the log must contain real output, not merely exist
   local waited=0
@@ -63,8 +74,10 @@ submit() {
   tail -n 20 "$log"
 
   # step 4: only now is the job real
-  printf 'pid=%s\ngpu=%s\ncmd=%s\nlog=%s\nstarted_at=%s\nverified=/%s/ after %ss\n' \
-    "$pid" "$gpu" "$*" "$log" "$(date -Is)" "$want" "$waited" \
+  # python_pid is authoritative for liveness; wrapper_pid is recorded for
+  # provenance only (it will already be gone -- that is not a failure signal).
+  printf 'python_pid=%s\nwrapper_pid=%s\npid=%s\ngpu=%s\ncmd=%s\nlog=%s\nstarted_at=%s\nverified=/%s/ after %ss\nliveness_check=ps -p %s\n' \
+    "$pid" "$wrapper_pid" "$pid" "$gpu" "$*" "$log" "$(date -Is)" "$want" "$waited" "$pid" \
     > "$(dirname "$log")/job.marker"
 }
 
@@ -99,9 +112,14 @@ genctx)
 
 # --- step 4: the eight main arms (1 GPU each; 2 at a time on this box) -----
 train)
-  arm="${2:?usage: run_where_b.sh train <W01..W08> [gpu]}"; gpu="${3:-0}"
+  # Anything after the GPU argument is forwarded to run_where_b.py.  A wave pins
+  # ONE `--micro-batch` for both of its arms: BalancedContextSampler chunks the
+  # same seeded permutation, so a different micro-batch changes len(sampler),
+  # total_optimizer_steps and therefore the LR schedule -- the two arms would no
+  # longer be the paired comparison protocol 11 asks for.
+  arm="${2:?usage: run_where_b.sh train <W01..W08> [gpu] [extra args...]}"; gpu="${3:-0}"
   submit "$gpu" "$RUNS/$arm/train.log" '"total_optimizer_steps"' \
-    $PY -m q3vl.whereb.scripts.run_where_b --arm "$arm" --checkpoint "$CKPT"
+    $PY -m q3vl.whereb.scripts.run_where_b --arm "$arm" --checkpoint "$CKPT" "${@:4}"
   ;;
 
 *)
