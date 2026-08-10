@@ -38,6 +38,18 @@ tools/queue/q events --since 30m --json | jq -r 'select(.event=="end") | "\(.nam
 > **改序会改 id**（`pueue switch` 交换的是两个任务的 id，实测）。所以**报告里一律写臂名不写 id**，
 > 所有动词也都支持按名字寻址：`q cancel W07`、`q logs W05 200`。
 
+### 边界：队列只看得见走 `q submit` 提交的任务
+
+**EXEC-3 的 W01/W02 是按 D-20 手工起的（`job.marker`），不在队列里。**
+它们跑满两张卡，而 `q` 对此一无所知——队列里的 W03/W04 只是占着槽位在等 gate。
+所以：
+
+- 「`q events` 是干净的」只能推出**排过队的任务没挂**，推不出「什么都没挂」。
+  要判断 W01/W02 的死活，看它们自己的 `job.marker` 与 `train.log`。
+- `q status` 现在会显式报出「卡上有负载但没有任何队列任务在跑载荷」，
+  并给出 `nvidia-smi --query-compute-apps=...` 去找出占卡的进程。
+  这条修正正是评测本次 skill 时被抓出来的：早先的措辞是「卡空着」，是**假话**。
+
 ---
 
 ## 1. 当前在队的六条臂（Where-B W2–W4）
