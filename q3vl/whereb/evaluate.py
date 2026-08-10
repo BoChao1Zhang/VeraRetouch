@@ -32,6 +32,8 @@ from .context import CONTEXT_MODES, SHUFFLED
 from .data import BatchBuilder, WhereBDataset
 from .fields import predict_fields
 from .metrics import (
+    active_primitive_bucket,
+    active_primitive_count,
     arm_metrics,
     attribution_section,
     antonym_invariance,
@@ -128,6 +130,13 @@ def evaluate_context(
                 "has_oracle": bool(tgt.get("has_oracle")),
                 **{k: tgt["meta"].get(k) for k in STRATA_KEYS},
             })
+            # WEVAL-1: the stratum is computed from the PREDICTED rho, so it can
+            # only be filled here, where `params` exists -- taking it from
+            # `tgt["meta"]` above (as the other strata do) silently yields None
+            # for every row and `strata_report` then reports {"None": 896}.
+            n_act = active_primitive_count(arm_cfg.readout, params)
+            met["active_primitive_count"] = n_act
+            met["active_primitive_bucket"] = active_primitive_bucket(n_act)
             # NOT setdefault: STRATA_KEYS already inserted the key, so a meta
             # dict whose render_mode is absent would leave it as None and the
             # row would vanish from *both* the local and the global aggregate

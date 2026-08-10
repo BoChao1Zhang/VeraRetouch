@@ -125,3 +125,58 @@ def test_attribution_note_records_the_risk_and_its_provenance():
     assert "30.8%" in risk and "+0.012" in risk and "+0.006" in risk
     assert "n/a" in risk                      # the Band caveat
     assert "no loss, gate or training change" in risk
+
+
+# --- WEVAL-1: declared + tested + NOT WIRED ---------------------------------
+#
+# Every test above ran on hand-built rows.  `evaluate_context` never wrote the
+# key, so the real board carried `{"None": 896}` -- the stratum existed
+# everywhere except in the data.  These tests run the real evaluator.
+
+def _eval_rows(arm: str, n: int = 6):
+    from q3vl.whereb.evaluate import evaluate_context
+    from q3vl.whereb.model import WhereBModel
+
+    from .test_evaluate_and_trainer import FakeBuilder, FakeDataset, _cfg
+
+    cfg = _cfg(arm)
+    ds = FakeDataset(n, cfg.readout, n_global=0)
+    rows, _ = evaluate_context(WhereBModel(cfg), FakeBuilder(ds), ds, cfg,
+                               "gt", batch_size=2)
+    return cfg, rows
+
+
+def test_evaluate_context_writes_the_primitive_stratum_into_every_row():
+    cfg, rows = _eval_rows("W02")                  # cband12
+    assert cfg.readout == "cband12"
+    assert len(rows) == 6
+    for r in rows:
+        assert "active_primitive_bucket" in r, "the stratum never reached the row"
+        assert "active_primitive_count" in r
+        assert r["active_primitive_bucket"] is not None
+        assert r["active_primitive_bucket"] in ("1", "2", ">=3"), r
+        assert isinstance(r["active_primitive_count"], int)
+        assert 0 <= r["active_primitive_count"] <= 12
+
+
+def test_the_stratum_is_computed_from_the_prediction_not_from_meta():
+    """It cannot come from `tgt["meta"]` like the other strata: it is a property
+    of the predicted rho.  Two different models must be able to disagree."""
+    cfg, rows = _eval_rows("W02")
+    assert all(r["active_primitive_bucket"] == M.active_primitive_bucket(
+        r["active_primitive_count"]) for r in rows)
+
+
+def test_band_arm_reports_the_stratum_as_not_applicable():
+    cfg, rows = _eval_rows("W01")                  # band: one band by construction
+    assert cfg.readout == "band"
+    assert all(r["active_primitive_count"] is None for r in rows)
+    assert all(r["active_primitive_bucket"] == "n/a" for r in rows)
+
+
+def test_the_board_is_not_a_single_none_bucket():
+    """The exact symptom WEVAL-1 found: `{"None": 896}`."""
+    _, rows = _eval_rows("W02")
+    board = strata_report(rows)["active_primitive_bucket"]
+    assert "None" not in board, f"the stratum is unwired: {board}"
+    assert set(board) <= {"1", "2", ">=3"}
