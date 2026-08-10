@@ -46,6 +46,7 @@ import torch
 
 from q3vl.train.collator import Sft2SegCollator
 from q3vl.train.modeling import load_model, load_processor
+from q3vl.train.shards import rewrite_read_path
 from q3vl.where.config import CBAND_NORMALIZATION
 from q3vl.whereb.config import (
     ARM_IDS,
@@ -76,6 +77,39 @@ from q3vl.whereb.model import WhereBModel
 from q3vl.whereb.preflight import _env
 from q3vl.whereb.stores import GenContextStore, MaskViewStore, OracleStore
 from q3vl.whereb.trainer import WhereBTrainer, probe_micro_batch
+
+
+def _streamed_shard_paths(*splits: str) -> list[Path]:
+    """The tar files the training loop will really open, after the W-B1 rewrite.
+
+    The frozen indexes record ABSOLUTE shard paths under ``/mnt/nfs`` (hard);
+    ``ShardStore`` maps them onto the soft read mirror at open time.  One shard
+    per role per split is enough for a liveness probe -- the point is to stat a
+    file on the path the bytes take, not to enumerate the build.
+    """
+    def shards(obj, out):                      # layouts A/B/C all key on "shard"
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k == "shard" and isinstance(v, str):
+                    out.append(v)
+                elif isinstance(v, (dict, list)):
+                    shards(v, out)
+        elif isinstance(obj, list):
+            for v in obj:
+                shards(v, out)
+        return out
+
+    found: list[str] = []
+    for split in splits:
+        raw: list[str] = []
+        with (SPLIT_DIR / f"{split}.index.jsonl").open("r", encoding="utf-8") as fh:
+            for line in fh:                    # layout B splits one sample over rows
+                if line.strip():
+                    shards(json.loads(line), raw)
+                if len(set(raw)) >= 2:
+                    break
+        found += raw
+    return [Path(rewrite_read_path(s)) for s in dict.fromkeys(found)]
 
 
 def assert_genctx_coverage(dataset: WhereBDataset, genctx: GenContextStore,
@@ -192,6 +226,14 @@ def main() -> int:
     # (CLAUDE.md 2026-08-10). Probes at depth -- the mount point itself answers
     # from cache long after the server is gone.
     mount_info = assert_read_mount(SPLIT_DIR, WHERE_A_ORACLE_DIR, GENCTX_DIR)
+    # W-B1: the three paths above are the ones D-B17 moved -- probing only them
+    # lights green while the training loop's whole byte stream (records/images,
+    # whose shard paths are baked ABSOLUTE into the frozen index) still opens
+    # the hard mount.  Probe the files that will actually be opened, after the
+    # rewrite, so the indicator is attached to the thing being protected.
+    streamed = _streamed_shard_paths(args.train_split, args.eval_split)
+    mount_info["probed"].update(assert_read_mount(*streamed)["probed"])
+    mount_info["streamed_shards_rewritten"] = [str(p) for p in streamed]
     print(json.dumps({"read_mount": mount_info}, indent=2), flush=True)
 
     processor, special_ids = load_processor(args.model_dir, 2048)
@@ -259,20 +301,51 @@ def main() -> int:
     print(json.dumps(setup, indent=2, ensure_ascii=False), flush=True)
 
     state = trainer.train()
+    # `trainer.train()` has already written checkpoint `final` (trainer.save),
+    # so from here on the ~10 h of training is on disk no matter what.
 
-    final = evaluate_arm(model, eval_builder, eval_ds, cfg,
-                         batch_size=max(2, micro), out_dir=run_dir / "eval_final",
-                         resources={"n_trainable_params": model.n_trainable(),
-                                    "peak_memory_gib": (
-                                        torch.cuda.max_memory_allocated() / 2**30
-                                        if torch.cuda.is_available() else None)})
+    # N35: the periodic evals run inside the trainer's guard, but this one did
+    # not -- an exception here (a single unreadable maskview, an OOM on the
+    # eval batch) would kill the process after training finished and take
+    # `arm_*.json` with it.  The evaluation is a pure function of the saved
+    # checkpoint and can be re-run offline; losing the arm's report cannot.
+    final: dict | None = None
+    final_error: dict | None = None
+    try:
+        final = evaluate_arm(model, eval_builder, eval_ds, cfg,
+                             batch_size=max(2, micro), out_dir=run_dir / "eval_final",
+                             resources={"n_trainable_params": model.n_trainable(),
+                                        "peak_memory_gib": (
+                                            torch.cuda.max_memory_allocated() / 2**30
+                                            if torch.cuda.is_available() else None)})
+    except Exception as exc:                                     # noqa: BLE001
+        import traceback
+        final_error = {"type": type(exc).__name__, "message": str(exc),
+                       "traceback": traceback.format_exc(),
+                       "step": state.step,
+                       "checkpoint": str(run_dir / "where_b_final.pt"),
+                       "rerun": (
+                           "DO NOT re-run the arm -- training completed and is "
+                           "saved.  Re-run the evaluation offline against the "
+                           "saved checkpoint.")}
+        (run_dir / "FINAL_EVAL_FAILED.json").write_text(
+            json.dumps(final_error, indent=2, ensure_ascii=False), encoding="utf-8")
+        print("FINAL_EVAL_FAILED " + json.dumps(final_error, ensure_ascii=False),
+              flush=True)
+
     rd = Path(REPORT_DIR)
     rd.mkdir(parents=True, exist_ok=True)
     (rd / f"arm_{args.arm}.json").write_text(json.dumps({
         "setup": setup, "final": final, "best_recorded": trainer.best(),
         "n_steps": state.step, "format_stats": {
             "train": train_builder.stats(), "eval": eval_builder.stats()},
+        # N34: how many checkpoints went unmeasured is part of the deliverable.
+        # Reading `arm_*.json` alone must not suggest every eval point exists.
+        "eval_failures": state.eval_failures,
+        "final_eval_error": final_error,
     }, indent=2, ensure_ascii=False), encoding="utf-8")
+    if final_error is not None:
+        return 2
     print(json.dumps({"arm": args.arm, "gate": final["gate"],
                       "local_soft_iou_median": final.get("local_soft_iou_median")},
                      indent=2), flush=True)

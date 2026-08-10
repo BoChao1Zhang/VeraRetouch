@@ -1083,9 +1083,13 @@ W02 读的是 W01 刚刚替它焐热的页缓存**。W01 的 GPU 只有 45% 占�
 
 **读写分流（只改读，写路径一律不动）**：
 
+> **订正（W-B1，见 §17）**：下表当时只对**索引文件与已发布派生物**成立。
+> records/images 的字节由索引里的**绝对路径**寻址，根常量管不到它们，
+> 直到 §17 的前缀重写才真正落到 `/mnt/nfs-ro`。原表保留原样以留痕。
+
 | 用途 | 常量 | 挂载 |
 |---|---|---|
-| 读 | `data.BUILD_ROOT` / `data.DATASET_ROOT` / `where.SFT2SEG_ROOT`(→`SPLIT_DIR`) / `where.BUILD_DATASET_ROOT` | **`/mnt/nfs-ro`** |
+| 读 | `data.BUILD_ROOT` / `data.DATASET_ROOT` / `where.SFT2SEG_ROOT`(→`SPLIT_DIR`) / `where.BUILD_DATASET_ROOT` | **`/mnt/nfs-ro`**（仅索引；字节见 §17） |
 | 读（新增镜像） | `where.MASKVIEW_READ_DIR` / `ORACLE_READ_DIR` / `BASIS_READ_DIR`、`whereb.GENCTX_DIR` | **`/mnt/nfs-ro`** |
 | 写（不变） | `data.OUT_ROOT`、`where.WHERE_A_ROOT` 及 `MASKVIEW_DIR`/`ORACLE_DIR`/`BASIS_DIR`、`whereb.WHERE_B_ROOT`/`GENCTX_WRITE_DIR` | `/mnt/nfs`（+ `nfsx`） |
 
@@ -1159,3 +1163,106 @@ EXEC-3 在 preflight 阶段修了 oracle namespace 阻塞，改动留在工作�
 
 与我本次改动的**相互作用**：EXEC-3 的 `--oracle-root` 默认值取 `WHERE_A_ORACLE_DIR`，
 而我把该常量指到了 ro 镜像 ⇒ **两者自动叠加**，S5 oracle 从 nfs-ro 读。已实测两个 split 均 `ok`。
+
+---
+
+## 十七、W-B1：D-B17 漏掉了读取量最大的那条路径（第 6 轮审阅，2026-08-10）
+
+日期：2026-08-10 ｜ W01/W02 仍在两卡跑，**全程未动其进程与运行目录**；本节全部实测只读 `/mnt/nfs-ro`
+
+### 17.1 结论先行：上一节 §16.1 的分流表**对索引成立、对字节不成立**（我的记账错误，已订正）
+
+D-B17 改的是**根常量**。但冻结 split 索引里的 `shard` 字段记的是**绝对路径**：
+
+```
+image  shard=/mnt/nfs/bc/data/datasets/sft2seg-20260804/images/shards/shard-00005.tar
+record shard=/mnt/nfs/bc/data/datasets/sft2seg-20260804/records/shards/shard-00000.tar
+```
+
+而 `ShardStore._fd` 只对**相对**路径拼 `shard_root`（`q3vl/train/shards.py`）。
+于是 records/images ——**训练循环里 100% 的流式 IO**——仍然开在 hard 挂载上，
+而启动断言只探那三条**已经改过的**常量路径，必然全绿。
+
+这与本战役已栽过三次的形态同构（第 1 轮 B1 / 第 3 轮 A5-B1 / 第 4 轮 F-B2）：
+**保护措施存在、指示灯是绿的、被保护的东西没被保护。**
+
+同一病灶第二处：`MaskResolver` 的 `root` 取自 `record["image"]["origin"]["root"]`
+（**烘进数据里**的 build 路径），它的 `catalog.sqlite3` 存在性判断本身就是 hard 挂载上的阻塞 stat。
+
+### 17.2 修法：在唯一的开文件收口处做前缀重写（审阅建议 (a)）
+
+`q3vl/train/shards.py` 新增常量 + 两个函数，`_fd` 在**拼完 `shard_root` 之后**重写一次：
+
+```python
+READ_PREFIX_REWRITE = (("/mnt/nfs/", "/mnt/nfs-ro/"),)
+rewrite_read_path(p)          # 仅当 /mnt/nfs-ro 已挂载（读 /proc/mounts，无 IO）才生效
+```
+
+三个设计选择，都是有意的：
+
+1. **默认开，不做 opt-in**。D-B17 的漏洞正是「常量改了但调用方没跟上」——
+   opt-in 只会把同一个错误留给下一个消费者。`ShardStore` 是**只读**构造
+   （`O_RDONLY` + `pread`），两个挂载是同一个 export，所以重写对语义是恒等的。
+2. **`/mnt/nfs-ro` 未挂载时自动失效**：没有读镜像的机器上行为与改动前逐字节相同。
+   Where-B 这边不靠这个兜底——`assert_read_mount` 在启动时就要求 ro 挂载存在且是 `soft`。
+3. **provenance 不改**：`MaskRef.root` 仍记逻辑路径（`/mnt/nfs/...`），只有 IO 走镜像。
+
+`MaskResolver._catalog` / `_jsonl_table` 各加一处 `rewrite_read_path(root)`（tar 读由 `ShardStore` 自己重写）。
+
+**包冻结例外**：本次改到 `q3vl/train/shards.py` 与 `q3vl/where/maskdata.py`，
+依据同 §16.1 —— 用户红线（读一律走 `/mnt/nfs-ro`）凌驾包冻结，且经主 agent 明确裁定。
+改动限于**开文件前的路径映射**，不触碰 tar 语义、offset/length、校验和任何数据语义。
+
+### 17.3 指示灯改探被保护的东西本身
+
+`run_where_b.py` 新增 `_streamed_shard_paths(train_split, eval_split)`：从两个 split 索引
+各取真实 shard 路径、按同一函数重写，再 `assert_read_mount(*streamed)`，
+结果并进 `run_setup.json.read_mount.probed`，并另记 `streamed_shards_rewritten`。
+
+### 17.4 实测（2026-08-10）
+
+**全量重算**（纯字符串复算 `_fd` 的解析逻辑，对 `/mnt/nfs` 零 IO）：
+
+| split | 样本 | 索引里 | 实际 open | 仍在 hard 挂载 |
+|---|---|---|---|---|
+| train | 159,215 | image/record 各 159,215 条 `/mnt/nfs` | 各 159,215 条 **`/mnt/nfs-ro`** | **0** |
+| V_where | 896 | image/record 各 896 条 `/mnt/nfs` | 各 896 条 **`/mnt/nfs-ro`** | **0** |
+
+**内核级证据**（`/proc/self/fd` 读出真正打开的是哪个文件，不是相信代码）：
+V_where 每 37 条抽 1 条、13 个 local 样本走完 `MaskResolver.resolve` + `load`
+（`verify="checksum"` 全通过 ⇒ 镜像给出的字节与 hard 挂载一致），
+期间持有的 **14 个 fd 全部在 `/mnt/nfs-ro`**：records shard 1 个 + 13 个 build batch 的 mask shard。
+`catalog hits 13 / jsonl hits 0` ⇒ sqlite 目录也走了镜像。
+（`prod-g2-global25k` 样本无 `.cgt.png` 属预期：只有 local build 有掩膜，非回归。）
+
+**启动探测列表**（实跑 `assert_read_mount` + `_streamed_shard_paths`）：
+
+```
+probed  .../sft2seg-20260804/splits                        ok
+        .../where_a-20260805/oracle                        ok
+        .../where_b-20260805/genwhere                      ok
+        .../sft2seg-20260804/images/shards/shard-00005.tar  ok   ← train image（新增）
+        .../sft2seg-20260804/records/shards/shard-00000.tar ok   ← record（新增）
+        .../sft2seg-20260804/images/shards/shard-00011.tar  ok   ← V_where image（新增）
+```
+
+**单测反向验证**（先破坏再跑，确认不是空断言）：撤掉 `_fd` 的重写 → 
+`test_shardstore_opens_the_read_mirror_for_a_baked_absolute_path` 失败；
+撤掉 `_catalog` 的重写 → `test_mask_resolver_reaches_the_catalog_through_the_mirror` 失败；
+把 N33 的精确解析改回子串 → `test_soft_option_is_parsed_exactly` 失败。三条都真的在测东西。
+
+### 17.5 同轮 nit
+
+| # | 处置 |
+|---|---|
+| N33 | `assert_read_mount` 改取 `/proc/mounts` 第 4 字段按 `,` 精确比对；单测构造 `1.2.3.4:/soft-export ... ro,hard` 证明整行子串判断会误过 |
+| N34 | `state.eval_failures` 与 `final_eval_error` 一并写进 `arm_<ARM>.json`——只读交付物也能看出有几个 checkpoint 未被测量 |
+| N35 | 最终 `evaluate_arm` 包进 try/except：训练早已由 `trainer.save("final")` 落盘，异常时**仍写** `arm_*.json`（`final: null` + 错误详情）+ `run_dir/FINAL_EVAL_FAILED.json`，退出码 **2**。状态文件明写「**DO NOT re-run the arm**，训练已完成，离线重跑评测即可」——防止有人用 `q retry` 白烧 10 h |
+| N36 | submit 打印解析到的 PID **及其 cmdline**（`ps -p <pid> -o pid=,args=`）+ 解析深度 + 是否 verified |
+| N37 | 解析后逐级下探（≤3 层）直到 cmdline 含 `q3vl.whereb`；仍不匹配则标 **UNVERIFIED**，此时 `ps -p` 消失**只 WARNING 一次**并回退到日志/600 s 超时，不再误报 died。W03–W08 实际由队列 `where_b_arm.sh` 直接 `exec`，本项只影响 `run_where_b.sh submit` 手工路径 |
+
+### 17.6 待主 agent 知悉
+
+- **W01/W02 全程在 hard 挂载上读**（它们用的是启动时的代码）。这条敞口已记录，未粉饰；
+  W03–W08 必须从本次 commit 之后的代码启动才算受保护。
+- 本次未触碰 loss / gate / 判据 / 训练超参，第 5 轮的判据侧结论不受影响。

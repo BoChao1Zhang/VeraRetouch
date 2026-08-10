@@ -31,6 +31,49 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+# --- read-path mount rewrite (W-B1, 2026-08-10) ---------------------------
+# The frozen split indexes bake ABSOLUTE shard paths under the hard mount:
+#     "shard": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/images/shards/..."
+# so moving the *root constants* to /mnt/nfs-ro (D-B17) never touched the bytes
+# the training loop actually streams -- 100% of it stayed on /mnt/nfs (nfs4,
+# hard), where one stalled read parks the process in unkillable D state and
+# takes the whole box with it (CLAUDE.md 2026-08-10 incident).
+#
+# ShardStore is read-only by construction (O_RDONLY + pread) and both mounts
+# export the same tree (172.25.76.194:/rwq), so rewriting the prefix at open
+# time is behaviour-preserving.  It is on by default rather than opt-in
+# precisely because the D-B17 miss was an opt-in that nobody remembered to
+# apply; it goes inert when /mnt/nfs-ro is not mounted, so a box without the
+# read mirror keeps working exactly as before.
+READ_PREFIX_REWRITE: tuple[tuple[str, str], ...] = (("/mnt/nfs/", "/mnt/nfs-ro/"),)
+_ro_mounted: bool | None = None
+
+
+def _read_mirror_mounted() -> bool:
+    """True if the rewrite targets are mounted. Local read of /proc/mounts only."""
+    global _ro_mounted
+    if _ro_mounted is None:
+        try:
+            with open("/proc/mounts", "r", encoding="utf-8") as fh:
+                fields = [ln.split() for ln in fh]
+            points = {f[1] for f in fields if len(f) > 1}
+        except OSError:                                   # pragma: no cover
+            points = set()
+        _ro_mounted = all(dst.rstrip("/") in points for _, dst in READ_PREFIX_REWRITE)
+    return _ro_mounted
+
+
+def rewrite_read_path(path: str | os.PathLike) -> str:
+    """Map an absolute read path onto the soft read mirror of the same export."""
+    s = str(path)
+    if not _read_mirror_mounted():
+        return s
+    for src, dst in READ_PREFIX_REWRITE:
+        if s.startswith(src):
+            return dst + s[len(src):]
+    return s
+
+
 # alias -> canonical, applied to member dicts
 MEMBER_FIELD_ALIASES: dict[str, str] = {
     "shard": "shard",
@@ -312,6 +355,8 @@ class ShardStore:
             path = Path(shard)
             if not path.is_absolute():
                 path = self.shard_root / shard
+            # after joining, so a shard_root on the hard mount is covered too
+            path = Path(rewrite_read_path(path))
             if not path.exists():
                 raise ShardIntegrityError(f"shard not found: {path}")
             if len(self._fds) >= self.max_open:

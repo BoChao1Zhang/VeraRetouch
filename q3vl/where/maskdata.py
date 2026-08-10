@@ -32,7 +32,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from q3vl.train.shards import MemberRef, ShardIndex, ShardStore
+from q3vl.train.shards import MemberRef, ShardIndex, ShardStore, rewrite_read_path
 
 from .config import (
     DEGENERATE_STD,
@@ -93,7 +93,11 @@ class MaskResolver:
     # -- locating ----------------------------------------------------------
     def _catalog(self, root: str) -> sqlite3.Connection | None:
         if root not in self._cats:
-            path = Path(root) / "indexes" / "catalog.sqlite3"
+            # W-B1: `root` is `image.origin.root`, an absolute build path baked
+            # into the records -- on the hard mount, where this `exists()` is
+            # itself a blocking stat.  The tar reads below go through
+            # ShardStore, which rewrites on its own.
+            path = Path(rewrite_read_path(root)) / "indexes" / "catalog.sqlite3"
             self._cats[root] = (
                 sqlite3.connect(f"file:{path}?mode=ro", uri=True, check_same_thread=False)
                 if path.exists() else None
@@ -104,7 +108,8 @@ class MaskResolver:
         table = self._jsonl.get(root)
         if table is None:
             table = {}
-            for p in sorted((Path(root) / "indexes").glob("shard-*.idx.jsonl")):
+            idx = Path(rewrite_read_path(root)) / "indexes"      # W-B1, see _catalog
+            for p in sorted(idx.glob("shard-*.idx.jsonl")):
                 with p.open("r", encoding="utf-8") as fh:
                     for line in fh:
                         if not line.strip():

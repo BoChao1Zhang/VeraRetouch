@@ -267,7 +267,9 @@ def assert_read_mount(*paths, timeout_s: float = 25.0) -> dict:
         )
     opts = next((ln for ln in mounts.splitlines()
                  if f" {NFS_RO_ROOT} " in ln), "")
-    if "soft" not in opts:
+    # N33: field 4 of /proc/mounts, split on ",".  A substring test over the
+    # whole line passes on any device or path that happens to contain "soft".
+    if "soft" not in (opts.split()[3].split(",") if opts else []):
         raise ReadMountError(
             f"{NFS_RO_ROOT} is mounted without `soft`: {opts.strip()}. A hard "
             "read mount defeats the point -- it hangs instead of returning EIO."

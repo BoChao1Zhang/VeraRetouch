@@ -19,6 +19,9 @@ export LD_LIBRARY_PATH=/home/bc/miniconda3/envs/llm_factory/lib${LD_LIBRARY_PATH
 PY=/home/bc/envs/q3vl_sft/bin/python
 REPO=/home/bc/VeraRetouch
 RUNS=/home/bc/data/runs/where_b
+# every `submit` target is a `python -m q3vl.whereb.scripts.*` job; used to
+# confirm that the PID we resolved is really the job (N37).
+MARKER=q3vl.whereb
 CKPT=${CKPT:-/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976}
 
 # submit <gpu|-> <logfile> <marker-grep> <cmd...>
@@ -53,18 +56,45 @@ submit() {
     [ -n "$pid" ] && break
     sleep 1
   done
+  # N37: the lookup above assumes setsid forks exactly one level.  If it ever
+  # forks twice, `pid` is an intermediate that exits immediately and step 3
+  # would report a healthy job as died.  Descend while the cmdline does not
+  # look like the job, and if it still does not match, say so and treat
+  # liveness as UNVERIFIED rather than as evidence of death.
+  local pid_verified=0 depth=0
+  while [ -n "$pid" ] && [ "$depth" -lt 3 ]; do
+    if ps -p "$pid" -o args= 2>/dev/null | grep -q "$MARKER"; then pid_verified=1; break; fi
+    local child; child=$(pgrep -P "$pid" -n 2>/dev/null || true)
+    [ -z "$child" ] && break
+    pid="$child"; depth=$((depth+1))
+  done
   if [ -z "$pid" ]; then
     pid="$wrapper_pid"
     echo "WARNING: could not resolve the python child of $wrapper_pid; "\
          "job.marker will carry the wrapper PID and liveness checks are unreliable"
   fi
+  # N36: print the cmdline the PID actually resolved to.  A wrong PID recorded
+  # in job.marker is invisible unless it is shown at submit time.
+  echo "  resolved pid=$pid (wrapper=$wrapper_pid, depth=$depth, verified=$pid_verified)"
+  ps -p "$pid" -o pid=,args= 2>/dev/null | sed 's/^/    cmdline: /' \
+    || echo "    cmdline: <pid $pid not visible>"
+  [ "$pid_verified" = 1 ] || echo "  WARNING: pid $pid does not look like /$MARKER/;"\
+    "liveness checks below are advisory only"
 
   # step 3: the log must contain real output, not merely exist
   local waited=0
   until grep -q "$want" "$log" 2>/dev/null; do
     sleep 5; waited=$((waited+5))
-    ps -p "$pid" > /dev/null || {
-      echo "process died before printing /$want/ after ${waited}s"; tail -n 40 "$log"; return 1; }
+    if ! ps -p "$pid" > /dev/null; then
+      if [ "$pid_verified" = 1 ]; then
+        echo "process died before printing /$want/ after ${waited}s"; tail -n 40 "$log"; return 1
+      fi
+      # N37: an unverified PID vanishing proves nothing about the job -- fall
+      # back to the log/timeout, which measure the job itself.  Warn once.
+      [ "$pid_verified" = 0 ] && echo "WARNING: unverified pid $pid is gone after"\
+        "${waited}s; falling back to the log and the ${waited}s/600s timeout"
+      pid_verified=gone
+    fi
     if [ "$waited" -ge 600 ]; then
       echo "no /$want/ in $log after ${waited}s -- refusing to claim success"
       tail -n 40 "$log"; return 1

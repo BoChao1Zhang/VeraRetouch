@@ -9,6 +9,7 @@ still running.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -226,3 +227,158 @@ def test_submit_resolves_the_child_and_never_greps_a_pattern():
 
 def test_liveness_still_uses_ps_p():
     assert 'ps -p "$pid"' in _submit_src()
+
+
+# --- W-B1: the streamed bytes, not just the root constants ------------------
+#
+# D-B17 moved the root *constants* to /mnt/nfs-ro, but the frozen split indexes
+# record ABSOLUTE shard paths under /mnt/nfs, so every record and every image --
+# 100% of the training loop's IO -- kept opening the hard mount while the
+# startup assertion (which probed only the moved constants) reported green.
+
+
+def _mirror(monkeypatch, tmp_path):
+    """Stand in for the two mounts: <tmp>/nfs (hard, absent) -> <tmp>/nfs-ro."""
+    from q3vl.train import shards
+
+    hard, ro = tmp_path / "nfs", tmp_path / "nfs-ro"
+    monkeypatch.setattr(shards, "READ_PREFIX_REWRITE",
+                        ((f"{hard}/", f"{ro}/"),))
+    monkeypatch.setattr(shards, "_ro_mounted", True)
+    return hard, ro
+
+
+def test_shardstore_opens_the_read_mirror_for_a_baked_absolute_path(monkeypatch, tmp_path):
+    """The index says /mnt/nfs/...; the file only exists on the mirror."""
+    from q3vl.train.shards import MemberRef, ShardStore
+
+    hard, ro = _mirror(monkeypatch, tmp_path)
+    rel = "bc/data/datasets/sft2seg-20260804/images/shards/shard-00005.tar"
+    (ro / rel).parent.mkdir(parents=True)
+    (ro / rel).write_bytes(b"\0" * 512 + b"PAYLOAD")
+    assert not (hard / rel).exists(), "the hard-mount path must not exist here"
+
+    store = ShardStore("/", verify="none")
+    ref = MemberRef(shard=str(hard / rel), member="x.jpg", offset=512,
+                    length=7, size=7, checksum=None)
+    # Without the rewrite this raises ShardIntegrityError: shard not found.
+    assert store.read(ref) == b"PAYLOAD"
+    opened = Path(os.readlink(f"/proc/self/fd/{store._fds[ref.shard]}"))
+    assert str(opened).startswith(str(ro)), opened
+    store.close()
+
+
+def test_rewrite_maps_the_campaign_mounts():
+    from q3vl.train.shards import READ_PREFIX_REWRITE
+
+    assert READ_PREFIX_REWRITE == ((f"{NFS_RW_ROOT}/", f"{NFS_RO_ROOT}/"),)
+
+
+def test_rewrite_is_inert_without_the_mirror(monkeypatch):
+    """A box without /mnt/nfs-ro keeps working exactly as before."""
+    from q3vl.train import shards
+
+    monkeypatch.setattr(shards, "_ro_mounted", False)
+    p = f"{NFS_RW_ROOT}/bc/data/x.tar"
+    assert shards.rewrite_read_path(p) == p
+
+
+def test_rewrite_leaves_other_paths_alone(monkeypatch):
+    from q3vl.train import shards
+
+    monkeypatch.setattr(shards, "_ro_mounted", True)
+    for p in ("/home/bc/data/runs/where_b/W03/train.log",
+              "/mnt/nfs-ro/bc/already/read.tar", "relative/shard.tar"):
+        assert shards.rewrite_read_path(p) == p
+
+
+def test_mask_resolver_reaches_the_catalog_through_the_mirror(monkeypatch, tmp_path):
+    """`image.origin.root` is a build path baked into the records; the
+    `catalog.sqlite3` probe on it is itself a blocking stat on the hard mount."""
+    import sqlite3
+
+    from q3vl.where.maskdata import MaskResolver
+
+    hard, ro = _mirror(monkeypatch, tmp_path)
+    root = "bc/data/builds/prod-l1-local17k-0001"
+    (ro / root / "indexes").mkdir(parents=True)
+    (ro / root / "shards").mkdir(parents=True)
+    con = sqlite3.connect(ro / root / "indexes" / "catalog.sqlite3")
+    con.execute("create table members (sample_id text, suffix text, shard text, "
+                "member text, offset_data int, size int, sha256 text)")
+    con.execute("insert into members values (?,?,?,?,?,?,?)",
+                ("src-1", ".cgt.png", "shard-00000", "src-1.cgt.png", 512, 7, None))
+    con.commit(); con.close()
+
+    r = MaskResolver(verify="none")
+    ref = r.resolve({"sample_id": "s1", "source_sample_id": "src-1",
+                     "image": {"origin": {"root": str(hard / root)}}})
+    assert r.n_catalog_hits == 1, "catalog was not found through the mirror"
+    # provenance keeps the logical (hard-mount) root; only the IO moves
+    assert ref.root == str(hard / root)
+
+    (ro / root / "shards" / "shard-00000.tar").write_bytes(b"\0" * 512 + b"MASKPNG")
+    assert r._store.read(ref.member) == b"MASKPNG"
+    r.close()
+
+
+def test_startup_probes_the_streamed_shards_not_only_the_moved_constants():
+    """The indicator must be attached to the thing being protected: the probe
+    list has to contain the rewritten records/images shard paths."""
+    src = (Path(__file__).resolve().parents[1] / "scripts" / "run_where_b.py").read_text()
+    assert "_streamed_shard_paths(" in src
+    assert "assert_read_mount(*streamed)" in src
+    assert "streamed_shards_rewritten" in src
+
+
+def test_streamed_shard_paths_rewrites_a_baked_index(monkeypatch, tmp_path):
+    import importlib
+
+    from q3vl.train import shards
+
+    run = importlib.import_module("q3vl.whereb.scripts.run_where_b")
+    hard, ro = _mirror(monkeypatch, tmp_path)
+    splits = tmp_path / "splits"
+    splits.mkdir()
+    img = f"{hard}/bc/data/datasets/sft2seg-20260804/images/shards/shard-00005.tar"
+    rec = f"{hard}/bc/data/datasets/sft2seg-20260804/records/shards/shard-00000.tar"
+    (splits / "V_where.index.jsonl").write_text(json.dumps({
+        "sample_id": "s1",
+        "members": {"image": {"shard": img, "member": "a.jpg", "offset": 0,
+                              "length": 1, "size": 1},
+                    "record": {"shard": rec, "member": "a.json", "offset": 0,
+                               "length": 1, "size": 1}}}) + "\n")
+    monkeypatch.setattr(run, "SPLIT_DIR", splits)
+
+    got = [str(p) for p in run._streamed_shard_paths("V_where")]
+    assert got == [shards.rewrite_read_path(img), shards.rewrite_read_path(rec)]
+    assert all(p.startswith(str(ro)) for p in got), got
+
+
+# --- N33: `soft` is a mount option, not a substring of the line -------------
+
+def test_soft_option_is_parsed_exactly(monkeypatch, tmp_path):
+    """A device or mount point containing "soft" must not pass for `soft`."""
+    mounts = tmp_path / "mounts"
+    mounts.write_text(
+        f"1.2.3.4:/soft-export {NFS_RO_ROOT} nfs ro,hard,vers=3 0 0\n")
+    real_open = open
+
+    def fake_open(path, *a, **kw):
+        return real_open(mounts if str(path) == "/proc/mounts" else path, *a, **kw)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+    with pytest.raises(ReadMountError, match="without `soft`"):
+        assert_read_mount(tmp_path)
+
+
+# --- N34/N35: the report survives a failing final evaluation -----------------
+
+def test_final_evaluation_is_guarded_and_failures_are_reported():
+    src = (Path(__file__).resolve().parents[1] / "scripts" / "run_where_b.py").read_text()
+    body = src[src.index("state = trainer.train()"):]
+    assert "FINAL_EVAL_FAILED.json" in body
+    assert '"eval_failures": state.eval_failures' in body
+    # arm_*.json must still be written on the failure path
+    assert body.index("FINAL_EVAL_FAILED.json") < body.index('f"arm_{args.arm}.json"')
+    assert "DO NOT re-run the arm" in body
