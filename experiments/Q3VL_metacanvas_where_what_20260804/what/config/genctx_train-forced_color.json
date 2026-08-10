@@ -1,0 +1,165 @@
+{
+  "kind": "genctx_merge",
+  "split": "train",
+  "mode": "forced_color",
+  "leaf": "train-forced_color",
+  "out_root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/train-forced_color",
+  "checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+  "schema_version": "q3vl.where_b.genwhere/2",
+  "num_shards": 8,
+  "shard_mode": "interleave",
+  "shard_root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train",
+  "shards": [
+    {
+      "tag": "shard00of08",
+      "root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard00of08/train-forced_color",
+      "status": "complete",
+      "member_count": 19902,
+      "sample_count": 19902,
+      "shard_count": 1,
+      "index_rows": 19902
+    },
+    {
+      "tag": "shard01of08",
+      "root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard01of08/train-forced_color",
+      "status": "complete",
+      "member_count": 19902,
+      "sample_count": 19902,
+      "shard_count": 1,
+      "index_rows": 19902
+    },
+    {
+      "tag": "shard02of08",
+      "root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard02of08/train-forced_color",
+      "status": "complete",
+      "member_count": 19902,
+      "sample_count": 19902,
+      "shard_count": 1,
+      "index_rows": 19902
+    },
+    {
+      "tag": "shard03of08",
+      "root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard03of08/train-forced_color",
+      "status": "complete",
+      "member_count": 19902,
+      "sample_count": 19902,
+      "shard_count": 1,
+      "index_rows": 19902
+    },
+    {
+      "tag": "shard04of08",
+      "root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard04of08/train-forced_color",
+      "status": "complete",
+      "member_count": 19902,
+      "sample_count": 19902,
+      "shard_count": 1,
+      "index_rows": 19902
+    },
+    {
+      "tag": "shard05of08",
+      "root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard05of08/train-forced_color",
+      "status": "complete",
+      "member_count": 19902,
+      "sample_count": 19902,
+      "shard_count": 1,
+      "index_rows": 19902
+    },
+    {
+      "tag": "shard06of08",
+      "root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard06of08/train-forced_color",
+      "status": "complete",
+      "member_count": 19902,
+      "sample_count": 19902,
+      "shard_count": 1,
+      "index_rows": 19902
+    },
+    {
+      "tag": "shard07of08",
+      "root": "/mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train/shard07of08/train-forced_color",
+      "status": "complete",
+      "member_count": 19901,
+      "sample_count": 19901,
+      "shard_count": 1,
+      "index_rows": 19901
+    }
+  ],
+  "n_samples": 159215,
+  "n_samples_expected": 159215,
+  "coverage": 1.0,
+  "manifest": {
+    "status": "complete",
+    "member_count": 159215,
+    "sample_count": 159215,
+    "shard_count": 2,
+    "payload_bytes": 1177782033,
+    "dataset_id": "indexed_tar_2d455671735d7d195999a2f95d65d553",
+    "created_at": "2026-08-10T11:58:27.704527+00:00"
+  },
+  "store": {
+    "root": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/train-forced_color",
+    "status": "complete",
+    "member_count": 159215,
+    "sample_count": 159215,
+    "shard_count": 2,
+    "index_rows": 159215
+  },
+  "summary": {
+    "n": 159215,
+    "modes": [
+      "forced_color"
+    ],
+    "schema_versions": [
+      "q3vl.where_b.genwhere/2"
+    ],
+    "format_failure_rate": 0.0,
+    "truncation_rate": 0.0,
+    "starts_with_where_open_rate": 0.0,
+    "stop_reasons": {
+      "suppressed_by_mode": 159215
+    },
+    "where_tokens": {
+      "min": 0,
+      "p50": 0,
+      "p95": 0,
+      "max": 0
+    },
+    "generated_tokens": {
+      "min": 236,
+      "p50": 270,
+      "p95": 305,
+      "max": 332
+    },
+    "segments_overlap_rate": 0.0,
+    "color": {
+      "n": 159215,
+      "format_failure_rate": 0.0,
+      "truncation_rate": 0.0,
+      "starts_with_color_open_rate": 1.0,
+      "stop_reasons": {
+        "closed": 159215
+      },
+      "color_tokens": {
+        "min": 114,
+        "p50": 194,
+        "p95": 237,
+        "max": 331
+      }
+    },
+    "both_segments_well_formed_rate": 1.0
+  },
+  "compat_symlinks": [
+    {
+      "link": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/train/two_segment",
+      "target": "../train",
+      "status": "ok_already"
+    },
+    {
+      "link": "/mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/train/forced_color",
+      "target": "../train-forced_color",
+      "status": "created"
+    }
+  ],
+  "merge_seconds": 166.7,
+  "git_commit": "4a7411d140f04f07350dbae14ab5debe4e8c824a",
+  "merged_at": "2026-08-10T19:58:58+0800"
+}

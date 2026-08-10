@@ -1,5 +1,24 @@
 # Stage-What preflight：已完成项与待 GPU / 待作业清单
 
+> **2026-08-10 更新（任务卡 EXEC-4）**：本文档「待 GPU」与「待作业」两节里，
+> **C 波（C01–C04）需要的全部条目已完成**，实测数字见 `NOTES.md` 第十二节。
+> 一句话状态：
+>
+> | 条目 | 状态 |
+> |---|---|
+> | `WT-J1` GT-LUT 打包 | **done** — 3,408 表 / 6,816 成员 / 3 shard / 2.4 GB / 0 冲突 0 缺失 |
+> | `WT-J2` `mean_train_u` + `C` | **done** — 中心只用 3,149 个 train lut_id；`C = 29.4131` |
+> | `WT-J3` 全量 `lut_id → preset_path` | **done**（`WT-J1` 的 collect 阶段就是全量，5 split 全部 record） |
+> | `WT-J9` `<color>` 边界全语料扫描 | **done** — 162,359 条、超界 0、全语料 max 361（余量仅 21，见 D-EXEC4-3） |
+> | `WT-J10` generated context | **done（本次补完合并）** — `forced_color` 的 train/V_what 合并从未跑过，已补；两 mode 覆盖率均 1.0 |
+> | `WT-G1/G2/G3/G5/G6/G7/G8/G9` | **done** — `preflight/preflight_what_gpu.json`，7 pass / 1 skip(`WT-G4`) / 1 warn(`WT-G7` LPIPS 未装) / 0 fail |
+> | `WT-G4` 冻结 Where 接入 | **skip（C 波不适用）**，理由落盘在报告里；**T01–T08 开跑前必须补做** |
+> | `WT-J4`–`WT-J8` | 未动（评测/选择期作业，与 C 波开跑无关） |
+>
+> C 波已于 2026-08-10 20:11 上队列：C1 = C01(gpu0) + C02(gpu1)，C2 = C03/C04 同卡排后并 gate 在前一臂的
+> `what_final.pt`。四臂共用 `--micro-batch 16`（`WT-G5` 实测）、`--keep-last none`（审阅 N-26）。
+> 偏离 **D-EXEC4**（A-3 统一 natural 采样在无 Where checkpoint 时的声明式替代）见 `NOTES.md` §12.3。
+
 协议 §14 共 15 项。Stage-What 负责其中 **项 8 的后半（`Q_color` 不读 `H_where`）、项 9、项 12、项 13、项 14**，
 外加四条本仓库特有的前置。其余各项归 Base SFT / Where-A / Where-B。
 

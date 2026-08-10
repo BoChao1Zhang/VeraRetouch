@@ -1,0 +1,252 @@
+{
+ "schema": "q3vl.what.preflight_gpu/1",
+ "generated_at": "2026-08-10T20:02:39",
+ "arm": "C01",
+ "split": "V_what",
+ "dataset": {
+  "split": "V_what",
+  "need_mask": false,
+  "mask_source": null,
+  "n_samples": 64
+ },
+ "natural_mask_source": "global_uniform",
+ "sft_checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+ "elapsed_s": 9.5,
+ "n_pass": 7,
+ "n_fail": 0,
+ "n_skip": 2,
+ "complete": true,
+ "ok": true,
+ "checks": [
+  {
+   "id": "WT-G1",
+   "status": "pass",
+   "detail": {
+    "n_color_tokens": 174,
+    "h_color_shape": [
+     174,
+     2560
+    ],
+    "h_where_shape": [
+     8,
+     2560
+    ],
+    "hook_vs_output_hidden_states_max_abs_diff": 0.0,
+    "layer": -1,
+    "final_norm": true,
+    "mean_row_norm": 117.08041381835938,
+    "seq_len": 637,
+    "slice": {
+     "prompt": 455,
+     "where": 8,
+     "color": 174
+    },
+    "vlm": {
+     "layer": -1,
+     "final_norm": true,
+     "use_hook": true,
+     "text_hidden": 2560,
+     "n_text_layers": 36,
+     "n_vision_blocks": 24,
+     "dtype": "torch.bfloat16",
+     "device": "cuda",
+     "any_param_requires_grad": false
+    }
+   }
+  },
+  {
+   "id": "WT-G2",
+   "status": "pass",
+   "detail": {
+    "where_prefix_true": {
+     "seq_len": 637,
+     "n_where_tokens": 8
+    },
+    "where_prefix_false": {
+     "seq_len": 629,
+     "n_where_tokens": 0
+    },
+    "same_color_token_count": true,
+    "h_color_prefix_delta_max": 58.78125,
+    "h_color_prefix_delta_rel": 0.09270276874303818,
+    "f_pre_identical_across_prefix": true,
+    "generated": {
+     "genctx_mode": "forced_color",
+     "n_gt_color_tokens": 174,
+     "n_generated_color_tokens": 190,
+     "prefix_token_overlap": 6,
+     "h_color_gt_vs_generated_delta_rel_first_n": 1.1448662281036377,
+     "note": "the <color> span starts at the same position in both sequences by construction (same prompt, same <where>); only its length and content differ"
+    }
+   }
+  },
+  {
+   "id": "WT-G3",
+   "status": "pass",
+   "detail": {
+    "image_hw": [
+     768,
+     512
+    ],
+    "f_pre_grid": [
+     48,
+     32
+    ],
+    "planned_grid": [
+     48,
+     32
+    ],
+    "f_pre_dim": 1024,
+    "stride": [
+     16.0,
+     16.0
+    ],
+    "aspect_image": 0.6666666666666666,
+    "aspect_grid": 0.6666666666666666,
+    "rgb_low_shape": [
+     3,
+     48,
+     32
+    ]
+   }
+  },
+  {
+   "id": "WT-G4",
+   "status": "skip",
+   "detail": {
+    "reason": "no frozen Where checkpoint exists (Where-B main wave halted, new Where design pending).  The four control arms are exactly the arms that do not consume one: C01/C02 take no Where input, C03/C04 take the GT mask and the Where-A oracle latent.",
+    "must_run_before": "any T01-T08 arm",
+    "deviation": "D-EXEC4"
+   }
+  },
+  {
+   "id": "WT-G5",
+   "status": "pass",
+   "detail": {
+    "rows": [
+     {
+      "micro_batch": 2,
+      "ok": true,
+      "peak_gib": 10.135581970214844,
+      "build_s": 0.199,
+      "step_s": 1.181,
+      "loss": 0.35289448499679565
+     },
+     {
+      "micro_batch": 4,
+      "ok": true,
+      "peak_gib": 10.246336460113525,
+      "build_s": 0.342,
+      "step_s": 0.256,
+      "loss": 0.33565059304237366
+     },
+     {
+      "micro_batch": 8,
+      "ok": true,
+      "peak_gib": 11.0557279586792,
+      "build_s": 0.632,
+      "step_s": 0.248,
+      "loss": 0.371662974357605
+     },
+     {
+      "micro_batch": 16,
+      "ok": true,
+      "peak_gib": 12.930261611938477,
+      "build_s": 1.337,
+      "step_s": 0.239,
+      "loss": 0.36136260628700256
+     }
+    ],
+    "chosen_micro_batch": 16,
+    "effective_batch": 32,
+    "grad_accum": 2,
+    "gpu": "NVIDIA H100",
+    "total_gib": 95.08447265625
+   }
+  },
+  {
+   "id": "WT-G6",
+   "status": "pass",
+   "detail": {
+    "loss_total": "torch.float32",
+    "params_raw_in_autocast": {
+     "mu": "torch.float32",
+     "sigma": "torch.float32",
+     "off": "torch.float32",
+     "opacity": "torch.float32",
+     "existence": "torch.float32",
+     "M": "torch.float32",
+     "b": "torch.float32",
+     "G": "torch.bfloat16",
+     "b_g": "torch.bfloat16"
+    },
+    "params": {
+     "mu": "torch.float32",
+     "sigma": "torch.float32",
+     "off": "torch.float32",
+     "opacity": "torch.float32",
+     "existence": "torch.float32",
+     "M": "torch.float32",
+     "b": "torch.float32",
+     "G": "torch.float32",
+     "b_g": "torch.float32"
+    },
+    "pool_extra": {},
+    "mahalanobis_dtype": "torch.float32",
+    "loss_keys": [
+     "L_bake",
+     "L_cov",
+     "L_func",
+     "L_func_ctx_generated",
+     "L_func_ctx_gt",
+     "L_func_natural",
+     "L_func_uniform",
+     "L_hc",
+     "L_style_cos",
+     "L_style_dist",
+     "L_var"
+    ],
+    "autocast_leak_outside_compute_batch": false,
+    "non_float32_params": [],
+    "note": "compute_batch wraps everything after the model in autocast(enabled=False); out.params is decoded inside the autocast region and therefore carries bf16 rounding (~4e-3) before it is cast -- review N-11 asks for the measurement, not for a change"
+   }
+  },
+  {
+   "id": "WT-G7",
+   "status": "warn",
+   "detail": {
+    "backend": null,
+    "impact": "image metrics are offline-only (scripts/evaluate_what.py); the in-loop eval is LUT-function only, so a missing backend does not block training.  metrics.image_metrics reports lpips=nan rather than substituting another metric."
+   }
+  },
+  {
+   "id": "WT-G8",
+   "status": "pass",
+   "detail": {
+    "bake_size": 33,
+    "lattice_shape": [
+     16,
+     33,
+     33,
+     33,
+     3
+    ],
+    "bake_s_per_batch": 0.0041,
+    "bake_ms_per_sample": 0.26,
+    "vlm_forward_s_batch1": 0.0884,
+    "bake_over_vlm_ratio": 0.0462
+   }
+  },
+  {
+   "id": "WT-G9",
+   "status": "pass",
+   "detail": {
+    "measured_train_s_per_sample": 0.0985,
+    "eval_subset": 256,
+    "contexts": 2,
+    "extrapolated_eval_s": 30.3,
+    "note": "forward-only eval is ~0.6x a train step (no backward/optimiser). The authoritative number is eval_seconds in the arm's eval.jsonl at step 500; this row exists so the first arm is not launched on an unbounded eval."
+   }
+  }
+ ]
+}

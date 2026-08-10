@@ -434,3 +434,156 @@ N-10（33³ baked render 的最终图像指标与可视化）、N-11（bf16 下 
 **注意**：VLM 那一项是**从 Base SFT 的训练步时外推的**，不是直接测的。已列为 `WT-G9`，两卡释放后与
 `WT-G1`–`WT-G8` 一起实测确认；`make_eval_fn` 每次都把 `eval_seconds` 写进 `eval.jsonl`，所以第一次真实 eval
 之后这个数就不再是估计。C01/C02 另付一次**较短的**监督前向（`prompt + <where>`，无 color body），已计入。
+
+---
+
+## 十二、EXEC-4 执行记录（2026-08-10，C 波数据前置 + GPU preflight + 启动）
+
+主 agent 任务卡 EXEC-4：Where-B 主臂被叫停、新 Where 方案待定，但 What 的四个控制臂不依赖 Where 预测，
+提前跑 C 波把两卡用起来。本节记录**实测数字**、**新发现的问题**与**待主 agent 决策项**。
+
+### 12.1 WT-J 数据前置作业（全部完成）
+
+| 作业 | 产物 | 实测 |
+|---|---|---|
+| `WT-J9` `<color>` 边界全语料扫描 | `preflight/color_boundary_scan.json` | **162,359 条**（train 159,215 / V_where 896 / V_what 897 / T_final 918 / T_lut_unseen 433），`tokens.color` 缺字段 **0**，超界 **0**。全语料 max = **361**（+2 标签 = 363），边界 384 ⇒ **headroom 21**。抽样期的 max 是 324，全量比它高 37，**余量从 58 掉到 21**——边界仍成立但不再宽裕（见待决策 D-EXEC4-3）。5.5 s |
+| `WT-J1` GT-LUT 打包 | `/mnt/nfs/bc/data/datasets/what-20260805/gtluts/` | **3,408 个 LUT**（train 3,149 / V_where 530 / V_what 531 / T_final 577 / T_lut_unseen 259），`lut_id→preset_path` 冲突 **0**、缺文件 **0**（这同时是 `WT-J3` 的全量版本，`collect_lut_paths` 读的就是全部 5 个 split 的全部 record）。6,816 个成员 / 3 个 shard / 2.4 GB / `status: complete`。440 s |
+| `WT-J2` `mean_train_u` + `C` | `/mnt/nfs/bc/data/datasets/what-20260805/zgt/` | 中心只用 **3,149 个 train lut_id**；`d_func_scale C = 29.4131`（A-2 闭式）；`zgt.jsonl` **3,408 行**；`center_sha256 = f682a512…`、`center_abs_mean = 0.0837`；SRHT digest `87857cc5…`。64.9 s |
+| `WT-J10`（**本次补完的上游件**） | `genwhere/train-forced_color`、`genwhere/V_what-forced_color` + 兼容软链 | 生成早已跑完（8+2 个分片，rc 全 0，2026-08-06 10:55 结束），但**合并从未执行**——`genwhere/<split>/forced_color` 根本不存在，C01/C02 直接开跑会在 `ColorGenContextStore` 构造时就拒绝。本次合并：train **159,215/159,215**（coverage 1.0，色段 format failure **0%**、截断 **0%**、全部 `closed`、`color_tokens` max 331）、V_what **897/897**（max 290）。166.7 s + 20 s |
+
+`WT-J4`–`WT-J8` 属于评测/选择期作业，与 C 波开跑无关，未动。
+
+### 12.2 `WT-G` GPU preflight（`preflight/preflight_what_gpu.json`，7 pass / 1 skip / 1 warn / **0 fail**）
+
+新脚本 `q3vl/what/scripts/preflight_gpu.py`（全部走生产类，不复制管线）。
+
+| id | 结论 | 实测 |
+|---|---|---|
+| `WT-G1` | pass | hook 与 `output_hidden_states` 逐位相同（max abs diff **0.0**）；layer `-1`、final RMSNorm **已施加**；`<color>` 切片 174 token 与 `n_color_tokens` 对齐；`h_color` (174, 2560)，序列 455+8+174=637 |
+| `WT-G2` | pass | `where_prefix` 只改序列：637→629，`h_where` 由 8 token 变空，**`F_pre` 逐位相同**，`<color>` token 数不变、hidden 相对差 **0.0927**（这就是 T01 与 C01 之间那条残余通道的直接读数）。GT vs generated：174 vs 190 token，前缀重合处 hidden 相对差 **0.437** |
+| `WT-G3` | pass | 768×512 → `F_pre` 48×32（stride 16.0/16.0），宽高比逐位一致，`rgb_low` 同网格 |
+| `WT-G4` | **skip** | 无冻结 Where checkpoint。C 波恰好是唯一不消费它的四个臂；**T01–T08 开跑前必须补做** |
+| `WT-G5` | pass | micro-batch 2/4/8/16 全部装得下，peak 10.1 / 10.2 / 11.1 / **12.9 GiB**（H100 95 GiB）。取 **16**，`grad_accum = 2`，effective batch 32 |
+| `WT-G6` | pass | `loss` 与 `t_pred`、`bake`、`render` 全 float32，无外层 autocast 泄漏；**N-11 实测**：autocast 区内 `out.params` 里 `mu/sigma/off/opacity/existence/M/b` 是 float32，**`G` 与 `b_g` 是 bfloat16**（`compute_batch` 之后统一 `.float()`）；`aligned_pool` 的 Mahalanobis 项实测 **float32** |
+| `WT-G7` | **warn** | 环境里 `lpips` / `torchmetrics` 都**没装**。只影响离线图像指标（§12.2 的 LPIPS 列），在线 eval 是 LUT function 级、不渲图，**不阻塞训练**；`image_metrics` 报 `nan` 而非静默替代 |
+| `WT-G8` | pass | 33³ 烘焙 **0.26 ms/sample**（batch 16 共 4.1 ms），VLM 单样本前向 88.4 ms ⇒ 烘焙占 **4.6%** |
+| `WT-G9` | pass | 实测训练 **0.0985 s/sample**（mb=16）；256 条 × 2 context × 0.6 ⇒ 一次 eval 外推 **≈ 30 s**，权威数字是 `eval.jsonl` 的 `eval_seconds`（smoke 实测 8 条子集 2.16 s） |
+
+### 12.3 D-EXEC4：A-3 统一 natural 采样在 C 波的**声明式**偏离
+
+**主 agent 裁定**（任务卡 EXEC-4 第 3 项）：没有冻结 Where checkpoint，因此
+
+- `C03/C04`：natural 半区用它们**本就拿到的 GT mask** 加权（`--natural-mask-source oracle_gt_mask`，per-sample 记 `gt_mask`）；
+- `C01/C02`：全图采样（`--natural-mask-source global_uniform`，per-sample 记 **`global_uniform_declared`**，与 global 样本天然的 `global_uniform` 区分开）。
+
+**落码方式（关键：不是回退，是拒绝 + 显式声明）**：
+`frozen_m_pred` 仍然是默认值，且**没有 WhereRunner 时直接抛错**；`run_what.py` 在缺 `--where-checkpoint` 时
+① 对 `where_source="predicted"` 的臂**硬停**（主臂不得走这条路），② 对控制臂**要求显式给出** `--natural-mask-source`，
+③ 把偏离写进 `run_setup.json.deviation`、`builder.natural_mask_source`、**以及 `config_digest` 的输入材料**
+（换了监督 mask 的 run 不共享 digest）。新增 5 个回归测试。
+
+**代价（已知并接受）**：C 臂的 loss 查询色分布与将来的 T 臂不同。新 Where 定档、D-W10 重新校准后若要求统一口径，
+**C 波重跑**。
+
+### 12.4 本次发现的三个真问题（都会让 C 波在没修之前跑不起来或跑出错东西）
+
+1. **oracle 路径写错**：`run_what.py` / `evaluate_what.py` 用的是 `<oracle>/<split>`，而 Where-A 的实际发布布局是
+   `<oracle>/<basis_arm>/<namespace>/<split>`（= `oracle/BA-3-Joint/s5/<split>`，`q3vl.whereb.config` 自己的注释与
+   `run_where_b.py` 都是这么读的）。原路径解析到**不存在的目录**，C03/C04 必崩。已改为按 `BASIS_ARM`/`ORACLE_NAMESPACE`
+   拼路径并可用 `--oracle-root` 覆盖。
+2. **评测侧 oracle store 用错 split**：`run_what.py` 把 **train** 的 `OracleStore` 传给了 `V_what` 的 eval builder。
+   store 按 sample_id 索引且只含本 split，C03/C04 会在**第 500 步的第一次 eval** 才崩。已为 eval split 单独构造。
+3. **oracle 覆盖率 = 恰好所有 local 样本，global 样本一个都没有**（实测：train 75,544/75,544 local 有 fit、
+   83,671 个 global 一个都没有；V_what 408/408 vs 489）。原实现遇到没有 fit 的样本**抛错**（"必须拒绝样本，不许编造"），
+   即 C03/C04 会在第一个 global 样本上崩。这是**决策**，见下。
+
+### 12.5 待主 agent 决策（已按保守默认继续，未静默拍板）
+
+**D-EXEC4-1 · `C03/C04` 遇到没有 oracle latent 的样本怎么办**
+一次 global 编辑没有 ROI，Where-A 因此没有为任何 global 样本拟合 latent。三条路：
+(a) **拒绝样本** → C03/C04 的训练population 变成「只有 local」，与另外 10 臂不同population，主榜与分层报告都不可比；
+(b) **保持population，给常量空 latent**（本次默认，`--oracle-missing-latent null_global`）：mask 用**诚实的全 1**
+（`_oracle_signals` 本就如此），`w_vec`/`rho_vec` 取全零常量，逐样本计数写进 `run_facts_final.json` 的
+`oracle_latent_stats`。语义上是「对 global 编辑，oracle 没有额外信息可说」——这本身是真的；
+(c) 给 global 样本单独一个可学习的 null token（改结构，需重跑参数量匹配）。
+**采用 (b)**。若主 agent认为 ceiling 臂必须只在 local 上定义，则应改判为 (a) 并同时规定主榜只读 local 分层。
+
+**D-EXEC4-2 · `C03/C04` 用哪个 readout 的 oracle latent**
+`oracle/BA-3-Joint/s5` 同时发布了 `band` 与 `cband12` 两套 fit（抽样 300 条 local，两套 status 全 `ok`）。
+`rho` 维度不同（`band` 是 4 个标量，`cband12` 是 3×12），因此它决定 `rho` token 投影的大小与臂的参数量。
+**默认取 `cband12`**（`ArmConfig.where_readout` 的默认值、W02 的 readout、amendment A-WhereA-1 §A3 专门定档了它的归一化约定）。
+风险：将来冻结的新 Where 若用 `band`，C03/C04 与 T 臂的 rho 维度不一致；ceiling 臂本就不进主榜，但**分层对照时要注明**。
+
+**D-EXEC4-3 · `<color>` 边界 384 的余量只剩 21 token**
+全语料 max 361（抽样期 324）。teacher 侧超界是**抛错**不是截断，所以余量小意味着「未来任何新增/重建的 build
+只要多写 22 个 token 就会让某个臂中途崩」。当前语料是安全的（超界 0），但如果还会再产数据，建议把边界提到 448。
+**默认不动**（改边界会改 `COLOR_CONTEXT_MAX_TOKENS`，而它是 Where-B 与 Stage-What 共用的常量，动它要两侧同时重发）。
+
+**D-EXEC4-4 · LPIPS 后端未安装**
+`WT-G7` warn。离线评测（§12.2）要 LPIPS，环境里没有 `lpips` 也没有 `torchmetrics`。不阻塞 C 波训练，但
+**在 `evaluate_what.py` 出主榜之前必须装**，否则该列全是 `nan`。装哪一个（`lpips` 官方 AlexNet/VGG 权重需要联网下载）
+属于环境决策。
+
+**D-EXEC4-5 · Where-B 入口脚本的 R6 guard**
+NOTES R6 里遗留的那条越界项仍未处置（`run_where_b.py` / `make_generated_context.py` / `make_oracle_latents.py`
+是否也加 `import sqlite3` 前置）。本次没有改 `q3vl/whereb/`。合并脚本 `merge_genctx.py` 本来就有该 guard。
+
+### 12.6 顺带修的一个上游脆弱点（`merge_genctx.py`）
+
+合并作业**写 `/mnt/nfs`（rw, nfs4.1）、读回却走 `/mnt/nfs-ro`（soft, nfs3）**，而刚创建的目录在 ro 客户端的
+dentry 缓存里还不存在（acdirmax 默认 60 s）。第一次跑 V_what 时因此在第 4 步 `ENOENT: shards/shard-00000.tar` 失败——
+**发布本身是完整的，失败的是它自己的校验**。已加 `_await_read_mirror()`：发布后只用 `os.stat` 在**软挂载**上轮询
+（不可能挂死、不写任何东西），全部可见才继续，超时 300 s 则报错并提示「把发布挪走重跑」。
+失败的那次发布已按纪律**挪走而非删除**：`genwhere/.V_what-forced_color.aborted-readback-20260810`。
+
+### 12.7 C 波的提交（gpu-queue）
+
+`waves/what_c_arm.sh`（payload，`exec` 不 nohup）+ `waves/enqueue_what_c_wave.sh`（波次）。
+C1 = C01(gpu0) + C02(gpu1)；C2 = C03(gpu0) + C04(gpu1)，同卡排在后面 **且** gate 在前一臂的 `what_final.pt`
+（本地盘，不是 `/mnt/nfs`）。四臂共用 `--micro-batch 16`，因此 `total_optimizer_steps` 与 LR 计划完全一致。
+`--keep-last none`（审阅 N-26）。
+
+**提交前清掉的一个雷**：`q resume gpu0` 会把 Where-B 停摆时留在暂停队列里的 **W03** 立刻放到卡上
+（它 8 小时来一直是 `starting`、GPU 0%）。已 `q cancel W03`。
+
+### 12.8 PERF-1 shard cache 对 What 的适用性（任务卡第 5 项：确认即可）
+
+**确认成立，且自动生效**：`WhatDataset` 用的是 `q3vl.train.shards.ShardStore`，因此 What 的每一次 record / image
+读取都经过 `resolve_read_path`，同时拿到 ① `/mnt/nfs` → `/mnt/nfs-ro` 的读路径重写、② 本地 shard cache。
+不需要任何接线改动。
+
+但 PERF-1 那次预热是按 **Where-B 的五个数据根** 做的（23 条目 / 28 GB），**不含 Stage-What 的新产物**。
+本次补预热了 9 个 shard / 3.52 GiB（155–162 MB/s，sha256 全部 ok，缓存现为 32 条目 / 32 GB）：
+`what-20260805/gtluts`（3）、`genwhere/train-forced_color`（2）、`genwhere/V_what-forced_color`（1）、
+`genwhere/V_what`（1）、`where_a/maskviews/V_what`（1）、`where_a/oracle/BA-3-Joint/s5/V_what`（1）。
+
+**时序注意**：cache manifest 是**进程内 memoise 一次**的，C01/C02 于 20:11 启动、预热 20:23 才完成，
+所以**这两个臂全程不吃新缓存**（gtluts 与 forced_color 仍走 nfs-ro 随机读），C03/C04 才吃得到。
+只影响墙钟，不影响数字（字节相同且逐成员 sha256 校验）；报告 C 波耗时时要提这一条，
+否则会把 C1/C2 两波的步时差误读成臂之间的差别。
+
+### 12.9 主 agent 对 §12.5 五项的裁定与落实（2026-08-10）
+
+| 项 | 裁定 | 落实 |
+|---|---|---|
+| **D-EXEC4-1** oracle 缺 latent | **认可 `null_global`**（global 样本的 oracle where 语义上就是全图，全 1 mask 正确；逐样本计数保持） | 已是默认；计数写在 `run_facts_final.json` 的 `oracle_latent_stats`（`fitted` / `null_global`），`run_setup.json` 里是**声明值**（跑之前恒为 0），两份文件故意分开 |
+| **D-EXEC4-2** oracle readout | **认可 `cband12`**（Where-A 结论其稳定占优）；**风险入档** | 见下面「风险 RK-1」，同时写进 `docs/reviews/REVIEW-impl-What.md` 的放行条件清单 |
+| **D-EXEC4-3** `<color>` 边界 | **记录；任何新 build 前 384→448** | 注释写在常量旁：`q3vl/whereb/config.py::COLOR_CONTEXT_MAX_TOKENS`（产方，权威）与 `q3vl/what/config.py` 的 import 处（消费方）。**本次不改数值**——它是两 stage 共用常量，改它要两侧同时重发 generated context |
+| **D-EXEC4-4** LPIPS | **现在就装** | 已装：`lpips 0.1.4`（`/home/bc/envs/q3vl_sft`），backbone torchvision 0.25.0+cu128。实测 `LPIPS(同一张图)=0.0`、`LPIPS(随机两张)=0.1255`；AlexNet 线性权重（6,009 B）**随包发布**，评测时不需要联网。落盘 `preflight/wt_g7_lpips_closure.json`（`WT-G7` 由 warn 转 pass）。**原 `preflight_what_gpu.json` 不改**——它当时说的是真话，静默改写发布过的 preflight 正是 R5 事故的形态 |
+| **D-EXEC4-5** whereb R6 guard | **记录（whereb 暂停使用，新方案时一并修）** | 本次未改 `q3vl/whereb/` 的任何入口脚本。`merge_genctx.py` 本来就有该 guard，所以合并作业不受影响 |
+
+**LPIPS 接线的一个未闭合点（留给离线评测任务）**：`lpips.LPIPS` 吃 `[-1,1]`，而 `q3vl.what.metrics.image_metrics`
+传的是 `[0,1]`。`evaluate_what.py` 目前传 `lpips_fn=None`（列报 `nan`），**接线的人必须在注入处做 `x*2-1`**，
+否则会得到一个安静的错数。已写进 closure 记录的 `input_convention` 字段。
+
+### 风险 RK-1 —— `C03/C04` 的 oracle readout 与将来的 Where 可能不同档
+
+C03/C04 用 `cband12` 的 Where-A oracle latent（`rho` = 3×12 = 36 维）。若新 Where 方案最终冻结在 **`band`**
+（`rho` = 4 个标量），则：
+
+- C03/C04 的 `rho` token 投影维度与 T01–T08 不同 ⇒ 两者的可训练参数量不再严格可比（`WCEncoder.proj["rho"]`
+  是 `Linear(n_rho, 512)`，36 vs 4 相差 16k 参数，占 ~0.02%，**对 §12.4 的 `n_trainable_params` 键几乎无影响**）；
+- 更实质的是**语义**：ceiling 臂的「上界」是在 cband12 的场参数化下定义的，而主臂在 band 下。
+  C03/C04 本就**永不进主榜**（§8.2），但**分层对照与「离上界还有多远」这类叙述必须注明档位不同**。
+
+处置：不阻塞 C 波；已同步写进 `REVIEW-impl-What` 的放行条件清单，供结果审阅逐条对照。

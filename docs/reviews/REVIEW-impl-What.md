@@ -1226,6 +1226,28 @@ NOTES 第十一节给的是**实测 + 外推**并分清了哪个是哪个：What
     `WT-J6`（paired bootstrap CI）、`WT-J7`（33³ baked render 的图像指标与联图）；
 12. `WT-J8`（12 臂 `run_setup.json` 的 Where digest 总巡检）。
 
+**C 波（C01-C04）先跑带来的三条附加条件（2026-08-10，任务卡 EXEC-4 / 偏离 D-EXEC4）**
+
+C 波在 Where 定档**之前**跑完，属主 agent 排期裁定；本清单第 1 项（冻结 Where checkpoint）对这四个臂
+按构造不适用，但换来了三条必须在结果审阅时逐条对照的条件：
+
+13. **`D-EXEC4`：A-3 的十二臂统一 natural 采样对 C 波被声明式替换**
+    （C01/C02 全图 `global_uniform_declared`，C03/C04 用 GT mask `gt_mask`）。
+    `frozen_m_pred` 仍是默认且**没有 checkpoint 时抛错**，偏离进了 `run_setup.json.deviation`、
+    `builder.natural_mask_source` 与 `config_digest`。**结果审阅必须核对**：C 臂与 T 臂的 loss 查询色分布
+    不同，因此 "C 是 T 的干净下界" 这句话在 D-W10 重新校准前**只在同 natural 源内成立**；
+    若重新校准要求统一口径，C 波重跑。
+14. **`RK-1`：C03/C04 的 oracle latent 档位是 `cband12`**（`rho` 36 维）。若新 Where 冻结在 `band`
+    （`rho` 4 维），ceiling 臂与主臂**不在同一场参数化下**。C03/C04 本就不进主榜，但任何
+    "离上界还差多少" 的表述必须标注档位不同。
+15. **`WT-G4` 仍未做**（冻结 Where 接入：digest 校验 + 六路信号的形状/值域断言）。
+    C 波不消费它；**T01-T08 开跑前必须补做**，否则本清单第 1 项没有任何实测支撑。
+
+补记：本清单第 5 项（`WT-J9` 边界扫描）已跑完并通过，但全语料 max 是 **361**（抽样期估计 324），
+余量从 58 降到 **21**。主 agent 裁定 D-EXEC4-3：**任何新 build 之前把共享常量 384 提到 448**。
+第 8 项（`keep_last=None`）与第 4/3 项（`WT-J1`/`WT-J2`）均已落实；
+`WT-G7`（LPIPS）由 warn 转 pass，见 `what/preflight/wt_g7_lpips_closure.json`。
+
 **红线复述（结果审阅时逐条对照）**
 - gate 不得事后放宽；全部未过则按 §15 分阶段报告，`main_board` 会给
   `selection_possible: false` + `WHAT-GATE-FAILED`，**这不是失败，是正确行为**；
