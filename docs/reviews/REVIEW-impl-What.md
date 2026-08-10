@@ -1031,3 +1031,217 @@ NOTES 三节已真实落盘、R6 guard（三入口 + AST 单测，覆盖面经�
 两次自曝（接口词表分歧、NOTES 未落盘）都由实现者自己发现并主动上报，这比审阅者抓到更有价值。
 唯一的系统性缺口是 NF-2：三轮下来，**被审的一直是库，没有人审过"谁来调用这个库"**——
 这也是我连续两轮没抓到它的原因。
+
+---
+
+# 第四轮聚焦审阅（2026-08-05，commit `80a5078`）
+
+- 范围：只审 NF-2 相关 diff。只读；未用 GPU。
+- 复跑（战役环境）：`pytest q3vl/what/tests -q` → **252 passed, 2 skipped**
+  （较三审的 221/8 增加，是因为 `1738779` 补上了测试树的 sqlite3 guard，5 个 store 契约测试
+  现在真的跑起来了）；`preflight --limit 400`（写 scratch）→ **12/12, `complete: true`**，
+  commit 戳 `80a5078`。
+
+## 十五、逐项复审
+
+### 15.1 `run_what.py` 是否真传 `eval_fn` / 边界门是否在昂贵操作之前 —— **pass（独立 AST 复核）**
+
+我没有采信实现者自己的 AST 断言，另写了一段独立解析：
+
+```
+WhatTrainer kwargs: ['run_dir', 'device', 'eval_fn']  -> eval_fn passed: True
+                                                        （值是 Name `eval_fn`）
+require_color_boundary_scan   首次调用行 156
+run_what_preflight            159
+from_pretrained (VLM 权重)    206
+WhatVLM                       210
+open_dataset                  215
+WhatModel                     234
+make_eval_fn                  261
+WhatTrainer                   266
+train                         293
+```
+
+`eval_fn` **确实**被传给了 trainer；边界门在 **preflight、VLM 权重加载、数据集打开、
+模型构造、trainer 构造** 全部之前。「在任何昂贵操作之前」成立，不是只比 trainer 早。
+
+### 15.2 256 子集的确定性与分层回退 —— **pass（附 N-25）**
+
+- **跨进程可复现**：我起了**三个独立 Python 进程**跑同一份 rows，`digest` / `n` /
+  `strata` / 前 5 个 sample_id **逐字节相同**。排序键是
+  `sha256(f"{seed}|{sample_id}")` 的 hexdigest，不依赖任何进程内 RNG——
+  `random.shuffle` / `torch.randperm` 只在单进程内够用，这个判断是对的。
+- **最大余数比例分配正确**：897 条、三个等大层（299/299/299）→ 取 86/85/85 = 256，
+  层比例与总体一致。tie-break 用 `(-余数, key)`，确定。
+- `subset_digest` 对 sample_id **排序后**取 sha256，与顺序无关；进 `run_setup.json` 的
+  `config_digest`，所以「在线代理算在哪 256 条上」是 run 身份的一部分。子集清单另落
+  `run_dir/eval_subset.json`。
+- **回退不静默**（部分）：`mask_area_used` 与 `strata_keys` 都写进 manifest；
+  纯 local 且无 maskviews 时我实测确实退回两键分层、`mask_area_used: false`。
+
+**N-25（nit）**：`eval_subset_rows` 给 global 样本**硬写** `mask_area = 1.0`，
+而 `use_mask_area = any(r["mask_area"] is not None)`。于是当 V_what 同时含 global 与 local
+且 maskviews **未发布**时，我实测得到 `mask_area_used: true`，而全部 local 样本落进同一个
+`"unknown"` 桶（层键实测为 `l1|local|unknown`）。信息**没有丢**（层键里写着 unknown，
+可被读出），但那个布尔值本身会误导只看它的人。建议：`use_mask_area` 改由**local 行**是否
+有真实面积决定，或在 manifest 里加 `n_unknown_mask_area`。
+
+### 15.3 在线代理与 §12.4 主键的同向性 —— **pass（附 N-26）**
+
+`ONLINE_SELECTION_KEY = "local_lut_de00_median"` vs 离线主键 `local_image_de00_median`：
+两者都是 **local 样本 / generated context / CIEDE2000 / 越小越好**，方向一致。
+论证本身也点对了因果——§9.1 的 natural 半区正是**按同一个冻结 `m_pred` 加权**从图像自身
+采的色，而 §12.2 的合成式用的是同一个 `m`，所以「LUT 函数在该图自身颜色上的误差」与
+「合成图误差」在同一个臂内是强耦合的。
+
+**「故意不写 `local_image_de00_median`」的处理正确**，理由也写在 docstring 里：
+这一趟不渲染图像，「一个名字与别处含义不同的键，比一个缺失的键更坏」。我实测在线报告里
+确实没有该键，`best()` 用的是 `TrainConfig.selection_key`。
+
+**N-26（nit）**：NOTES 只讨论了「**不同向**的代理会让滚动删除丢掉离线榜想要的文件」，
+没有讨论「**同向但排序不同**」这一残余。keep_last=3 + 三个 milestone + 一个 best_protected
+⇒ 约 10 次保存里有 3–4 个中段 checkpoint 仍会被删；若代理与离线主键在这几个之间排序不同，
+离线榜想要的文件可能已不在。风险有界（影响的是某臂的代表 step，不是跨臂结论，且 12 臂同等
+受影响），但**可以零成本消除**：实现者已提供 `keep_last=None`（约 0.37 GB × 10 × 12 ≈ 44 GB）。
+建议正式跑用 `keep_last=None`，或把这一残余显式写进 NOTES。
+
+### 15.4 `evaluate_what.py` 作为最终选择依据的完整性 —— **pass**
+
+| §12 要求 | 落实 |
+|---|---|
+| 完整 `V_what`（非子集） | `open_dataset(args.split)`，无 subset |
+| 双 context 分报 | `for context in (CONTEXT_GT, CONTEXT_GENERATED)`，各出一行 `arm_metrics` |
+| §12.1 LUT 指标 | `sample_row` → `lut_metrics`（uniform/natural/全量三组）+ `bake_metrics`；`--full-grid` 另出完整 33³ 格点 |
+| §12.2 图像指标与分区分层 | `sample_row(i_in=…, i_tar=…, mask=…)` → `image_metrics`（PSNR/SSIM/LPIPS/ΔE00 + inside/boundary/outside）+ `strata_report` |
+| §12.3 防坍缩 | `style_diagnostics(z_style, u_gt=…)` 在**全 split** 上算（897 条，满足「≥32 样本」的要求），写进 `m["style_diagnostics"]` |
+| 三张榜 | `main_board` / `ceiling_board` / `context_report` 齐出 |
+| 选择纪律 | `main_board(..., allow=tuple(args.allow_split))`，默认只允许 `V_what`；开 `T_final` 必须显式传 `--allow-split`，且 `report["split"]` 落盘 |
+
+**`I_tar` 隔离**我独立 grep 复核（不看他们的测试）：`load_target_image` 全包只有
+`data.py:195` 定义、`evaluate_what.py:108` 调用（另加一条断言它的测试）。训练路径无调用点。
+`mask_source` 现在按 `where_source` 取 `gt`/`predicted`/`ones` 三值——三审 N-5 的标签问题
+一并修掉了。
+
+### 15.5 B-2 回归测试的证据力 —— **pass**
+
+`_real_eval_trainer` 我逐行看过：它构造**真实** `WhatModel` + `MockBuilder` +
+**真实 `make_eval_fn`** + **真实 `WhatTrainer`**，没有任何 `_EvalStub`。两类断言都在：
+
+1. **保护确实生效**：`best()` 非空且带 `ONLINE_SELECTION_KEY`；该 step 有存活条目、
+   文件确实在盘上、`lost_best_steps == []`；
+2. **滚动删除仍然发生**：`assert any(c.get("deleted") for c in tr.state.saved)`
+   ——「保护不是 keep all」。
+
+第 2 条是关键：没有它，一个把 `keep_last` 关掉的实现也会让第 1 条通过。两条合起来才排除了
+「用不删来假装保护」这条捷径。这正是 NF-2 第 2 点漏检的成因（全注入 stub），现在被堵上了。
+
+另有 `test_the_eval_pass_leaves_the_model_in_training_mode`（eval 后模型回到 train、
+`collect_pool_stats` 复原）与 `test_eval_wall_clock_is_recorded`。
+
+### 15.6 墙钟外推的诚实性 —— **pass**
+
+NOTES 第十一节给的是**实测 + 外推**并分清了哪个是哪个：What 侧 CPU 生产宽度实测
+39.4 ms/sample（forward 22.2 / bake33³ 15.1 / render 0.6 / tetra 1.4）；GPU 一次 eval ≈ 25 s、
+每臂约 4 min、占臂总时长 0.2–0.4% 是**由 Base SFT 的 5.1 s/step 反推 VLM 前向**得到的。
+**「VLM 那一项是外推不是实测」在 NOTES 与 PENDING 两处都明写**，并已列为 `WT-G9`
+与 `WT-G1`–`WT-G8` 一起在两卡释放后实测。`make_eval_fn` 每次把 `eval_seconds` 写进报告，
+且有测试钉住该字段——第一次真实 eval 之后外推自动被实测取代。这个处理是诚实的。
+
+### 15.7 N-22 / N-23 / N-18 / N-19 / N-24 处置 —— **全部 pass**
+
+- **N-22**：WT-P7 增两条源码断言——`data.py` 的 generated 分支只从 `rec.get("color_text")`
+  取 `text`，且该分支内不出现 `sample.color_text`。签名断言管 token 路径、源码断言管
+  元数据路径，两条合起来覆盖了我提的残余。
+- **N-23**：`assert_covers` 现在顺带 `record(ids[0])` 探一条，把 schema/mode 两条契约从
+  「第一个 batch」提前到「启动前」，并把探针写进返回值。理由写得准确：「整个 split 是错档」
+  是目录级属性，一条样本即可判定。
+- **N-18/N-19**：`best()` 返回值现带 `gate_fallback`（全部未过 gate 时的回退标记）与
+  `n_gate_unknown`（缺 `gate_pass` 键的报告数），并有测试断言真实报告形状下
+  `n_gate_unknown == 0`。
+- **N-24**：从「开跑后的 WT-J9」升级为**开跑前硬前置**。新增 `boundary.py` +
+  `scan_color_boundary.py`（纯读 record 的 `tokens.color`，不解码图像不 tokenise），
+  `require_color_boundary_scan` 六种情形硬停：缺报告 / schema 过期 / 边界不符 /
+  split 未覆盖 / 有超界样本 / 有缺字段记录。7 条测试逐一覆盖。
+  方向正确：`gt_color_context` 超界是**抛错**，一条超界样本会让臂中途崩，所以这个门必须前置。
+
+## 十六、新增 NIT
+
+- **N-25**：`mask_area_used` 布尔值在「有 global 样本 + maskviews 未发布」时为 `true`，
+  但所有 local 样本落在 `unknown` 桶（见 15.2）。信息在层键里可见，布尔值误导。
+- **N-26**：在线代理与离线主键「同向但排序可能不同」这一残余未被讨论；建议正式跑用
+  `keep_last=None` 零成本消除，或把残余写进 NOTES（见 15.3）。
+- **N-27**：`arm_metrics` 在 `shuffle_rows=None` 时**不写** `instruction_shuffle_pass`，
+  于是 `gate_pass` 只由 bake+finite 两门决定。我实测：一个从未评估过 instruction-shuffle 的
+  候选，`gate_pass: True`、`main_board` 给 `selection_possible: True`。
+  §12.4 step 1 列的是**三**个条件，目前只有两个可执行（第三个依赖 `WT-J4`，已声明 pending）。
+  这属于「没跑的检查不得报 PASS」的同型（Where-B B1 / 本审 N-19）。
+  **不阻塞训练**（evaluate_what.py 本就 NOT RUN YET，且不影响训练），
+  但**必须在 `V_what` 选择发生前关闭**：建议 `arm_metrics` 总是写
+  `instruction_shuffle_evaluated: true/false`，`main_board` 在为 false 时拒绝
+  `selection_possible: true`（或至少整榜打标记）。已列入下方放行条件清单。
+
+## 十七、最终判决
+
+**NF-2 的全部审阅项 pass，无新增 BLOCKER。**
+四轮累计：**BLOCKER 0 项未清**（B-1…B-6、NF-1、NF-2 全部关闭）；本轮新增 NIT 3 项
+（N-25/N-26/N-27），均不阻塞训练。
+
+### **Stage-What 实现审阅链闭环。Where 定档后准许正式训练。**
+
+四轮审阅覆盖了：协议符合性（§6/§7/§9/§10.4/§12/§14 逐符号）、四条 amendment
+（A-1 零初始化恒等、A-2 `d_func` 口径、A-3 统一 natural 采样、A-4 `<color>` context）、
+八个 blocker 的修复及其回归证据、以及「谁来调用这个库」的接线层。
+每一轮的 blocker 都用**构造性反例**验证过修复前会失败、修复后会通过；
+关键数字（零初始化 2x、闭式 `C`、子集 digest、参数量差、gate 过滤行为）我都独立复算过，
+没有采信上报数。
+
+### 放行条件清单（开跑前必须全绿）
+
+**外部依赖（不在 Stage-What 控制内）**
+1. **Where-B 定档并冻结一个 checkpoint**（§5.6）——12 臂共用，`provenance.assert_where_consistency`
+   会在每臂启动时硬停不一致；
+2. **`WT-J10`**：WB-IMPL 的 `genwhere/2` 生成作业跑完，**两种 mode 各一套**
+   （`two_segment` 给 T01–T08+C03/C04，`forced_color` 给 C01/C02），覆盖 train 与 V_what；
+   `run_what.py` 会在任何昂贵操作前 `assert_covers` 全 split，缺一条即拒跑。
+
+**本阶段数据派生物**
+3. `WT-J1` `pack_gt_luts.py`（GT LUT indexed shards）；
+4. `WT-J2` `make_zgt_center.py`（`mean_train_u` **只用 train 的 lut_id** + A-2 的常量 `C`）；
+5. **`WT-J9`/N-24 的边界全语料扫描**——`scan_color_boundary.py` 必须先跑并通过，
+   否则 `run_what.py` 的前置门会直接拒跑（这是设计如此，不是障碍）。
+
+**GPU preflight（两卡释放后，正式训练前）**
+6. `WT-G1`–`WT-G8`，其中 `WT-G2` 需按三审建议同时测出 **GT vs generated 两条序列的 `H_color`**，
+   `WT-G6` 需按 N-11 记录 `out.params` 与 pooling 内 Mahalanobis 的实测 dtype；
+7. `WT-G9`：在线 eval 的真实墙钟（现为外推，`eval_seconds` 落盘后即自动实测）。
+
+**开跑前的两个小决定（建议，非阻塞）**
+8. **N-26**：正式跑建议 `keep_last=None`（约 44 GB），零成本消除「代理排序与离线主键不同」
+   导致的中段 checkpoint 丢失残余；
+9. **N-25**：把 `mask_area_used` 改由 local 行判定，或加 `n_unknown_mask_area`。
+
+**`V_what` 选择发生前必须关闭（不阻塞训练）**
+10. **N-27**：instruction-shuffle 未评估时不得报 `gate_pass: True` / `selection_possible: true`；
+11. `WT-J4`（image-shuffle + instruction-shuffle 批次构造）、`WT-J5`（WC 配对提升）、
+    `WT-J6`（paired bootstrap CI）、`WT-J7`（33³ baked render 的图像指标与联图）；
+12. `WT-J8`（12 臂 `run_setup.json` 的 Where digest 总巡检）。
+
+**红线复述（结果审阅时逐条对照）**
+- gate 不得事后放宽；全部未过则按 §15 分阶段报告，`main_board` 会给
+  `selection_possible: false` + `WHAT-GATE-FAILED`，**这不是失败，是正确行为**；
+- 选择只在 `V_what`、只读 **generated** 榜；`T_final` / `T_lut_unseen` 各开一次；
+- C03/C04 永不进主榜；
+- checkpoint 选择禁用 val loss（`best()` 只读 §12.4 榜键）。
+
+### 对四轮实现工作的总评
+
+八个 blocker 里有六个（B-1/B-2/B-3/B-5/B-6/NF-2）的修复都是**结构性**的而非打补丁：
+把标签变成过滤器、把两个保护标志分离并覆盖两条时序、用闭式常量取代抽样、
+把「供给侧」与「输入侧」拆成两个方法、新建一个只负责 provenance 的模块、
+把「谁调用库」也纳入 AST 断言。两次**自曝**（接口词表分歧、NOTES 未落盘）由实现者自己
+发现并主动上报，一次**越界发现**（whereb 的 R6 暴露）上报而未擅自修改——这三件事比
+审阅者抓到 bug 更能说明交付纪律。
+
+审阅侧也犯过两次同类错误并已披露：一次覆盖了交付的 preflight 文件（§三-bis），
+一次连续两轮只审库不审接线（NF-2）。两次都是「静默失败」这一类，与本战役
+`s` 缓存契约里写的第二种失败模式同源。
