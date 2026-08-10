@@ -1266,3 +1266,59 @@ probed  .../sft2seg-20260804/splits                        ok
 - **W01/W02 全程在 hard 挂载上读**（它们用的是启动时的代码）。这条敞口已记录，未粉饰；
   W03–W08 必须从本次 commit 之后的代码启动才算受保护。
 - 本次未触碰 loss / gate / 判据 / 训练超参，第 5 轮的判据侧结论不受影响。
+
+---
+
+## 十八、在线评测简化为 quick 档（用户裁定，2026-08-10）
+
+**裁定**：Where-A oracle 质量已完全验证（天花板 0.97），日常评估只需衡量**与 oracle 的
+语义分割指标**，不需要复杂板子。完整板保留为**离线终评**，§5.6 gate 定义**一个字不动**。
+
+### 18.1 在线档（`--online-eval quick`，默认）
+
+| 项 | 在线 quick | 完整板 full |
+|---|---|---|
+| context | `generated` + `gt`（2） | 七块（gt/generated/null/shuffled/irrelevant_words/fixed_phrase/antonym） |
+| 读数 | `soft_iou_vs_oracle` / `local_soft_iou_median` / `grid_hard_iou`（3 个） | 全部判据列 + gate |
+| 负控制 / 中心先验 / 配对 Δ / 分层 / antonym | **不跑**（离线列） | 跑 |
+| per-sample 落盘 | **跑**（WEVAL-1 分层工具离线消费） | 跑 |
+| `gate` 键 | **没有**（进度读数不得冒充 §5.6 判定，单测钉死） | 有 |
+
+**新列 `soft_iou_vs_oracle`**：注意与既有 `oracle_soft_iou` **不是同一对**——
+后者是 **oracle 自身质量**（oracle vs GT，即天花板），前者是**预测 vs oracle mask**，
+min/max 形式（同脚注 1）。用户要的是**直接值不是 ratio**：ratio 的分子分母同动时看不出来。
+`summarise` 里两者并排给出。
+
+### 18.2 墙钟（两种口径都给，不挑好看的）
+
+N31 的 39.4% 是**前向计数比**（7 × 896 × 10 = 62,720 次评测前向 ÷ 159,215 次训练前向），
+并按「评测前向 ≈ 训练前向」保守折成 1.39× 墙钟。同一口径下：
+
+| | 评测前向 | 占训练前向 | 墙钟乘子 |
+|---|---|---|---|
+| 七块板（原） | 62,720 | 39.4% | ≈1.39× |
+| **quick（2 块板）** | **17,920** | **11.3%** | **≈1.11×** |
+
+若按评测前向的**真实成本**折算（只有前向、无反向，约为一个训练 step 的 1/3），
+quick 档落在 **≈4–5%**，与主 agent 的 ~5% 估计一致。**排期请用保守的 11.3% / 1.11×**，
+省下的约 20% 总墙钟是硬收益；实跑 W03 后以 `steps.jsonl` 的 `event=eval` 行实测校正。
+
+### 18.3 监控读数进 `steps.jsonl`
+
+`_eval_and_record` 成功后额外写一行 `{"event":"eval","step":…,"eval_mode":…,
+"soft_iou_vs_oracle":…,"local_soft_iou_median":…,"grid_hard_iou":…}` 到 `steps.jsonl`
+并 `print` 到 stdout ⇒ `q status` / 事件日志里直接可见，不用去翻 `eval.jsonl`。
+
+### 18.4 边界（单测钉住）
+
+* `GATES` 仍是 10 行、`SELECTION_ORDER` 未动、loss 未动；
+* full 档仍跑满七块板并产 gate + strata（`test_full_board_is_unchanged`）；
+* quick 报告**不含** `gate` / `strata` / `antonym_invariance` 键；
+* `trainer.best()` 的排序键 `local_soft_iou_median` 在 quick 报告里仍在（否则选型静默失效）。
+
+### 18.5 顺带发现（未改，报主 agent）
+
+`q3vl/whereb/config.py:100` 的 `CONTEXT_MODES = ("gt","generated","null","shuffled")`
+是**四模式的陈旧副本**，真身在 `context.py`（七模式）。全仓库**无人引用**该常量，
+所以目前无害；但同名不同值是下一次「以为读的是权威常量」的现成陷阱，建议删或改为
+从 `context` 转出。

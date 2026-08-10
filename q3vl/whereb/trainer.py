@@ -260,7 +260,7 @@ class WhereBTrainer:
                     log.flush()
                     print(json.dumps(row), flush=True)
                 if self.eval_fn and self.state.step % self.cfg.eval_steps == 0:
-                    self._eval_and_record()
+                    self._eval_and_record(log)
                 if self.state.step % self.cfg.save_steps == 0:
                     self.save(f"step{self.state.step}")
         finally:
@@ -270,7 +270,7 @@ class WhereBTrainer:
             self._eval_and_record()
         return self.state
 
-    def _eval_and_record(self) -> None:
+    def _eval_and_record(self, log=None) -> None:
         """Run the eval callback, but never let it kill an unattended arm.
 
         An arm is ~10 h of GPU time; an exception inside evaluation (a wedged
@@ -319,6 +319,20 @@ class WhereBTrainer:
         report["step"] = self.state.step
         self.state.checkpoints.append(report)
         (self.run_dir / "eval.jsonl").open("a").write(json.dumps(report) + "\n")
+        # The monitoring reading has to be where the monitor already looks:
+        # steps.jsonl and stdout (which is what `q status` / the event log tail).
+        # `soft_iou_vs_oracle` is the headline number of the quick board -- the
+        # verified Where-A oracle (0.97 ceiling) is the yardstick.
+        summary = {"step": self.state.step, "event": "eval",
+                   "epoch": round(self.state.epoch_float, 4),
+                   "eval_mode": report.get("eval_mode", "full"),
+                   "soft_iou_vs_oracle": report.get("soft_iou_vs_oracle"),
+                   "local_soft_iou_median": report.get("local_soft_iou_median"),
+                   "grid_hard_iou": report.get("grid_hard_iou")}
+        if log is not None:
+            log.write(json.dumps(summary) + "\n")
+            log.flush()
+        print(json.dumps(summary), flush=True)
 
     # -- checkpoints --------------------------------------------------------
     def save(self, tag: str) -> Path:

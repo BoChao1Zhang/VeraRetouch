@@ -28,7 +28,7 @@ from .config import (
     STRATA_KEYS,
     ArmConfig,
 )
-from .context import CONTEXT_MODES, SHUFFLED
+from .context import CONTEXT_MODES, GENERATED, GT, SHUFFLED
 from .data import BatchBuilder, WhereBDataset
 from .fields import predict_fields
 from .metrics import (
@@ -50,7 +50,8 @@ from .metrics import (
 from .model import WhereBModel
 from .prefetch import SamplePrefetcher, prefetch_warmers
 
-__all__ = ["evaluate_context", "evaluate_arm", "strata_report", "write_per_sample"]
+__all__ = ["evaluate_context", "evaluate_arm", "strata_report", "write_per_sample",
+           "QUICK_CONTEXTS", "QUICK_KEYS"]
 
 
 def _chunks(xs: Sequence[int], n: int) -> Iterable[list[int]]:
@@ -70,6 +71,7 @@ def evaluate_context(
     limit: int | None = None,
     with_oracle: bool = True,
     prefetch_workers: int | None = None,
+    quick: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     model.eval()
     idx = list(range(len(dataset) if limit is None else min(limit, len(dataset))))
@@ -149,6 +151,8 @@ def evaluate_context(
                     "summarise() would drop this row from every stratum"
                 )
             rows.append(met)
+            if quick:
+                continue          # the paired difference is a full-board column
             fields[tgt["sample_id"]] = {
                 "grid_pred": f["m_low"].detach().reshape(gh, gw).cpu(),
                 "grid_gt": tgt["mask_low"].detach().reshape(gh, gw).float().cpu(),
@@ -157,7 +161,8 @@ def evaluate_context(
             }
 
     summary = summarise(rows)
-    summary["instruction_paired"] = _instruction_paired(fields)
+    if not quick:
+        summary["instruction_paired"] = _instruction_paired(fields)
     summary["n_skipped"] = len(skipped)
     summary["skipped"] = skipped[:50]
     summary["context"] = mode
@@ -304,21 +309,77 @@ def write_per_sample(rows: Iterable[dict[str, Any]], path: Path) -> Path:
     return path
 
 
+#: the board the gate is read off; also the quick report's headline context
+MAIN_CONTEXT = GENERATED
+#: user ruling 2026-08-10: the online eval only needs the real-context board and
+#: the teacher-context board; every control is a full-board (offline) column.
+QUICK_CONTEXTS = (GENERATED, GT)
+#: the online reading, in the order it is reported.  (a) how close to the
+#: verified oracle, (b) how close to GT, (c) matched-area top-k hard IoU.
+QUICK_KEYS = ("soft_iou_vs_oracle", "local_soft_iou_median", "grid_hard_iou")
+
+
+def _quick_report(arm_cfg: ArmConfig, per_context: dict[str, dict[str, Any]],
+                  all_rows: list[dict[str, Any]], out_dir: Path | None,
+                  ) -> dict[str, Any]:
+    """Three numbers per context, plus the per-sample rows for offline work.
+
+    Deliberately carries **no** ``gate`` key and no strata: a quick report is a
+    progress reading, not a §5.6 decision, and must not be able to masquerade as
+    one in a REPORT.
+    """
+    main = MAIN_CONTEXT if MAIN_CONTEXT in per_context else list(per_context)[0]
+    out: dict[str, Any] = {
+        "eval_mode": "quick",
+        "arm": arm_cfg.arm, "structure": arm_cfg.structure,
+        "readout": arm_cfg.readout,
+        "main_context": main,
+        "contexts": {mode: {k: s.get(k) for k in QUICK_KEYS}
+                     | {"n": s.get("n"), "n_local": s.get("n_local")}
+                     for mode, s in per_context.items()},
+    }
+    out.update({k: per_context[main].get(k) for k in QUICK_KEYS})
+    if out_dir is not None:
+        out_dir = Path(out_dir)
+        # the strata tooling (WEVAL-1) reads these offline; they are the reason
+        # the quick board can afford to report only three numbers.
+        write_per_sample(all_rows, out_dir / "per_sample.jsonl")
+        (out_dir / "metrics.json").write_text(
+            json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")
+    return out
+
+
 def evaluate_arm(
     model: WhereBModel,
     builder: BatchBuilder,
     dataset: WhereBDataset,
     arm_cfg: ArmConfig,
     *,
-    contexts: Sequence[str] = CONTEXT_MODES,
+    contexts: Sequence[str] | None = None,
     batch_size: int = 4,
     limit: int | None = None,
     out_dir: Path | None = None,
     resources: dict[str, Any] | None = None,
     progress: Callable[[str], None] | None = None,
     prefetch_workers: int | None = None,
+    quick: bool = False,
 ) -> dict[str, Any]:
-    """The full protocol 5.6 board for one checkpoint."""
+    """One checkpoint's board.
+
+    ``quick`` is the **online** mode (user ruling, 2026-08-10): the Where-A
+    oracle is verified (0.97 ceiling), so the every-500-step reading only has to
+    say how close this checkpoint is to it.  Two contexts instead of seven and
+    three numbers instead of the board -- the periodic eval drops from ~39% of
+    an arm's wall clock to ~5%, and nothing is lost, because the per-sample rows
+    are still written and the full board is re-run offline at selection time.
+
+    ``quick=False`` is the **full protocol 5.6 board** and is what the §5.6 gate
+    is decided on.  The gate definitions themselves are untouched by this split:
+    a quick report simply carries no ``gate`` key, so it cannot be mistaken for
+    one.
+    """
+    if contexts is None:
+        contexts = QUICK_CONTEXTS if quick else CONTEXT_MODES
     per_context: dict[str, dict[str, Any]] = {}
     all_rows: list[dict[str, Any]] = []
     # nit N8: the builder is reused across every 500-step eval, so its format
@@ -332,15 +393,18 @@ def evaluate_arm(
         rows, summary = evaluate_context(
             model, builder, dataset, arm_cfg, mode,
             batch_size=batch_size, limit=limit,
-            prefetch_workers=prefetch_workers,
+            prefetch_workers=prefetch_workers, quick=quick,
         )
         per_context[mode] = summary
         all_rows.extend(rows)
 
+    if quick:
+        return _quick_report(arm_cfg, per_context, all_rows, out_dir)
+
     res = dict(resources or {})
     res.setdefault("n_trainable_params", model.n_trainable())
-    metrics = arm_metrics(per_context, main_context="generated"
-                          if "generated" in per_context else contexts[0],
+    metrics = arm_metrics(per_context, main_context=MAIN_CONTEXT
+                          if MAIN_CONTEXT in per_context else contexts[0],
                           resources=res)
     metrics["arm"] = arm_cfg.arm
     metrics["structure"] = arm_cfg.structure

@@ -228,6 +228,13 @@ def main() -> int:
     ap.add_argument("--train-limit", type=int, default=None)
     ap.add_argument("--eval-limit", type=int, default=None)
     ap.add_argument("--out-root", default=str(RUN_ROOT))
+    # user ruling 2026-08-10: the every-500-step eval is a progress reading
+    # against the verified Where-A oracle, not a decision.  Two contexts and
+    # three numbers -- ~5% of the arm's wall clock instead of ~39%.  The full
+    # protocol 5.6 board (which the gate is read off) runs once at the end and
+    # can be re-run offline on any saved checkpoint.
+    ap.add_argument("--online-eval", choices=("quick", "full"), default="quick")
+    ap.add_argument("--final-eval", choices=("quick", "full"), default="full")
     ap.add_argument("--train-split", default="train")
     ap.add_argument("--eval-split", default="V_where")
     args = ap.parse_args()
@@ -315,6 +322,7 @@ def main() -> int:
             out_dir=run_dir / f"eval_step{step}",
             resources={"n_trainable_params": model.n_trainable()},
             prefetch_workers=n_prefetch,
+            quick=args.online_eval == "quick",
         )
 
     trainer = WhereBTrainer(model, train_builder, train_ds, cfg, tcfg,
@@ -323,6 +331,7 @@ def main() -> int:
     setup.update({"env": _env(), "special_token_ids": special_ids,
                   "checkpoint": args.checkpoint, "micro_batch_probe": probe,
                   "splits": {"train": args.train_split, "eval": args.eval_split},
+                  "eval_modes": {"online": args.online_eval, "final": args.final_eval},
                   "datasets": {"train": train_info, "eval": eval_info},
                   "shuffle_coverage": eval_shuffle.coverage(),
                   "read_mount": mount_info,
@@ -353,6 +362,7 @@ def main() -> int:
     try:
         final = evaluate_arm(model, eval_builder, eval_ds, cfg,
                              batch_size=max(2, micro), out_dir=run_dir / "eval_final",
+                             quick=args.final_eval == "quick",
                              resources={"n_trainable_params": model.n_trainable(),
                                         "peak_memory_gib": (
                                             torch.cuda.max_memory_allocated() / 2**30
@@ -385,7 +395,9 @@ def main() -> int:
     }, indent=2, ensure_ascii=False), encoding="utf-8")
     if final_error is not None:
         return 2
-    print(json.dumps({"arm": args.arm, "gate": final["gate"],
+    print(json.dumps({"arm": args.arm, "gate": final.get("gate"),
+                      "eval_mode": final.get("eval_mode", "full"),
+                      "soft_iou_vs_oracle": final.get("soft_iou_vs_oracle"),
                       "local_soft_iou_median": final.get("local_soft_iou_median")},
                      indent=2), flush=True)
     return 0

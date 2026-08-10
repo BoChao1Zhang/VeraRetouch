@@ -393,6 +393,11 @@ def sample_metrics(
         )
     if m_oracle is not None:
         out["oracle_soft_iou"] = soft_iou_value(m_oracle, m_gt)
+        # The user's 2026-08-10 ruling: with the Where-A oracle verified at a
+        # 0.97 ceiling, day-to-day progress is "how close is the prediction to
+        # the oracle", as a DIRECT value -- the ratio hides whether both terms
+        # moved.  Same min/max form as every other soft-IoU here (footnote 1).
+        out["soft_iou_vs_oracle"] = soft_iou_value(m_pred, m_oracle)
 
     if grid_pred is not None and grid_gt is not None:
         gp = grid_pred.reshape(grid_gt.shape)
@@ -464,6 +469,9 @@ def summarise(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "global_soft_iou": percentile(glo, 0.5),
         "grid_boundary_f1": percentile(gbf, 0.5),
         "grid_hard_iou": percentile(ghi, 0.5),
+        # direct value (the main monitoring reading) next to the ratio
+        "soft_iou_vs_oracle": percentile(
+            pick("soft_iou_vs_oracle", is_local), 0.5),
         "soft_iou_vs_oracle_ratio": percentile(ratio, 0.5),
         "grid_boundary_f1_vs_oracle_ratio": percentile(bratio, 0.5),
         "s_std_ratio_median": percentile(sratio, 0.5),
