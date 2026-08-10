@@ -1,5 +1,9 @@
 # 局部精修研究计划 v2.1（2026-07-31）
 
+> **方法底稿 / 预注册快照。** H1、H3、RO-9、N*=32 等初始假设已有后续正反结果，
+> 不应从本文件推断当前结论。当前结论见 [`EXPERIMENT_RESULTS_CURRENT.md`](EXPERIMENT_RESULTS_CURRENT.md)，
+> 逐实验出处见 [`EXPERIMENT_REGISTRY.md`](EXPERIMENT_REGISTRY.md)。
+
 > 来源：8 轮外部文献调研（现状 / 对抗核验 / 双边泼溅 / GLUT-4D / 执行期 / 掩膜基底 / 颜色探针 / transformer 渲染器），全程未读本仓库历史。
 > v2.1 相对 v2：加入完整备选方案库（渲染器 R-1..R-11、读出 D-0..D-10）、消融总表、失败分支树、论文外支线。
 > 所有 arXiv 编号经 agent 打开 abs 页核验，但**写论文前仍须逐条用 export.arxiv.org API 复核**（本次调研抓到检索引擎双向错误：编造论文 + 武断否定真实论文，见 §9）。

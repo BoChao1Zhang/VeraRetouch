@@ -7,7 +7,10 @@
 
 1. **l 系 build 就是真实局部编辑三元组**（I_in + 指令 + SAM3 掩膜/region + 赢家渲染 + 已知 preset）。v3 里原计划"只能靠合成数据 + PPR10K"的局部实验（G2 真实档、容量阶梯真实档、E14 局部子集、E20 打榜、RO 评分），全部升级为**自家真实数据为主、外部数据为辅**。全领域没有第二家有这个东西（PerTouch 是 SAM 合成打分、InstantRetouch 语料未放出）。
 2. **groups.jsonl 的 8 候选是渲染确定性数据**：每组 8 个 (I_in, preset, after) 对，**不依赖标注质量**（渲染是机械的）→ 完成 build 已有 ≈100 万渲染对，是 RD-G Stage-1"抄参数"预训练的金矿，把 DOSSIER 里"4000 cube × 8–16 张标准图 = 3–6 万样本"的方案直接放大 20 倍且换成真实分布。低置信组、甚至弃权组的渲染对都能用。
-3. **RO-X1 有名词/无名词对比的数据是现成的**：l 系指令天然带 region 名词，g 系风格指令天然无名词（"胶片感"类）——不用另造。
+3. ~~**RO-X1 有名词/无名词对比的数据是现成的**。~~ **已被 RO-X1 实测推翻**：g/style 半集的
+   具体名词命中率为 0.884/0.942，严格无名词子集只有 2/86 源。该半集只能作为 style/local 的
+   描述性切分，不能再充当有名词/无名词实验；当前证据见
+   [`experiments/ROX1_clipside_20260803/REPORT.md`](../experiments/ROX1_clipside_20260803/REPORT.md)。
 
 ## 1. 全局切分纪律（所有实验共用一张表）
 
@@ -85,7 +88,7 @@
 | RO-6 context encoder | D-SFT-G/L(S-train, normal) 端到端重建 + s_VLM 缓存蒸馏 | S-val 行；**E21 同数据只换 init** | s_VLM 离线缓存（INF-5） |
 | RO-7 EDIT token LoRA | D-CONSTRUCT(S-train) 2k + D-SFT-L(S-train) 5k 子集 | RO 统一评分集 | 最后做 |
 | RO-8 伪标签厂 | —（离线推理 S-train 源） | 与 GT 掩膜对拍 AUC | 产物喂 RO-5 |
-| RO-X1 有名词/无名词 | — | **名词半集 = D-SFT-L(S-val) 指令 200 条；无名词半集 = D-SFT-G(S-val) 风格指令 200 条**（人工核一遍确无名词） | 数据现成，不另造 |
+| RO-X1 有名词/无名词 | — | **原 D-SFT-L vs D-SFT-G 切分已作废为有/无名词实验**；若重做，需构造或人工冻结真实 noun-free 指令，并与同图同区域有名词指令配对 | RO-X1 已证明原 style 半集并非无名词；历史结果仅作描述性对照 |
 | RO-X2 归一化四档 | — | 每晋级臂在 RO 统一评分集重跑 | — |
 | RO-X3 SasP/MasP | — | RO 统一评分集 | 外部 baseline |
 

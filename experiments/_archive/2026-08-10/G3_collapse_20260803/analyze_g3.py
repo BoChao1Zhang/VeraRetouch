@@ -126,44 +126,68 @@ def _need(runs: dict, dataset: str, arm: str, path: list):
 # figures
 # ---------------------------------------------------------------------------
 
+SIGMA_S_INIT = 0.15          # both arms start here (config/env.json)
+
+
 def fig_sigma_s(runs: dict, out: str) -> None:
-    """The deliverable figure: both arms' sigma_s trajectories, side by side."""
+    """The deliverable figure: both arms' sigma_s trajectories, side by side.
+
+    Read this figure for ONE thing: does the unbounded (naive) sigma_s run
+    away?  Hence the explicit init reference line -- "below init" is the
+    headline, and a bare log axis labelled only at 10^-1 cannot show it.
+    """
     present = [d for d in DATASETS
                if any(r["dataset"] == d for r in runs.values())]
-    fig, axes = plt.subplots(1, len(present), figsize=(5.2 * len(present), 4.0),
+    fig, axes = plt.subplots(1, len(present), figsize=(5.2 * len(present), 4.3),
                              squeeze=False)
+    handles: list = []
     for ax, ds in zip(axes[0], present):
+        n_seed = {}
         for arm in ("naive", "anchored"):
             got = series(runs, ds, arm, ["sigma_s", "q50"])
             if got is None:
                 continue
             st, q50 = got
+            n_seed[arm] = q50.shape[0]
             _, q05 = _need(runs, ds, arm, ["sigma_s", "q05"])
             _, q95 = _need(runs, ds, arm, ["sigma_s", "q95"])
             _, mx = _need(runs, ds, arm, ["sigma_s", "max"])
             c = ARM_COLOR[arm]
             ax.fill_between(st, q05.mean(0), q95.mean(0), color=c, alpha=0.16,
                             lw=0, zorder=2)
-            ax.plot(st, q50.mean(0), color=c, lw=2.0, zorder=4,
-                    label=f"{ARM_LABEL[arm]} — median")
-            ax.plot(st, mx.mean(0), color=c, lw=1.2, ls=":", zorder=3,
-                    label=f"{ARM_LABEL[arm]} — max")
-        for y, lbl in ((SIGMA_S_MIN, "R-2 lower 0.025"),
-                       (SIGMA_S_MAX, "R-2 upper 0.30")):
-            ax.axhline(y, color=MUTED, lw=1.0, ls="--", zorder=1)
-            ax.text(ax.get_xlim()[1], y, f" {lbl}", color=MUTED, fontsize=7,
-                    va="bottom", ha="right")
+            ln, = ax.plot(st, q50.mean(0), color=c, lw=2.0, zorder=4,
+                          label=f"{ARM_LABEL[arm]} — median")
+            ld, = ax.plot(st, mx.mean(0), color=c, lw=1.2, ls=":", zorder=3,
+                          label=f"{ARM_LABEL[arm]} — max over the 32 Gaussians")
+            if ax is axes[0][0]:
+                handles += [ln, ld]
         ax.set_yscale("log")
+        ax.set_ylim(0.02, 0.42)
+        ax.set_yticks([0.025, 0.05, 0.10, 0.15, 0.20, 0.30])
+        ax.set_yticklabels(["0.025", "0.05", "0.10", "0.15", "0.20", "0.30"])
+        ax.minorticks_off()
+        # the init line is annotated BELOW itself: every trajectory lives at or
+        # above 0.15, so the space under it is the only empty space left.
+        for y, lbl, ls, va in ((SIGMA_S_MIN, "R-2 lower bound 0.025", "--",
+                                "bottom"),
+                               (SIGMA_S_MAX, "R-2 upper bound 0.30", "--",
+                                "bottom"),
+                               (SIGMA_S_INIT, "init 0.15 (both arms)", "-.",
+                                "top")):
+            ax.axhline(y, color=MUTED, lw=1.0, ls=ls, zorder=1)
+            ax.text(st[-1], y * (1.03 if va == "bottom" else 0.97), f"{lbl} ",
+                    color=MUTED, fontsize=7, va=va, ha="right")
+        seeds = "/".join(f"{a} n={n_seed[a]}" for a in sorted(n_seed))
         style(ax, "training step", r"$\sigma_s$  (marginal std of the s axis)",
-              DS_TITLE[ds])
-    # lower-left: the R-2 bound annotations live at the right edge, and with a
-    # log axis the space below the trajectories is always empty
-    axes[0][0].legend(loc="lower left", fontsize=7, frameon=False,
-                      labelcolor=INK)
+              f"{DS_TITLE[ds]}   [seeds: {seeds}]")
+    fig.legend(handles=handles, loc="lower center", ncol=2, fontsize=7.5,
+               frameon=False, labelcolor=INK, bbox_to_anchor=(0.5, -0.005))
     fig.suptitle("G3 / Gate D3 — $\\sigma_s$ trajectory under a PURE "
                  "reconstruction loss (shaded: q05–q95 across the 32 "
-                 "Gaussians; mean over seeds)", fontsize=10, color=INK)
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
+                 "Gaussians; mean over seeds).  The escape channel would show "
+                 "as $\\sigma_s$ climbing away from init and off the top.",
+                 fontsize=10, color=INK)
+    fig.tight_layout(rect=(0, 0.11, 1, 0.93))
     fig.savefig(os.path.join(out, "sigma_s_trajectory.png"), dpi=150,
                 facecolor="#fcfcfb")
     plt.close(fig)
@@ -342,13 +366,18 @@ def main() -> None:
               "G3 — s-sensitivity on held-out pixels "
               "(0 = the s axis has been switched off)",
               "s_sensitivity.png", logy=True)
+    # NB: traces are the every-100-step probe set (8 val pairs); the reported
+    # verdict uses all 48.  On the low-signal datasets the two differ by >1 dB
+    # (mixed/naive: trace +2.36 vs final +0.59) -- say so on the figure so the
+    # curve is never read as the headline number.
+    trace_note = "  [trace = 8-pair probe set; headline table = all 48 pairs]"
     fig_trace(runs, viz, ["delta_shuffle"], r"$\Delta_{shuffle}$  (dB)",
               "G3 — $\\Delta_{shuffle}$ vs step "
-              "(band: min–max across seeds)", "delta_shuffle.png",
+              "(band: min–max across seeds)" + trace_note, "delta_shuffle.png",
               hlines=((0.3, "collapse red line 0.3 dB", "#d03b3b"),
                       (3.0, "no-collapse 3 dB", "#0ca30c")))
     fig_trace(runs, viz, ["delta_const"], r"$\Delta_{const}$  (dB)",
-              "G3 — $\\Delta_{const}$ vs step", "delta_const.png",
+              "G3 — $\\Delta_{const}$ vs step" + trace_note, "delta_const.png",
               hlines=((0.05, "collapse red line 0.05 dB", "#d03b3b"),))
     fig_trace(runs, viz, ["mu_s", "std"], r"$\mathrm{std}(\mu_s)$",
               "G3 — cross-Gaussian spread of $\\mu_s$ "

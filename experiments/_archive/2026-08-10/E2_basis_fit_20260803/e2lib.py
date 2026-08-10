@@ -8,9 +8,23 @@ Basis (single-axis v1, PLAN section 1.3):
          + [L, S] (range)  + [e1..e6] (semantic, per-image standardized +
            residual-orthogonalized against the geometric+range block)
 
-Readouts:
-    monotone: m = sigmoid(g * s + b)
-    bandpass: m = exp(-0.5 * ((s - mu) / sigma)^2), sigma bounded via sigmoid
+Readouts (unconstrained = free readout shape; constrained = the renderer's
+own s-axis parameterization, PLAN L56 + L124-R2 + L48):
+    monotone     : m = sigmoid(g * s + b)
+    bandpass     : m = sigmoid(k(s-mu+h)) - sigmoid(k(s-mu-h))   (flat-top band)
+    gauss        : m = exp(-0.5 * ((s - mu) / sigma)^2), amplitude fixed at 1,
+                   sigma bounded via sigmoid (NO bare exp parameterization)
+    cband_norm   : m = sum_i c_i o_i N(s;mu_i,sig_i) / sum_j o_j N(s;mu_j,sig_j)
+                   with M=12 primitives, mu_i on a FIXED uniform grid over
+                   [-3,3], sig_i in [0.025,0.30] via bounded sigmoid, o_i and
+                   c_i in (0,1) via sigmoid.  This is exactly "the mask a
+                   subset of the renderer's primitives can paint" (PLAN L48
+                   weight formula + L75 "the M=12 Gaussians on the s axis ARE
+                   12 band-pass masks").
+    cband_unnorm : same mixture without the normalizing denominator, clamped
+                   to <=1 (the R-6 / RD-D form).
+    cgauss       : single primitive of that bank: mu locked to a grid point,
+                   sigma in [0.025,0.30], amplitude fixed at 1.
 
 Loss = 1 - softIoU_minmax, softIoU_minmax = sum(min(m,t)) / sum(max(m,t))
 (exact recovery of a *soft* target scores 1.0, which is what the >=0.97
@@ -46,6 +60,23 @@ ANCHORS = {
 }
 ANCHOR_ORDER = ["sky", "skin", "foliage", "water", "architecture", "subject"]
 CONTENT_CLASSES = ["sky", "skin", "foliage", "water", "architecture"]
+
+# --------------------------------------------------------------------------
+# Renderer s-axis spec (constrained readouts).  Sources, verbatim:
+#   PLAN L56  : "s axis M=12 Gaussians, mu uniform [-3,3] FIXED, sigma_s
+#                bounded sigmoid; NO smoothness regularizer on the s axis"
+#   PLAN L124 : R-2 row, "sigma_s in [0.025, 0.30] sigmoid"
+# (the M=12/K=6 and the sigma-range reading are in tension across the two
+#  lines; see NOTES "pending decision 5" -- the default below is the reading
+#  that is HARDEST for the constrained arm, and A-5 sweeps the range.)
+CONSTRAINED_AXIS = {"M": 12, "mu_lo": -3.0, "mu_hi": 3.0,
+                    "sig_lo": 0.025, "sig_hi": 0.30}
+CONSTRAINED_READOUTS = ("cband_norm", "cband_unnorm", "cgauss")
+
+
+def axis_grid(axis: dict | None = None) -> np.ndarray:
+    ax = axis or CONSTRAINED_AXIS
+    return np.linspace(ax["mu_lo"], ax["mu_hi"], int(ax["M"]))
 
 
 def norm_coords(h: int, w: int, stride: int = 1):
@@ -159,12 +190,38 @@ def soft_iou_prod_np(a: np.ndarray, b: np.ndarray, eps: float = 1e-6):
 # Per-mask L-BFGS fit
 # --------------------------------------------------------------------------
 
-def _forward(params: dict, Phi: torch.Tensor, readout: str):
+def _sig_bounded(raw, lo, hi):
+    """Bounded sigmoid sigma parameterization (redline: no bare exp)."""
+    return lo + (hi - lo) * torch.sigmoid(raw)
+
+
+def _constrained_mask(params, s, readout, axis):
+    """Renderer-faithful s-axis response.  mu is a FIXED grid (a buffer, not a
+    parameter); sigma is bounded-sigmoid; o/c are sigmoids in (0,1).
+    No smoothness regularizer anywhere (redline)."""
+    ax = axis or CONSTRAINED_AXIS
+    sig = _sig_bounded(params["sig_raw"], ax["sig_lo"], ax["sig_hi"])
+    mu = params["mu_grid"]
+    if readout == "cgauss":                       # single primitive, amp == 1
+        return torch.exp(-0.5 * ((s - mu) / sig) ** 2)
+    z = (s.unsqueeze(-1) - mu) / sig              # (P, M)
+    N = torch.exp(-0.5 * z * z)
+    o = torch.sigmoid(params["o_raw"])
+    c = torch.sigmoid(params["c_raw"])
+    if readout == "cband_norm":                   # PLAN L48 weight formula
+        return (N * (o * c)).sum(-1) / ((N * o).sum(-1) + 1e-9)
+    return torch.clamp((N * (o * c)).sum(-1), max=1.0)   # cband_unnorm (R-6)
+
+
+def _forward(params: dict, Phi: torch.Tensor, readout: str,
+             axis: dict | None = None):
     u = params["u"]
     w_dir = u / (u.norm() + 1e-12)
     alpha = torch.nn.functional.softplus(params["a_raw"])
     q = params["w0"] + alpha * (Phi @ w_dir)
     s = 3.0 * torch.tanh(q / 3.0)
+    if readout in CONSTRAINED_READOUTS:
+        return _constrained_mask(params, s, readout, axis), s, alpha
     if readout == "monotone":
         m = torch.sigmoid(params["g"] * s + params["b"])
     elif readout == "bandpass":
@@ -177,15 +234,15 @@ def _forward(params: dict, Phi: torch.Tensor, readout: str):
         m = (torch.sigmoid(k * (s - params["mu"] + h))
              - torch.sigmoid(k * (s - params["mu"] - h)))
     elif readout == "gauss":
-        sigma = 0.05 + 2.95 * torch.sigmoid(params["sig_raw"])
+        sigma = _sig_bounded(params["sig_raw"], 0.05, 3.0)
         m = torch.exp(-0.5 * ((s - params["mu"]) / sigma) ** 2)
     else:
         raise ValueError(readout)
     return m, s, alpha
 
 
-def _loss(params, Phi, t, readout):
-    m, _, _ = _forward(params, Phi, readout)
+def _loss(params, Phi, t, readout, axis=None):
+    m, _, _ = _forward(params, Phi, readout, axis)
     iou = torch.minimum(m, t).sum() / (torch.maximum(m, t).sum() + 1e-6)
     return 1.0 - iou
 
@@ -208,11 +265,48 @@ def softplus_inv(y: float) -> float:
     return float(y + np.log(-np.expm1(-y))) if y < 20 else y
 
 
+def _logit_bounded(y: float, lo: float, hi: float) -> float:
+    """Inverse of lo + (hi-lo)*sigmoid(raw), safely clipped."""
+    z = float(np.clip((y - lo) / (hi - lo), 1e-4, 1 - 1e-4))
+    return float(np.log(z / (1 - z)))
+
+
+def _axis_start(st: dict, readout: str, axis: dict, rng) -> dict:
+    """Complete a (mu, sig)-style start into constrained-axis raw fields.
+
+    `st` may already carry explicit axis fields (warm starts); otherwise the
+    band centre is snapped to the nearest grid point (w0 is free, so the
+    residual shift is absorbable) and sigma is initialised at ~0.45*grid step.
+    """
+    ax = axis or CONSTRAINED_AXIS
+    grid = axis_grid(ax)
+    M = len(grid)
+    dmu = float(grid[1] - grid[0])
+    out = dict(st)
+    if "k_idx" not in out:
+        out["k_idx"] = int(np.argmin(np.abs(grid - float(st.get("mu", 0.0)))))
+    if "sig0" not in out:
+        out["sig0"] = float(np.clip(0.45 * dmu, ax["sig_lo"] * 1.05,
+                                    ax["sig_hi"] * 0.95))
+    if readout == "cgauss":
+        return out
+    if "c0" not in out:
+        hw = float(st.get("hw", max(float(st.get("sig", 0.3)), 0.5 * dmu)))
+        on = np.abs(grid - grid[out["k_idx"]]) <= max(hw, 1e-6)
+        if not on.any():
+            on[out["k_idx"]] = True
+        out["c0"] = np.where(on, 0.98, 0.02)
+    if "o0" not in out:
+        out["o0"] = np.full(M, 0.5)
+    return out
+
+
 def fit_mask(Phi_fit: np.ndarray, t_fit: np.ndarray,
              Phi_eval: np.ndarray, t_eval: np.ndarray,
              readout: str, seed: int = 0, n_random: int = 6,
              max_iter: int = 120,
-             extra_starts: list[dict] | None = None) -> dict:
+             extra_starts: list[dict] | None = None,
+             axis: dict | None = None) -> dict:
     """Fit one mask; returns best params + eval IoUs.
 
     Restarts: LSQ-informed + n_random random + caller-provided informed
@@ -251,6 +345,14 @@ def fit_mask(Phi_fit: np.ndarray, t_fit: np.ndarray,
                        "mu": 0.0, "sig": 0.5})
     for st in (extra_starts or []):
         starts.append(st)
+    if readout in CONSTRAINED_READOUTS:
+        ax = axis or CONSTRAINED_AXIS
+        grid = axis_grid(ax)
+        starts = [_axis_start(st, readout, ax, rng) for st in starts]
+        if readout == "cgauss":       # second grid anchor (tanh-saturation)
+            alt = dict(starts[0])
+            alt["k_idx"] = int(len(grid) // 2)
+            starts.append(_axis_start(alt, readout, ax, rng))
 
     best = None
     for st in starts:
@@ -262,7 +364,30 @@ def fit_mask(Phi_fit: np.ndarray, t_fit: np.ndarray,
             "u": torch.tensor(np.asarray(st["u"], dtype=np.float64),
                               requires_grad=True),
         }
-        if readout == "monotone":
+        if readout in CONSTRAINED_READOUTS:
+            ax = axis or CONSTRAINED_AXIS
+            grid = axis_grid(ax)
+            if readout == "cgauss":
+                params["mu_grid"] = torch.tensor(float(grid[st["k_idx"]]),
+                                                 dtype=torch.float64)
+                params["sig_raw"] = torch.tensor(
+                    _logit_bounded(st["sig0"], ax["sig_lo"], ax["sig_hi"]),
+                    dtype=torch.float64, requires_grad=True)
+            else:
+                params["mu_grid"] = torch.tensor(grid, dtype=torch.float64)
+                sig0 = np.full(len(grid), float(st["sig0"])) \
+                    if np.ndim(st["sig0"]) == 0 else np.asarray(st["sig0"])
+                params["sig_raw"] = torch.tensor(
+                    [_logit_bounded(float(v), ax["sig_lo"], ax["sig_hi"])
+                     for v in sig0],
+                    dtype=torch.float64, requires_grad=True)
+                params["o_raw"] = torch.tensor(
+                    [_logit_bounded(float(v), 0.0, 1.0) for v in st["o0"]],
+                    dtype=torch.float64, requires_grad=True)
+                params["c_raw"] = torch.tensor(
+                    [_logit_bounded(float(v), 0.0, 1.0) for v in st["c0"]],
+                    dtype=torch.float64, requires_grad=True)
+        elif readout == "monotone":
             params["g"] = torch.tensor(st["g"], dtype=torch.float64,
                                        requires_grad=True)
             params["b"] = torch.tensor(st["b"], dtype=torch.float64,
@@ -286,13 +411,15 @@ def fit_mask(Phi_fit: np.ndarray, t_fit: np.ndarray,
                                         1e-4)))
                 params["sig_raw"] = torch.tensor(sr, dtype=torch.float64,
                                                  requires_grad=True)
-        opt = torch.optim.LBFGS(list(params.values()), max_iter=max_iter,
+        # mu_grid is a fixed buffer (mu is NOT learnable, PLAN L56)
+        opt = torch.optim.LBFGS([v for v in params.values()
+                                 if v.requires_grad], max_iter=max_iter,
                                 history_size=20, line_search_fn="strong_wolfe",
                                 tolerance_grad=1e-9, tolerance_change=1e-11)
 
         def closure():
             opt.zero_grad()
-            loss = _loss(params, Phi, t, readout)
+            loss = _loss(params, Phi, t, readout, axis)
             loss.backward()
             return loss
 
@@ -301,7 +428,7 @@ def fit_mask(Phi_fit: np.ndarray, t_fit: np.ndarray,
         except Exception:
             continue
         with torch.no_grad():
-            loss = float(_loss(params, Phi, t, readout))
+            loss = float(_loss(params, Phi, t, readout, axis))
             alpha = float(torch.nn.functional.softplus(params["a_raw"]))
         cand = {"loss": loss, "alpha": alpha,
                 "state": {k: v.detach().clone() for k, v in params.items()}}
@@ -314,7 +441,7 @@ def fit_mask(Phi_fit: np.ndarray, t_fit: np.ndarray,
     # evaluate at full resolution
     with torch.no_grad():
         Phi_e = torch.from_numpy(Phi_eval.astype(np.float64))
-        m_e, s_e, alpha = _forward(best["state"], Phi_e, readout)
+        m_e, s_e, alpha = _forward(best["state"], Phi_e, readout, axis)
     m_np = m_e.numpy()
     st = best["state"]
     # complement IoU keeps the metric meaningful for near-empty targets
@@ -338,9 +465,30 @@ def fit_mask(Phi_fit: np.ndarray, t_fit: np.ndarray,
         out["mu"] = float(st["mu"])
         out["h"] = float(0.02 + 2.48 * torch.sigmoid(st["h_raw"]))
         out["k"] = float(1.0 + 39.0 * torch.sigmoid(st["k_raw"]))
+    elif readout in CONSTRAINED_READOUTS:
+        ax = axis or CONSTRAINED_AXIS
+        out["axis"] = dict(ax)
+        out["mu_grid"] = np.atleast_1d(st["mu_grid"].numpy()).tolist()
+        out["sigma"] = np.atleast_1d(
+            _sig_bounded(st["sig_raw"], ax["sig_lo"],
+                         ax["sig_hi"]).numpy()).tolist()
+        if readout != "cgauss":
+            out["o"] = torch.sigmoid(st["o_raw"]).numpy().tolist()
+            c = torch.sigmoid(st["c_raw"])
+            out["c"] = c.numpy().tolist()
+            # A-3: hard payload grouping (c rounded to {0,1}); in the renderer
+            # a payload group IS a 0/1 subset of primitives.
+            hard = dict(st)
+            hard["c_raw"] = torch.where(c >= 0.5,
+                                        torch.full_like(c, 20.0),
+                                        torch.full_like(c, -20.0))
+            with torch.no_grad():
+                m_h, _, _ = _forward(hard, Phi_e, readout, ax)
+            out["iou_hardc"] = soft_iou_minmax_np(m_h.numpy(), t_eval)
+            out["n_on"] = int((c >= 0.5).sum())
     else:
         out["mu"] = float(st["mu"])
-        out["sigma"] = float(0.05 + 2.95 * torch.sigmoid(st["sig_raw"]))
+        out["sigma"] = float(_sig_bounded(st["sig_raw"], 0.05, 3.0))
     return out
 
 
@@ -349,7 +497,14 @@ def radial_starts(Phi_fit: np.ndarray, t_fit: np.ndarray,
     """Centroid-radial informed starts. Assumes dir-columns start with
     [x, y, P2(x), P2(y), xy, ...]. Builds q ~ -((x-a)^2 + (y-b)^2) around the
     target centroid (x^2 = (2*P2(x)+1)/3), scaled so s spans ~[-2, 2]; for
-    bandpass, mu/sigma from the target-weighted s statistics."""
+    every band-type readout, mu/sigma come from the target-weighted s stats.
+
+    NOTE (bug fix, REVIEW-result section 2.3): this used to branch on
+    `readout == "bandpass"`, so every *other* non-monotone readout ("gauss",
+    and now the constrained ones) got monotone-style g/b starts while
+    `fit_mask` asked for st["mu"] -> KeyError('mu') on 600/600 gauss fits.
+    The branch now mirrors `fit_mask`: monotone -> g/b, everything else ->
+    mu/sig."""
     D = Phi_fit.shape[1]
     if D < 5:
         return []
@@ -366,15 +521,61 @@ def radial_starts(Phi_fit: np.ndarray, t_fit: np.ndarray,
     mu_w = float((t_fit * s).sum() / tw)
     sd_w = float(np.sqrt((t_fit * (s - mu_w) ** 2).sum() / tw)) + 0.05
     out = []
-    if readout == "bandpass":
-        for sig in (min(max(sd_w, 0.1), 1.5), 0.3):
-            out.append({"w0": w0, "a": alpha0, "u": u.copy(),
-                        "mu": mu_w, "sig": sig})
-    else:
+    if readout == "monotone":
         for g in (3.0, -3.0):
             out.append({"w0": w0, "a": alpha0, "u": u.copy(),
                         "g": g, "b": -g * mu_w})
+    else:
+        for sig in (min(max(sd_w, 0.1), 1.5), 0.3):
+            out.append({"w0": w0, "a": alpha0, "u": u.copy(),
+                        "mu": mu_w, "sig": sig})
     return out
+
+
+def band_warm_start(row: dict, axis: dict | None = None,
+                    n_on: int = 1) -> dict | None:
+    """Warm start for the constrained readouts, built from a *previous*
+    unconstrained band-pass fit of the same mask (fairness measure: we ask
+    about expressiveness, not optimizer luck).
+
+    Re-parameterizes the s field so the fitted band [mu-h, mu+h] lands on
+    `n_on` grid cells:  q~ = lam*(q - q_mu) + q_c  with
+    lam = h_target/h, q_x = 3*artanh(x/3), and sets sigma from the slope
+    match  k_new = dmu/sigma^2  (k_new = k/lam).
+    """
+    if row is None or "h" not in row or "k" not in row:
+        return None
+    ax = axis or CONSTRAINED_AXIS
+    grid = axis_grid(ax)
+    dmu = float(grid[1] - grid[0])
+    k_idx = int(len(grid) // 2)
+    h_t = 0.5 * n_on * dmu
+    lam = h_t / max(float(row["h"]), 1e-6)
+    at = lambda x: 3.0 * np.arctanh(np.clip(x / 3.0, -0.999, 0.999))  # noqa
+    q_mu, q_c = at(float(row["mu"])), at(float(grid[k_idx]))
+    w0 = lam * (float(row["w0"]) - q_mu) + q_c
+    sig = float(np.sqrt(dmu * lam / max(float(row["k"]), 1e-6)))
+    sig = float(np.clip(sig, ax["sig_lo"] * 1.05, ax["sig_hi"] * 0.95))
+    on = np.abs(np.arange(len(grid)) - k_idx) <= (n_on - 1) / 2.0
+    return {"w0": w0, "a": max(lam * float(row["alpha"]), 1e-3),
+            "u": np.asarray(row["w_dir"], dtype=np.float64),
+            "mu": float(grid[k_idx]), "sig": sig, "hw": h_t,
+            "k_idx": k_idx, "sig0": sig,
+            "c0": np.where(on, 0.98, 0.02),
+            "o0": np.full(len(grid), 0.5)}
+
+
+def axis_response(row: dict, s: np.ndarray) -> np.ndarray:
+    """Constrained-axis response r(s) rebuilt from a stored result row."""
+    mu = np.asarray(row["mu_grid"])
+    sig = np.asarray(row["sigma"])
+    if row["readout"] == "cgauss":
+        return np.exp(-0.5 * ((s - mu[0]) / sig[0]) ** 2)
+    N = np.exp(-0.5 * ((s[..., None] - mu) / sig) ** 2)
+    o, c = np.asarray(row["o"]), np.asarray(row["c"])
+    if row["readout"] == "cband_norm":
+        return (N * (o * c)).sum(-1) / ((N * o).sum(-1) + 1e-9)
+    return np.clip((N * (o * c)).sum(-1), None, 1.0)
 
 
 def predict_mask(row: dict, Phi: np.ndarray, readout: str) -> np.ndarray:
@@ -388,6 +589,8 @@ def predict_mask(row: dict, Phi: np.ndarray, readout: str) -> np.ndarray:
         sg = lambda z: 1.0 / (1.0 + np.exp(-z))  # noqa: E731
         return (sg(row["k"] * (s - row["mu"] + row["h"]))
                 - sg(row["k"] * (s - row["mu"] - row["h"])))
+    if readout in CONSTRAINED_READOUTS:
+        return axis_response(row, s)
     return np.exp(-0.5 * ((s - row["mu"]) / row["sigma"]) ** 2)
 
 

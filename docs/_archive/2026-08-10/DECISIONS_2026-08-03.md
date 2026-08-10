@@ -1,5 +1,9 @@
 # 决策日志（wave-1 审阅后，2026-08-03）
 
+> **事件日志，不是当前数值真值。** 中途快照（例如 G1 的 ρY、E1 的 N*、E1b 的秩）允许保留，
+> 但引用当前结果必须转到 [`EXPERIMENT_REGISTRY.md`](EXPERIMENT_REGISTRY.md)；
+> 结果综述见 [`EXPERIMENT_RESULTS_CURRENT.md`](EXPERIMENT_RESULTS_CURRENT.md)。
+
 > 来源：`docs/reviews/REVIEW-impl-wave1.md` 的 22 项待决策 + 3 blocker。常规项由主 agent 按保守默认裁定并在此记录；**标 ⚑ 的需要用户拍板**，未拍板前按建议值执行但不进任何对外口径。
 
 ## 一、升级给用户的决策（⚑）

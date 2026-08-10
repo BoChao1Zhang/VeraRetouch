@@ -1,5 +1,9 @@
 # 调研论文全汇编（2026-07-31）
 
+> 本文是论文摘要底账，不是项目方案优先级。针对当前 render / what / where 结果，哪些论文能解决
+> 哪个已观察问题、最小验证实验和风险，见
+> [`EXPERIMENT_RESULTS_CURRENT.md` §4](EXPERIMENT_RESULTS_CURRENT.md#4-docs-里的-paper-list-有没有解法)。
+
 > 来源：8 轮 workflow 文献调研的全部结构化结果（去重后 579 条）。**标题与摘要一律取自 arXiv 官方 API**（export.arxiv.org 实时拉取），非 agent 转述；「声称会议」为调研 agent 报告的 venue，**引用前仍须自行核对会议归属**（本次调研确认检索引擎会编造会议与编号）。共 526 篇带官方摘要；50 条无 arXiv 条目见附录 A；3 条 agent 笔记类条目已剔除。
 > 分组 = 该论文**第一次被哪个调研任务发现**（同一篇只出现一次，「调研轮次」列出全部出现过的轮）。
 > ⚠️ 已知问题：arXiv:2606.14035 被记录为 FocusDiff/FineEdit 但官方标题不符（ID 归属存疑，勿引）；带 ⚠️ 条目 = agent 记录标题与官方差异大，以官方为准。
