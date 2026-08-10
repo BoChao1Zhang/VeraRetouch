@@ -4,11 +4,10 @@ Protocol 14.9 -- "prove that no main arm's input contains ``I_tar``, a GT mask, 
 GT LUT or an oracle latent" -- is enforced here, at the only place that touches
 the raw records:
 
-* :class:`WhatSample` keeps a whitelist of record fields (:data:`META_KEYS`).
-  The record's ``image.baked`` locator *is* ``I_tar`` and is dropped on load, so
-  no sample object can reach a training batch carrying it.  The evaluation path
-  asks for it explicitly through :meth:`WhatDataset.load_target_image`, which
-  exists only in :mod:`q3vl.what.evaluate`;
+* :class:`WhatSample` keeps a whitelist of record fields (:data:`META_KEYS`), so
+  no sample object can reach a training batch carrying a target.  ``I_tar`` is
+  reachable only through :meth:`WhatDataset.load_target_image`, whose only call
+  site in the package is ``scripts/evaluate_what.py``;
 * :class:`Batch` separates ``inputs`` (the six entries
   :data:`q3vl.what.model.MODEL_INPUT_KEYS` allows) from ``targets``.  The model is
   called as ``model(**batch.inputs)`` and physically cannot see a target;
@@ -101,7 +100,7 @@ ORACLE_MISSING_NULL_GLOBAL = "null_global"
 ORACLE_MISSING_POLICIES = (ORACLE_MISSING_REJECT, ORACLE_MISSING_NULL_GLOBAL)
 
 #: the only record fields a sample object keeps.  ``image`` is deliberately
-#: absent: the record's ``image.baked`` entry is the ``I_tar`` locator.
+#: absent -- nothing about the pixels belongs in a training batch's metadata.
 META_KEYS = (
     "sample_id", "build", "build_id", "batch", "split", "task_type", "render_mode",
     "region", "source_image_id", "source_sample_id", "lut_id", "winner_confidence",
@@ -109,6 +108,10 @@ META_KEYS = (
 )
 FORBIDDEN_INPUT_SUBSTRINGS = ("baked", "i_tar", "target_image", "gt_lut", "t_gt",
                               "preset", "z_gt")
+#: ``I_tar`` -- the build's rendered candidate, one per ``source_sample_id``,
+#: in the same shard as ``.in.*`` (``I_in``) and ``.cgt.png`` (the GT mask).
+#: See :meth:`WhatDataset._target_locator` for why it is not ``image.baked``.
+TARGET_SUFFIX = ".jpg"
 
 
 def split_index_path(split: str) -> Path:
@@ -129,8 +132,9 @@ class WhatSample:
     mask_hi: torch.Tensor | None = None   # GT mask: evaluation + oracle arms only
     grid_h: int = 0
     grid_w: int = 0
-    #: locator of ``I_tar``; kept as a *string* so it can never be mistaken for a
-    #: tensor input, and only resolved by the evaluation path.
+    #: how to reach ``I_tar`` in the *build* -- ``{"root", "source_sample_id"}``,
+    #: never pixels, so it can not be mistaken for a tensor input.  Resolved only
+    #: by the evaluation path (:meth:`WhatDataset.load_target_image`).
     target_locator: dict[str, Any] | None = None
 
     @property
@@ -157,6 +161,7 @@ class WhatDataset:
                 "a live MaskResolver was given.  Use q3vl.what.data.open_dataset()."
             )
         self.split = split
+        self.verify = verify
         self.index = ShardIndex.load(index_path or split_index_path(split))
         self.store = store or ShardStore("/", verify=verify)
         self.maskviews = maskviews
@@ -210,8 +215,28 @@ class WhatDataset:
             color_text=rec["color"], lut_id=rec["lut_id"],
             preset_path=rec["preset_path"], meta=meta, mask_hi=mask,
             grid_h=gh, grid_w=gw,
-            target_locator=(rec.get("image") or {}).get("baked"),
+            target_locator=self._target_locator(rec),
         )
+
+    @staticmethod
+    def _target_locator(rec: dict[str, Any]) -> dict[str, Any] | None:
+        """Where ``I_tar`` lives, or ``None`` when the record cannot reach it.
+
+        **Not** ``image.baked``: that entry is the contract-sized copy of
+        ``I_in`` (``q3vl/data/bake.py`` -- "byte-for-byte the one the trainer
+        would apply online", and ``verify.check_bake_fidelity`` compares it to
+        ``prepare_image(original)``).  It is bit-identical to the ``image``
+        member this dataset already loads, so reading it as ``I_tar`` would have
+        scored every arm against its own input.  ``I_tar`` is the build's
+        rendered candidate, the ``.jpg`` member sitting next to ``.in.*`` and
+        ``.cgt.png`` -- the provenance :mod:`q3vl.where.maskdata` established on
+        2026-08-05 and the image the winner selection actually scored.
+        """
+        root = ((rec.get("image") or {}).get("origin") or {}).get("root")
+        src = rec.get("source_sample_id")
+        if not root or not src:
+            return None
+        return {"root": root, "source_sample_id": src, "suffix": TARGET_SUFFIX}
 
     def _mask(self, sample_id: str, rec: dict[str, Any], geom) -> torch.Tensor | None:
         if rec.get("render_mode") == "global":
@@ -233,12 +258,42 @@ class WhatDataset:
         Deliberately not reachable from :class:`WhatBatchBuilder`: protocol 9.5
         says ``I_tar`` does not enter ``L_what``, and the way to keep that true is
         for the training path to have no call site for this method.
+
+        Put through the same :func:`prepare_image` transform as ``I_in``, because
+        the build renders at its own resolution (short side 1024) while every
+        metric in protocol 12.2 is computed on the spec-5 grid.  The result is
+        asserted to match ``I_in``'s shape rather than resized to fit: a
+        mismatch means the locator is wrong, and a silent resize is how that
+        stays invisible.
         """
-        if sample.target_locator is None:
-            raise KeyError(f"{sample.sample_id} has no baked-image locator")
-        image, _geom = prepare_image(self.store.read(sample.target_locator))
+        loc = sample.target_locator
+        if loc is None:
+            raise KeyError(
+                f"{sample.sample_id}: no image.origin.root / source_sample_id, so "
+                f"the build's {TARGET_SUFFIX} render (I_tar) cannot be reached")
+        ref = self._target_resolver(loc["suffix"]).resolve(
+            {"image": {"origin": {"root": loc["root"]}},
+             "source_sample_id": loc["source_sample_id"],
+             "sample_id": sample.sample_id})
+        raw = self._target_resolver(loc["suffix"]).read_bytes(ref)
+        image, _geom = prepare_image(raw)
         a = np.array(image, dtype=np.uint8, copy=True)
-        return torch.from_numpy(a).permute(2, 0, 1).float() / 255.0
+        out = torch.from_numpy(a).permute(2, 0, 1).float() / 255.0
+        want = (sample.geometry.out_h, sample.geometry.out_w)
+        if tuple(out.shape[-2:]) != want:
+            raise RuntimeError(
+                f"{sample.sample_id}: I_tar is {tuple(out.shape[-2:])} but I_in is "
+                f"{want}; the two must land on the same spec-5 grid")
+        return out
+
+    def _target_resolver(self, suffix: str):
+        from q3vl.where.maskdata import MaskResolver
+
+        res = getattr(self, "_tres", None)
+        if res is None or res.suffix != suffix:
+            res = MaskResolver(verify=self.verify, suffix=suffix)
+            self._tres = res
+        return res
 
 
 def open_dataset(split: str, *, need_mask: bool = False,

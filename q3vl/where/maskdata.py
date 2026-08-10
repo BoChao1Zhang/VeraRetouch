@@ -80,10 +80,18 @@ class MaskLookupError(RuntimeError):
 
 
 class MaskResolver:
-    """Locate and read ``.cgt.png`` members, caching one catalog per batch."""
+    """Locate and read a per-candidate build member, caching one catalog per batch.
 
-    def __init__(self, verify: str = "checksum"):
+    ``suffix`` defaults to the ``.cgt.png`` mask this class was written for.  The
+    other per-candidate members sit in the same shard behind the same catalog
+    (``.in.*`` = ``I_in``, ``.jpg`` = ``I_tar``), so protocol 12.2's target image
+    is the same lookup with a different suffix -- see
+    :meth:`q3vl.what.data.WhatDataset.load_target_image`.
+    """
+
+    def __init__(self, verify: str = "checksum", suffix: str = MASK_SUFFIX):
         self.verify = verify
+        self.suffix = suffix
         self._cats: dict[str, sqlite3.Connection | None] = {}
         self._jsonl: dict[str, dict[str, tuple[str, str, int, int, str]]] = {}
         self._store = ShardStore("/", verify=verify)
@@ -115,7 +123,7 @@ class MaskResolver:
                         if not line.strip():
                             continue
                         row = json.loads(line)
-                        if row.get("suffix") == MASK_SUFFIX:
+                        if row.get("suffix") == self.suffix:
                             table[row["sample_id"]] = (
                                 row["shard"], row["member"], int(row["offset_data"]),
                                 int(row["length"]), row.get("sha256"),
@@ -130,7 +138,7 @@ class MaskResolver:
         if not root or not src:
             raise MaskLookupError(
                 f"{record.get('sample_id')}: record has no image.origin.root / "
-                f"source_sample_id, cannot reach the build's {MASK_SUFFIX}"
+                f"source_sample_id, cannot reach the build's {self.suffix}"
             )
         row = None
         cat = self._catalog(root)
@@ -138,7 +146,7 @@ class MaskResolver:
             row = cat.execute(
                 "select shard, member, offset_data, size, sha256 from members "
                 "where sample_id=? and suffix=?",
-                (src, MASK_SUFFIX),
+                (src, self.suffix),
             ).fetchone()
             if row is not None:
                 self.n_catalog_hits += 1
@@ -147,7 +155,8 @@ class MaskResolver:
             if row is not None:
                 self.n_jsonl_hits += 1
         if row is None:
-            raise MaskLookupError(f"{record.get('sample_id')}: no {MASK_SUFFIX} for {src} under {root}")
+            raise MaskLookupError(
+                f"{record.get('sample_id')}: no {self.suffix} for {src} under {root}")
         shard, member, offset, size, sha = row
         return MaskRef(
             sample_id=record["sample_id"],
@@ -164,13 +173,17 @@ class MaskResolver:
         )
 
     # -- reading -----------------------------------------------------------
+    def read_bytes(self, ref: MaskRef) -> bytes:
+        """The member's raw bytes, checksum-verified.  Suffix-agnostic."""
+        return self._store.read(ref.member, verify=self.verify)
+
     def load(self, ref: MaskRef) -> np.ndarray:
         """``(h, w)`` float32 in [0, 1]."""
         data = self._store.read(ref.member, verify=self.verify)
         with Image.open(io.BytesIO(data)) as im:
             if im.mode != "L":
                 raise MaskLookupError(
-                    f"{ref.sample_id}: {MASK_SUFFIX} is mode {im.mode!r}, expected 'L' "
+                    f"{ref.sample_id}: {self.suffix} is mode {im.mode!r}, expected 'L' "
                     "(single-channel soft mask)"
                 )
             arr = np.asarray(im, dtype=np.uint8)

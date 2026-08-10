@@ -587,3 +587,76 @@ C03/C04 用 `cband12` 的 Where-A oracle latent（`rho` = 3×12 = 36 维）。�
   C03/C04 本就**永不进主榜**（§8.2），但**分层对照与「离上界还有多远」这类叙述必须注明档位不同**。
 
 处置：不阻塞 C 波；已同步写进 `REVIEW-impl-What` 的放行条件清单，供结果审阅逐条对照。
+
+---
+
+## 十三、任务卡 EXEC-5 —— C 臂离线评测入队（2026-08-10）
+
+### 13.1 实施前核实记录（不是检索来的，是打开原始来源读的）
+
+| 要核实的事 | 怎么核实的 | 结论 |
+|---|---|---|
+| `evaluate_what.py` 是否已接 LPIPS | 读源码 + `git show 80a5078 -- q3vl/what/scripts/evaluate_what.py` | **已接且已 `x*2-1`**（2026-08-05 的 NF-2 提交里就有）。`wt_g7_lpips_closure.json` 的 `still_open: "currently passes lpips_fn=None"` 是**过期陈述**。本次把 lambda 提成具名 `lpips_closure()` 并补单测（缺 `x*2-1` 不会崩，只会安静地量一对半对比度的图） |
+| LPIPS 是否真的装了 | `python -c "import lpips"` 于 `/home/bc/envs/q3vl_sft` | 装了；`lpips_closure` 实测 identical=0.0、random=0.1031 |
+| `V_what` 规模与掩膜可得性 | 真机 `open_dataset("V_what", need_mask=True)` | **897** 样本；`mask_source = published_maskviews`（不需要回落到 live resolver） |
+| generated `<color>` context 覆盖 | `ColorGenContextStore.assert_covers` 两个 mode | `two_segment` / `forced_color` **各覆盖全部 897** |
+| C03/C04 的 oracle latent | `OracleStore.latent(..., "cband12")` 抽 24 条 | 14 命中 / 10 缺失，缺的都是 global 样本 ⇒ 必须 `--oracle-missing-latent null_global`（已写进 wave 脚本） |
+| 在线 eval 实测墙钟（`WT-G9` 闭环） | `C01/eval.jsonl` 第一条 | **57.23 s** / 256 样本 × 2 context ⇒ 0.112 s per (sample, context)，纯 LUT 指标 |
+| C 波训练节奏 | `C01/train.log` step 600 `elapsed_s=2011.6` | 3.35 s/step ⇒ 4975 步 ≈ **4.6 h**；C1 约 00:50 完成，C2 约 05:30 完成 |
+
+### 13.2 入队的四个任务
+
+`waves/what_c_eval.sh`（单臂载荷）+ `waves/enqueue_what_c_eval.sh`（wave）。
+每臂一次 `evaluate_what`，读 `what_final.pt`，完整 `V_what` 双 context，
+`--full-grid --lpips`，输出到 `/home/bc/data/runs/what/evaluate/<ARM>/`。
+
+| 任务 | 卡 | gate | 排在谁后面 |
+|---|---|---|---|
+| `eval_C01` | gpu0 | `C01/what_final.pt` | C01 → C03 |
+| `eval_C02` | gpu1 | `C02/what_final.pt` | C02 → C04 |
+| `eval_C03` | gpu0 | `C03/what_final.pt` | eval_C01 |
+| `eval_C04` | gpu1 | `C04/what_final.pt` | eval_C02 |
+
+组内 FIFO 保证顺序，gate 保证「前一臂没死」。`--ready 'progress'`：`evaluate_what` 每
+32 个样本打一行进度，**打在真的算完之后**，所以 ready 不会因为「python 起来了」就误判成功。
+
+### 13.3 本次修掉的三个会让评测直接失败或静默错的问题
+
+1. **`--where-checkpoint` 曾是 required** ⇒ C 波（D-EXEC4，无冻结 Where）根本跑不了。
+   现在按 `run_what.py` 同一套规则放行：`predicted` 臂仍拒绝；无 checkpoint 时
+   `--where-readout` 与 `--natural-mask-source` 必须显式，且**与该 checkpoint 目录里的
+   `run_setup.json` 交叉校验**，不一致就硬停（natural 半边的查询色分布不同 = 指标不可比）。
+2. **builder 从未收到 `natural_mask_source` / `oracle_missing_latent`** ⇒ C03/C04 会在第一个
+   global 样本上以 `ORACLE_MISSING_REJECT` 抛出。已接线。
+3. **`I_tar` 读错了对象（最严重）**。`WhatDataset.load_target_image` 读的是 `image.baked`，
+   而 `q3vl/data/bake.py` 写得很清楚：`baked` 是 **`I_in` 的契约尺寸副本**
+   （`verify.check_bake_fidelity` 拿它跟 `prepare_image(原图)` 逐像素比）。实测该 locator 与
+   dataset 已经加载的 `image` 成员 **shard/offset/sha256 完全相同** ⇒ 若它「能跑」，
+   §12.2 全套图像指标就是拿预测结果去比**输入图自己**，量的是「你改得多小」。
+   真正的 `I_tar` 是 build 里的渲染候选图 —— `.jpg` 成员，和 `.in.*`（`I_in`）、`.cgt.png`（GT mask）
+   同批发布；这条 provenance `q3vl/where/maskdata.py` 的模块文档 2026-08-05 就写明了。
+   **它没有静默出错，是因为它连类型都不对**（dict 传给了要 `MemberRef` 的 `ShardStore.read`），
+   所以一读就崩 —— 这是运气，不是设计。
+   已改：`MaskResolver` 接受 `suffix`（默认仍是 `.cgt.png`）并新增 `read_bytes`；
+   `load_target_image` 走同一套 catalog 查 `.jpg`，过同一个 `prepare_image`，
+   **断言与 `I_in` 同形而不是 resize**。
+   **真机验证（13 个 V_what 样本）**：`I_tar ≠ I_in`（0/13 相同）；local 样本
+   掩膜内平均 |Δ| 是掩膜外的 **6–10 倍**（例：0.1058 内 vs 0.0100 外），正是局部编辑该有的样子。
+
+### 13.4 待主 agent 决策
+
+| # | 事项 | 我采用的保守默认 | 为什么需要你裁 |
+|---|---|---|---|
+| **DQ-1** | **§12.2 的合成掩膜**（deviation **D-EXEC5**）。协议要求四臂都用**冻结 Where 掩膜**合成 `I_out`，好让 C01/C02 是干净的下界而不是「掩膜消融」。D-EXEC4 下没有冻结掩膜。 | `--composite-mask gt`：四臂**统一用 GT 掩膜**（唯一对每个臂都存在的掩膜；C01/C02 从未把它当输入，C03/C04 本来就是它）。`--composite-mask` **无默认值**，不给就拒跑；每行都记 `composite_mask` | 另一个选项 `model` 会让 C01/C02 用全 1、C03/C04 用 GT，**两臂的渲染器不同**，等于把控制臂和掩膜消融混在一起。我认为 `gt` 更贴协议原意，但这是判据口径，应由你确认 |
+| **DQ-2** | **每臂只评 `what_final.pt`** | 是（单 checkpoint）。`keep-last none` 下每臂另有 9 个 500 步 checkpoint | §12.4 的选择规则允许跨 step 选。全扫 10 个 checkpoint × 2 context × 897 样本 ≈ 10 倍机时。建议：先看 `eval.jsonl` 的在线曲线，若终点不是最优再补跑指定 step |
+| **DQ-3** | 四个任务各自出一份**单臂** `main_board` | 是 | 跨臂主榜需要把四份 `candidates_V_what.jsonl` 合并后再跑一次 `main_board`（纯 CPU，几秒）。**尚未实现合并脚本**，等四个任务跑完再做 |
+| **DQ-4** | `I_tar` 取 build 的 `.jpg` 渲染图 | 是 | 备选是「用 GT LUT + GT mask 现场重渲」。`.jpg` 是 QA 与 winner 选择**当时真正评分的那张图**，是数据集自己的真值；重渲只是它的近似，且会让掩膜外误差恒等于 0（分区指标退化）。实测 `.jpg` 的掩膜外误差 ~0.006–0.010（JPEG 重编码 + 软边），**分区不退化** |
+
+### 13.5 未做 / 已知缺口
+
+- **未做 GPU 端到端 smoke**：两卡在跑 C 波，任务卡明令勿扰。VLM 那一半由 C 波本身在证；
+  非 VLM 的全部环节（数据集、掩膜、genctx、oracle、gtluts、zgt、LPIPS、`I_tar`、12.2 分区）
+  已在 CPU 上用**真实数据**跑通（见 13.1 / 13.3）。
+- `WT-J7`（33³ baked render 的第二组图像指标与并排图）仍未实现，§13 联图交付前要补。
+- `WT-J4`（image-shuffle 批次构造）未实现 ⇒ §12.3 的 image-shuffle 一列这次仍缺；
+  instruction-shuffle 的配对差分已在 `arm_metrics` 里。
