@@ -643,7 +643,16 @@ C03/C04 用 `cband12` 的 Where-A oracle latent（`rho` = 3×12 = 36 维）。�
    **真机验证（13 个 V_what 样本）**：`I_tar ≠ I_in`（0/13 相同）；local 样本
    掩膜内平均 |Δ| 是掩膜外的 **6–10 倍**（例：0.1058 内 vs 0.0100 外），正是局部编辑该有的样子。
 
-### 13.4 待主 agent 决策
+### 13.4 待主 agent 决策 —— **四项已裁定（2026-08-10，主 agent 回执）**
+
+| # | 裁定 | 附带指示 |
+|---|---|---|
+| **DQ-1** | **认可**：`--composite-mask gt`，且该参数无默认值、不给就拒跑 | **新 Where 定档后**：T 臂按协议用 frozen `m_pred` 合成；**C 臂用同一口径重评即可，不必重训** —— 评测是便宜的（每臂 30–60 min），训练不是。这条把「D-EXEC5 的代价」从「四个臂作废」降到「四次重评」 |
+| **DQ-2** | **认可**：控制臂只评 `what_final.pt` | 异常再回扫指定 step（`eval.jsonl` 的在线曲线是回扫的依据） |
+| **DQ-3** | **记为 T 臂阶段待办**：C 臂出四份**单独**报告即可 | 跨臂 `main_board` 合并脚本推迟到 T 臂阶段一并做 |
+| **DQ-4** | **认可**：`I_tar` 取 build 的 `.jpg` 渲染图 | 理由采纳：重渲会让掩膜外误差**恒等于 0**，分区指标退化 |
+
+以下为提交裁定时的原始记录（保留，便于审阅对照裁定前后的口径）：
 
 | # | 事项 | 我采用的保守默认 | 为什么需要你裁 |
 |---|---|---|---|
@@ -660,3 +669,96 @@ C03/C04 用 `cband12` 的 Where-A oracle latent（`rho` = 3×12 = 36 维）。�
 - `WT-J7`（33³ baked render 的第二组图像指标与并排图）仍未实现，§13 联图交付前要补。
 - `WT-J4`（image-shuffle 批次构造）未实现 ⇒ §12.3 的 image-shuffle 一列这次仍缺；
   instruction-shuffle 的配对差分已在 `arm_metrics` 里。
+- **DQ-3 已裁定推迟**：跨臂 `main_board` 合并脚本记为 **T 臂阶段待办**，C 臂交四份单独报告。
+
+### 13.6 事故记录 —— `I_tar` 读的是 `I_in`（2026-08-10，EXEC-5 接线时发现）
+
+> 主 agent 回执：「`I_tar` 修复是本阶段最有价值的一抓」。记在这里是为了让**下一个人不必重新发现它**。
+
+#### 症状
+
+`scripts/evaluate_what.py` 从未被执行过（PREFLIGHT 三-ter 明写「**未执行**」）。EXEC-5 第一次
+在真实数据上走它的第 4 个样本时崩在：
+
+```
+AttributeError: 'dict' object has no attribute 'shard'
+  q3vl/what/data.py:239  in load_target_image
+  q3vl/train/shards.py:609 in ShardStore.read
+```
+
+#### 根因（两层，第二层才是真的）
+
+1. **类型错**：`load_target_image` 把 `rec["image"]["baked"]`（一个 **dict**）交给了
+   要 `MemberRef` 的 `ShardStore.read`。这一层一读就崩。
+2. **对象错**：即使把类型修好，`image.baked` **也不是 `I_tar`**。
+
+`q3vl/data/bake.py` 的模块文档写得很清楚——baked 是 **`I_in` 的契约尺寸副本**：
+
+> "the spec-5 transform is deterministic ... pre-applying it removes nothing";
+> "byte-for-byte the one the trainer would apply online -- decode,
+> `ImageOps.exif_transpose`, RGB, `plan_geometry` size, BICUBIC"
+
+`q3vl/data/verify.py::check_bake_fidelity` 更是直接拿它跟 `prepare_image(原图)` **逐像素比**。
+
+**真机实测（V_what 第一条）**：`rec["image"]["baked"]` 与 dataset 已经加载为输入的
+`ref.members["image"]` —— **shard / offset / length / sha256 四项全同**：
+
+```
+shard  /mnt/nfs/bc/data/datasets/sft2seg-20260804/images/shards/shard-00003.tar
+offset 1689694208   length 309416
+sha256 1809b08f9b13a3e8b568205d8a4debffed274df654f4d9cb0152cf9bd1e4cea3
+```
+
+即：**若这段代码「能跑」，§12.2 的 PSNR / SSIM / LPIPS / ΔE00 全套图像指标量的是
+「预测结果 vs 输入图自己」，也就是「你改得多小」——改得越少分越高。**
+它没有静默出错，**纯属运气**（类型不匹配先崩了），不是设计。这正是本战役 s 缓存契约里
+反复说的「第二种失败模式是静默的」的同型事故，只是这次被类型系统撞了一下。
+
+#### 真值在哪（provenance，非推测）
+
+`q3vl/where/maskdata.py` 的模块文档 **2026-08-05 就已经写明**（原话，「by reading the
+published data (not by naming convention)」）：
+
+> every local build batch (`prod-l{1..6}-local17k-*`) publishes exactly one
+> `<source_sample_id>.cgt.png` member per sample, **next to `.in.*` (I_in) and
+> `.jpg` (I_tar)**
+
+本次独立复核了这条：查 build 自己的 `indexes/catalog.sqlite3`，
+`prod-l2-local17k-20260731/batch-0000` 的 suffix 分布为
+
+```
+.vrmeta.json 1881 | .jpg 1881 | .cgt.png 1881 | .in.jpg 1132 | .in.png 749
+```
+
+`.jpg` 与 `.vrmeta.json`、`.cgt.png` **各 1881，一候选一份**；`.in.jpg + .in.png = 1881`
+恰好是输入侧。读一条 `.vrmeta.json` 确认它描述的是一个**候选**（`preset_id` / `mask_id` /
+`qa.onealign` / `winner_rank`）——即 `.jpg` 就是 QA 与 winner 选择**当时真正评分的那张渲染图**。
+全局 build（`prod-g3-global25k`）无 `.cgt.png`（全局编辑没有 ROI），其余同构。
+
+#### 修法
+
+- `q3vl/where/maskdata.py`：`MaskResolver` 接受 `suffix`（**默认仍是 `.cgt.png`**，Where 侧行为不变），
+  新增 `read_bytes`（后缀无关的原始字节读取）。同一套 catalog / jsonl 回退 / 校验和逻辑复用。
+- `q3vl/what/data.py`：`target_locator` 从「`image.baked` 的 locator」改为
+  `{root, source_sample_id, suffix=".jpg"}`（**只是坐标，不是像素**）；`load_target_image`
+  过同一个 `prepare_image`（build 渲染在自己的分辨率上，短边 1024，而 §12.2 全部指标在 spec-5 网格上），
+  并**断言与 `I_in` 同形而不是 resize**——形状不符说明 locator 找错了，静默 resize 正是让这种错继续隐身的办法。
+
+#### 验证（13 个 V_what 样本，真机）
+
+| 检查 | 结果 |
+|---|---|
+| `I_tar` 是否等于 `I_in` | **0 / 13 相同**（修复前按定义必然 13/13 相同） |
+| 形状 | 全部与 `I_in` 一致（768×512 / 512×768 / 512×640 / 640×512） |
+| local 样本掩膜**内** vs **外** 平均 \|Δ\| | **6–10 倍**（例：0.1058 内 vs 0.0100 外；0.0682 vs 0.0077） |
+| 掩膜外残差 | ~0.006–0.010（JPEG 重编码 + 软边），**非 0** ⇒ §12.2 的内/边界/外分区**不退化** |
+
+掩膜内外相差 6–10 倍，是「局部编辑」该有的形状——这同时验证了 `I_tar` 找对了、
+GT 掩膜与 `I_tar` 在同一坐标系里。
+
+#### 连带结论
+
+- **此前没有任何数字受污染**：这条路径从未成功执行过（在线 eval 只做 LUT function 指标，
+  不碰 `I_tar`），所以没有已发布的 §12.2 数字需要撤回。
+- **回归护栏**：`test_exec5_offline_eval.py` 三条——`_target_locator` 不得指向 `image.baked`、
+  记录不完整时必须返回 `None`、AST 断言 `load_target_image` 源码里不得再出现 `baked`。
