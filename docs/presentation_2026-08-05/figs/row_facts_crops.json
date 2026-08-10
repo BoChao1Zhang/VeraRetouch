@@ -1,0 +1,188 @@
+[
+ {
+  "fig": "P13a_dense_edge_degradation_row1.png",
+  "source_png": "experiments/MCQ_full_local_l1l6_20260804/viz/config_ab_compare/compare20_p01.png",
+  "rule": "按原图行序取第 1 行（共 5 行）",
+  "native_px": "每格 128×128（模型渲染分辨率），放大到 440 不引入新信息"
+ },
+ {
+  "fig": "P13a_dense_edge_degradation_row2.png",
+  "source_png": "experiments/MCQ_full_local_l1l6_20260804/viz/config_ab_compare/compare20_p01.png",
+  "rule": "按原图行序取第 2 行（共 5 行）",
+  "native_px": "每格 128×128（模型渲染分辨率），放大到 440 不引入新信息"
+ },
+ {
+  "fig": "P13a_dense_edge_degradation_row3.png",
+  "source_png": "experiments/MCQ_full_local_l1l6_20260804/viz/config_ab_compare/compare20_p01.png",
+  "rule": "按原图行序取第 3 行（共 5 行）",
+  "native_px": "每格 128×128（模型渲染分辨率），放大到 440 不引入新信息"
+ },
+ {
+  "fig": "P13b_metaquery_not_instruction_conditioned_row1.png",
+  "source_png": "experiments/MCQ_e2e_whatwhere_20260803/viz/best_where_w14_metaquery.png",
+  "rule": "按原图行序取第 1 行（共 6 行）",
+  "pairing": "第 1、2 行是同一张图的 rega / regb 两条指令，可直接看「切指令时预测几乎不动」"
+ },
+ {
+  "fig": "P13b_metaquery_not_instruction_conditioned_row2.png",
+  "source_png": "experiments/MCQ_e2e_whatwhere_20260803/viz/best_where_w14_metaquery.png",
+  "rule": "按原图行序取第 2 行（共 6 行）",
+  "pairing": "第 1、2 行是同一张图的 rega / regb 两条指令，可直接看「切指令时预测几乎不动」"
+ },
+ {
+  "fig": "P13b_metaquery_not_instruction_conditioned_row3.png",
+  "source_png": "experiments/MCQ_e2e_whatwhere_20260803/viz/best_where_w14_metaquery.png",
+  "rule": "按原图行序取第 3 行（共 6 行）",
+  "pairing": "第 1、2 行是同一张图的 rega / regb 两条指令，可直接看「切指令时预测几乎不动」"
+ },
+ {
+  "fig": "P14a_basis_functions_14_row1.png",
+  "source_npz": "experiments/MCQ_basis_where_l1l6_20260804/viz/basis_vlm14_full/features20.npz",
+  "uid": "prod-l1-local17k-20260731__candidate_35bdf6a553fb099896a7170c78a0b159",
+  "group": "几何基 8 维（解析图案 + 图像亮度/饱和度）",
+  "rule": "原图是 14 基的 4×4 图鉴；按基的定义顺序拆成「几何 8 + 语义 6」两张单行",
+  "native_px": "每格 16×16 原生分辨率，最近邻放大（不插值，不造边界）"
+ },
+ {
+  "fig": "P14a_basis_functions_14_row2.png",
+  "source_npz": "experiments/MCQ_basis_where_l1l6_20260804/viz/basis_vlm14_full/features20.npz",
+  "uid": "prod-l1-local17k-20260731__candidate_35bdf6a553fb099896a7170c78a0b159",
+  "group": "VLM 语义基 e1..e6（图像相关）",
+  "rule": "原图是 14 基的 4×4 图鉴；按基的定义顺序拆成「几何 8 + 语义 6」两张单行",
+  "native_px": "每格 16×16 原生分辨率，最近邻放大（不插值，不造边界）"
+ },
+ {
+  "fig": "P14b_basis_weighted_contrib_row1.png",
+  "source_npz": "experiments/MCQ_basis_where_l1l6_20260804/viz/basis_geo_range8_full/features20.npz",
+  "uid": "prod-l1-local17k-20260731__candidate_35bdf6a553fb099896a7170c78a0b159",
+  "rule": "按冻结清单顺序取第 1 个样本（共 20 个）",
+  "coefficients": {
+   "1": -0.229,
+   "x": -0.011,
+   "y": 0.734,
+   "P2(x)": -0.252,
+   "P2(y)": -0.359,
+   "xy": 0.002,
+   "L": 0.003,
+   "S": -0.021
+  },
+  "colour": "同一行内共享色标（±0.5967，取 |贡献| 的 98 分位）"
+ },
+ {
+  "fig": "P14b_basis_weighted_contrib_row2.png",
+  "source_npz": "experiments/MCQ_basis_where_l1l6_20260804/viz/basis_geo_range8_full/features20.npz",
+  "uid": "prod-l1-local17k-20260731__candidate_200922a31ac6b5172bc7716954e6ce71",
+  "rule": "按冻结清单顺序取第 2 个样本（共 20 个）",
+  "coefficients": {
+   "1": -0.114,
+   "x": -0.145,
+   "y": 0.082,
+   "P2(x)": -0.727,
+   "P2(y)": -0.235,
+   "xy": 0.007,
+   "L": -0.012,
+   "S": -0.0
+  },
+  "colour": "同一行内共享色标（±0.3590，取 |贡献| 的 98 分位）"
+ },
+ {
+  "fig": "P64a_geo8_detail_row1.png",
+  "source_npz": "experiments/MCQ_basis_where_l1l6_20260804/viz/basis_geo_range8_full/features20.npz",
+  "uid": "prod-l1-local17k-20260731__candidate_35bdf6a553fb099896a7170c78a0b159",
+  "soft_iou": 0.5441,
+  "rule": "按冻结清单顺序取第 1 个样本（共 20 个）",
+  "top_basis": [
+   "y w=+0.734",
+   "P2(y) w=-0.359"
+  ]
+ },
+ {
+  "fig": "P64a_geo8_detail_row2.png",
+  "source_npz": "experiments/MCQ_basis_where_l1l6_20260804/viz/basis_geo_range8_full/features20.npz",
+  "uid": "prod-l1-local17k-20260731__candidate_200922a31ac6b5172bc7716954e6ce71",
+  "soft_iou": 0.5046,
+  "rule": "按冻结清单顺序取第 2 个样本（共 20 个）",
+  "top_basis": [
+   "P2(x) w=-0.727",
+   "P2(y) w=-0.235"
+  ]
+ },
+ {
+  "fig": "P64b_vlm14_detail_row1.png",
+  "source_npz": "experiments/MCQ_basis_where_l1l6_20260804/viz/basis_vlm14_full/features20.npz",
+  "uid": "prod-l1-local17k-20260731__candidate_35bdf6a553fb099896a7170c78a0b159",
+  "soft_iou": 0.5431,
+  "rule": "按冻结清单顺序取第 1 个样本（共 20 个）",
+  "top_basis": [
+   "y w=+0.727",
+   "P2(y) w=-0.301"
+  ]
+ },
+ {
+  "fig": "P64b_vlm14_detail_row2.png",
+  "source_npz": "experiments/MCQ_basis_where_l1l6_20260804/viz/basis_vlm14_full/features20.npz",
+  "uid": "prod-l1-local17k-20260731__candidate_200922a31ac6b5172bc7716954e6ce71",
+  "soft_iou": 0.4848,
+  "rule": "按冻结清单顺序取第 2 个样本（共 20 个）",
+  "top_basis": [
+   "P2(x) w=-0.490",
+   "P2(y) w=-0.200"
+  ]
+ },
+ {
+  "fig": "P15a_ring_monotone_vs_bandpass_row1.png",
+  "source_png": "experiments/E2_basis_fit_20260803/viz/ring_evidence.png",
+  "part": "原复合图的上半：散点 / 中位线，纯图表，原样搬运未改内容"
+ },
+ {
+  "fig": "P15a_ring_monotone_vs_bandpass_row2.png",
+  "source_png": "experiments/E2_basis_fit_20260803/viz/ring_evidence.png",
+  "part": "原复合图的下半：样例行",
+  "rule": "原图下半就是 4 列样例，原样拆出，未改内容"
+ },
+ {
+  "fig": "P15b_constrained_axis_row1.png",
+  "source_png": "experiments/E2_basis_fit_20260803/viz/constrained_axis_evidence.png",
+  "part": "原复合图的上半：散点 / 中位线，纯图表，原样搬运未改内容"
+ },
+ {
+  "fig": "P15b_constrained_axis_row2.png",
+  "source_png": "experiments/E2_basis_fit_20260803/viz/constrained_axis_evidence.png",
+  "part": "原复合图的下半：样例行",
+  "rule": "原图下半就是 5 列样例，原样拆出，未改内容"
+ },
+ {
+  "fig": "P15c_semantic_fit_row1.png",
+  "source_png": "experiments/E2_basis_fit_20260803/viz/success_semantic.png",
+  "rule": "按原图行序取第 1 行（共 3 行）",
+  "note": "第 1、2 行为单调读出档，第 3 行为带通读出档"
+ },
+ {
+  "fig": "P15c_semantic_fit_row2.png",
+  "source_png": "experiments/E2_basis_fit_20260803/viz/success_semantic.png",
+  "rule": "按原图行序取第 2 行（共 3 行）",
+  "note": "第 1、2 行为单调读出档，第 3 行为带通读出档"
+ },
+ {
+  "fig": "P15d_semantic_failure_row1.png",
+  "source_png": "experiments/E2_basis_fit_20260803/viz/failure_semantic.png",
+  "rule": "按原图行序取第 1 行（共 3 行）",
+  "note": "语义族尾部失败案例：多个互不相连的小实例 + 细碎边界"
+ },
+ {
+  "fig": "P15d_semantic_failure_row2.png",
+  "source_png": "experiments/E2_basis_fit_20260803/viz/failure_semantic.png",
+  "rule": "按原图行序取第 2 行（共 3 行）",
+  "note": "语义族尾部失败案例：多个互不相连的小实例 + 细碎边界"
+ },
+ {
+  "fig": "APX_e1b_lowrank_failure_row1.png",
+  "source_png": "experiments/E1b_svd_20260803/viz/failure_r48.png",
+  "rule": "按原图行序取第 1 行（共 3 行）"
+ },
+ {
+  "fig": "APX_e1b_lowrank_failure_row2.png",
+  "source_png": "experiments/E1b_svd_20260803/viz/failure_r48.png",
+  "rule": "按原图行序取第 2 行（共 3 行）"
+ }
+]

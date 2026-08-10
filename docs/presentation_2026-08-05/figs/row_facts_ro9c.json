@@ -1,0 +1,85 @@
+{
+ "picks_rule": {
+  "rule": "分层取样，仅用 G1 配置里的源属性（pool / region_b_kind / subject_area / winner_confidence），不看任何本实验读出结果；每层按 img_id 字典序取第一个",
+  "strata": [
+   "pool=awards",
+   "pool=unsplash",
+   "pool=ppr10k",
+   "region_b_kind=spatial",
+   "region_b_kind=background"
+  ],
+  "filters": {
+   "winner_confidence": "!= low",
+   "subject_area": "[0.08, 0.35]"
+  },
+  "picked": [
+   "src_08aef2f575be97b1",
+   "src_0e6178111d466cfb",
+   "ppr10k_0579_a",
+   "ppr10k_2164_a",
+   "ppr10k_0815_a"
+  ]
+ },
+ "rows": [
+  {
+   "fig": "P3c_seven_col_ablation_GC_row1.png",
+   "token": "GC",
+   "src": "src_08aef2f575be97b1",
+   "subject_area": 0.263,
+   "pad_mass_share": 0.5572,
+   "argmax_in_pad": true,
+   "auc_raw": 0.48,
+   "auc_m1": 0.3736
+  },
+  {
+   "fig": "P3c_seven_col_ablation_GC_row2.png",
+   "token": "GC",
+   "src": "src_0e6178111d466cfb",
+   "subject_area": 0.253,
+   "pad_mass_share": 0.5157,
+   "argmax_in_pad": true,
+   "auc_raw": 0.7354,
+   "auc_m1": 0.8094
+  },
+  {
+   "fig": "P3c_seven_col_ablation_GC_row3.png",
+   "token": "GC",
+   "src": "ppr10k_0579_a",
+   "subject_area": 0.318,
+   "pad_mass_share": 0.5585,
+   "argmax_in_pad": true,
+   "auc_raw": 0.7041,
+   "auc_m1": 0.7325
+  },
+  {
+   "fig": "P3d_seven_col_ablation_L_row1.png",
+   "token": "L",
+   "src": "src_08aef2f575be97b1",
+   "subject_area": 0.263,
+   "pad_mass_share": 0.7373,
+   "argmax_in_pad": true,
+   "auc_raw": 0.6946,
+   "auc_m1": 0.6718
+  },
+  {
+   "fig": "P3d_seven_col_ablation_L_row2.png",
+   "token": "L",
+   "src": "src_0e6178111d466cfb",
+   "subject_area": 0.253,
+   "pad_mass_share": 0.6917,
+   "argmax_in_pad": true,
+   "auc_raw": 0.4714,
+   "auc_m1": 0.5313
+  },
+  {
+   "fig": "P3d_seven_col_ablation_L_row3.png",
+   "token": "L",
+   "src": "ppr10k_0579_a",
+   "subject_area": 0.318,
+   "pad_mass_share": 0.6953,
+   "argmax_in_pad": true,
+   "auc_raw": 0.6265,
+   "auc_m1": 0.4708
+  }
+ ]
+}

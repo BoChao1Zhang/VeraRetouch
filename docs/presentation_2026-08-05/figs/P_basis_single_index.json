@@ -1,0 +1,67 @@
+{
+ "schema": "p_basis_single_index_v1",
+ "rule": "PPT 版式：**一页一图、一图一行**，6 列。\n\n    选源（effect-blind，不看任何一臂预测）：在 `pick_sources()` 已冻结的 L1–L6 六例中，\n    再按同一把排序键 —— **GT 形状复杂度** —— 取前 N_SINGLE 名。\n\n    `clean=True`（`--clean`，评审 2026-08-05 要求「只读原始 attention 图本身」）：\n    画面里只留热力图 + 一行短列标题 + 色标条。删除大标题/副标题、列标题下的小字、\n    底部全部说明段落、格内数值标注、以及叠在第 3–6 列上的红虚线 GT 轮廓\n    （真值已单独占第 2 列）。**保留补边格的白色打叉**（那是数据本身）。\n    数据、选源、色标口径与非 clean 版逐字相同 —— 本开关只动画面元素。\n    ",
+ "diff_shared_limit": 0.47775185108184814,
+ "files": [
+  {
+   "path": "/home/bc/VeraRetouch/docs/presentation_2026-08-05/figs/P_basis_single_L3_src_f1b21a1551.png",
+   "level": "L3",
+   "source_id": "src_f1b21a1551357050",
+   "uid": "prod-l3-local17k-20260731__candidate_a19d9ad0ccfb27e3ac8512d19ddfad74",
+   "shape_complexity": 4.153696673030629,
+   "geo8_soft_iou": 0.27967246043331373,
+   "vlm14_soft_iou": 0.27189757456844427,
+   "delta_soft_iou": -0.007774885864869463,
+   "raw_attn_iou_at_k": 0.044547554758400186,
+   "geo8_iou_at_k": 0.3012781201615107,
+   "vlm14_iou_at_k": 0.34603282271588187,
+   "pad_cells": 0,
+   "pad_mass_frac": 0.0
+  },
+  {
+   "path": "/home/bc/VeraRetouch/docs/presentation_2026-08-05/figs/P_basis_single_L6_src_9f9f56ed1d.png",
+   "level": "L6",
+   "source_id": "src_9f9f56ed1dd50cfd",
+   "uid": "prod-l6-local17k-20260801__candidate_4a05701277ae1cfbf651ef31629b7f3e",
+   "shape_complexity": 3.476849029407952,
+   "geo8_soft_iou": 0.3020011505224232,
+   "vlm14_soft_iou": 0.36665758070702414,
+   "delta_soft_iou": 0.06465643018460093,
+   "raw_attn_iou_at_k": 0.24889043507595643,
+   "geo8_iou_at_k": 0.47267008938005795,
+   "vlm14_iou_at_k": 0.6545184109271454,
+   "pad_cells": 96,
+   "pad_mass_frac": 0.558381199836731
+  },
+  {
+   "path": "/home/bc/VeraRetouch/docs/presentation_2026-08-05/figs/P_basis_single_L1_src_0e6178111d.png",
+   "level": "L1",
+   "source_id": "src_0e6178111d466cfb",
+   "uid": "prod-l1-local17k-20260731__candidate_f674b70225c0a900b9e417b0b77da624",
+   "shape_complexity": 3.4146993577656577,
+   "geo8_soft_iou": 0.21406587557217416,
+   "vlm14_soft_iou": 0.22525024410952893,
+   "delta_soft_iou": 0.011184368537354772,
+   "raw_attn_iou_at_k": 0.33963892415155933,
+   "geo8_iou_at_k": 0.34549085987231143,
+   "vlm14_iou_at_k": 0.3933112630161755,
+   "pad_cells": 96,
+   "pad_mass_frac": 0.5157133936882019
+  },
+  {
+   "path": "/home/bc/VeraRetouch/docs/presentation_2026-08-05/figs/P_basis_single_L4_ppr10k_3327a.png",
+   "level": "L4",
+   "source_id": "ppr10k_3327_a",
+   "uid": "prod-l4-local17k-20260801__candidate_5fa0ca421b33cb4b8ac9f23c12cf0d57",
+   "shape_complexity": 3.0905561894725584,
+   "geo8_soft_iou": 0.24003393577846677,
+   "vlm14_soft_iou": 0.24242021143134335,
+   "delta_soft_iou": 0.0023862756528765794,
+   "raw_attn_iou_at_k": 0.13196266456151756,
+   "geo8_iou_at_k": 0.394193303925704,
+   "vlm14_iou_at_k": 0.3875764906788103,
+   "pad_cells": 96,
+   "pad_mass_frac": 0.5038799047470093
+  }
+ ]
+}

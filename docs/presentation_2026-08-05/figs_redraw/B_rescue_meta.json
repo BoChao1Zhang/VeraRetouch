@@ -1,0 +1,296 @@
+{
+ "replaces": "BIWEEKLY_REPORT 图 5(a)(b)(c) / assets/P52a_,P52b_,P52c_*.png",
+ "source_rule": {
+  "rule": "RO-9c 冻结 figure_picks.json 的 picked 列表，保持冻结顺序；剔除长宽比 > 1.8 的源（版式原因：单行五列在 PPT 一页内不可读；本批只剔除 src_08aef2f575be97b1 = 1920×960 双联幅）；取前 3 项。全程 effect-blind——只用 G1 配置里的源属性与图像长宽比，不看任何读出结果。",
+  "frozen_list": [
+   "src_08aef2f575be97b1",
+   "src_0e6178111d466cfb",
+   "ppr10k_0579_a",
+   "ppr10k_2164_a",
+   "ppr10k_0815_a"
+  ],
+  "dropped_for_layout": [
+   {
+    "img_id": "src_08aef2f575be97b1",
+    "size": [
+     1920,
+     960
+    ],
+    "aspect": 2.0,
+    "pool": "awards",
+    "region_b_kind": "spatial"
+   }
+  ],
+  "kept": [
+   {
+    "img_id": "src_0e6178111d466cfb",
+    "size": [
+     2048,
+     3072
+    ],
+    "aspect": 1.5,
+    "pool": "unsplash",
+    "region_b_kind": "background"
+   },
+   {
+    "img_id": "ppr10k_0579_a",
+    "size": [
+     360,
+     540
+    ],
+    "aspect": 1.5,
+    "pool": "ppr10k",
+    "region_b_kind": "background"
+   },
+   {
+    "img_id": "ppr10k_2164_a",
+    "size": [
+     360,
+     540
+    ],
+    "aspect": 1.5,
+    "pool": "ppr10k",
+    "region_b_kind": "spatial"
+   }
+  ]
+ },
+ "field_before": {
+  "cfg": {
+   "interaction": "pre",
+   "head": "mean",
+   "layer": "canon",
+   "post": "a1"
+  },
+  "desc": "RO-9 原样：pre / head-mean / L8–15 / D-0（无任何拟合）"
+ },
+ "field_after": {
+  "cfg": {
+   "interaction": "qq",
+   "head": "top3",
+   "layer": "best1",
+   "post": "aff",
+   "zlayer": false,
+   "crit": "auc"
+  },
+  "desc": "RO-9b REPORT §2a 受限档终配置（主叙事）；本目录零 GPU 重算，5 折 source-level CV out-of-fold",
+  "layers_per_fold": [
+   [
+    11
+   ],
+   [
+    11
+   ],
+   [
+    11
+   ],
+   [
+    11
+   ],
+   [
+    11
+   ]
+  ]
+ },
+ "reproduction_check": {
+  "recomputed_auc_after": 0.9200006817329652,
+  "report_2a_auc": 0.9200006817329652,
+  "recomputed_auc_target_after": 0.5041547435615232,
+  "report_2a_auc_target": 0.5041547435615232,
+  "recomputed_auc_before": 0.6607084611587151,
+  "report_S0_auc": 0.6607084611587151,
+  "note": "⚠️ AUC 仅用于与 REPORT 已落盘数字对表（判据不完整，结论限于排序）；判据一律看下面的 soft-IoU / grid 边界 F1 / 中心先验列"
+ },
+ "colour_scale": "第 4、5 列共用一把色标（同算子同值域）；第 3 列因算子与值域不同单独取自己的有效格色标，与第 4 列只比形状不比数值",
+ "figures": [
+  {
+   "file": "B_rescue_src_0e617811.png",
+   "img_id": "src_0e6178111d466cfb",
+   "pool": "unsplash",
+   "region_b_kind": "background",
+   "instr_a": "Please brighten a bouquet of flowers including orange lilies and a pale pink chrysanthemum, held in front of a blurred person, keeping the rest of the image unchanged.",
+   "instr_b": "Please brighten the background, keeping the rest of the image unchanged.",
+   "pad_cells": 96,
+   "before": {
+    "k": 41,
+    "soft_iou": 0.046891809380552575,
+    "hard_iou": 0.05128205128205128,
+    "bf1_grid": 0.29520295202952024
+   },
+   "after": {
+    "k": 41,
+    "soft_iou": 0.6235955227361333,
+    "hard_iou": 0.7083333333333334,
+    "bf1_grid": 0.9836065573770492
+   },
+   "after_opposite_instr": {
+    "k": 41,
+    "soft_iou": 0.6353140357953974,
+    "hard_iou": 0.7083333333333334,
+    "bf1_grid": 0.9824561403508771
+   },
+   "center_prior": {
+    "k": 41,
+    "soft_iou": 0.35627653920772534,
+    "hard_iou": 0.3898305084745763,
+    "bf1_grid": 0.5596868884540117
+   },
+   "rho_after_a_vs_b": 0.997541804664878,
+   "rho_before_a_vs_b": 0.8703901564188548,
+   "d_norm_max_after": 0.10103575502022688,
+   "s_range_before_all": [
+    -12.32101058959961,
+    0.823309063911438
+   ],
+   "s_range_before_valid": [
+    -6.851004600524902,
+    -0.191837877035141
+   ],
+   "s_range_after_valid": [
+    -1.9580014944076538,
+    1.8450852632522583
+   ]
+  },
+  {
+   "file": "B_rescue_ppr10k_0579_a.png",
+   "img_id": "ppr10k_0579_a",
+   "pool": "ppr10k",
+   "region_b_kind": "background",
+   "instr_a": "Please darken the woman in red traditional dress leaning against brick wall, keeping the rest of the image unchanged.",
+   "instr_b": "Please darken the background, keeping the rest of the image unchanged.",
+   "pad_cells": 96,
+   "before": {
+    "k": 54,
+    "soft_iou": 0.2598108630425541,
+    "hard_iou": 0.2558139534883721,
+    "bf1_grid": 0.7486631016042781
+   },
+   "after": {
+    "k": 54,
+    "soft_iou": 0.7288465445563287,
+    "hard_iou": 0.7704918032786885,
+    "bf1_grid": 0.96875
+   },
+   "after_opposite_instr": {
+    "k": 54,
+    "soft_iou": 0.6521115726887157,
+    "hard_iou": 0.6875,
+    "bf1_grid": 0.9369951534733442
+   },
+   "center_prior": {
+    "k": 54,
+    "soft_iou": 0.32454036256326785,
+    "hard_iou": 0.3333333333333333,
+    "bf1_grid": 0.4406779661016949
+   },
+   "rho_after_a_vs_b": 0.995535923429823,
+   "rho_before_a_vs_b": 0.7367718494455753,
+   "d_norm_max_after": 0.05408534750295135,
+   "s_range_before_all": [
+    -12.6800537109375,
+    0.1889411211013794
+   ],
+   "s_range_before_valid": [
+    -4.8827972412109375,
+    0.1889411211013794
+   ],
+   "s_range_after_valid": [
+    -1.2931991815567017,
+    1.1988155841827393
+   ]
+  },
+  {
+   "file": "B_rescue_ppr10k_2164_a.png",
+   "img_id": "ppr10k_2164_a",
+   "pool": "ppr10k",
+   "region_b_kind": "spatial",
+   "instr_a": "Please brighten the woman in blue hanfu holding an umbrella, keeping the rest of the image unchanged.",
+   "instr_b": "Please brighten the upper part of the image, keeping the rest of the image unchanged.",
+   "pad_cells": 96,
+   "before": {
+    "k": 24,
+    "soft_iou": 0.10169569749965239,
+    "hard_iou": 0.09090909090909091,
+    "bf1_grid": 0.3610315186246419
+   },
+   "after": {
+    "k": 24,
+    "soft_iou": 0.20418852618055705,
+    "hard_iou": 0.2,
+    "bf1_grid": 0.626865671641791
+   },
+   "after_opposite_instr": {
+    "k": 24,
+    "soft_iou": 0.14297881495654244,
+    "hard_iou": 0.14285714285714285,
+    "bf1_grid": 0.47941888619854717
+   },
+   "center_prior": {
+    "k": 24,
+    "soft_iou": 0.22031735616354403,
+    "hard_iou": 0.2,
+    "bf1_grid": 0.3870967741935484
+   },
+   "rho_after_a_vs_b": 0.994793062175045,
+   "rho_before_a_vs_b": 0.7658109581802703,
+   "d_norm_max_after": 0.08616050011606805,
+   "s_range_before_all": [
+    -11.484288215637207,
+    0.34963127970695496
+   ],
+   "s_range_before_valid": [
+    -5.2416815757751465,
+    0.09657067060470581
+   ],
+   "s_range_after_valid": [
+    -1.1168646812438965,
+    1.4750285148620605
+   ]
+  }
+ ],
+ "batch": {
+  "n": 212,
+  "soft_iou_median": {
+   "before": 0.1471800638642406,
+   "after": 0.37694164462355517,
+   "afterB": 0.3801911277384118,
+   "center": 0.30117951457124487
+  },
+  "bf1_grid_median": {
+   "before": 0.5319727891156463,
+   "after": 0.8460915532561016,
+   "center": 0.5353730664240219
+  },
+  "paired_after_minus_before_soft_iou": {
+   "median_delta": 0.22265452646464418,
+   "wilcoxon_p": 1.346950985870433e-29,
+   "winrate": 0.8773584905660378,
+   "n": 212
+  },
+  "paired_after_minus_center_soft_iou": {
+   "median_delta": 0.07384510335902174,
+   "wilcoxon_p": 1.2362674374069015e-12,
+   "winrate": 0.6792452830188679,
+   "n": 212
+  },
+  "paired_after_minus_before_bf1": {
+   "median_delta": 0.3054708894279797,
+   "wilcoxon_p": 5.071940847199154e-24,
+   "winrate": 0.8254716981132075,
+   "n": 212
+  },
+  "paired_after_minus_center_bf1": {
+   "median_delta": 0.23973313499249793,
+   "wilcoxon_p": 5.308879954900494e-24,
+   "winrate": 0.7924528301886793,
+   "n": 212
+  },
+  "rho_opposite_instr_median": {
+   "before": 0.8764810433529688,
+   "after": 0.9966654676019346
+  },
+  "n_rho_below_0.30": {
+   "before": 0,
+   "after": 0
+  }
+ }
+}

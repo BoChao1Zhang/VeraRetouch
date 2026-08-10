@@ -1,0 +1,28 @@
+{
+ "s_base_a": {
+  "colorbar_used_by_valid": 0.6630346775054932,
+  "relu_mass_in_pad": 0.5204253792762756,
+  "argmax_in_pad": 0.5754716981132075,
+  "argmin_in_pad": 0.8915094339622641
+ },
+ "s_fix_a": {
+  "colorbar_used_by_valid": 0.9139325618743896,
+  "relu_mass_in_pad": 0.039810340851545334,
+  "argmax_in_pad": 0.009433962264150943,
+  "argmin_in_pad": 0.9009433962264151
+ },
+ "s_fix_b": {
+  "colorbar_used_by_valid": 0.9178314208984375,
+  "relu_mass_in_pad": 0.04408795386552811,
+  "argmax_in_pad": 0.009433962264150943,
+  "argmin_in_pad": 0.8962264150943396
+ },
+ "pad_cell_frac_median": 0.375,
+ "G1_s_canon": {
+  "colorbar_used_by_valid": 0.658508837223053,
+  "argmax_in_pad": 0.5380952380952381,
+  "argmin_in_pad": 0.9,
+  "pad_cell_frac_median": 0.375,
+  "n": 210
+ }
+}
