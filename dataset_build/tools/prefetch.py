@@ -15,13 +15,15 @@ half-recycled entry only costs the archive read it was avoiding.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sqlite3
 import sys
 import tarfile
+import uuid
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Mapping, Sequence
 
 from dataset_build.tools.archive_reader import default_db, prefetch_name
 from dataset_build.tools.indexed_tar import BLOCK_SIZE, IndexedTarError, _load_manifest
@@ -38,7 +40,8 @@ from dataset_build.tools.indexed_tar import BLOCK_SIZE, IndexedTarError, _load_m
 # 连接是等值且 source_path 唯一，行集与 ORDER BY 决定的顺序都不受影响。
 _LOCATE_SQL = """
 SELECT w.source_path AS source_path, g.root AS root, m.shard AS shard,
-       m.member AS member, m.offset_data AS offset_data, m.size AS size
+       m.member AS member, m.offset_data AS offset_data, m.size AS size,
+       m.sha256 AS sha256
 FROM want w
 CROSS JOIN source_paths s ON s.source_path = w.source_path
 JOIN members m ON m."group" = s."group" AND m.member = s.member
@@ -94,11 +97,7 @@ def _pread_exact(descriptor: int, size: int, offset: int, what: str) -> bytes:
 
 
 def _read_member(descriptor: int, row: dict[str, object]) -> bytes:
-    """Read one member and check the tar header agrees with the catalog.
-
-    Header and payload come out in one pread so the descriptor walks forward
-    exactly once per member, which is the whole point of the ordering above.
-    """
+    """Read one member and verify both its tar header and indexed digest."""
     offset, size = int(row["offset_data"]), int(row["size"])
     block = _pread_exact(descriptor, BLOCK_SIZE + size, offset - BLOCK_SIZE, str(row["source_path"]))
     try:
@@ -107,75 +106,182 @@ def _read_member(descriptor: int, row: dict[str, object]) -> bytes:
         raise IndexedTarError(f"invalid member header for {row['source_path']}: {exc}") from exc
     if info.name != row["member"] or info.size != size:
         raise IndexedTarError(f"catalog does not match shard header for {row['source_path']}")
-    return block[BLOCK_SIZE:]
+    payload = block[BLOCK_SIZE:]
+    expected_digest = row.get("sha256")
+    if expected_digest and hashlib.sha256(payload).hexdigest() != expected_digest:
+        raise IndexedTarError(f"payload checksum mismatch for {row['source_path']}")
+    return payload
 
 
-def _publish(target: Path, payload: bytes) -> None:
+def _file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+class PrefetchResult(dict[str, Path]):
+    """Backward-compatible mapping plus the index metadata verified for each copy."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: dict[str, tuple[int, str]] = {}
+
+
+def _publish(
+    target: Path,
+    payload: bytes,
+    *,
+    cancelled: Callable[[], bool] | None = None,
+) -> None:
     """Land one buffered copy atomically, so a reader never sees a partial file."""
-    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
     try:
+        if cancelled is not None and cancelled():
+            raise InterruptedError("prefetch cancelled")
         tmp.write_bytes(payload)
+        if cancelled is not None and cancelled():
+            raise InterruptedError("prefetch cancelled")
         os.replace(tmp, target)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
-    # No fsync: the buffer is tmpfs and rebuildable by definition — losing it to
-    # a crash costs a re-read, and fsyncing every source would cost the round.
-
-
-def _still_local(path: str) -> bool:
-    try:
-        return os.stat(path).st_size > 0
-    except OSError:
-        return False
+    # No fsync: the buffer is rebuildable by definition; losing it costs a re-read.
 
 
 def prefetch(
-    source_paths: list[str], dest: Path, *, db_path: Path | None = None
+    source_paths: list[str],
+    dest: Path,
+    *,
+    db_path: Path | None = None,
+    progress: Callable[[Mapping[str, object]], None] | None = None,
+    strict: bool = False,
+    cancelled: Callable[[], bool] | None = None,
 ) -> dict[str, Path]:
     """Read the given sources in archive-physical order into ``dest``.
 
     Returns ``{original path: buffered copy}`` for the paths the buffer now
-    serves.  Paths that still exist on this machine are skipped — ``read_bytes``
-    is local-first, so buffering them would only duplicate them — and so are
-    paths the catalog does not know; both are simply absent from the mapping.
-    Already-buffered copies of the right size are kept as they are, which makes
-    the call idempotent and cheap to repeat on a resume.
+    serves. Paths that still exist on this machine are skipped because
+    ``read_bytes`` is local-first. Unknown catalog paths remain skipped by
+    default for compatibility; ``strict=True`` turns them into an error.
+
+    ``progress`` receives synchronous snapshots for ``locating`` and
+    ``materializing``. Existing callers pay no callback or strictness cost.
     """
     dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     resolved_db = Path(db_path) if db_path is not None else default_db()
+    requested = list(dict.fromkeys(map(str, source_paths)))
+    local_sizes: dict[str, int] = {}
+    wanted: list[str] = []
+    for path in requested:
+        try:
+            size = os.stat(path).st_size
+        except OSError:
+            wanted.append(path)
+        else:
+            if size > 0:
+                local_sizes[path] = size
+            else:
+                wanted.append(path)
 
-    wanted = [path for path in dict.fromkeys(map(str, source_paths)) if not _still_local(path)]
+    def emit(payload: Mapping[str, object]) -> None:
+        if progress is not None:
+            progress(payload)
+
+    emit({
+        "phase": "locating",
+        "files_done": len(local_sizes),
+        "files_total": len(requested),
+        "bytes_done": sum(local_sizes.values()),
+        "bytes_total": sum(local_sizes.values()),
+        "current_item": None,
+    })
     if not wanted:
-        return {}
+        return PrefetchResult()
 
-    fetched: dict[str, Path] = {}
+    rows = _locate(wanted, resolved_db)
+    located = {str(row["source_path"]) for row in rows}
+    missing = [path for path in wanted if path not in located]
+    if strict and missing:
+        preview = ", ".join(missing[:3])
+        suffix = "" if len(missing) <= 3 else f" (+{len(missing) - 3} more)"
+        raise IndexedTarError(f"catalog does not contain requested paths: {preview}{suffix}")
+
+    local_bytes = sum(local_sizes.values())
+    archive_bytes = sum(int(row["size"]) for row in rows)
+    files_done = len(local_sizes)
+    bytes_done = local_bytes
+    fetched = PrefetchResult()
+    pending: list[dict[str, object]] = []
+    for row in rows:
+        if cancelled is not None and cancelled():
+            raise InterruptedError("prefetch cancelled")
+        source_path = str(row["source_path"])
+        target = dest / prefetch_name(source_path)
+        size = int(row["size"])
+        digest = str(row["sha256"])
+        try:
+            cached = target.stat().st_size == size and _file_digest(target) == digest
+        except OSError:
+            cached = False
+        if cached:
+            os.utime(target, None)
+            fetched[source_path] = target
+            fetched.records[source_path] = (size, digest)
+            files_done += 1
+            bytes_done += size
+        else:
+            target.unlink(missing_ok=True)
+            pending.append(row)
+
+    # Invalid finals have been removed, so the exact peak increase for the
+    # single-writer materializer is the sum of all payloads still to publish.
+    bytes_needed = sum(int(row["size"]) for row in pending)
+    emit({
+        "phase": "materializing",
+        "files_done": files_done,
+        "files_total": len(local_sizes) + len(rows),
+        "bytes_done": bytes_done,
+        "bytes_total": local_bytes + archive_bytes,
+        "bytes_needed": bytes_needed,
+        "current_item": None,
+    })
+
     shard_paths: dict[tuple[str, str], str] = {}
     descriptor: int | None = None
     open_shard: str | None = None
     try:
-        for row in _locate(wanted, resolved_db):
+        for row in pending:
+            if cancelled is not None and cancelled():
+                raise InterruptedError("prefetch cancelled")
             source_path = str(row["source_path"])
             target = dest / prefetch_name(source_path)
             size = int(row["size"])
-            try:
-                if target.stat().st_size == size:
-                    fetched[source_path] = target
-                    continue
-            except OSError:
-                pass
+            digest = str(row["sha256"])
             path = _shard_path(str(row["root"]), str(row["shard"]), shard_paths)
             if path != open_shard:
-                # One descriptor at a time is enough: the rows arrive grouped by
-                # shard, so a shard is finished before the next one opens.
                 if descriptor is not None:
                     os.close(descriptor)
                 descriptor = os.open(path, os.O_RDONLY)
                 open_shard = path
             assert descriptor is not None
-            _publish(target, _read_member(descriptor, row))
+            payload = _read_member(descriptor, row)
+            _publish(target, payload, cancelled=cancelled)
             fetched[source_path] = target
+            fetched.records[source_path] = (size, digest)
+            files_done += 1
+            bytes_done += size
+            emit({
+                "phase": "materializing",
+                "files_done": files_done,
+                "files_total": len(local_sizes) + len(rows),
+                "bytes_done": bytes_done,
+                "bytes_total": local_bytes + archive_bytes,
+                "bytes_needed": bytes_needed,
+                "current_item": source_path,
+            })
     finally:
         if descriptor is not None:
             os.close(descriptor)

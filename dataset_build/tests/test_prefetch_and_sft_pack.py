@@ -21,9 +21,15 @@ from PIL import Image
 from dataset_build.tools.archive_reader import open_image, prefetch_name, read_bytes, set_prefetch_dir
 from dataset_build.tools.dataset_plan import META_SUFFIX, PlanError, PlanGroup, PlanRow, write_group
 from dataset_build.tools.global_catalog import rebuild
-from dataset_build.tools.indexed_tar import build_indexed_tar, verify_dataset
+from dataset_build.tools.indexed_tar import IndexedTarError, build_indexed_tar, verify_dataset
 from dataset_build.tools.land import land
-from dataset_build.tools.prefetch import _LOCATE_SQL, main as prefetch_main, prefetch
+from dataset_build.tools.prefetch import (
+    _LOCATE_SQL,
+    _locate,
+    _shard_path,
+    main as prefetch_main,
+    prefetch,
+)
 from dataset_build.tools.sft_pack import load_sft_rows, main as sft_pack_main, sft_pack
 
 
@@ -100,10 +106,14 @@ class PrefetchTests(unittest.TestCase):
         # read_bytes 本来就是 local-first：还在本机的那张不该占缓冲。
         self.assertNotIn(str(kept), fetched)
         self.assertFalse((self.buffer / prefetch_name(kept)).exists())
-        before = {path: path.stat().st_mtime_ns for path in fetched.values()}
+        before_mtime = {path: path.stat().st_mtime_ns for path in fetched.values()}
+        before_payload = {path: path.read_bytes() for path in fetched.values()}
         again = prefetch(requested, self.buffer, db_path=self.db)
         self.assertEqual(set(again), set(fetched))
-        self.assertEqual({path: path.stat().st_mtime_ns for path in again.values()}, before)
+        self.assertEqual({path: path.read_bytes() for path in again.values()}, before_payload)
+        self.assertTrue(all(
+            path.stat().st_mtime_ns >= before_mtime[path] for path in again.values()
+        ))
 
     def test_reads_walk_each_shard_forward(self) -> None:
         self._delete_locals()
@@ -194,6 +204,61 @@ class PrefetchTests(unittest.TestCase):
         ])
         self.assertEqual(code, 0)
         self.assertEqual(len(list(self.buffer.iterdir())), len(self.original))
+
+    def test_progress_reports_index_then_monotonic_materialization(self) -> None:
+        self._delete_locals()
+        events: list[dict] = []
+        prefetch(
+            [str(path) for path in self.original.values()],
+            self.buffer,
+            db_path=self.db,
+            strict=True,
+            progress=lambda event: events.append(dict(event)),
+        )
+        self.assertEqual("locating", events[0]["phase"])
+        materializing = [event for event in events if event["phase"] == "materializing"]
+        self.assertTrue(materializing)
+        self.assertEqual(4, materializing[-1]["files_done"])
+        self.assertEqual(4, materializing[-1]["files_total"])
+        self.assertEqual(
+            sorted(event["bytes_done"] for event in materializing),
+            [event["bytes_done"] for event in materializing],
+        )
+        self.assertEqual(materializing[-1]["bytes_total"], materializing[-1]["bytes_done"])
+
+    def test_strict_mode_rejects_an_unindexed_retired_path(self) -> None:
+        unknown = self.root / "retired-unknown.jpg"
+        with self.assertRaisesRegex(IndexedTarError, "catalog does not contain"):
+            prefetch([str(unknown)], self.buffer, db_path=self.db, strict=True)
+
+    def test_equal_size_corrupt_cache_is_deleted_and_refetched(self) -> None:
+        path = self.original["src_0001.jpg"]
+        path.unlink()
+        fetched = prefetch([str(path)], self.buffer, db_path=self.db, strict=True)
+        target = fetched[str(path)]
+        target.write_bytes(b"z" * len(self.payloads["src_0001.jpg"]))
+        repaired = prefetch([str(path)], self.buffer, db_path=self.db, strict=True)
+        self.assertEqual(self.payloads["src_0001.jpg"], repaired[str(path)].read_bytes())
+
+    def test_corrupt_shard_payload_fails_index_digest_before_publish(self) -> None:
+        path = self.original["src_0002.jpg"]
+        path.unlink()
+        row = _locate([str(path)], self.db)[0]
+        tar_path = Path(_shard_path(str(row["root"]), str(row["shard"]), {}))
+        offset = int(row["offset_data"])
+        with tar_path.open("r+b") as handle:
+            handle.seek(offset)
+            original = handle.read(1)
+            handle.seek(offset)
+            handle.write(bytes([original[0] ^ 0xFF]))
+        try:
+            with self.assertRaisesRegex(IndexedTarError, "payload checksum mismatch"):
+                prefetch([str(path)], self.buffer, db_path=self.db, strict=True)
+            self.assertFalse((self.buffer / prefetch_name(path)).exists())
+        finally:
+            with tar_path.open("r+b") as handle:
+                handle.seek(offset)
+                handle.write(original)
 
 
 class PreserveOrderTests(unittest.TestCase):
