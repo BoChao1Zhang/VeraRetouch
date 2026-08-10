@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# nfsx — 让 NFS 卡死不再卡住 claude。
+#
+#   tools/nfsx [秒] -- <命令...>    在 NFS 上跑命令，超时就放弃（调用方永不阻塞）
+#   tools/nfsx --probe <路径> [秒]  探活：退出 0=通，124=卡死
+#   tools/nfsx --diag               诊断：挂载 / D 状态进程 / 探活
+#   tools/nfsx --hook               PreToolUse 钩子：NFS 无应答时拦下会挂死 CLI 的工具调用
+#   tools/nfsx --selftest           自检
+#
+# 为什么不能只用 timeout：hard 挂载卡死时子进程停在 D 状态，timeout 发完信号仍要
+# wait() 它。NFS 的等待多为 TASK_KILLABLE（wchan=rpc_wait_bit_killabl），SIGKILL 能救；
+# 但页回写等路径是真·不可中断，那时 timeout 自己也一起挂住。所以统一改成
+# 后台跑 + 轮询 + 到点放弃 —— 本脚本自身永不阻塞。
+set -uo pipefail
+
+NFS_ROOT="${NFSX_ROOT:-/mnt/nfs}"
+# 探活必须打深路径：挂载点本身的 stat 由 dentry/属性缓存应答，服务端死了它照样 OK
+CANARY="${NFSX_CANARY:-$NFS_ROOT/bc}"
+DEFAULT_SECS="${NFSX_TIMEOUT:-10}"
+
+# 后台跑 + 到点放弃；stdout/stderr 原样透传，超时返回 124
+run_abandon() {
+  local secs="$1"; shift
+  local out pid i rc
+  out="$(mktemp)"
+  "$@" >"$out" 2>&1 &
+  pid=$!
+  for ((i = 0; i < secs * 10; i++)); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -9 "$pid" 2>/dev/null       # TASK_KILLABLE 的 RPC 等待会就地释放；不可中断的就丢给 init
+    disown "$pid" 2>/dev/null        # 不要 wait（它可能永远回不来），也别让 bash 打 "Killed" 噪声
+    cat "$out"; rm -f "$out"
+    return 124
+  fi
+  wait "$pid"; rc=$?
+  cat "$out"; rm -f "$out"
+  return "$rc"
+}
+
+# ponytail: 只探 stat；属性缓存(acregmax 默认 60s)期内可能乐观放行。
+# 持续宕机必然被抓到，要更严再加一次真实 read。
+probe() {
+  run_abandon "${2:-3}" stat -c '' -- "$1" >/dev/null 2>&1
+  [ $? = 124 ] && return 124
+  return 0                            # 快速失败（不存在/无权限）不算卡死
+}
+
+diag() {
+  echo "== 挂载 =="
+  findmnt -t nfs,nfs4 -o TARGET,SOURCE,OPTIONS 2>/dev/null || echo "  (无 NFS 挂载)"
+  echo "== D 状态进程（可 kill -9 释放的 wchan=rpc_wait_bit_killabl）=="
+  ps -eo pid,stat,wchan:20,etime,cmd --no-headers | awk '$2 ~ /^D/' | cut -c1-140
+  echo "== 探活 $CANARY =="
+  probe "$CANARY" 5 && echo "  OK" || echo "  卡死：5 秒无应答"
+}
+
+hook() {
+  local payload field target
+  payload="$(cat)"
+  # 只看真正会被访问的字段（路径/命令），不看 content——否则往 /tmp 写一个
+  # 内容里提到 NFS 路径的脚本都会被误拦
+  field="$(jq -r '.tool_input | (.file_path // .path // .command // empty)' <<<"$payload" 2>/dev/null)"
+  grep -qF "$NFS_ROOT" <<<"$field" || exit 0     # 不碰 NFS，放行
+  grep -qF 'nfsx' <<<"$field" && exit 0          # 走的就是本工具，放行
+  target="$(grep -oE "$NFS_ROOT[^\"' ]*" <<<"$field" | head -1)"
+  [ "$target" = "$NFS_ROOT" ] && target="$CANARY"   # 挂载点本身走缓存，探不出死活
+  probe "${target:-$CANARY}" 3 && exit 0
+  echo "NFS 无应答（探活 $target 超时 3s），已拦截：直接访问会把 claude 进程挂进 D 状态，整个 CLI 一起死。" >&2
+  echo "先跑 tools/nfsx --diag 看状态；确需访问改用 tools/nfsx 10 -- <命令>。" >&2
+  exit 2
+}
+
+selftest() {
+  run_abandon 1 sleep 5;              [ $? = 124 ] || { echo "FAIL: 超时未返回 124"; exit 1; }
+  [ "$(run_abandon 5 echo hi)" = hi ] || { echo "FAIL: 正常输出未透传"; exit 1; }
+  run_abandon 5 false;                [ $? = 1 ]   || { echo "FAIL: 退出码未透传"; exit 1; }
+  echo '{"tool_input":{"file_path":"/etc/hostname"}}' | ( hook );  [ $? = 0 ] || { echo "FAIL: 非 NFS 路径应放行"; exit 1; }
+  echo '{"tool_input":{"command":"tools/nfsx 5 -- ls /mnt/nfs"}}' | ( hook ); [ $? = 0 ] || { echo "FAIL: nfsx 自身应放行"; exit 1; }
+  echo '{"tool_input":{"file_path":"/tmp/x.sh","content":"umount /mnt/nfs"}}' | ( hook ); [ $? = 0 ] || { echo "FAIL: 仅 content 提及 NFS 应放行"; exit 1; }
+  # 拦截分支：拿一个必然卡住的 stat 桩顶替，验证 NFS 无应答时 hook 真的 exit 2
+  local bin; bin="$(mktemp -d)"
+  printf '#!/bin/sh\nsleep 30\n' >"$bin/stat"; chmod +x "$bin/stat"
+  echo "{\"tool_input\":{\"file_path\":\"$NFS_ROOT/x\"}}" | ( PATH="$bin:$PATH"; hook ) 2>/dev/null
+  [ $? = 2 ] || { echo "FAIL: NFS 卡死时未拦截"; rm -rf "$bin"; exit 1; }
+  rm -rf "$bin"
+  echo OK
+}
+
+case "${1:-}" in
+  --probe)    shift; probe "$1" "${2:-3}"; exit $? ;;
+  --diag)     diag; exit 0 ;;
+  --hook)     hook ;;
+  --selftest) selftest; exit 0 ;;
+  -h|--help)  sed -n '2,16p' "$0"; exit 0 ;;
+esac
+
+secs="$DEFAULT_SECS"
+[[ "${1:-}" =~ ^[0-9]+$ ]] && { secs="$1"; shift; }
+[ "${1:-}" = "--" ] && shift
+[ $# -gt 0 ] || { sed -n '2,16p' "$0"; exit 2; }
+run_abandon "$secs" "$@"
+exit $?
