@@ -361,13 +361,19 @@ class _BuildData:
 
 
 class JsonlStore:
-    """Small/local read-only fallback over canonical artifact directories."""
+    """Lazy, one-build-at-a-time fallback over canonical JSONL ledgers."""
 
     def __init__(self, roots: Sequence[str | os.PathLike[str]]) -> None:
         self.roots = tuple(Path(root).expanduser().resolve() for root in roots)
         self._lock = threading.RLock()
-        self._signature: tuple[tuple[str, int, int], ...] | None = None
-        self._builds: dict[str, _BuildData] = {}
+        # JSONL parsing can retain hundreds of MiB per production build. Serialize
+        # the whole load/switch operation so only one build is parsed or resident.
+        self._load_lock = threading.RLock()
+        self._manifest_signature: tuple[tuple[str, int, int], ...] | None = None
+        self._manifests: dict[str, tuple[Path, dict[str, Any]]] = {}
+        self._active_id: str | None = None
+        self._active_signature: tuple[tuple[str, int, int], ...] | None = None
+        self._active: _BuildData | None = None
 
     def _directories(self) -> list[Path]:
         found: dict[str, Path] = {}
@@ -385,10 +391,11 @@ class JsonlStore:
                     found[str(child.resolve())] = child.resolve()
         return sorted(found.values(), key=lambda value: str(value))
 
-    def _current_signature(self, directories: Sequence[Path]) -> tuple[tuple[str, int, int], ...]:
+    @staticmethod
+    def _signature(directories: Sequence[Path], names: Sequence[str]) -> tuple[tuple[str, int, int], ...]:
         values: list[tuple[str, int, int]] = []
         for directory in directories:
-            for name in ("manifest.json", "groups.jsonl", "sft.jsonl", "failures.jsonl"):
+            for name in names:
                 path = directory / name
                 try:
                     stat = path.stat()
@@ -398,20 +405,76 @@ class JsonlStore:
                     values.append((str(path), stat.st_mtime_ns, stat.st_size))
         return tuple(values)
 
-    def _refresh(self) -> None:
+    def _refresh_manifests(self) -> None:
+        with self._load_lock:
+            self._refresh_manifests_locked()
+
+    def _refresh_manifests_locked(self) -> None:
         directories = self._directories()
-        signature = self._current_signature(directories)
+        signature = self._signature(directories, ("manifest.json",))
         with self._lock:
-            if signature == self._signature:
+            if signature == self._manifest_signature:
                 return
-            builds: dict[str, _BuildData] = {}
-            for directory in directories:
-                try:
-                    manifest_value = json.loads((directory / "manifest.json").read_text("utf-8"))
-                except (OSError, TypeError, ValueError):
-                    continue
-                manifest = _mapping(manifest_value)
-                build_id = str(manifest.get("build_id") or directory.name)
+            manifests: dict[str, tuple[Path, dict[str, Any]]] = {}
+            try:
+                for directory in directories:
+                    try:
+                        value = json.loads((directory / "manifest.json").read_text("utf-8"))
+                    except (OSError, TypeError, ValueError):
+                        continue
+                    manifest = _mapping(value)
+                    build_id = str(manifest.get("build_id") or directory.name)
+                    previous = manifests.get(build_id)
+                    if previous is not None and previous[0] != directory:
+                        raise StoreUnavailable(f"duplicate_build_id:{build_id}")
+                    manifests[build_id] = (directory, manifest)
+            except StoreUnavailable:
+                # Never retain a partially discovered authority set or data from
+                # the previously active ledger after an identity conflict.
+                self._manifests = {}
+                self._manifest_signature = None
+                self._active_id = None
+                self._active_signature = None
+                self._active = None
+                raise
+            self._manifests = manifests
+            self._manifest_signature = signature
+            if self._active_id not in manifests:
+                self._active_id = None
+                self._active_signature = None
+                self._active = None
+
+    def _resolve_build_id(self, build_id: str | None) -> str | None:
+        self._refresh_manifests()
+        if build_id:
+            return build_id if build_id in self._manifests else None
+        if not self._manifests:
+            return None
+        if len(self._manifests) != 1:
+            raise StoreUnavailable("build_id_required")
+        return next(iter(self._manifests))
+
+    def _load(self, build_id: str | None) -> _BuildData | None:
+        with self._load_lock:
+            resolved = self._resolve_build_id(build_id)
+            if resolved is None:
+                return None
+            with self._lock:
+                directory, manifest = self._manifests[resolved]
+            signature = self._signature(
+                (directory,), ("groups.jsonl", "sft.jsonl", "failures.jsonl")
+            )
+            with self._lock:
+                if self._active_id == resolved and self._active_signature == signature:
+                    return self._active
+                # Release the old build before opening the new JSONLs. If any
+                # read or parse below fails, the store deliberately has no active
+                # build rather than serving a stale or partially switched view.
+                self._active_id = None
+                self._active_signature = None
+                self._active = None
+
+            try:
                 group_rows, group_bad = _read_jsonl(directory / "groups.jsonl")
                 sft_rows, sft_bad = _read_jsonl(directory / "sft.jsonl")
                 failures, failure_bad = _read_jsonl(directory / "failures.jsonl")
@@ -421,7 +484,7 @@ class JsonlStore:
                     if (
                         not isinstance(group_id, str)
                         or not group_id
-                        or row.get("build_id") != build_id
+                        or row.get("build_id") != resolved
                         or canonical_group_error(row) is not None
                         or group_id in groups
                     ):
@@ -431,20 +494,24 @@ class JsonlStore:
                 sft_by_group: dict[str, list[dict[str, Any]]] = {}
                 seen_sft: dict[str, dict[str, Any]] = {}
                 for row in sft_rows:
-                    if row.get("sft_id") and row.get("build_id") == build_id:
+                    if row.get("sft_id") and row.get("build_id") == resolved:
                         seen_sft[str(row["sft_id"])] = row
                 for row in seen_sft.values():
                     if row.get("group_id"):
                         sft_by_group.setdefault(str(row["group_id"]), []).append(row)
                 for rows in sft_by_group.values():
-                    rows.sort(key=lambda row: (int(row.get("winner_rank") or 0), str(row.get("sft_id"))))
+                    rows.sort(
+                        key=lambda row: (
+                            int(row.get("winner_rank") or 0), str(row.get("sft_id"))
+                        )
+                    )
                 seen_failures: dict[str, dict[str, Any]] = {}
                 for index, row in enumerate(failures):
-                    if row.get("build_id") != build_id:
+                    if row.get("build_id") != resolved:
                         continue
                     event_id = str(row.get("event_id") or f"missing-event-{index}")
                     seen_failures[event_id] = row
-                builds[build_id] = _BuildData(
+                data = _BuildData(
                     directory=directory,
                     manifest=manifest,
                     groups=groups,
@@ -452,14 +519,32 @@ class JsonlStore:
                     failures=list(seen_failures.values()),
                     malformed_records=group_bad + sft_bad + failure_bad,
                 )
-            self._builds = builds
-            self._signature = signature
+            except BaseException:
+                with self._lock:
+                    self._active_id = None
+                    self._active_signature = None
+                    self._active = None
+                raise
+
+            with self._lock:
+                self._active_id = resolved
+                self._active_signature = signature
+                self._active = data
+            return data
 
     def builds(self) -> list[dict[str, Any]]:
-        self._refresh()
+        self._refresh_manifests()
+        with self._lock:
+            manifests = tuple(self._manifests.items())
+            active_id = self._active_id
+            active = self._active
         rows: list[dict[str, Any]] = []
-        for build_id, data in self._builds.items():
-            manifest = data.manifest
+        for build_id, (directory, manifest) in manifests:
+            loaded_bad = (
+                active.malformed_records
+                if active_id == build_id and active is not None
+                else 0
+            )
             rows.append({
                 "build_id": build_id,
                 "schema_version": manifest.get("schema_version"),
@@ -468,8 +553,8 @@ class JsonlStore:
                 "updated_at": manifest.get("updated_at") or manifest.get("ended_at"),
                 "targets": _mapping(manifest.get("targets")),
                 "completed": _mapping(manifest.get("completed")),
-                "malformed_records": data.malformed_records,
-                "artifact_root": str(data.directory),
+                "malformed_records": loaded_bad,
+                "artifact_root": str(directory),
             })
         rows.sort(key=lambda row: (str(row.get("updated_at") or ""), str(row["build_id"])), reverse=True)
         return rows
@@ -481,18 +566,15 @@ class JsonlStore:
         failures = _related_failures(group, data.failures)
         return sft, failures
 
-    def groups(
-        self, filters: GroupFilters, page: int, page_size: int
-    ) -> dict[str, Any]:
-        self._refresh()
+    def groups(self, filters: GroupFilters, page: int, page_size: int) -> dict[str, Any]:
+        data = self._load(filters.build_id)
+        if data is None:
+            return {"total": 0, "page": page, "page_size": page_size, "items": []}
         matches: list[dict[str, Any]] = []
-        for build_id, data in self._builds.items():
-            if filters.build_id and build_id != filters.build_id:
-                continue
-            for group in reversed(tuple(data.groups.values())):
-                sft, failures = self._group_context(data, group)
-                if _group_matches(group, sft, failures, filters):
-                    matches.append(_summary(group, sft, failures))
+        for group in reversed(tuple(data.groups.values())):
+            sft, failures = self._group_context(data, group)
+            if _group_matches(group, sft, failures, filters):
+                matches.append(_summary(group, sft, failures))
         matches.sort(
             key=lambda row: (str(row.get("completed_at") or ""), str(row.get("group_id") or "")),
             reverse=True,
@@ -505,33 +587,31 @@ class JsonlStore:
             "items": matches[offset:offset + page_size],
         }
 
-    def group(self, group_id: str) -> dict[str, Any] | None:
-        self._refresh()
-        for data in self._builds.values():
-            group = data.groups.get(group_id)
-            if group is None:
-                continue
-            sft, failures = self._group_context(data, group)
-            normalized = dict(group)
-            normalized["queue_state"] = _queue_state(group, sft, failures)
-            normalized["failure_state"] = _failure_state(failures)
-            return {
-                "group": normalized,
-                "candidates": _candidate_rows(group),
-                "sft": sft,
-                "failures": failures,
-            }
-        return None
+    def group(self, group_id: str, build_id: str | None = None) -> dict[str, Any] | None:
+        data = self._load(build_id)
+        if data is None:
+            return None
+        group = data.groups.get(group_id)
+        if group is None:
+            return None
+        sft, failures = self._group_context(data, group)
+        normalized = dict(group)
+        normalized["queue_state"] = _queue_state(group, sft, failures)
+        normalized["failure_state"] = _failure_state(failures)
+        return {
+            "group": normalized,
+            "candidates": _candidate_rows(group),
+            "sft": sft,
+            "failures": failures,
+        }
 
     def facets(self, build_id: str | None = None) -> dict[str, Any]:
-        self._refresh()
+        data = self._load(build_id)
         modes: set[str] = set()
         formats: set[str] = set()
         majors: set[str] = set()
         minors: set[str] = set()
-        for current_id, data in self._builds.items():
-            if build_id and current_id != build_id:
-                continue
+        if data is not None:
             for group in data.groups.values():
                 if group.get("render_mode"):
                     modes.add(str(group["render_mode"]))
@@ -555,12 +635,19 @@ class JsonlStore:
 
     def health(self) -> dict[str, Any]:
         builds = self.builds()
+        estimated_groups = sum(
+            int(_mapping(row.get("completed")).get("groups") or 0) for row in builds
+        )
         return {
             "ok": True,
             "source": "jsonl",
             "builds": len(builds),
-            "groups": sum(len(data.groups) for data in self._builds.values()),
-            "malformed_records": sum(data.malformed_records for data in self._builds.values()),
+            "groups": estimated_groups,
+            "groups_estimated_from_manifests": True,
+            "malformed_records": (
+                self._active.malformed_records if self._active is not None else 0
+            ),
+            "active_build": self._active_id,
             "roots": [str(root) for root in self.roots],
         }
 
@@ -779,13 +866,19 @@ class PostgresStore:
         return {"total": int(total), "page": page, "page_size": page_size, "items": items}
 
     def _group_with_connection(
-        self, connection: Any, group_id: str, group: Mapping[str, Any] | None = None
+        self,
+        connection: Any,
+        group_id: str,
+        build_id: str | None = None,
+        group: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         if group is None:
+            if not build_id:
+                raise StoreUnavailable("build_id_required")
             row = connection.execute(
                 f"SELECT g.payload FROM canonical_groups g WHERE g.group_id=%s "
-                f"AND {_CANONICAL_GROUP_SQL}",
-                [group_id],
+                f"AND g.build_id=%s AND {_CANONICAL_GROUP_SQL}",
+                [group_id, build_id],
             ).fetchone()
             if not row:
                 return {}
@@ -831,10 +924,10 @@ class PostgresStore:
         normalized["failure_state"] = _failure_state(failures)
         return {"group": normalized, "candidates": candidates, "sft": sft, "failures": failures}
 
-    def group(self, group_id: str) -> dict[str, Any] | None:
+    def group(self, group_id: str, build_id: str | None = None) -> dict[str, Any] | None:
         connection = self._connect()
         try:
-            detail = self._group_with_connection(connection, group_id)
+            detail = self._group_with_connection(connection, group_id, build_id)
         except Exception as exc:
             raise StoreUnavailable("postgres_query_failed") from exc
         finally:
@@ -933,8 +1026,8 @@ class ViewerRepository:
     def groups(self, filters: GroupFilters, page: int, page_size: int) -> dict[str, Any]:
         return self._call("groups", filters, page, page_size)
 
-    def group(self, group_id: str) -> dict[str, Any] | None:
-        return self._call("group", group_id)
+    def group(self, group_id: str, build_id: str | None = None) -> dict[str, Any] | None:
+        return self._call("group", group_id, build_id)
 
     def facets(self, build_id: str | None = None) -> dict[str, Any]:
         return self._call("facets", build_id)

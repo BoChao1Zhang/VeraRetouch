@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -10,10 +13,12 @@ from fastapi import HTTPException
 from PIL import Image
 
 from databuild_viewer.backend import app as backend
+from databuild_viewer.backend import repository as repository_module
 from databuild_viewer.backend.repository import (
     GroupFilters,
     JsonlStore,
     PostgresStore,
+    StoreUnavailable,
     ViewerRepository,
 )
 
@@ -71,7 +76,12 @@ class CanonicalViewerBackendTests(unittest.TestCase):
             "error_code": "schema_failed",
             "message": "invalid structured output",
         }], torn_tail=True)
-        backend.configure(build_roots=(self.root,), image_roots=(self.root,))
+        backend.configure(
+            build_roots=(self.root,),
+            image_roots=(self.root,),
+            cache_root=self.root / "viewer-cache",
+            catalog_path=self.root / "catalog.sqlite3",
+        )
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -192,7 +202,7 @@ class CanonicalViewerBackendTests(unittest.TestCase):
 
         detail = PostgresStore(
             "postgresql://ignored", lambda _dsn: Connection()
-        ).group("global-group")
+        ).group("global-group", "build-a")
         self.assertIsNotNone(detail)
         assert detail is not None
         self.assertEqual("complete", detail["group"]["queue_state"])
@@ -316,6 +326,151 @@ class CanonicalViewerBackendTests(unittest.TestCase):
         self.assertEqual(["global", "local"], facets["modes"])
         self.assertEqual(["lrtemplate", "lut", "xmp"], facets["formats"])
 
+    def test_jsonl_full_ledger_reads_manifests_then_only_selected_build(self) -> None:
+        second = self.root / "build-b"
+        second.mkdir()
+        (second / "manifest.json").write_text(json.dumps({
+            "build_id": "build-b", "status": "complete", "completed": {"groups": 999},
+        }), encoding="utf-8")
+        for name in ("groups.jsonl", "sft.jsonl", "failures.jsonl"):
+            (second / name).write_text("", encoding="utf-8")
+        calls: list[Path] = []
+        original = repository_module._read_jsonl
+
+        def tracked(path):
+            calls.append(Path(path))
+            return original(path)
+
+        store = JsonlStore((self.root,))
+        with mock.patch.object(repository_module, "_read_jsonl", side_effect=tracked):
+            self.assertEqual(2, len(store.builds()))
+            health = store.health()
+            self.assertEqual(1002, health["groups"])
+            self.assertEqual([], calls)
+            with self.assertRaisesRegex(StoreUnavailable, "build_id_required"):
+                store.groups(GroupFilters(), 1, 20)
+            self.assertEqual(3, store.groups(GroupFilters(build_id="build-a"), 1, 20)["total"])
+        self.assertTrue(calls)
+        self.assertTrue(all(path.parent == self.build for path in calls))
+        self.assertEqual("build-a", store._active_id)
+
+    def test_jsonl_build_switch_is_serialized_and_releases_old_active(self) -> None:
+        builds: dict[str, Path] = {}
+        for build_id in ("build-b", "build-c"):
+            directory = self.root / build_id
+            directory.mkdir()
+            (directory / "manifest.json").write_text(json.dumps({
+                "build_id": build_id, "status": "complete", "completed": {"groups": 0},
+            }), encoding="utf-8")
+            for name in ("groups.jsonl", "sft.jsonl", "failures.jsonl"):
+                (directory / name).write_text("", encoding="utf-8")
+            builds[build_id] = directory
+
+        store = JsonlStore((self.root,))
+        self.assertIsNotNone(store.group("local-group", "build-a"))
+        self.assertEqual("build-a", store._active_id)
+        original = repository_module._read_jsonl
+        parser_lock = threading.Lock()
+        active_parsers = 0
+        max_parsers = 0
+        b_entered = threading.Event()
+        b_release = threading.Event()
+        c_entered = threading.Event()
+        errors: list[BaseException] = []
+        results: list[str] = []
+
+        def tracked(path):
+            nonlocal active_parsers, max_parsers
+            path = Path(path)
+            with parser_lock:
+                active_parsers += 1
+                max_parsers = max(max_parsers, active_parsers)
+            try:
+                if path.parent in builds.values():
+                    self.assertIsNone(store._active)
+                    self.assertIsNone(store._active_id)
+                if path.parent == builds["build-b"] and path.name == "groups.jsonl":
+                    b_entered.set()
+                    self.assertTrue(b_release.wait(2))
+                if path.parent == builds["build-c"] and path.name == "groups.jsonl":
+                    c_entered.set()
+                time.sleep(0.01)
+                return original(path)
+            finally:
+                with parser_lock:
+                    active_parsers -= 1
+
+        def load(build_id: str) -> None:
+            try:
+                store.groups(GroupFilters(build_id=build_id), 1, 20)
+                results.append(build_id)
+            except BaseException as exc:
+                errors.append(exc)
+
+        with mock.patch.object(repository_module, "_read_jsonl", side_effect=tracked):
+            thread_b = threading.Thread(target=load, args=("build-b",))
+            thread_b.start()
+            self.assertTrue(b_entered.wait(1))
+            thread_c = threading.Thread(target=load, args=("build-c",))
+            thread_c.start()
+            self.assertFalse(c_entered.wait(0.05))
+            b_release.set()
+            thread_b.join(2)
+            thread_c.join(2)
+
+        self.assertFalse(thread_b.is_alive())
+        self.assertFalse(thread_c.is_alive())
+        self.assertEqual([], errors)
+        self.assertEqual(["build-b", "build-c"], results)
+        self.assertEqual(1, max_parsers)
+        self.assertEqual("build-c", store._active_id)
+        self.assertEqual(builds["build-c"], store._active.directory)
+
+    def test_jsonl_load_failure_leaves_no_active_build(self) -> None:
+        second = self.root / "build-b"
+        second.mkdir()
+        (second / "manifest.json").write_text(json.dumps({"build_id": "build-b"}), encoding="utf-8")
+        for name in ("groups.jsonl", "sft.jsonl", "failures.jsonl"):
+            (second / name).write_text("", encoding="utf-8")
+        store = JsonlStore((self.root,))
+        self.assertIsNotNone(store.group("local-group", "build-a"))
+        with mock.patch.object(repository_module, "_read_jsonl", side_effect=OSError("read failed")):
+            with self.assertRaisesRegex(OSError, "read failed"):
+                store.groups(GroupFilters(build_id="build-b"), 1, 20)
+        self.assertIsNone(store._active)
+        self.assertIsNone(store._active_id)
+
+    def test_duplicate_build_ids_fail_closed_and_recover(self) -> None:
+        duplicates = []
+        for name in ("duplicate-a", "duplicate-b"):
+            directory = self.root / name
+            directory.mkdir()
+            (directory / "manifest.json").write_text(
+                json.dumps({"build_id": "duplicate", "completed": {"groups": 0}}),
+                encoding="utf-8",
+            )
+            duplicates.append(directory)
+        store = JsonlStore((self.root,))
+        with self.assertRaisesRegex(StoreUnavailable, "duplicate_build_id:duplicate") as failure:
+            store.builds()
+        self.assertNotIn(str(duplicates[0]), str(failure.exception))
+        self.assertEqual({}, store._manifests)
+        self.assertIsNone(store._active)
+        with self.assertRaisesRegex(StoreUnavailable, "duplicate_build_id:duplicate"):
+            ViewerRepository((self.root,)).health()
+
+        (duplicates[1] / "manifest.json").write_text(
+            json.dumps({"build_id": "duplicate-b", "completed": {"groups": 0}}),
+            encoding="utf-8",
+        )
+        build_ids = [row["build_id"] for row in store.builds()]
+        self.assertEqual(1, build_ids.count("duplicate"))
+        self.assertIn("duplicate-b", build_ids)
+
+        overlapping = JsonlStore((self.root, self.build))
+        overlap_ids = [row["build_id"] for row in overlapping.builds()]
+        self.assertEqual(1, overlap_ids.count("build-a"))
+
     def test_all_required_filters_are_applied(self) -> None:
         store = JsonlStore((self.root,))
         cases = (
@@ -336,6 +491,8 @@ class CanonicalViewerBackendTests(unittest.TestCase):
 
     def test_malformed_torn_tail_is_reported_without_mutation(self) -> None:
         store = JsonlStore((self.root,))
+        self.assertEqual(0, store.health()["malformed_records"])
+        store.group("local-group", "build-a")
         health = store.health()
         self.assertEqual(1, health["malformed_records"])
         self.assertEqual('{"event_id":"torn"', (self.build / "failures.jsonl").read_text("utf-8").splitlines()[-1])
@@ -423,10 +580,11 @@ class CanonicalViewerBackendTests(unittest.TestCase):
         self.assertEqual("postgres_unavailable", health["fallback_reason"])
         self.assertNotIn("secret", json.dumps(health))
 
-    def test_api_is_read_only_and_has_no_dpo_or_review_routes(self) -> None:
+    def test_api_has_inspection_and_bounded_prepare_routes_but_no_review_mutation(self) -> None:
         paths = {route.path for route in backend.app.routes}
         self.assertIn("/api/groups", paths)
         self.assertIn("/api/groups/{group_id}", paths)
+        self.assertIn("/api/groups/{group_id}/prepare", paths)
         self.assertNotIn("/api/review", paths)
         self.assertFalse(any("dpo" in path.lower() for path in paths))
         self.assertEqual(3, backend.api_groups(
@@ -441,10 +599,12 @@ class CanonicalViewerBackendTests(unittest.TestCase):
             page=1,
             page_size=50,
         )["total"])
-        self.assertEqual(8, len(backend.api_group("global-group")["candidates"]))
+        self.assertEqual(8, len(backend.api_group("global-group", "build-a")["candidates"]))
 
     def test_image_path_commonpath_and_type_guards(self) -> None:
         self.assertEqual(self.source.resolve(), backend._safe_path(str(self.source)))
+        retired = self.root / "retired" / "candidate.jpg"
+        self.assertEqual(retired.resolve(), backend._authorized_image_path(str(retired)))
         sibling = Path(self.temp.name + "-sibling")
         sibling.mkdir()
         try:
@@ -453,14 +613,185 @@ class CanonicalViewerBackendTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as denied:
                 backend._safe_path(str(outside))
             self.assertEqual(403, denied.exception.status_code)
+            with self.assertRaises(HTTPException) as traversal:
+                backend._authorized_image_path(str(self.root / ".." / sibling.name / "outside.jpg"))
+            self.assertEqual(403, traversal.exception.status_code)
             text = self.root / "not-image.txt"
             text.write_text("x", encoding="utf-8")
             with self.assertRaises(HTTPException) as unsupported:
                 backend._safe_path(str(text))
             self.assertEqual(415, unsupported.exception.status_code)
+            rejected = (
+                "~/data/image.jpg",
+                "relative/image.jpg",
+                str(self.root / "folder" / ".." / "source.jpg"),
+                "//home/bc/data/image.jpg",
+            )
+            for value in rejected:
+                with self.subTest(value=value), self.assertRaises(HTTPException) as invalid:
+                    backend._authorized_image_path(value)
+                self.assertEqual(403, invalid.exception.status_code)
+            with self.assertRaises(HTTPException) as nul:
+                backend._authorized_image_path(str(self.root / "bad.jpg") + "\x00")
+            self.assertEqual(400, nul.exception.status_code)
         finally:
             outside.unlink()
             sibling.rmdir()
+
+    def test_startup_matrix_uses_durable_nfs_default_and_explicit_overrides(self) -> None:
+        captures: list[dict] = []
+        config = self.root / "viewer.toml"
+        explicit = self.root / "explicit-build"
+        explicit.mkdir()
+        env_root = self.root / "env-ledger"
+        env_root.mkdir()
+
+        def capture(**kwargs):
+            captures.append(kwargs)
+
+        cases = (
+            ([], (backend.DEFAULT_NFS_LEDGER_ROOT,), None),
+            (["--config", str(config)], (backend.DEFAULT_NFS_LEDGER_ROOT,), "postgresql://fixture"),
+            (["--config", str(config), "--build-root", str(explicit)], (explicit.resolve(),), "postgresql://fixture"),
+            (["--nfs-ledger", str(explicit)], (explicit.resolve(),), None),
+        )
+        with mock.patch.object(
+            backend, "_load_databuild_config", return_value=(Path("/mnt/ramstage/retired"), "postgresql://fixture")
+        ), mock.patch.object(backend, "configure", side_effect=capture), mock.patch.object(
+            backend, "selfcheck", return_value={
+                "source": "jsonl", "builds": 0, "groups": 0, "malformed_records": 0,
+            }
+        ):
+            for argv, expected_roots, expected_dsn in cases:
+                self.assertEqual(0, backend.main([*argv, "--selfcheck"]))
+                self.assertEqual(expected_roots, tuple(captures[-1]["build_roots"]))
+                self.assertEqual(expected_dsn, captures[-1]["postgres_dsn"])
+            with mock.patch.object(backend, "_build_roots", (env_root.resolve(),)):
+                self.assertEqual(0, backend.main(["--selfcheck"]))
+                self.assertEqual((env_root.resolve(),), tuple(captures[-1]["build_roots"]))
+
+    def test_prepare_api_deduplicates_assets_and_returns_versioned_status(self) -> None:
+        calls: list[tuple[str, tuple[str, ...], bool]] = []
+
+        class StubMaterializer:
+            db_path = self.root / "catalog.sqlite3"
+
+            @staticmethod
+            def cache_status():
+                return {"root": "/tmp/cache", "bytes": 0, "max_bytes": 1000}
+
+            @staticmethod
+            def prepare(group_id, paths, *, build_id, retry=False):
+                calls.append((group_id, build_id, tuple(paths), retry))
+                return {
+                    "schema_version": 1,
+                    "group_id": group_id,
+                    "state": "queued",
+                    "files": {"done": 0, "total": len(paths)},
+                    "bytes": {"done": 0, "total": 0},
+                    "current_item": None,
+                    "message": None,
+                    "updated_at": "now",
+                }
+
+            @staticmethod
+            def status(group_id, *, build_id):
+                return {
+                    "schema_version": 1,
+                    "group_id": group_id,
+                    "state": "materializing",
+                    "files": {"done": 2, "total": 4},
+                    "bytes": {"done": 20, "total": 40},
+                    "current_item": str(self.source),
+                    "message": None,
+                    "updated_at": "now",
+                }
+
+            @staticmethod
+            def read_cached(_path):
+                return None
+
+        with mock.patch.object(backend, "materializer", StubMaterializer()):
+            queued = backend.api_prepare_group("local-group", "build-a")
+            status = backend.api_prepare_status("local-group", "build-a")
+        self.assertEqual(1, queued["schema_version"])
+        self.assertEqual("materializing", status["state"])
+        self.assertEqual(1, len(calls))
+        group_id, build_id, paths, retry = calls[0]
+        self.assertEqual("local-group", group_id)
+        self.assertEqual("build-a", build_id)
+        self.assertFalse(retry)
+        self.assertEqual(len(paths), len(set(paths)))
+        self.assertIn(str(self.source), paths)
+        self.assertIn(str(self.cgt), paths)
+
+    def test_prepare_and_image_share_canonical_in_root_alias_key(self) -> None:
+        inside = self.root / "inside"
+        inside.mkdir()
+        alias = self.root / "alias"
+        alias.symlink_to(inside, target_is_directory=True)
+        aliased_path = alias / "archived.png"
+        canonical_path = inside / "archived.png"
+        buffer = io.BytesIO()
+        Image.new("RGB", (9, 7), (12, 34, 56)).save(buffer, format="PNG")
+        payload = buffer.getvalue()
+        prepared: list[tuple[str, ...]] = []
+        reads: list[str] = []
+
+        class StubRepository:
+            @staticmethod
+            def group(group_id, build_id):
+                self.assertEqual(("alias-group", "build-a"), (group_id, build_id))
+                return {"group": {"source_path": str(aliased_path)}, "candidates": [], "sft": []}
+
+        class StubMaterializer:
+            @staticmethod
+            def prepare(_group_id, paths, *, build_id, retry=False):
+                self.assertEqual("build-a", build_id)
+                self.assertFalse(retry)
+                prepared.append(tuple(paths))
+                return {"schema_version": 1, "state": "queued"}
+
+            @staticmethod
+            def read_cached(path):
+                reads.append(path)
+                return payload
+
+        with mock.patch.object(backend, "repository", StubRepository()), mock.patch.object(
+            backend, "materializer", StubMaterializer()
+        ):
+            backend.api_prepare_group("alias-group", "build-a")
+            full = backend.image(str(aliased_path), full=True)
+            thumb = backend.image(str(aliased_path), w=64)
+
+        canonical = str(canonical_path.resolve(strict=False))
+        self.assertEqual([(canonical,)], prepared)
+        self.assertEqual([canonical, canonical], reads)
+        self.assertEqual("image/png", full.media_type)
+        self.assertEqual("image/jpeg", thumb.media_type)
+        self.assertGreater(len(thumb.body), 0)
+
+    def test_archived_image_is_cache_only_after_authorization_and_decodes(self) -> None:
+        archived = self.root / "retired" / "candidate.png"
+        buffer = io.BytesIO()
+        Image.new("RGB", (9, 7), (12, 34, 56)).save(buffer, format="PNG")
+        payload = buffer.getvalue()
+        with mock.patch.object(backend.materializer, "read_cached", return_value=None):
+            with self.assertRaises(HTTPException) as pending:
+                backend.image(str(archived), w=64)
+        self.assertEqual(409, pending.exception.status_code)
+
+        with mock.patch.object(backend.materializer, "read_cached", return_value=payload):
+            response = backend.image(str(archived), w=64)
+        self.assertEqual("image/jpeg", response.media_type)
+        self.assertGreater(len(response.body), 0)
+
+        outside = Path(self.temp.name + "-outside") / "secret.png"
+        with mock.patch.object(backend.materializer, "read_cached") as denied_read:
+            with self.assertRaises(HTTPException) as denied:
+                backend.image(str(outside))
+        self.assertEqual(403, denied.exception.status_code)
+        denied_read.assert_not_called()
 
     def test_selfcheck_is_read_only_and_accepts_empty_store(self) -> None:
         result = backend.selfcheck()
@@ -493,7 +824,8 @@ class CanonicalViewerBackendTests(unittest.TestCase):
                 }
 
             @staticmethod
-            def group(group_id):
+            def group(group_id, build_id):
+                self.assertEqual("build-a", build_id)
                 group = valid if group_id == "valid-group" else invalid
                 return {"group": group, "candidates": candidates, "sft": [], "failures": []}
 
@@ -552,7 +884,8 @@ class CanonicalViewerBackendTests(unittest.TestCase):
                 return {"total": 201, "items": [{"group_id": "page-late"}]}
 
             @staticmethod
-            def group(group_id):
+            def group(group_id, build_id):
+                self.assertEqual("build-a", build_id)
                 sft = [] if group_id != "page-late" else [
                     {
                         "build_id": "build-a",

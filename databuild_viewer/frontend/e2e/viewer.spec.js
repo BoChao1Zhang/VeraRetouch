@@ -162,8 +162,22 @@ const secondSummary = {
   )),
 }
 
+const preparation = (groupId, state, done = 0, total = 10, message = null) => ({
+  schema_version: 1,
+  group_id: groupId,
+  state,
+  files: { done, total },
+  bytes: { done: done * 1024 * 1024, total: total * 1024 * 1024 },
+  current_item: state === 'materializing' ? `/retired/archive/member-${done}.jpg` : null,
+  message,
+  updated_at: new Date().toISOString(),
+})
+
 async function installApi(page, state = 'normal') {
+  const preparationPolls = new Map()
+  const counters = { imageRequests: 0, prepareGets: 0, preparePosts: 0 }
   await page.route('**/img?**', async (route) => {
+    counters.imageRequests += 1
     const path = new URL(route.request().url()).searchParams.get('path') || ''
     const filename = path.includes('cgt') ? MASK_IMAGE : SOURCE_IMAGE
     const body = fs.existsSync(filename) ? fs.readFileSync(filename) : FALLBACK_PNG
@@ -180,7 +194,67 @@ async function installApi(page, state = 'normal') {
       return
     }
     let body
-    if (url.pathname === '/api/health') {
+    if (
+      url.pathname === '/api/facets' || url.pathname === '/api/groups'
+      || /^\/api\/groups\/[^/]+(?:\/prepare)?$/.test(url.pathname)
+    ) {
+      expect(url.searchParams.get('build_id')).toBe(group.build_id)
+    }
+    const prepareMatch = url.pathname.match(/^\/api\/groups\/([^/]+)\/prepare$/)
+    if (prepareMatch) {
+      const groupId = decodeURIComponent(prepareMatch[1])
+      const poll = preparationPolls.get(groupId) || 0
+      if (route.request().method() === 'POST') {
+        counters.preparePosts += 1
+        if (state === 'prepare-failure') {
+          body = preparation(groupId, 'failed', 1, 10, 'OSError: fixture shard unavailable')
+        } else if (state === 'job-lost' && url.searchParams.get('retry') === 'true') {
+          body = preparation(groupId, 'ready', 10, 10)
+        } else if (
+          state === 'progress' || state === 'progress-hold' || state === 'progress-switch'
+          || state === 'job-lost' || state === 'transient-503'
+        ) {
+          body = preparation(groupId, 'queued', 0, 10)
+        } else {
+          body = preparation(groupId, 'ready', 10, 10)
+        }
+      } else {
+        counters.prepareGets += 1
+        if (state === 'job-lost') {
+          if (poll === 0) {
+            preparationPolls.set(groupId, 1)
+            body = preparation(groupId, 'materializing', 3, 10)
+          } else {
+            await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'asset preparation not started' }) })
+            return
+          }
+        } else if (state === 'transient-503' && poll === 0) {
+          preparationPolls.set(groupId, 1)
+          await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'temporary catalog stall' }) })
+          return
+        } else if (state === 'transient-503') {
+          await new Promise((resolve) => setTimeout(resolve, 500))
+          body = preparation(groupId, 'ready', 10, 10)
+        } else if (state === 'progress-hold') {
+          body = preparation(groupId, 'materializing', 4, 10)
+        } else if (state === 'progress-switch' && groupId === group.group_id) {
+        await new Promise((resolve) => setTimeout(resolve, 450))
+        body = preparation(groupId, 'failed', 3, 10, 'late old-group failure')
+        } else if (state === 'progress-switch') {
+        body = preparation(groupId, 'ready', 10, 10)
+        } else if (state === 'progress') {
+        const states = [
+          preparation(groupId, 'materializing', 2, 10),
+          preparation(groupId, 'materializing', 7, 10),
+          preparation(groupId, 'ready', 10, 10),
+        ]
+        body = states[Math.min(poll, states.length - 1)]
+        preparationPolls.set(groupId, poll + 1)
+        } else {
+          body = preparation(groupId, 'ready', 10, 10)
+        }
+      }
+    } else if (url.pathname === '/api/health') {
       body = { ok: true, source: 'postgres', builds: 1, malformed_records: 0 }
     } else if (url.pathname === '/api/builds') {
       body = [{ build_id: group.build_id, phase: 'complete', status: 'complete_with_failures', completed: { groups: 1, sft: 2 } }]
@@ -198,7 +272,7 @@ async function installApi(page, state = 'normal') {
     } else if (url.pathname === '/api/groups') {
       body = state === 'empty'
         ? { total: 0, page: 1, page_size: 50, items: [] }
-        : state === 'switch'
+        : state === 'switch' || state === 'progress-switch'
           ? { total: 2, page: 1, page_size: 50, items: [summary, secondSummary] }
           : { total: 1, page: 1, page_size: 50, items: [summary] }
     } else if (url.pathname === `/api/groups/${group.group_id}`) {
@@ -214,6 +288,7 @@ async function installApi(page, state = 'normal') {
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
+  return counters
 }
 
 test('desktop candidate strip, filters, overlay, and long text', async ({ page }) => {
@@ -308,4 +383,91 @@ test('historical SFT C_GT enables local mask inspection', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'C_GT' }).click()
   await expect(page.getByAltText('C_GT mask')).toBeVisible()
+})
+
+test('indexed materialization progress increases and gates asset detail', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await installApi(page, 'progress')
+  await page.goto('/')
+  await expect(page.getByText('Materializing assets')).toBeVisible()
+  await expect(page.getByText('2/10 files')).toBeVisible()
+  await expect(page.locator('.candidate-strip')).toHaveCount(0)
+  await expect(page.getByText('7/10 files')).toBeVisible()
+  await expect(page.locator('.candidate-strip [role="option"]')).toHaveCount(8)
+  await page.screenshot({ path: '/tmp/databuild-viewer-desktop-materialized.png', fullPage: true })
+})
+
+test('materialization failure is visible, retryable, and leaves navigation usable', async ({ page }) => {
+  await installApi(page, 'prepare-failure')
+  await page.goto('/')
+  await expect(page.getByRole('alert')).toContainText('fixture shard unavailable')
+  await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
+  await expect(page.locator('.group-row')).toHaveCount(1)
+})
+
+test('late progress from a previous group cannot replace the selected group', async ({ page }) => {
+  await installApi(page, 'progress-switch')
+  await page.goto('/')
+  await expect(page.getByText('Queued', { exact: true })).toBeVisible()
+  await page.locator('.group-row').nth(1).click()
+  await expect(page.getByRole('heading', { name: 'second-group' })).toBeVisible()
+  await page.waitForTimeout(550)
+  await expect(page.getByRole('heading', { name: 'second-group' })).toBeVisible()
+  await expect(page.getByText('late old-group failure')).toHaveCount(0)
+})
+
+test('archived image requests stay at zero before selected group is ready', async ({ page }) => {
+  const counters = await installApi(page, 'progress-hold')
+  await page.goto('/')
+  await expect(page.getByText('4/10 files')).toBeVisible()
+  await page.waitForTimeout(350)
+  expect(counters.imageRequests).toBe(0)
+})
+
+test('lost backend job stops polling and explicit retry starts a new prepare', async ({ page }) => {
+  const counters = await installApi(page, 'job-lost')
+  await page.goto('/')
+  await expect(page.getByText('3/10 files')).toBeVisible()
+  await expect(page.getByText('Preparation job lost')).toBeVisible()
+  const getsAfterLoss = counters.prepareGets
+  await page.waitForTimeout(600)
+  expect(counters.prepareGets).toBe(getsAfterLoss)
+  const postsBeforeRetry = counters.preparePosts
+  await page.getByRole('button', { name: 'Retry' }).click()
+  await expect(page.locator('.candidate-strip [role="option"]')).toHaveCount(8)
+  expect(counters.preparePosts).toBe(postsBeforeRetry + 1)
+})
+
+test('temporary 503 retains progress and recovers with bounded backoff', async ({ page }) => {
+  const counters = await installApi(page, 'transient-503')
+  await page.goto('/')
+  await expect(page.getByText('temporary catalog stall')).toBeVisible()
+  await expect(page.locator('.candidate-strip [role="option"]')).toHaveCount(8)
+  expect(counters.prepareGets).toBe(2)
+})
+
+test('unmount clears materialization polling timer', async ({ page }) => {
+  const counters = await installApi(page, 'progress-hold')
+  await page.goto('/')
+  await expect(page.getByText('4/10 files')).toBeVisible()
+  await page.goto('about:blank')
+  const stoppedAt = counters.prepareGets
+  await page.waitForTimeout(500)
+  expect(counters.prepareGets).toBe(stoppedAt)
+})
+
+test('mobile materialization progress remains contained', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await installApi(page, 'progress-hold')
+  await page.goto('/')
+  await expect(page.getByText('4/10 files')).toBeVisible()
+  const layout = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+    progressWidth: document.querySelector('.materialization-panel').getBoundingClientRect().width,
+    mainWidth: document.querySelector('.inspector-main').getBoundingClientRect().width,
+  }))
+  expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewport)
+  expect(layout.progressWidth).toBeLessThanOrEqual(layout.mainWidth)
+  await page.screenshot({ path: '/tmp/databuild-viewer-mobile-materializing.png', fullPage: true })
 })

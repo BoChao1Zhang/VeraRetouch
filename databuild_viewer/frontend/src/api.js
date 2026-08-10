@@ -1,5 +1,18 @@
-const requestJson = async (url) => {
-  const response = await fetch(url)
+export class ApiError extends Error {
+  constructor(status, message) {
+    super(`${status || 'network'} ${message}`)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+const requestJson = async (url, options) => {
+  let response
+  try {
+    response = await fetch(url, options)
+  } catch (error) {
+    throw new ApiError(0, error instanceof Error ? error.message : 'request failed')
+  }
   if (!response.ok) {
     let message = response.statusText
     try {
@@ -8,7 +21,7 @@ const requestJson = async (url) => {
     } catch {
       // Keep the HTTP status text when the backend did not return JSON.
     }
-    throw new Error(`${response.status} ${message}`)
+    throw new ApiError(response.status, message)
   }
   return response.json()
 }
@@ -28,7 +41,16 @@ export const api = {
   groups: (filters, page = 1, pageSize = 50) => requestJson(
     `/api/groups?${query({ ...filters, page, page_size: pageSize })}`,
   ),
-  group: (id) => requestJson(`/api/groups/${encodeURIComponent(id)}`),
+  group: (id, buildId) => requestJson(
+    `/api/groups/${encodeURIComponent(id)}?${query({ build_id: buildId })}`,
+  ),
+  prepareGroup: (id, buildId, retry = false) => requestJson(
+    `/api/groups/${encodeURIComponent(id)}/prepare?${query({ build_id: buildId, retry: retry ? 'true' : '' })}`,
+    { method: 'POST' },
+  ),
+  preparation: (id, buildId) => requestJson(
+    `/api/groups/${encodeURIComponent(id)}/prepare?${query({ build_id: buildId })}`,
+  ),
 }
 
 export const img = (path, width = 768) => (
