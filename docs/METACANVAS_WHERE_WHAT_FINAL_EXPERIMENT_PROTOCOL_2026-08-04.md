@@ -64,8 +64,8 @@ GLUT/CGLUT（arXiv:2605.19889）支持两个关键设计：
 
 ### 1.3 本仓库已有证据
 
-- `experiments/E2_basis_fit_20260803/` 已证明固定中心、归一化 Gaussian competition 可以形成平顶带通响应；单 Gaussian 对环形区域不足。
-- `experiments/RDG_transformer_20260803/` 支持参数生成端使用 Transformer，而非小 MLP；标准 33^3 烘焙与生产四面体插值回读误差可以接近零。
+- `experiments/_archive/2026-08-10/E2_basis_fit_20260803/` 已证明固定中心、归一化 Gaussian competition 可以形成平顶带通响应；单 Gaussian 对环形区域不足。
+- `experiments/_archive/2026-08-10/RDG_transformer_20260803/` 支持参数生成端使用 Transformer，而非小 MLP；标准 33^3 烘焙与生产四面体插值回读误差可以接近零。
 - 旧 MCQ 直接空间 logits 路线出现明显坍缩和边缘退化，因此本方案将 MetaCanvas 从“空间图生成器”降为“全局 basis/readout 参数生成器”。
 - 旧 RD-G 中任何 `(I_in, after=I_tar)` 输入都必须删除。`I_tar` 不得进入新模型条件。
 

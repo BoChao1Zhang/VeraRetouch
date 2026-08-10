@@ -75,7 +75,7 @@ analytic vs 33³ 四面体回读的 MAE 是 2.19e-4、p99 是 4.01e-3，即分�
 结果，不是实现问题**。请主 agent 预知：如果所有 12 臂都过不了 bake gate，正确的动作是按 §15 分阶段报告
 （"解析 renderer 成立、33³ 交付不成立"），而不是事后放宽 gate。
 
-参考：旧 RD-G 的 bake 判据是 ΔE00 p99 < 2（`experiments/RDG_transformer_20260803/tools/bake_check.py`），
+参考：旧 RD-G 的 bake 判据是 ΔE00 p99 < 2（`experiments/_archive/2026-08-10/RDG_transformer_20260803/tools/bake_check.py`），
 与本轮的 RGB MAE 口径不可直接换算，但说明"接近零"这个说法在 ΔE00 口径下成立、在 1e-4 RGB 口径下需要实测。
 
 ### R2 — 90M 的 adapter 参数量

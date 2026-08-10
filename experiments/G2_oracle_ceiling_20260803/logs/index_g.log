@@ -1,5 +1,0 @@
-[index] prod-g1-global25k-20260731: val_groups=360 cands=360 kept=296
-[index] prod-g2-global25k-20260731: val_groups=387 cands=387 kept=323
-[index] prod-g3-global25k-20260801: val_groups=385 cands=385 kept=315
-[index] prod-g4-global25k-20260801: val_groups=404 cands=404 kept=341
-{"n": 1275, "out": "experiments/G2_oracle_ceiling_20260803/index/dsftg_sval_normal.jsonl"}

@@ -1,5 +1,0 @@
-[ablate] 9 LUTs, arms=opac_sig,opac_sig_g0, epochs=20
-[ablate] opac_sig: PSNR 42.555 dB  dE00 0.7414  alive 0.861  gspike100x 0  (430s)
-[ablate] opac_sig_g0: PSNR 45.415 dB  dE00 0.5288  alive 0.993  gspike100x 0  (427s)
-ABLATE_DONE
-WAVE4_DONE

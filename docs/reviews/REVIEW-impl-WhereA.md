@@ -56,7 +56,7 @@ merge-order unshuffle、mask 数据回连链路）**逐符号核对全部通过*
 | `pi = sigmoid(pi_raw)` | — | `readout.py:94` | **pass** |
 | `mu_i = linspace(−3,3,12)` 固定 | — | `readout.py:73-76` 每次现算的常量，**不是 Parameter**；`param_shapes("cband12")` 里没有 `mu` | **pass** |
 | `sigma ∈ [0.025,0.30]` | 禁裸 exp | `readout.py:112` `bounded_sigmoid`；全模块唯一的有界映射入口 | **pass** |
-| `g_i / m(z)` | `sum c_i g_i / (sum g_i + eps)` | `readout.py:128-129` 逐符号一致；`o_i, c_i = sigmoid(raw) ∈ (0,1)` | **pass**（与 `experiments/E2_basis_fit_20260803/e2lib.py:212` 的 `(N·o·c).sum/((N·o).sum+1e-9)` 数学等价，eps 同为 1e-9） |
+| `g_i / m(z)` | `sum c_i g_i / (sum g_i + eps)` | `readout.py:128-129` 逐符号一致；`o_i, c_i = sigmoid(raw) ∈ (0,1)` | **pass**（与 `experiments/_archive/2026-08-10/E2_basis_fit_20260803/e2lib.py:212` 的 `(N·o·c).sum/((N·o).sum+1e-9)` 数学等价，eps 同为 1e-9） |
 | mirror 恒等式 | 协议未要求，实现自加 | Band: `mu→−mu`；CBand12: 索引翻转（`mu` 网格对称）。我手推验证：`b(−z;−mu)=b(z;mu)` 成立 | **pass** |
 
 **结论：公式层无 blocker、无 nit（除 N-1 的注释错字）。**
@@ -287,7 +287,7 @@ total_steps = max(1, (args.train_limit or n_local) // args.batch_size)
 按同一条纪律，**消费方必须声明期望域并断言生数据住在里面**，当前实现一条都没有。
 
 另外，D5（`radius_low=2, eps=1e-3`）被标注为"E2 先例"，但 E2 的 `guided_filter` 是
-**在全分辨率上逐个 basis 通道**做的（`experiments/E2_basis_fit_20260803/prep_data.py:149`，`r=32`）
+**在全分辨率上逐个 basis 通道**做的（`experiments/_archive/2026-08-10/E2_basis_fit_20260803/prep_data.py:149`，`r=32`）
 ——**恰好是 §4.2 现在明令禁止的顺序**。先例不可迁移，参数必须重定。
 
 **要求**（三条，缺一不可）：

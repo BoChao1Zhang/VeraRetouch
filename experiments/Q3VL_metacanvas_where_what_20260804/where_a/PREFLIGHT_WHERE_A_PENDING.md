@@ -159,7 +159,7 @@ soft-IoU、low→hi 落差、越域比例。**选择是字典序：先过 `S_OOD
 定档后写回 `config.py` 并把 `GUIDED_PARAMS_PROVISIONAL` 置 `False`
 （**N-27**：翻标记前须用 `--basis .../BA-3-Joint/B.npy` 在校准后的 B 上复跑一次确认推荐值仍成立）。
 **当前 `radius_low=2, eps=1e-3` 是临时值**：它们来自 E2 的**全分辨率逐通道** `r=32` 用法
-（`experiments/E2_basis_fit_20260803/prep_data.py:149`），正是 §4.2 现在禁止的顺序，先例不可迁移。
+（`experiments/_archive/2026-08-10/E2_basis_fit_20260803/prep_data.py:149`），正是 §4.2 现在禁止的顺序，先例不可迁移。
 
 **(b) 内层 L-BFGS 吞吐 —— ✅ 已实测，并据此改了配置（D11）**
 

@@ -17,7 +17,7 @@
 | V4 | GT mask 来源 | 见下节"二、mask 数据来源结论" | `.cgt.png`，100% 可定位、可读 |
 | V5 | `Qwen3VLVisionRotaryEmbedding.inv_freq` 是 **non-persistent buffer** | 读 modeling 源码 `register_buffer(..., persistent=False)` | 因此 `meta` + `to_empty()` 装载路径会把 `inv_freq` 留成未初始化内存（**静默错误的旋转位置**）。已改为在目标 device 上正常构造再 `load_state_dict`，并在返回前断言所有 buffer 有限 |
 | V6 | guided upsample 算法出处 | 打开 https://arxiv.org/abs/1505.00996 核实：标题 *Fast Guided Filter*，作者 Kaiming He, Jian Sun，摘要为 O(N)→O(N/s²) 的子采样加速 | 编号与内容一致，可引用；低分辨率估 `(a,b)` → 双线性上采样 → 用原分辨率 guide 施加，即该文的做法 |
-| V7 | E2 已验证的 readout 形式与超参 | 读 `experiments/E2_basis_fit_20260803/e2lib.py`（本仓库既有实现） | `cband_norm`、`bandpass`、`σ∈[0.025,0.30]` 有界 sigmoid、`μ` 固定网格为 buffer、`k∈[1,40]`、L=Rec.709 luma / S=HSV saturation、短边归一坐标、lstsq 残差化——全部与本实现对齐 |
+| V7 | E2 已验证的 readout 形式与超参 | 读 `experiments/_archive/2026-08-10/E2_basis_fit_20260803/e2lib.py`（本仓库既有实现） | `cband_norm`、`bandpass`、`σ∈[0.025,0.30]` 有界 sigmoid、`μ` 固定网格为 buffer、`k∈[1,40]`、L=Rec.709 luma / S=HSV saturation、短边归一坐标、lstsq 残差化——全部与本实现对齐 |
 | V8 | split 权威表与本地样本量 | 数 `/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/*.index.jsonl` | train 159,215（local 75,544：normal 42,752 / low 32,792）；V_where 896（local 400：normal 224 / low 176）；V_what 897（local 408）；T_final 918（local 424）；T_lut_unseen 433（local 198） |
 | V9 | 训练 env 的 `sqlite3` 坏了 | `/home/bc/envs/q3vl_sft/bin/python -c "import sqlite3"` → `CXXABI_1.3.15 not found` | 解法：`export LD_LIBRARY_PATH=/home/bc/miniconda3/envs/llm_factory/lib`。已写进 `scripts/run_where_a.sh`。**mask 定位依赖 build 的 `catalog.sqlite3`，不设这个变量整条 Where-A 数据路径起不来** |
 
@@ -175,7 +175,7 @@ vision tower 单独加载：415.3M 参数，CPU float32 加载 3.0 s，512×768 
 
 **D5 · guided filter 的 radius / eps —— 裁定：先例作废，S2 现扫现定。**
 原来的"E2 先例"不成立：E2 的 `guided_filter` 是**全分辨率逐 basis 通道** `r=32`
-（`experiments/E2_basis_fit_20260803/prep_data.py:149`），正是 §4.2 现在明令禁止的顺序。
+（`experiments/_archive/2026-08-10/E2_basis_fit_20260803/prep_data.py:149`），正是 §4.2 现在明令禁止的顺序。
 - 落地：`GUIDED_PARAMS_PROVISIONAL = True` 标记当前 `radius_low=2, eps=1e-3` 为临时值；
   `scripts/sweep_upsample.py` 扫 3×3 组合，S2 定档后写回 `config.py` 并翻标记。
 - **选择规则是字典序，不是"IoU 最高者胜"**（复审 N-20）：先过预注册门槛

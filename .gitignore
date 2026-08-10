@@ -70,3 +70,14 @@ experiments/*/runs/*/ckpt_*.pt
 experiments/*/hypA/gt_tmp/
 experiments/*/**/gt_tmp/
 experiments/tooling-wave1/T4_construct/cache/
+
+# ARCH-1 归档（2026-08-10）——非当前战役的旧实验目录移入 experiments/_archive/<日期>/。
+# 归档目录里只有**文档类小文件**留在 git（REPORT/NOTES/STATUS/metrics.json/config/脚本，
+# 随 git mv 保历史）；日志与大产物（png/log/pt/npy/npz/jsonl）已 git rm --cached，
+# 仍在磁盘上但不再入 git。
+# 注意：.gitignore 只作用于**未跟踪**文件——仍在 index 里的那 216 个文档类文件不受下面三条影响。
+# 上面几条按旧路径写的规则（experiments/tooling-wave1/... 等）在归档后已成为惰性规则，
+# 归档目录统一由下面的 blanket 规则覆盖，保留原文以便旧目录被取回时仍然生效。
+experiments/_archive/**
+!experiments/_archive/**/
+!experiments/_archive/**/*.md
