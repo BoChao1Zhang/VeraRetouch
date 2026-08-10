@@ -60,6 +60,10 @@ __all__ = ["percentile", "soft_iou_value", "boundary_f1", "topk_mask",
 
 
 def percentile(xs: Sequence[float], p: float) -> float | None:
+    """**nearest-rank** order statistic (amendment A-6), i.e. the equivalent of
+    ``numpy.quantile(..., method="nearest")`` -- NOT an interpolated quantile.
+    n=400 median is the 201st sorted element; the two differ by ~4e-4 here, which
+    matters only because the gates are hard thresholds."""
     if not xs:
         return None
     s = sorted(xs)
@@ -240,6 +244,11 @@ def paired_delta(a: Sequence[float], b: Sequence[float], *, n_perm: int = 10000,
 
     ``p`` is the two-sided add-one-corrected proportion of sign-flipped means at
     least as extreme as the observed one, so it can never be exactly zero.
+
+    Amendment A-6 pins the counts, because A-5's text ("bootstrap, 2000
+    resamples") named neither the right test nor the right number: the p-value is
+    **10,000 sign-flip permutations** (hence the observed floor 1/10001), and the
+    2,000 resamples are the *bootstrap CI* below, a different quantity.
     """
     import random as _random
 
@@ -444,6 +453,11 @@ def summarise(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     glo = pick("soft_iou", is_global)
     gbf = pick("grid_boundary_f1", is_local)
     ghi = pick("grid_hard_iou", is_local)
+    # amendment A-6: the ">=85% of oracle" gate's denominator is each sample's
+    # OWN delivery-tier (hi) ceiling -- a per-image paired ratio, not the low-tier
+    # corpus constant the protocol footnote used to name.  `oracle_soft_iou` is
+    # computed against `mask_hi` in `sample_metrics`, so the tier is hi by
+    # construction; keep it that way, a tier swap here changes the gate silently.
     ratio = [float(r["soft_iou"]) / float(r["oracle_soft_iou"])
              for r in rows if is_local(r) and r.get("oracle_soft_iou")]
     bratio = [float(r["grid_boundary_f1"]) / float(r["oracle_grid_boundary_f1"])

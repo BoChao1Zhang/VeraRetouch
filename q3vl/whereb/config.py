@@ -161,9 +161,15 @@ MASK_BF1_W = 0.10
 # second AUC: it would rank fields by how soft their GT is.  min/max scores a
 # perfect prediction of a soft GT at exactly 1.0.
 SOFT_IOU_KIND = "minmax"
-# Denominator of the `soft_iou_vs_oracle_ratio` gate: the Where-A per-image
-# oracle ceiling, measured in the **low tier** with the **min/max** form.
-# Using a different tier or the product form would silently change the gate.
+# LOW-TIER REFERENCE CONSTANT -- **not** the gate's denominator (amendment A-6,
+# 2026-08-10).  `soft_iou_vs_oracle_ratio` divides each sample by *its own*
+# delivery-tier (hi) oracle ceiling; this constant is the fitting-tier (low)
+# corpus median and is only used when a report puts the two tiers side by side.
+# Nothing on the criteria path reads it, and the reading the protocol footnote
+# used to derive from it ("ceiling ~0.83, so the absolute >=0.75 row is the
+# stricter one") is FALSE under the real denominator: with a per-image hi ceiling
+# near 0.965/0.976, 0.75 is only 77.7%/76.9% of oracle, i.e. the RELATIVE row
+# binds first.  See protocol amendment A-6 / REVIEW-result-W1 §2.1b.
 ORACLE_CEILING_LOW_MINMAX = {"band": 0.827, "cband12": 0.835}
 # Boundary-F1 surrogate of Bokhovkin & Burnaev, arXiv:1905.07852 (verified
 # 2026-08-05, see NOTES V-B6): boundary map = pool(1-y, 3) - (1-y); tolerance

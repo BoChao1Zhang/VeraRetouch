@@ -120,12 +120,23 @@ def test_no_criteria_module_selects_the_product_form():
 
 def test_the_oracle_ratio_denominator_is_pinned():
     """The >=85%-of-oracle gate needs its denominator stated, or a different
-    tier / a different form silently changes the gate."""
+    tier / a different form silently changes the gate.
+
+    Amendment A-6 (2026-08-10): the denominator is each sample's OWN hi-tier
+    ceiling, and ``ORACLE_CEILING_LOW_MINMAX`` is a low-tier *reference* constant
+    that no criteria path reads.  Both readings are pinned here, in opposite
+    directions, because the pair is the whole point: which of the two gate rows
+    binds first flips between them.
+    """
     ceil = C.ORACLE_CEILING_LOW_MINMAX
     assert ceil == {"band": 0.827, "cband12": 0.835}
-    # with a ceiling near 0.83, the absolute >=0.75 row implies ~90% of oracle,
-    # i.e. the absolute row is the stricter of the two -- worth knowing which
-    # one actually binds before reading a near-miss as an oracle problem.
+    # low tier (reference only): 0.75 implies ~90% of oracle -> the ABSOLUTE row
+    # would be the stricter of the two ...
     for r, c in ceil.items():
-        implied = 0.75 / c
-        assert implied > 0.85, (r, implied)
+        assert 0.75 / c > 0.85, (r, 0.75 / c)
+    # ... but under the real denominator (per-image hi, W1 median 0.9651/0.9759)
+    # 0.75 is only ~77.7%/76.9%, so the RELATIVE row binds first.  The deleted
+    # protocol footnote asserted the opposite and would have misdirected anyone
+    # reading a near-miss.
+    for hi in (0.9651, 0.9759):
+        assert 0.75 / hi < 0.85, hi
