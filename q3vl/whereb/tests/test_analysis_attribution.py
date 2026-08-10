@@ -290,7 +290,11 @@ def _payload(cell: dict):
                  "main_context": "generated", "n_rows": 1, "n_contexts": 1,
                  "n_masked": 1, "taxonomy": __import__(
                      "q3vl.whereb.analysis.taxonomy", fromlist=["TaxonomyConfig"]
-                 ).TaxonomyConfig().to_dict()},
+                 ).TaxonomyConfig().to_dict(),
+                 "thresholds": AnalysisThresholds().to_dict(),
+                 "tail_cut": AnalysisThresholds().tail_soft_iou,
+                 "tail_decile": AnalysisThresholds().tail_decile,
+                 "tail_decile_cut": 0.12, "n_viz_samples": 0},
         "dimensions": ["area"],
         "per_class": {"generated": {"area": {"large": cell}}, "gt": {}},
         "class_distribution": {"area": {"large": 1}},
@@ -302,6 +306,39 @@ def _payload(cell: dict):
         "population_summary": {},
         "conclusions": [],
     }
+
+
+def test_both_tail_cuts_are_declared_and_the_ceiling_is_marked_provisional():
+    """Main-agent ruling 2026-08-10: report the absolute cut AND the decile."""
+    t = AnalysisThresholds()
+    assert t.tail_soft_iou == 0.30
+    assert t.tail_decile == 0.10
+    import inspect
+
+    from q3vl.whereb.analysis import attribution as A
+
+    src = inspect.getsource(A.AnalysisThresholds)
+    assert "PROVISIONAL" in src, "the ceiling's provisional status must be stated"
+    # the number itself is what a report has to quote, so it is in the dump
+    assert t.to_dict()["oracle_ceiling"] == 0.70
+    assert t.to_dict()["tail_decile"] == 0.10
+
+
+def test_report_carries_the_auxiliary_decile_column_and_the_provisional_note():
+    cell = {"center_prior_hard_iou": 0.4, "local_soft_iou_median": 0.5}
+    payload = _payload(cell)
+    payload["tail_summary_decile"] = mechanism_summary(
+        [attribute_sample(clean_row(oracle_soft_iou=0.3), gt_row=clean_row())])
+    md = render_report(payload)
+    assert "最差 10%" in md
+    assert "provisional" in md.lower()
+    assert "工程判断" in md, "the priority order must be declared as a judgement"
+
+
+def test_report_still_renders_without_a_decile_summary():
+    """Older payloads (and the unit fixtures) must not crash the renderer."""
+    md = render_report(_payload({"center_prior_hard_iou": 0.4}))
+    assert "长尾归因" in md
 
 
 def test_report_refuses_a_table_without_the_centre_prior_column():

@@ -198,11 +198,19 @@ def main() -> int:
     # ``tail_k`` are the ones that get a figure drawn.
     thresholds = AnalysisThresholds()
     by_id = {str(r["sample_id"]): r for r in local_main}
-    tail_set_ids = [str(r["sample_id"]) for r in sorted(
-        (r for r in local_main
-         if r.get("soft_iou") is not None
-         and float(r["soft_iou"]) < thresholds.tail_soft_iou),
-        key=lambda r: float(r["soft_iou"]))]
+    ranked_local = sorted((r for r in local_main if r.get("soft_iou") is not None),
+                          key=lambda r: float(r["soft_iou"]))
+    tail_set_ids = [str(r["sample_id"]) for r in ranked_local
+                    if float(r["soft_iou"]) < thresholds.tail_soft_iou]
+    # Main-agent ruling (2026-08-10): report BOTH cuts.  The absolute cut is
+    # comparable across arms (a stronger arm has a smaller tail); the bottom
+    # decile always holds the same number of samples, so it compares *shapes* of
+    # failure rather than amounts.  Reading either one alone gets a question
+    # wrong: "did the tail shrink" needs the absolute cut, "did the tail change
+    # character" needs the decile.
+    n_dec = max(1, int(round(thresholds.tail_decile * len(ranked_local))))
+    decile_ids = [str(r["sample_id"]) for r in ranked_local[:n_dec]]
+    decile_cut = (float(ranked_local[n_dec - 1]["soft_iou"]) if ranked_local else None)
     panel_ids = _tail_ids(local_main, args.tail_k)
     # one extra sample from each dimension's worst class, so the panels cover the
     # classes the tables just accused rather than only the global bottom
@@ -264,13 +272,15 @@ def main() -> int:
         "sample_id": sid,
         "rank": i,
         "in_viz": sid in panel_ids,
+        "in_decile": sid in decile_ids,
         "labels": labels.get(sid, {}),
         "row": by_id[sid],
         "attribution": by_attr[sid],
         "fields": fields.get(sid),
-    } for i, sid in enumerate(dict.fromkeys(tail_set_ids + panel_ids))
+    } for i, sid in enumerate(dict.fromkeys(tail_set_ids + decile_ids + panel_ids))
         if sid in by_id]
     tail_summary = mechanism_summary([t["attribution"] for t in tail])
+    decile_summary = mechanism_summary([by_attr[s] for s in decile_ids if s in by_attr])
     population_summary = mechanism_summary(labelled_all)
 
     # --- panels ------------------------------------------------------------
@@ -291,6 +301,8 @@ def main() -> int:
             "n_rows": len(rows), "n_contexts": len(by_ctx),
             "n_masked": len(geometry), "n_panels": n_panels,
             "tail_cut": thresholds.tail_soft_iou,
+            "tail_decile": thresholds.tail_decile,
+            "tail_decile_cut": decile_cut,
             "n_viz_samples": len(panel_ids),
             "taxonomy": cfg.to_dict(),
             "thresholds": thresholds.to_dict(),
@@ -309,6 +321,7 @@ def main() -> int:
         "worst_class_note": worst_note,
         "tail": tail,
         "tail_summary": tail_summary,
+        "tail_summary_decile": decile_summary,
         "population_summary": population_summary,
         "conclusions": _conclusions(per_class[args.main_context], worst, activity,
                                     tail_summary, population_summary, geometry,

@@ -87,14 +87,24 @@ PRIORITY: tuple[str, ...] = (
 class AnalysisThresholds:
     """Pre-registered cut-offs.  Dumped verbatim into ``config/``."""
 
-    #: a sample is in the long tail when its main-context soft-IoU is below this
-    #: OR it is among the worst ``tail_k`` (whichever the caller asks for)
+    #: the long tail's primary cut: main-context soft-IoU below this.  Absolute,
+    #: so it is comparable across arms and across steps -- a better arm has a
+    #: literally smaller tail (main-agent ruling 2026-08-10).
     tail_soft_iou: float = 0.30
+    #: the auxiliary cut, reported next to it: the worst this share of local
+    #: samples.  Fixed size, so it compares the *composition* of failure between
+    #: arms rather than its amount.
+    tail_decile: float = 0.10
     #: GT-context minus generated-context IoU that counts as a context problem,
     #: and how good the GT context has to be for the comparison to mean anything
     context_gap: float = 0.10
     context_gt_ok: float = 0.50
-    #: the per-image Where-A oracle is itself this bad -> the basis is the cap
+    #: the per-image Where-A oracle is itself this bad -> the basis is the cap.
+    #: **PROVISIONAL** (main-agent ruling 2026-08-10): accepted for now, but it
+    #: is a judgement call with no calibration behind it.  Measured sensitivity
+    #: on W01 step1500: it fires on 12.4% of the tail at 0.70; loosening it
+    #: shifts blame towards the basis and away from the model, tightening it does
+    #: the reverse.  Any conclusion that turns on this number has to say so.
     oracle_ceiling: float = 0.70
     #: std(s_pred)/std(s*) below this is a collapsed axis
     s_collapse: float = 0.20

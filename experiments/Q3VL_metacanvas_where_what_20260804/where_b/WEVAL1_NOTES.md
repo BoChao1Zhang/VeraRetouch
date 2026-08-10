@@ -44,16 +44,51 @@
 3. **`pubio.py` 自带一个极小的 published-store 读取器**，不走 `q3vl.whereb.stores`。原因是实施期间 PERF-1 正在重写 `q3vl/train/shards.py` + `stores.py`，工作区一度处于 `resolve_read_path` 抛 `TypeError: 'function' object is not subscriptable` 的中间态（后已修好）。字节级读仍然委托给未被改动的 `q3vl.data.shardio.read_member`（含 sha256 校验），索引解析仍走 `ShardIndex`——没有重复实现任何格式。
 4. **不改任何既有文件**（任务卡要求）。因此 `evaluate.py` 的 `active_primitive_bucket` 空洞（见 3.2-e）只被**报告**，没有被就地修掉。
 
-### 3.2 待主 agent 决策（已采用保守默认继续，未静默拍板）
+### 3.2 待主 agent 决策 —— **已于 2026-08-10 全部裁定**
 
-| # | 事项 | 现在采用的保守默认 | 备选与代价 |
+| # | 事项 | 裁定 | 落地位置 |
 |---|---|---|---|
-| a | **面积分档切点** | 任务卡写的是 small<5% / medium<25% / large>25%；实测 279/400 落进 large，一个装 70% 样本的格回答不了「哪种区域难」。默认改为 **四档 (0.05, 0.15, 0.45)**，**保留 <5% 这条预注册边界作为独立的 `tiny` 类** | 若要严格按卡面两切点，`--taxonomy` 层面改一个常量即可；代价是 large 格失去分辨力 |
-| b | **长尾集合的口径** | 统计口径 = 主榜 softIoU < **0.30** 的全部 local 样本（W01: 89 个 / 22.2%）；只有出图取最差 12 个 | 备选「按分位取 bottom 10%」。0.30 是预注册常数，随 arm 变强会自动收缩，分位口径则恒定 —— 两者哪个更适合跨 arm 比较，需要定 |
-| c | **`oracle_ceiling` 阈值 0.70** | 该样本自己的 Where-A oracle softIoU < 0.70 才算「basis 表达上界」 | 更松（0.8）会把大量样本归给 basis 从而低估模型责任；更紧（0.6）反之。W01 长尾里它占 12.4%，对阈值不算敏感 |
-| d | **归因优先级顺序（上游优先）** | `format_failure > oracle_ceiling > context_quality > s_direction > s_error > rho_error > s_collapse > single_primitive > upsample_collapse > area_mismatch > below_center_prior` | 这是工程判断不是测量结果，报告 §6 已声明。多标签命中率同时给出，改顺序只影响 `primary` 列 |
-| e | **`active_primitive_bucket` 在 eval 侧是空的** | `metrics.active_primitive_count/_bucket` 有定义有单测，`config.EXTRA_STRATA_KEYS` 也列了，但 `evaluate.evaluate_context` **从未把它写进 per-sample 行**——所以每块已发布的板子里 `strata.active_primitive_bucket` 只有一格 `{"None": 896}`（W01/W02 step1500 实测如此）。本工具在 `--checkpoint` 模式下自己算（那是唯一有预测 `rho` 的地方），只覆盖被重跑的样本 | 建议派一个 1 行的修复：在 `evaluate.py` 的 `met.update({...})` 里加 `active_primitive_bucket`。**Where-A 继承来的单基元脆弱性风险目前在所有 Where-B 板子上都没有实际数据支撑** |
-| f | **是否把本工具挂进 `run_where_b.py` 的 eval 回调** | 没挂。现在是离线工具，对任意已落盘 eval 目录可跑 | 挂进去可以每 500 步自动出分层报告，代价是训练进程里多一次 NFS 掩膜扫描（首轮 ~15 s，之后走缓存） |
+| a | **面积分档切点** | **认可四档 (0.05, 0.15, 0.45)**（实测分布标定、保留预注册 5% 边界） | `taxonomy.TaxonomyConfig.area_cuts`，docstring 里带 p10/p50/p90 实测行 |
+| b | **长尾集合的口径** | **两个口径都出**：主榜 = 绝对 softIoU < 0.30（跨 arm 绝对可比），辅助 = 最差 10%（构成可比）；报告注明含义差异 | `AnalysisThresholds.tail_soft_iou / .tail_decile`；CLASS_REPORT §4 机制表新增「辅助口径 primary 占比」列 + 一段口径差异说明；`tail_samples.jsonl` 每行带 `in_decile` |
+| c | **`oracle_ceiling` 阈值 0.70** | **认可，标 provisional** | dataclass 字段注释写明 PROVISIONAL 与敏感性；CLASS_REPORT §4 瓶颈结论下方固定一条 provisional 提示；单测 `test_both_tail_cuts_are_declared_and_the_ceiling_is_marked_provisional` 钉住 |
+| d | **归因优先级顺序（上游优先）** | **认可**，CLASS_REPORT 里注明「工程判断非测量」 | §4 引入 `primary` 的同一段就写明；§6 保留长版说明 |
+| e | **`active_primitive_bucket` 在 eval 侧是空的** | **另派 WB-IMPL，赶在 W03 前修** | 本工具不动 `evaluate.py`；`--checkpoint` 模式自己算，修好后会自动多出全量分层 |
+| f | **是否挂进 eval 回调** | **不挂**（评测墙钟已占 39%，500 步一次太贵）。定位为**臂完成后的离线工具，每臂跑一次**；后续由队列在臂完成后追加一个 CPU 分析任务接入 | CLI 已经是「对任意已落盘 eval 目录可跑」；无 GPU 时 30 s，几何缓存跨 8 臂共享 |
+
+队列接入的最小命令（CPU 档，臂完成后追加）：
+
+```bash
+nfsx 900 -- python -m q3vl.whereb.analysis.run_analysis \
+    --eval-dir  <run_dir>/eval_final --arm <ARM> --step final \
+    --out-dir   experiments/Q3VL_metacanvas_where_what_20260804/where_b/analysis_<ARM>_final \
+    --geometry-cache experiments/Q3VL_metacanvas_where_what_20260804/where_b/geometry_V_where.json
+# 需要 s 场面板与 s_direction/s_error/rho_error 时再追加（GPU，约 50 s / 16 样本）：
+#   --checkpoint <run_dir>/where_b_final.pt --device cuda --field-batch 2
+```
+
+### 3.3 环形 / 多连通类在评测数据里的普查（裁定要求，2026-08-10，CPU，只看 GT 几何）
+
+用同一套几何量扫了**全部四个 eval split** 的已发布 GT 掩膜，缓存落在
+`geometry_{V_where,V_what,T_final,T_lut_unseen}.json`：
+
+| split | n(local) | 带洞（≥ max(64px, 1% 填充面积）) | 多连通 | max `hole_frac` |
+|---|---:|---:|---:|---:|
+| V_where | 400 | 0 | 16 (4.0%) | 0.0061 |
+| V_what | 408 | 0 | 14 (3.4%) | 0.0061 |
+| T_final | 424 | 0 | 21 (5.0%) | 0.0042 |
+| T_lut_unseen | 198 | **1** | 18 (9.1%) | 0.0617 |
+
+结论，按「如实处置、不造样本」执行：
+
+- **环形（带洞）**：1430 个掩膜里只有 **1 个**——`sft_997b054f97c8c55e045b09f91b54545c`（T_lut_unseen，
+  `hole_frac` 0.0617、`area_frac` 0.296、`circularity` 0.139）。`V_where` / `V_what` / **`T_final` 一个都没有**；
+  其余样本的 `hole_frac` ≤ 0.0061，是羽化边缘上的针孔，不构成拓扑洞（`min_hole_frac`/`min_hole_px` 两条底噪门就是为此设的）。
+  → 协议 §13「联图至少覆盖环形」在最终报告的 `T_final` 上**无法满足**。CLASS_REPORT §6 已把这张普查表写死，
+  措辞为「该类在 V_where/V_what/T_final 中不存在，全部 eval split 合计仅 T_lut_unseen 1 例」。**不造样本、不跨 split 补图**
+  （T_lut_unseen 的用途是未见 LUT 泛化，把它的样本混进 §13 的 20 图会改变那组图的含义）。
+- **多连通**：**存在且够用**。`T_final` 自身有 21 个（5.0%），最终 20 图从 `T_final` 内部取即可，无需跨 split。
+- 本 split（`V_where`）上 `topology` 维度因此恒为单类，报告里显式声明「不是模型没差别，是数据里没有对比」，
+  而不是把该维度悄悄省掉。
 
 ## 4. 红线自查
 
@@ -73,7 +108,7 @@
 
 1. **`evaluate.py` 没有写 `active_primitive_bucket`**（见 3.2-e）。影响：Where-A 单基元脆弱性这条已知风险，在 Where-B 侧目前是**零证据**状态。
 2. **PERF-1 与本任务并发**：期间 `q3vl/train/shards.py` 出现过 `_cache_state` 函数名与模块级备忘变量同名导致 `resolve_read_path` 返回函数对象、所有 published-store 读全挂的中间态。再次核查时已修复（本机 `/home/bc/data/shard_cache` 已有 23 个条目 / 29.6 GB）。记录在此仅为存档。
-3. **`V_where` 的 `.cgt` 掩膜没有一个带洞**，且 96% 是单连通。§13 要求联图覆盖「环形 / 多连通」，**本 split 覆盖不了环形**；若那条交付要求要满足，需要从别的 split 取样或承认该类不存在。
+3. **`V_where` 的 `.cgt` 掩膜没有一个带洞**，且 96% 是单连通。§13 要求联图覆盖「环形 / 多连通」——已按裁定普查全部四个 eval split，结论见 §3.3：环形类在 `T_final` 上不存在（全部 eval split 合计 1 例），多连通够用。
 
 ## 6. 复现
 

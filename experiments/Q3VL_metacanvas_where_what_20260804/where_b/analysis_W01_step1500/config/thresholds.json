@@ -19,6 +19,7 @@
   },
   "attribution": {
     "tail_soft_iou": 0.3,
+    "tail_decile": 0.1,
     "context_gap": 0.1,
     "context_gt_ok": 0.5,
     "oracle_ceiling": 0.7,

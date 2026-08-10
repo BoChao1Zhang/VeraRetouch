@@ -20,7 +20,7 @@
     "torch": "2.10.0+cu128",
     "scipy": "1.17.1"
   },
-  "git_commit": "c1b4cdc94c0939f193bf3775ace1b51a48cf5723",
+  "git_commit": "db20c1882f53481cf0795f59a449544069f2e1e1",
   "eval_dir": "/home/bc/data/runs/where_b/W01/eval_step1500",
   "board_arm": "W01",
   "mask_scan": {
@@ -32,7 +32,7 @@
     "n_read": 400,
     "n_missing": 0,
     "verify_checksums": false,
-    "seconds": 22.21
+    "seconds": 16.98
   },
-  "seconds": 43.5
+  "seconds": 41.2
 }
