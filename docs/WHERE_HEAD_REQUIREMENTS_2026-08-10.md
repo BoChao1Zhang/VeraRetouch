@@ -85,15 +85,43 @@
 | context 数据流 | teacher/generated 50/50、forced-prefix、七种 context 构造（负控制备用） |
 | 训练循环 | 单卡臂、D-20、eval 防御（eval 崩溃不杀训练）、checkpoint 保护 |
 
-### 2.4 历史证据指针（新方案设计的信号地图）
+### 2.4 已确立的机制发现（新方案设计的信号地图）
 
-| 证据 | 位置 | 结论（口径限定） |
-|---|---|---|
-| RO-3：text→image attention 逐层头扫描 | `experiments/_archive/2026-08-10/RO3_layerhead_scan_20260803/REPORT.md` | base 模型上 OOF 融合与 L11H5 差分场存在指令条件空间信号（AUC 口径，限于排序）——**SFT 后（merger+LLM 全调）该信号大概率更强，未测** |
-| RO-2：logit lens / emb 对齐 | `.../RO2_logitlens_20260803/REPORT.md` | 进 LLM 前目标词-视觉对齐存在；LLM 前向逐层抹掉词特异性 |
-| RO9b：算子修复后的定位上限 | `.../RO9b_readout_fix_20260803/` | 主体定位可达 0.92-0.935；指令可控性不足（base 模型） |
-| MCQ 坍缩史 | `.../MCQ_*/` | 直接空间 logits 生成路线塌陷的完整记录 |
-| W01/W02 全量失败数据 | `/home/bc/data/runs/where_b/W0{1,2}/` + `experiments/.../where_b/analysis_W0{1,2}_step1500/` | 本次失败的逐样本归因（过覆盖机制） |
+以下发现均有归档实验背书，是「指令条件的空间信号到底在模型哪里、怎么读才读得出来」的已知答案。
+历史 AUC 口径的结论一律**限于排序**（AUC 已全面禁用为判据，见 CLAUDE.md 红线）。
+
+**发现一：定位信息在 attention 里涌现，但被 padding 格与 attention sink 掩埋——去掉它们才看得见。**
+- `expand2square` 的 pad 格只占 16×16 网格约 5.3 格，却吃掉 **53-74% 的注意力质量**，**93% 的源 argmax 落在 pad 里**（RO-9c 补件）；逐图 min-max 的分母被 pad 支配，导致原始场"看起来只有一个 sink"，而实际**有效区内主体信号清晰存在**——此前"必须做共模消除才能解锁 grounding"的整条结论就是这个假象造成的。
+- 排除 pad/sink + 修层 + head 聚合 + self-self 算子后，主体定位从 0.661 提到 **0.92-0.935**（RO9b，base 模型）。
+- 推论：任何 attention 读出路线，**pad/sink 排除是第一前提**，不是后处理选项。
+- 位置：`experiments/_archive/2026-08-10/RO9b_readout_fix_20260803/`、CLAUDE.md「空间场可视化纪律」节。
+
+**发现二：指令条件信号存在于特定层/头的差分 attention，不在 head 均值。**
+- 单头 **L11H5 差分场**对 `.cgt` 有信号、零对比度对照 0.522；OOF 逐层头融合有指令条件定位（RO-3，AUC 口径限排序）。
+- G1（旧失败）的主因被证明是 **query token 选择与 head-mean 读法错误**，不是信号不存在。
+- **未测的关键变量**：这些全是 base 模型上的结论；SFT 已全参训练 merger+LLM，`<where>` 段 hidden 被显式塑形过（文本 F1=1.0），SFT 后模型的 `<where>` token→image attention 大概率显著更强——一个半天级探针即可测。
+- 位置：`.../RO3_layerhead_scan_20260803/REPORT.md`。
+- 附：**attention 导出必须 eager**（FA2/SDPA 返回 None，不回退——红线）。
+
+**发现三：词-视觉对齐在进 LLM 之前最强，LLM 前向逐层抹掉词特异性。**
+- emb 层（进 LLM 前）目标词对应区域可分（RO-2，限排序）；越往深层走词特异性越弱。
+- 推论：「哪个词」的空间信息宜在浅层/入口处取，「指令整体语义」在深层 hidden——两者可能要在不同深度读。
+- 位置：`.../RO2_logitlens_20260803/REPORT.md`。
+
+**发现四：主体显著性先验极强，会冒充指令理解——负控制不可省。**
+- 一句对全体样本相同的 "the main subject" 就能拿到高定位分（RO-1/RO-X1）；零参数中心先验场同样能赢过弱读出。
+- 本次 W01/W02 的 center 类输给中心先验（Δ=−0.05, p=1e-4）是同一现象的再现。
+- 推论：新方案验证必须自带 shuffle/固定短语/中心先验三件套，哪怕探针阶段。
+
+**发现五：直接生成空间 logits 会坍缩（两次实证）。**
+- 旧 MCQ 路线（语言模型直接出空间图）坍缩 + 边缘退化（`.../MCQ_*/`）；本次 MetaCanvas query→全局 w 读出同样崩塌但模式不同（过覆盖铺全局）。
+- 两次失败夹出的空间：**信号要从模型内部"读"出来（attention/相似度/浅层特征），不是让模型"生成"出来**——这正是发现一、二、三共同指向的方向。
+
+**发现六：本次 W01/W02 的失败画像（逐样本归因在盘）。**
+- 过覆盖 3.7×（长尾 70% 主因、100% pred>gt）；大/居中靠面积吃分、小/偏心/复杂/软边全崩；oracle 天花板只解释 12% 尾部；最差 10% 深尾中 oracle_ceiling 升到 27.5%（basis 上界在最深处开始起作用）。
+- 位置：`/home/bc/data/runs/where_b/W0{1,2}/` + `experiments/.../where_b/analysis_W0{1,2}_step1500/CLASS_REPORT.md`。
+
+**其他已确立事实**：F_pre 对 SFT 不变（vision 全冻结，WA-P4b 实测 diff=0——attention/相似度类方案可复用全部 Where-A 资产）；灰度照片占 local 池 3.3-3.8%（S 通道恒零，读出要能容忍退化维）；单活跃基元解在 guided upsample 下脆弱（30.8% 样本，hi 档落差翻倍）。
 
 ### 2.5 算力与运维
 
