@@ -124,6 +124,37 @@ def _iter_verified(stores, expected_mode: str, schema: str,
             yield rec
 
 
+def _await_read_mirror(out_root: Path, manifest: dict[str, Any],
+                       timeout_s: float = 300.0, poll_s: float = 5.0) -> None:
+    """Block until every published shard is visible through the read mirror.
+
+    ``os.stat`` only, on the soft (nfs3) mount, so this can neither hang nor
+    write.  Raises rather than proceeding: a read-back that silently skipped the
+    verification would be the "second failure mode" of the campaign's cache
+    contract -- quiet, and indistinguishable from success.
+    """
+    from q3vl.train.shards import rewrite_read_path
+
+    wanted = [out_root / "manifest.json"] + [
+        out_root / s["tar"] for s in manifest.get("shards", [])]
+    t0 = time.time()
+    while True:
+        missing = [p for p in wanted if not Path(rewrite_read_path(p)).exists()]
+        if not missing:
+            print(json.dumps({"read_mirror_visible": len(wanted),
+                              "waited_s": round(time.time() - t0, 1)}), flush=True)
+            return
+        if time.time() - t0 > timeout_s:
+            raise SystemExit(
+                f"{len(missing)} published file(s) are still invisible through "
+                f"the read mirror after {timeout_s:.0f}s, e.g. "
+                f"{rewrite_read_path(missing[0])}.  The publication itself is "
+                f"complete at {out_root}; move it aside and re-run the merge.")
+        print(json.dumps({"waiting_for_read_mirror": len(missing),
+                          "elapsed_s": round(time.time() - t0, 1)}), flush=True)
+        time.sleep(poll_s)
+
+
 def main() -> int:
     from q3vl.whereb.config import GENCTX_DIR, GENCTX_MODES, REPORT_DIR, SCHEMA_GENCTX
 
@@ -221,6 +252,16 @@ def main() -> int:
         raise SystemExit(
             f"published {counters['n']} records but the split has {n_all}; "
             f"{out_root} must be moved aside and the merge repeated")
+
+    # -- 3b. wait for the soft READ mirror to see what we just wrote ----------
+    # We publish through the rw mount (nfs4.1) but every consumer -- and step 4
+    # below, via ShardStore's `resolve_read_path` -- reads through /mnt/nfs-ro
+    # (nfs3, soft).  A directory created seconds ago is not in that client's
+    # dentry cache yet, so the read-back raced and failed with ENOENT on
+    # `shards/shard-00000.tar` (observed 2026-08-10, forced_color/V_what).  The
+    # entry becomes visible within acdirmax (60 s by default), so this waits for
+    # it rather than skipping the verification or reading through the hard mount.
+    _await_read_mirror(out_root, manifest)
 
     # -- 4. read the merged root back through the consumer's own class --------
     merged = GenContextStore(out_root, verify=args.verify)
