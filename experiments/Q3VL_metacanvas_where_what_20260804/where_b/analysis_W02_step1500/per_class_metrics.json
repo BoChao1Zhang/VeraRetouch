@@ -10,7 +10,7 @@
     "n_rows": 6232,
     "n_contexts": 7,
     "n_masked": 400,
-    "n_panels": 85,
+    "n_panels": 16,
     "tail_cut": 0.3,
     "n_viz_samples": 12,
     "taxonomy": {
@@ -44,8 +44,8 @@
       "swap_gain": 0.15
     },
     "field_cache": "experiments/Q3VL_metacanvas_where_what_20260804/where_b/analysis_W02_step1500/fields",
-    "git_commit": "c1b4cdc94c0939f193bf3775ace1b51a48cf5723",
-    "generated_at": "2026-08-10T15:18:56"
+    "git_commit": "b335a3d2827030feae8365b9c95cd536e3900cf3",
+    "generated_at": "2026-08-10T15:22:30"
   },
   "dimensions": [
     "area",

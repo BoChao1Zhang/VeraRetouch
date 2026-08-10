@@ -25,7 +25,7 @@
 | 整臂 grid 边界 F1 | 0.306 |
 | 中心先验 hardIoU / Δ / p | 0.518 / -0.026 / 0.0001 |
 | field cache（GPU 重跑） | experiments/Q3VL_metacanvas_where_what_20260804/where_b/analysis_W02_step1500/fields |
-| git commit | c1b4cdc94c0939f193bf3775ace1b51a48cf5723 |
+| git commit | b335a3d2827030feae8365b9c95cd536e3900cf3 |
 
 > **判据纪律**：本报告不含任何 AUC 列（2026-08-05 红线）。所有二值化一律「匹配 GT 面积的 top-k」，每张表都带零参数中心先验列与配对 Δ、p 值。`n < 20` 的类别标 ⚠低置信——中位数不是发现。
 
@@ -256,7 +256,7 @@
 | `sft_34b2d6eb76bd…` | 0.200 | 0.333 | 0.533 | 0.917 | small/single/compact/center/soft/center/low/False/l4/n/a-not-emitted | 面积失配（pred_mean vs gt_mean） |
 | `sft_87ce6b49e4ea…` | 0.202 | 0.215 | 0.096 | 0.960 | medium/single/compact/edge/soft/lower right/normal/True/l4/n/a-not-emitted | s 轴塌缩（std(s)/std(s*) 过小） |
 
-联图见 `viz/`（85 张）。每张固定为 `I_in | GT mask | GT 叠图 | pred mask hi | pred mask low | s 叠图`，缺的格子画成 “not available” 而不是省略。
+联图见 `viz/`（16 张）。每张固定为 `I_in | GT mask | GT 叠图 | pred mask hi | pred mask low | s 叠图`，缺的格子画成 “not available” 而不是省略。
 
 ## 5. 结论与建议下一步
 
