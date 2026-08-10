@@ -157,9 +157,16 @@ guard 反而会让 import 本身失败。
 
 ### 三-ter、评测的两个入口（NF-2 路线 (a)+离线互补）
 
+> **2026-08-10 更新（任务卡 EXEC-5）**：离线入口已**入队**（`eval_C01`–`eval_C04`，
+> pueue id 10–13，各自 gate 在本臂 `what_final.pt`，排在 C1/C2 训练波之后）。
+> 接线时修掉三个会让它直接失败或静默出错的问题，其中最重的是
+> **`I_tar` 读的是 `image.baked` = `I_in` 的副本**（详见 `NOTES.md` §13.3）。
+> `WT-G7` 的 `still_open`（「evaluate_what 仍传 `lpips_fn=None`」）是**过期陈述**——
+> 该接线 2026-08-05 的 `80a5078` 就在了；本次只是把 lambda 提成具名函数并补单测。
+
 | | 在线 | 离线 |
 |---|---|---|
-| 入口 | `run_what.py` 构造的 `eval_fn`（`evalloop.make_eval_fn`） | `scripts/evaluate_what.py`（**未执行**） |
+| 入口 | `run_what.py` 构造的 `eval_fn`（`evalloop.make_eval_fn`） | `scripts/evaluate_what.py`（**已入队，2026-08-10**） |
 | 数据 | `V_what` 固定 256 条确定性分层子集（清单落盘且进 `config_digest`） | 完整 `V_what`，双 context |
 | 指标 | LUT function 级 + bake gate | §12.1 全套 + §12.2 图像分区分层 + §12.3 |
 | 产出 | 每 500 步两行 `arm_metrics` + `gap`，写 `eval.jsonl` / `eval_per_sample.jsonl` | `main_board` / `ceiling_board` / `context_report` + `per_sample_*.jsonl` |
