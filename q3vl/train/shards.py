@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import threading
 import zlib
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -72,6 +73,243 @@ def rewrite_read_path(path: str | os.PathLike) -> str:
         if s.startswith(src):
             return dst + s[len(src):]
     return s
+
+
+# --- local shard cache (PERF-1, 2026-08-10) -------------------------------
+# Measured on this box while W01/W02 were streaming (see PERF-1):
+#
+#   nfs-ro random 152 KiB pread, 1 thread : p50 17.0 ms, 53 reads/s,   8 MB/s
+#   local ext4, page cache warm           : p50  0.02 ms, 45k reads/s
+#   local ext4, page cache dropped        : p50  6.5 ms, 145 reads/s
+#   nfs-ro sequential copy                : 106 MB/s  (27.5 GiB -> ~4.5 min)
+#
+# Where-B walks a shuffled 1-epoch permutation, so *every* member read is a cold
+# random read: 78 ms of the 627 ms it took to assemble one micro-batch of 8 was
+# nothing but NFS round-trip latency (<5% of it was transferring bytes).  The
+# whole consumed corpus is 27.5 GiB against 1.1 TiB of free local disk and
+# 113 GiB of free RAM, so a one-off sequential copy converts every one of those
+# round trips into a page-cache hit.
+#
+# The cache is a pure read-path detour: the same shard bytes, at the same
+# offsets, and every member is still sha256-verified on read by ``ShardStore``
+# (``verify="checksum"``) and by the published stores, so a corrupt cached shard
+# fails loudly at the exact member rather than training on garbage.  It is
+# keyed by the path *relative to the NFS export*, so a cache entry can only ever
+# stand in for the file it was copied from.
+SHARD_CACHE_ENV = "Q3VL_SHARD_CACHE"
+DEFAULT_SHARD_CACHE = Path("/home/bc/data/shard_cache")
+CACHE_MANIFEST_NAME = "cache_manifest.json"
+#: absolute prefixes whose tails are usable as cache keys (both mounts export
+#: the same tree, so ``/mnt/nfs/x`` and ``/mnt/nfs-ro/x`` share one key)
+CACHEABLE_PREFIXES: tuple[str, ...] = tuple(dict.fromkeys(
+    [src for src, _ in READ_PREFIX_REWRITE] + [dst for _, dst in READ_PREFIX_REWRITE]
+))
+
+_cache_lock = threading.Lock()
+_cache_state: dict[str, Any] | None = None
+
+
+def _load_cache_state() -> dict[str, Any]:
+    """Read the cache manifest once per process.  Local IO only, never NFS."""
+    raw = os.environ.get(SHARD_CACHE_ENV)
+    if raw is not None and raw.strip().lower() in ("", "0", "off", "no", "none", "disabled"):
+        return {"enabled": False, "root": None, "reason": f"{SHARD_CACHE_ENV} disables it",
+                "entries": {}, "hits": 0, "misses": 0}
+    root = Path(raw.strip()) if raw else DEFAULT_SHARD_CACHE
+    manifest = root / CACHE_MANIFEST_NAME
+    try:
+        entries = json.loads(manifest.read_text(encoding="utf-8"))["entries"]
+    except (OSError, KeyError, ValueError) as exc:
+        return {"enabled": False, "root": str(root),
+                "reason": f"no usable {manifest}: {type(exc).__name__}",
+                "entries": {}, "hits": 0, "misses": 0}
+    return {"enabled": True, "root": str(root), "reason": None,
+            "entries": {k: int(v["bytes"]) for k, v in entries.items()},
+            "hits": 0, "misses": 0}
+
+
+def cache_state() -> dict[str, Any]:
+    """Memoised cache manifest + hit counters.  Local IO only, never NFS."""
+    global _cache_state
+    if _cache_state is None:
+        with _cache_lock:
+            if _cache_state is None:
+                _cache_state = _load_cache_state()
+    return _cache_state
+
+
+def reset_shard_cache() -> None:
+    """Forget the memoised cache/mount state (tests and warm jobs only)."""
+    global _cache_state, _ro_mounted
+    with _cache_lock:
+        _cache_state = None
+        _ro_mounted = None
+
+
+def cache_key_for(path: str | os.PathLike) -> str | None:
+    """The cache-relative key of an export path, or ``None`` if not cacheable."""
+    s = str(path)
+    for prefix in CACHEABLE_PREFIXES:
+        if s.startswith(prefix):
+            return s[len(prefix):]
+    return None
+
+
+def resolve_read_path(path: str | os.PathLike) -> str:
+    """``rewrite_read_path`` + local cache.  This is what open() should be given.
+
+    A cache entry is used only when the manifest knows the key *and* the local
+    file is exactly the size the manifest recorded -- so a half-copied shard (or
+    one truncated by a full disk) is ignored rather than read.
+    """
+    s = rewrite_read_path(path)
+    st = cache_state()
+    if not st["enabled"]:
+        return s
+    key = cache_key_for(s)
+    want = st["entries"].get(key) if key is not None else None
+    if want is not None:
+        local = os.path.join(st["root"], key)
+        try:
+            if os.stat(local).st_size == want:
+                st["hits"] += 1
+                return local
+        except OSError:
+            pass
+    st["misses"] += 1
+    return s
+
+
+def shard_cache_facts() -> dict[str, Any]:
+    """Provenance for ``run_setup.json``: which cache, how many entries, hit rate."""
+    st = cache_state()
+    return {"enabled": st["enabled"], "root": st["root"], "reason": st["reason"],
+            "n_entries": len(st["entries"]),
+            "cached_bytes": sum(st["entries"].values()),
+            "open_hits": st["hits"], "open_misses": st["misses"]}
+
+
+class _FdPool:
+    """Per-(pid, thread) read-only fd cache.
+
+    ``os.pread`` is positional, so a shared fd would be safe to *read* through --
+    but the LRU eviction is not: one thread closing an fd another thread is about
+    to pread yields EBADF, or worse, a read against whatever the number was
+    recycled into.  Each thread therefore keeps its own table, which also makes
+    the fork check (dataloader workers) a per-thread no-op.
+    """
+
+    def __init__(self, max_open: int = 32):
+        self.max_open = max_open
+        self._local = threading.local()
+        self._tables: list[dict[str, int]] = []
+        self._lock = threading.Lock()
+
+    def table(self) -> dict[str, int]:
+        pid = os.getpid()
+        table = getattr(self._local, "table", None)
+        if table is None or getattr(self._local, "pid", None) != pid:
+            table = {}
+            self._local.table = table
+            self._local.pid = pid
+            with self._lock:
+                self._tables.append(table)
+        return table
+
+    def fd(self, key: str, path: str) -> int:
+        table = self.table()
+        fd = table.get(key)
+        if fd is None:
+            fd = os.open(path, os.O_RDONLY)
+            if len(table) >= self.max_open:
+                _, old = table.popitem()
+                try:
+                    os.close(old)
+                except OSError:                                # pragma: no cover
+                    pass
+            table[key] = fd
+        return fd
+
+    def close(self) -> None:
+        with self._lock:
+            tables, self._tables = list(self._tables), []
+        for table in tables:
+            for fd in table.values():
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            table.clear()
+        self._local = threading.local()
+
+
+class SliceReader:
+    """``pread`` byte ranges out of shard tars, with fd caching + cache resolution.
+
+    The published stores used to ``os.open``/``os.close`` per member; on NFSv4
+    that made OPEN+CLOSE 72% of the client's RPC mix.  One fd per shard per
+    thread removes both round trips without changing a single byte that is read.
+    """
+
+    def __init__(self, max_open: int = 16):
+        self._pool = _FdPool(max_open)
+
+    def read(self, path: str | os.PathLike, offset: int, length: int) -> bytes:
+        fd = self._pool.fd(str(path), resolve_read_path(path))
+        return os.pread(fd, length, offset)
+
+    def close(self) -> None:
+        self._pool.close()
+
+    def __del__(self):                                          # best effort
+        try:
+            self.close()
+        except Exception:                                       # pragma: no cover
+            pass
+
+
+class BoundedBytesCache:
+    """FIFO byte cache with a hard budget.  Values are immutable ``bytes``.
+
+    Used to let a prefetch thread pay for a published-store member read and have
+    the training thread find it already there.  Nothing derived is cached (the
+    JSON is re-parsed per call), so no caller can ever mutate another's object.
+    """
+
+    def __init__(self, max_bytes: int):
+        self.max_bytes = int(max_bytes)
+        self._data: dict[Any, bytes] = {}
+        self._bytes = 0
+        self._lock = threading.Lock()
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: Any) -> bytes | None:
+        with self._lock:
+            hit = self._data.get(key)
+            if hit is None:
+                self.misses += 1
+            else:
+                self.hits += 1
+            return hit
+
+    def put(self, key: Any, data: bytes) -> None:
+        if self.max_bytes <= 0 or len(data) > self.max_bytes:
+            return
+        with self._lock:
+            if key in self._data:
+                return
+            self._data[key] = data
+            self._bytes += len(data)
+            while self._bytes > self.max_bytes and len(self._data) > 1:
+                oldest = next(iter(self._data))
+                self._bytes -= len(self._data.pop(oldest))
+
+    def facts(self) -> dict[str, Any]:
+        with self._lock:
+            return {"max_bytes": self.max_bytes, "bytes": self._bytes,
+                    "n_entries": len(self._data), "hits": self.hits,
+                    "misses": self.misses}
 
 
 # alias -> canonical, applied to member dicts
@@ -326,8 +564,9 @@ class ShardStore:
     """Positional reads into unbundled tar shards, with checksum verification.
 
     ``verify`` -- ``"checksum"`` (default), ``"length"`` or ``"none"``.
-    File descriptors are cached per (pid, shard) so dataloader workers that
-    fork after construction reopen their own handles.
+    File descriptors are cached per (pid, thread, shard) so dataloader workers
+    that fork after construction reopen their own handles, and so a prefetch
+    thread can never close an fd another thread is about to pread (PERF-1).
     """
 
     def __init__(
@@ -341,36 +580,36 @@ class ShardStore:
             raise ValueError(f"verify must be checksum|length|none, got {verify!r}")
         self.verify = verify
         self.max_open = max_open
-        self._fds: dict[str, int] = {}
-        self._pid = os.getpid()
+        self._pool = _FdPool(max_open)
+        self._counters = threading.Lock()
         self.n_reads = 0
         self.n_checksum_verified = 0
 
+    @property
+    def _fds(self) -> dict[str, int]:
+        """This thread's open shards.  Kept as an attribute name for inspection."""
+        return self._pool.table()
+
     def _fd(self, shard: str) -> int:
-        if os.getpid() != self._pid:  # forked dataloader worker
-            self._fds.clear()
-            self._pid = os.getpid()
-        fd = self._fds.get(shard)
-        if fd is None:
-            path = Path(shard)
-            if not path.is_absolute():
-                path = self.shard_root / shard
-            # after joining, so a shard_root on the hard mount is covered too
-            path = Path(rewrite_read_path(path))
-            if not path.exists():
-                raise ShardIntegrityError(f"shard not found: {path}")
-            if len(self._fds) >= self.max_open:
-                _, old = self._fds.popitem()
-                os.close(old)
-            fd = os.open(path, os.O_RDONLY)
-            self._fds[shard] = fd
-        return fd
+        table = self._pool.table()
+        fd = table.get(shard)
+        if fd is not None:
+            return fd
+        path = Path(shard)
+        if not path.is_absolute():
+            path = self.shard_root / shard
+        # after joining, so a shard_root on the hard mount is covered too
+        path = Path(resolve_read_path(path))
+        if not path.exists():
+            raise ShardIntegrityError(f"shard not found: {path}")
+        return self._pool.fd(shard, str(path))
 
     def read(self, ref: MemberRef, verify: str | None = None) -> bytes:
         mode = self.verify if verify is None else verify
         fd = self._fd(ref.shard)
         data = os.pread(fd, ref.length, ref.offset)
-        self.n_reads += 1
+        with self._counters:
+            self.n_reads += 1
         if len(data) != ref.length:
             raise ShardIntegrityError(
                 f"short read for {ref.shard}:{ref.member} -- got {len(data)} of {ref.length} "
@@ -392,19 +631,18 @@ class ShardStore:
                 raise ShardIntegrityError(
                     f"{alg} mismatch for {ref.shard}:{ref.member} -- expected {expected}, got {got}"
                 )
-            self.n_checksum_verified += 1
+            with self._counters:
+                self.n_checksum_verified += 1
         return data
 
     def close(self) -> None:
-        for fd in self._fds.values():
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        self._fds.clear()
+        self._pool.close()
 
     def __del__(self):  # best effort
-        self.close()
+        try:
+            self.close()
+        except Exception:                                       # pragma: no cover
+            pass
 
 
 # --- terminal manifest -----------------------------------------------------

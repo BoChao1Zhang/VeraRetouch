@@ -250,3 +250,54 @@ def test_odd_micro_batch_is_rejected_by_the_trainer(tmp_path):
         WhereBTrainer(WhereBModel(cfg), FakeBuilder(ds), ds, cfg,
                       TrainConfig(arm=cfg.arm, micro_batch=3, effective_batch=9),
                       run_dir=tmp_path, device="cpu")
+
+
+# -- PERF-1: prefetch is scheduling, not semantics --------------------------
+
+def _run_arm(tmp_path, workers: int, n: int = 96):
+    cfg = _cfg()
+    ds = FakeDataset(n, cfg.readout, n_global=0)
+    tcfg = TrainConfig(arm=cfg.arm, micro_batch=4, effective_batch=16,
+                       save_steps=10**9, prefetch_workers=workers)
+    torch.manual_seed(0)
+    model = WhereBModel(cfg)
+    builder = FakeBuilder(ds)
+    tr = WhereBTrainer(model, builder, ds, cfg, tcfg, run_dir=tmp_path,
+                       device="cpu", log_every=10**9)
+    state = tr.train()
+    weights = torch.cat([p.detach().reshape(-1) for p in model.parameters()])
+    return state, builder, weights
+
+
+def test_prefetch_does_not_change_a_single_trained_weight(tmp_path):
+    """The whole point of PERF-1: only *when* dataset[i] runs changes."""
+    serial, b0, w0 = _run_arm(tmp_path / "serial", 0)
+    threaded, b1, w1 = _run_arm(tmp_path / "threaded", 4)
+    assert b0.calls == b1.calls                       # same order, same contexts
+    assert [r["loss"] for r in serial.history] == [r["loss"] for r in threaded.history]
+    assert [r["grad_norm"] for r in serial.history] == [r["grad_norm"] for r in threaded.history]
+    assert torch.equal(w0, w1)
+
+
+def test_the_prefetch_setting_is_recorded_in_the_run_setup(tmp_path):
+    cfg = _cfg()
+    ds = FakeDataset(32, cfg.readout, n_global=0)
+    tcfg = TrainConfig(arm=cfg.arm, micro_batch=4, effective_batch=8,
+                       prefetch_workers=3)
+    tr = WhereBTrainer(WhereBModel(cfg), FakeBuilder(ds), ds, cfg, tcfg,
+                       run_dir=tmp_path, device="cpu")
+    assert tr.setup()["prefetch"]["workers"] == 3
+
+
+def test_evaluation_is_identical_with_and_without_prefetch(tmp_path):
+    cfg = _cfg()
+    ds = FakeDataset(24, cfg.readout, n_global=4)
+    builder = FakeBuilder(ds, shuffle_index=None)
+    torch.manual_seed(0)
+    model = WhereBModel(cfg)
+    a, _ = evaluate_context(model, builder, ds, cfg, "gt", batch_size=4,
+                            prefetch_workers=0)
+    b, _ = evaluate_context(model, builder, ds, cfg, "gt", batch_size=4,
+                            prefetch_workers=4)
+    assert [r["sample_id"] for r in a] == [r["sample_id"] for r in b]
+    assert [r["soft_iou"] for r in a] == [r["soft_iou"] for r in b]

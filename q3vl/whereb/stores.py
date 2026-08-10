@@ -16,6 +16,7 @@ interop test the task card asks for.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -25,16 +26,31 @@ import numpy as np
 import torch
 from PIL import Image
 
-from q3vl.data.shardio import read_member
+from dataset_build.tools.indexed_tar import IndexedTarError
+from q3vl.train.shards import BoundedBytesCache, SliceReader
 from q3vl.where.basis import Latent
 
 __all__ = ["PublishedStore", "OracleStore", "MaskViewStore", "GenContextStore"]
 
+#: default in-process byte budget for member payloads.  Zero disables it; the
+#: point is only to let a prefetch thread pay for a read the training thread is
+#: about to make (PERF-1), so it needs to hold a few hundred samples, not a
+#: split.  Raw ``bytes`` are cached and every accessor re-parses them, so no
+#: caller can hand another caller a mutable object.
+DEFAULT_BLOB_CACHE_BYTES = 64 * 1024 ** 2
+
 
 class PublishedStore:
-    """Random access to a published dataset by ``(sample_id, suffix)``."""
+    """Random access to a published dataset by ``(sample_id, suffix)``.
 
-    def __init__(self, root: str | Path, *, verify: bool = True):
+    PERF-1: reads go through a :class:`~q3vl.train.shards.SliceReader`, which
+    keeps one fd per shard per thread and resolves the local shard cache.  The
+    previous ``os.open``/``os.close`` per member made OPEN+CLOSE 72% of the NFS
+    client's RPC mix for two arms; the bytes read are identical either way.
+    """
+
+    def __init__(self, root: str | Path, *, verify: bool = True,
+                 cache_bytes: int = 0):
         self.root = Path(root)
         if not (self.root / "manifest.json").exists():
             raise FileNotFoundError(
@@ -49,6 +65,8 @@ class PublishedStore:
                 "refusing to read a dataset that was not published atomically"
             )
         self.verify = verify
+        self.reader = SliceReader()
+        self.blobs = BoundedBytesCache(cache_bytes) if cache_bytes > 0 else None
         self.rows: dict[tuple[str, str], dict[str, Any]] = {}
         for p in sorted((self.root / "indexes").glob("shard-*.idx.jsonl")):
             with p.open("r", encoding="utf-8") as fh:
@@ -72,16 +90,44 @@ class PublishedStore:
             r = self.rows[(sample_id, suffix)]
         except KeyError:
             raise KeyError(f"{sample_id}{suffix} not in {self.root}") from None
-        return read_member(
-            self.root, r["shard"], int(r["offset_data"]), int(r["length"]),
-            r.get("sha256") if self.verify else None,
-        )
+        key = (sample_id, suffix)
+        if self.blobs is not None:
+            hit = self.blobs.get(key)
+            if hit is not None:
+                return hit
+        shard, offset, length = r["shard"], int(r["offset_data"]), int(r["length"])
+        data = self.reader.read(self.root / "shards" / f"{shard}.tar", offset, length)
+        if len(data) != length:
+            raise IndexedTarError(
+                f"short read of {shard}:{offset} ({len(data)} != {length})")
+        if self.verify and r.get("sha256") is not None:
+            got = hashlib.sha256(data).hexdigest()
+            if got != r["sha256"]:
+                raise IndexedTarError(f"checksum mismatch for {shard}:{offset}")
+        if self.blobs is not None:
+            self.blobs.put(key, data)
+        return data
 
     def read_json(self, sample_id: str, suffix: str) -> dict[str, Any]:
         return json.loads(self.read(sample_id, suffix).decode("utf-8"))
 
+    def prime(self, sample_id: str, suffix: str) -> bool:
+        """Pay for one member read now (prefetch thread) so a later read is free.
+
+        Returns False for a member this store does not carry -- a global sample
+        has no oracle latent and asking for one is not an error here; the caller
+        that actually needs it still raises.
+        """
+        if not self.has(sample_id, suffix):
+            return False
+        self.read(sample_id, suffix)
+        return True
+
+    def close(self) -> None:
+        self.reader.close()
+
     def facts(self) -> dict[str, Any]:
-        return {
+        out = {
             "root": str(self.root),
             "status": self.manifest.get("status"),
             "member_count": self.manifest.get("member_count"),
@@ -89,6 +135,9 @@ class PublishedStore:
             "shard_count": self.manifest.get("shard_count"),
             "index_rows": len(self.rows),
         }
+        if self.blobs is not None:
+            out["blob_cache"] = self.blobs.facts()
+        return out
 
 
 class OracleStore(PublishedStore):

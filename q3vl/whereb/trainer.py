@@ -48,6 +48,7 @@ from .data import Batch, BatchBuilder, WhereBDataset
 from .fields import predict_fields
 from .losses import SampleLoss, aggregate, sample_loss, schedule_weights
 from .model import WhereBModel
+from .prefetch import SamplePrefetcher, default_workers, prefetch_warmers
 
 __all__ = ["compute_batch", "build_optimizer", "WhereBTrainer", "TrainState"]
 
@@ -162,6 +163,13 @@ class WhereBTrainer:
             teacher_fraction=train_cfg.teacher_fraction,
         )
         self.gas = train_cfg.grad_accum()
+        # PERF-1: scheduling only.  `dataset[i]` is a pure function of the frozen
+        # index, so building the next few micro-batches on worker threads moves
+        # 2.5 s of NFS latency and JPEG decode per optimizer step off the
+        # training thread without touching what is trained on.
+        self.prefetch_workers = (default_workers()
+                                 if train_cfg.prefetch_workers < 0
+                                 else int(train_cfg.prefetch_workers))
         self.state.total_steps = max(1, len(self.sampler) // self.gas)
         self.optimizer = build_optimizer(self.model, train_cfg)
         self.scheduler = make_scheduler(
@@ -183,6 +191,7 @@ class WhereBTrainer:
             "model": self.model.facts(),
             "train": asdict(self.cfg),
             "sampler": self.sampler.facts(),
+            "prefetch": self._prefetcher().facts(),
             "grad_accum": self.gas,
             "total_optimizer_steps": self.state.total_steps,
             "n_dataset": len(self.dataset),
@@ -192,6 +201,11 @@ class WhereBTrainer:
             "schedule_boundary_step": schedule_weights(0, self.state.total_steps)["boundary_step"],
         }
 
+    def _prefetcher(self) -> SamplePrefetcher:
+        return SamplePrefetcher(self.dataset, self.sampler,
+                                workers=self.prefetch_workers,
+                                warm=prefetch_warmers(self.builder))
+
     # -- one epoch ----------------------------------------------------------
     def train(self) -> TrainState:
         t0 = time.time()
@@ -200,9 +214,8 @@ class WhereBTrainer:
         self.optimizer.zero_grad(set_to_none=True)
         accum = 0
         try:
-            for micro in self.sampler:
+            for micro, samples in self._prefetcher():
                 weights = schedule_weights(self.state.step, self.state.total_steps)
-                samples = [self.dataset[i] for i, _ in micro]
                 modes = [m for _, m in micro]
                 batch = self.builder.build(samples, modes)
                 with self.autocast:

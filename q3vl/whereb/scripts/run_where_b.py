@@ -46,7 +46,7 @@ import torch
 
 from q3vl.train.collator import Sft2SegCollator
 from q3vl.train.modeling import load_model, load_processor
-from q3vl.train.shards import rewrite_read_path
+from q3vl.train.shards import rewrite_read_path, shard_cache_facts
 from q3vl.where.config import CBAND_NORMALIZATION
 from q3vl.whereb.config import (
     ARM_IDS,
@@ -75,7 +75,13 @@ from q3vl.whereb.fields import load_basis
 from q3vl.whereb.hiddens import FrozenVLM
 from q3vl.whereb.model import WhereBModel
 from q3vl.whereb.preflight import _env
-from q3vl.whereb.stores import GenContextStore, MaskViewStore, OracleStore
+from q3vl.whereb.prefetch import default_workers
+from q3vl.whereb.stores import (
+    DEFAULT_BLOB_CACHE_BYTES,
+    GenContextStore,
+    MaskViewStore,
+    OracleStore,
+)
 from q3vl.whereb.trainer import WhereBTrainer, probe_micro_batch
 
 
@@ -211,6 +217,10 @@ def main() -> int:
     ap.add_argument("--dtype", default="bfloat16")
     ap.add_argument("--attn", default="flash_attention_2")
     ap.add_argument("--micro-batch", type=int, default=0, help="0 = probe")
+    ap.add_argument("--prefetch-workers", type=int, default=-1,
+                    help="PERF-1 sample prefetch threads; -1 = $Q3VL_PREFETCH_WORKERS "
+                         "(default 6), 0 = the exactly-serial pre-PERF-1 loop. "
+                         "Scheduling only: the trained model is identical either way")
     ap.add_argument("--train-limit", type=int, default=None)
     ap.add_argument("--eval-limit", type=int, default=None)
     ap.add_argument("--out-root", default=str(RUN_ROOT))
@@ -248,8 +258,11 @@ def main() -> int:
     def make(split: str, limit):
         ds, info = open_dataset(split, limit=limit,
                                 maskview_root=WHERE_A_MASKVIEW_DIR)
-        oracle = OracleStore(oracle_base / split)
-        genctx = GenContextStore(GENCTX_DIR / split)
+        # PERF-1: the prefetch threads read these two ahead of the training
+        # thread; the blob cache is what lets the training thread find the bytes
+        # already there.  Raw payloads only -- every accessor re-parses.
+        oracle = OracleStore(oracle_base / split, cache_bytes=DEFAULT_BLOB_CACHE_BYTES)
+        genctx = GenContextStore(GENCTX_DIR / split, cache_bytes=DEFAULT_BLOB_CACHE_BYTES)
         info["genctx"] = assert_genctx_coverage(ds, genctx, split)
         info["oracle"] = assert_oracle_contract(oracle, cfg.readout, split)
         return ds, oracle, genctx, info
@@ -274,13 +287,17 @@ def main() -> int:
     if not micro:
         probe = probe_micro_batch(train_builder, train_ds, model, cfg, device=args.device)
         micro = probe["chosen"] or 2
-    tcfg = TrainConfig(arm=args.arm, micro_batch=micro)
+    tcfg = TrainConfig(arm=args.arm, micro_batch=micro,
+                       prefetch_workers=args.prefetch_workers)
+    n_prefetch = (default_workers() if args.prefetch_workers < 0
+                  else args.prefetch_workers)
 
     def eval_fn(step: int) -> dict:
         return evaluate_arm(
             model, eval_builder, eval_ds, cfg, batch_size=max(2, micro),
             out_dir=run_dir / f"eval_step{step}",
             resources={"n_trainable_params": model.n_trainable()},
+            prefetch_workers=n_prefetch,
         )
 
     trainer = WhereBTrainer(model, train_builder, train_ds, cfg, tcfg,
@@ -292,6 +309,11 @@ def main() -> int:
                   "datasets": {"train": train_info, "eval": eval_info},
                   "shuffle_coverage": eval_shuffle.coverage(),
                   "read_mount": mount_info,
+                  # PERF-1: which read path the arm actually took, and how much
+                  # of it was overlapped.  A cold `shard_cache.enabled=false`
+                  # explains a slow arm without needing a second diagnosis.
+                  "shard_cache": shard_cache_facts(),
+                  "prefetch_workers": n_prefetch,
                   "oracle_coverage": {
                       "train": train_oracle.coverage(
                           [r.sample_id for r in train_ds.refs], cfg.readout),

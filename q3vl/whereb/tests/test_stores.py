@@ -136,3 +136,55 @@ def test_published_store_verifies_checksums(oracle_root):
     assert json.loads(data)["sample_id"] == "sft_0000"
     with pytest.raises(KeyError):
         st.read("does_not_exist", ".oracle.json")
+
+
+# -- PERF-1: fd reuse and the blob cache -------------------------------------
+
+def test_the_blob_cache_returns_the_same_bytes_without_a_second_read(oracle_root):
+    """A prefetch thread pays for the read; the training thread finds it there."""
+    st = OracleStore(oracle_root, cache_bytes=1 << 20)
+    reads = []
+    inner = st.reader.read
+
+    def counting(path, offset, length):
+        reads.append((str(path), offset, length))
+        return inner(path, offset, length)
+
+    st.reader.read = counting
+    first = st.read("sft_0000", OracleStore.SUFFIX)
+    assert len(reads) == 1
+    assert st.prime("sft_0000", OracleStore.SUFFIX) is True
+    assert st.read("sft_0000", OracleStore.SUFFIX) == first
+    assert len(reads) == 1                              # still one physical read
+    assert st.blobs.hits >= 2
+    # and the parsed view is rebuilt each time, so no caller can alias another's
+    assert st.payload("sft_0000") is not st.payload("sft_0000")
+
+
+def test_prime_is_false_for_a_member_the_store_does_not_carry(oracle_root):
+    st = OracleStore(oracle_root, cache_bytes=1 << 20)
+    assert st.prime("does_not_exist", OracleStore.SUFFIX) is False
+
+
+def test_reads_without_a_cache_still_work_and_reuse_one_descriptor(oracle_root):
+    st = OracleStore(oracle_root)
+    assert st.blobs is None
+    a = st.read("sft_0000", OracleStore.SUFFIX)
+    b = st.read("sft_0001", OracleStore.SUFFIX)
+    assert a and b and a != b
+    assert len(st.reader._pool.table()) == 1            # one fd for the shard
+
+
+def test_a_tampered_member_is_still_caught(oracle_root, tmp_path):
+    """The digest check did not move when the read path did."""
+    import shutil
+    root = tmp_path / "tampered"
+    shutil.copytree(oracle_root, root)
+    tar = next((root / "shards").glob("*.tar"))
+    blob = bytearray(tar.read_bytes())
+    row = next(r for (sid, suf), r in PublishedStore(root).rows.items()
+               if suf == OracleStore.SUFFIX)
+    blob[int(row["offset_data"]) + 5] ^= 0xFF
+    tar.write_bytes(bytes(blob))
+    with pytest.raises(Exception, match="checksum mismatch"):
+        OracleStore(root).payload(row["sample_id"])

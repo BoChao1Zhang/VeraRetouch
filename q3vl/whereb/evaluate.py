@@ -46,6 +46,7 @@ from .metrics import (
     summarise,
 )
 from .model import WhereBModel
+from .prefetch import SamplePrefetcher, prefetch_warmers
 
 __all__ = ["evaluate_context", "evaluate_arm", "strata_report", "write_per_sample"]
 
@@ -66,6 +67,7 @@ def evaluate_context(
     batch_size: int = 4,
     limit: int | None = None,
     with_oracle: bool = True,
+    prefetch_workers: int | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     model.eval()
     idx = list(range(len(dataset) if limit is None else min(limit, len(dataset))))
@@ -74,10 +76,15 @@ def evaluate_context(
     # kept only for the same-image paired difference (A-5); ~6 KB per sample
     fields: dict[str, dict[str, Any]] = {}
 
-    for chunk in _chunks(idx, batch_size):
+    # PERF-1: the periodic eval walks the split four times and used to pay the
+    # same serial NFS latency as training did (~8.5 min per checkpoint).  Same
+    # order, same samples -- only built ahead of the forward.
+    chunks = ([(i, mode) for i in chunk] for chunk in _chunks(idx, batch_size))
+    supply = SamplePrefetcher(dataset, chunks, workers=prefetch_workers,
+                              warm=prefetch_warmers(builder))
+    for _chunk, built in supply:
         samples = []
-        for i in chunk:
-            s = dataset[i]
+        for s in built:
             if mode == SHUFFLED and builder.shuffle_index is not None:
                 if builder.shuffle_index.partner_of(s.sample_id) is None:
                     skipped.append({"sample_id": s.sample_id, "reason": "no_shuffle_partner"})
@@ -300,6 +307,7 @@ def evaluate_arm(
     out_dir: Path | None = None,
     resources: dict[str, Any] | None = None,
     progress: Callable[[str], None] | None = None,
+    prefetch_workers: int | None = None,
 ) -> dict[str, Any]:
     """The full protocol 5.6 board for one checkpoint."""
     per_context: dict[str, dict[str, Any]] = {}
@@ -315,6 +323,7 @@ def evaluate_arm(
         rows, summary = evaluate_context(
             model, builder, dataset, arm_cfg, mode,
             batch_size=batch_size, limit=limit,
+            prefetch_workers=prefetch_workers,
         )
         per_context[mode] = summary
         all_rows.extend(rows)

@@ -368,6 +368,11 @@ class TrainConfig:
     seed: int = SEED
     no_decay_on_bias_norm: bool = NO_DECAY_ON_BIAS_NORM
     teacher_fraction: float = TEACHER_FRACTION
+    #: PERF-1.  How many micro-batches of samples to build ahead, on worker
+    #: threads.  Pure scheduling: the order, the samples and the losses are
+    #: identical at any value; 0 is the exactly-serial pre-PERF-1 loop.
+    #: ``-1`` means "ask q3vl.whereb.prefetch.default_workers()" (env-tunable).
+    prefetch_workers: int = -1
 
     def grad_accum(self) -> int:
         if self.effective_batch % self.micro_batch:
