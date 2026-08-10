@@ -1,0 +1,2566 @@
+{
+  "meta": {
+    "arm": "W02",
+    "step": "1500",
+    "split": "V_where",
+    "eval_dir": "/home/bc/data/runs/where_b/W02/eval_step1500",
+    "main_context": "generated",
+    "structure": "MC8-Joint",
+    "readout": "cband12",
+    "n_rows": 6232,
+    "n_contexts": 7,
+    "n_masked": 400,
+    "n_panels": 85,
+    "tail_cut": 0.3,
+    "n_viz_samples": 12,
+    "taxonomy": {
+      "binarize": 0.5,
+      "area_cuts": [
+        0.05,
+        0.15,
+        0.45
+      ],
+      "min_component_frac": 0.02,
+      "min_component_px": 64,
+      "min_hole_frac": 0.01,
+      "min_hole_px": 64,
+      "compact_min": 0.5,
+      "center_max": 0.15,
+      "edge_min": 0.3,
+      "soft_lo": 0.05,
+      "soft_hi": 0.95,
+      "soft_frac_min": 0.4
+    },
+    "thresholds": {
+      "tail_soft_iou": 0.3,
+      "context_gap": 0.1,
+      "context_gt_ok": 0.5,
+      "oracle_ceiling": 0.7,
+      "s_collapse": 0.2,
+      "upsample_drop": 0.05,
+      "area_ratio_gap": 0.5,
+      "center_prior_margin": 0.05,
+      "w_dir_cos": 0.3,
+      "swap_gain": 0.15
+    },
+    "field_cache": "experiments/Q3VL_metacanvas_where_what_20260804/where_b/analysis_W02_step1500/fields",
+    "git_commit": "c1b4cdc94c0939f193bf3775ace1b51a48cf5723",
+    "generated_at": "2026-08-10T15:18:56"
+  },
+  "dimensions": [
+    "area",
+    "components",
+    "boundary",
+    "position",
+    "softness",
+    "region",
+    "winner_confidence",
+    "upscaled",
+    "build",
+    "active_primitive_bucket"
+  ],
+  "dimension_activity": {
+    "area": {
+      "n_classes": 4,
+      "counts": {
+        "large": 189,
+        "medium": 151,
+        "small": 52,
+        "tiny": 8
+      },
+      "active": true
+    },
+    "components": {
+      "n_classes": 2,
+      "counts": {
+        "single": 384,
+        "multi": 16
+      },
+      "active": true
+    },
+    "topology": {
+      "n_classes": 1,
+      "counts": {
+        "solid": 400
+      },
+      "active": false
+    },
+    "boundary": {
+      "n_classes": 2,
+      "counts": {
+        "compact": 305,
+        "complex": 95
+      },
+      "active": true
+    },
+    "position": {
+      "n_classes": 3,
+      "counts": {
+        "mid": 177,
+        "center": 147,
+        "edge": 76
+      },
+      "active": true
+    },
+    "softness": {
+      "n_classes": 2,
+      "counts": {
+        "hard": 213,
+        "soft": 187
+      },
+      "active": true
+    },
+    "region": {
+      "n_classes": 7,
+      "counts": {
+        "center": 305,
+        "lower left": 2,
+        "right": 16,
+        "lower": 41,
+        "upper": 5,
+        "left": 25,
+        "lower right": 6
+      },
+      "active": true
+    },
+    "winner_confidence": {
+      "n_classes": 2,
+      "counts": {
+        "normal": 224,
+        "low": 176
+      },
+      "active": true
+    },
+    "upscaled": {
+      "n_classes": 2,
+      "counts": {
+        "False": 346,
+        "True": 54
+      },
+      "active": true
+    },
+    "build": {
+      "n_classes": 6,
+      "counts": {
+        "l6": 69,
+        "l5": 75,
+        "l1": 75,
+        "l4": 71,
+        "l2": 57,
+        "l3": 53
+      },
+      "active": true
+    },
+    "active_primitive_bucket": {
+      "n_classes": 2,
+      "counts": {
+        "n/a-not-emitted": 384,
+        ">=3": 16
+      },
+      "active": true
+    }
+  },
+  "class_distribution": {
+    "area": {
+      "large": 189,
+      "medium": 151,
+      "small": 52,
+      "tiny": 8
+    },
+    "components": {
+      "multi": 16,
+      "single": 384
+    },
+    "topology": {
+      "solid": 400
+    },
+    "boundary": {
+      "compact": 305,
+      "complex": 95
+    },
+    "position": {
+      "center": 147,
+      "edge": 76,
+      "mid": 177
+    },
+    "softness": {
+      "hard": 213,
+      "soft": 187
+    },
+    "region": {
+      "center": 305,
+      "left": 25,
+      "lower": 41,
+      "lower left": 2,
+      "lower right": 6,
+      "right": 16,
+      "upper": 5
+    },
+    "winner_confidence": {
+      "low": 176,
+      "normal": 224
+    },
+    "upscaled": {
+      "False": 346,
+      "True": 54
+    },
+    "build": {
+      "l1": 75,
+      "l2": 57,
+      "l3": 53,
+      "l4": 71,
+      "l5": 75,
+      "l6": 69
+    },
+    "active_primitive_bucket": {
+      ">=3": 16,
+      "n/a-not-emitted": 384
+    }
+  },
+  "geometry_stats": {
+    "area_frac": {
+      "n": 400,
+      "min": 0.006390889485677083,
+      "p10": 0.10377807617187504,
+      "p50": 0.40887324015299475,
+      "p90": 0.7643567403157553,
+      "max": 0.8343048095703125
+    },
+    "circularity": {
+      "n": 400,
+      "min": 0.07054969413745268,
+      "p10": 0.3453230626995975,
+      "p50": 0.67952241619853,
+      "p90": 0.8318998388805997,
+      "max": 0.9048188964967204
+    },
+    "centroid_dist_rel": {
+      "n": 400,
+      "min": 0.0036576463878781784,
+      "p10": 0.05872914629912004,
+      "p50": 0.18111863799618905,
+      "p90": 0.369507045988782,
+      "max": 0.5761062363065971
+    },
+    "soft_frac": {
+      "n": 400,
+      "min": 0.13250523815243356,
+      "p10": 0.1939049505799496,
+      "p50": 0.36874651791484897,
+      "p90": 0.6490232567049454,
+      "max": 0.9344865916354036
+    },
+    "mask_max": {
+      "n": 400,
+      "min": 0.5607843399047852,
+      "p10": 0.615686297416687,
+      "p50": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    },
+    "largest_component_frac": {
+      "n": 400,
+      "min": 0.34570230607966457,
+      "p10": 1.0,
+      "p50": 1.0,
+      "p90": 1.0,
+      "max": 1.0
+    }
+  },
+  "overall": {
+    "generated": {
+      "n": 896,
+      "n_local": 400,
+      "n_global": 496,
+      "local_soft_iou_median": 0.5114795072327478,
+      "local_soft_iou_mean": 0.4916316279494984,
+      "local_soft_iou_p10": 0.2075972908102051,
+      "local_soft_iou_p90": 0.7652948575652653,
+      "global_soft_iou": 0.9999619285260486,
+      "grid_boundary_f1": 0.30620187833150014,
+      "grid_hard_iou": 0.47549019607843135,
+      "soft_iou_vs_oracle_ratio": 0.5258260382937031,
+      "grid_boundary_f1_vs_oracle_ratio": 0.30775663809324694,
+      "s_std_ratio_median": 0.555044412612915,
+      "hi_lo_soft_iou_drop_median": -0.011252808676237264,
+      "center_prior_hard_iou": 0.5178571428571429,
+      "center_prior_boundary_f1": 0.19730941704035873,
+      "center_prior_delta_hard_iou": -0.0255617511306088,
+      "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+      "center_prior_delta_hard_iou_ci95": [
+        -0.03678533298035013,
+        -0.01454011381531792
+      ],
+      "center_prior_delta_boundary_f1": 0.1092712876813048,
+      "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+      "center_prior_delta_boundary_f1_ci95": [
+        0.09626816421811205,
+        0.12243890232836421
+      ],
+      "low_confidence": false
+    },
+    "gt": {
+      "n": 896,
+      "n_local": 400,
+      "n_global": 496,
+      "local_soft_iou_median": 0.5441680389147502,
+      "local_soft_iou_mean": 0.5143059736823108,
+      "local_soft_iou_p10": 0.21594098364415962,
+      "local_soft_iou_p90": 0.7926539700574081,
+      "global_soft_iou": 0.999961927895314,
+      "grid_boundary_f1": 0.3323600567281221,
+      "grid_hard_iou": 0.4916584887144259,
+      "soft_iou_vs_oracle_ratio": 0.5691719856476323,
+      "grid_boundary_f1_vs_oracle_ratio": 0.33579725448785636,
+      "s_std_ratio_median": 0.5320682525634766,
+      "hi_lo_soft_iou_drop_median": -0.007057647767555797,
+      "center_prior_hard_iou": 0.5178571428571429,
+      "center_prior_boundary_f1": 0.19730941704035873,
+      "center_prior_delta_hard_iou": -0.013864736906593532,
+      "center_prior_delta_hard_iou_p": 0.011898810118988102,
+      "center_prior_delta_hard_iou_ci95": [
+        -0.024558926893014935,
+        -0.0031100394328042284
+      ],
+      "center_prior_delta_boundary_f1": 0.11543375283810216,
+      "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+      "center_prior_delta_boundary_f1_ci95": [
+        0.10253502280390066,
+        0.12904362238700343
+      ],
+      "low_confidence": false
+    }
+  },
+  "per_class": {
+    "generated": {
+      "area": {
+        "large": {
+          "n": 189,
+          "n_local": 189,
+          "n_global": 0,
+          "local_soft_iou_median": 0.639178340823613,
+          "local_soft_iou_mean": 0.6418454215081637,
+          "local_soft_iou_p10": 0.4669076991461057,
+          "local_soft_iou_p90": 0.800044243297571,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.21764220939818632,
+          "grid_hard_iou": 0.6141975308641975,
+          "soft_iou_vs_oracle_ratio": 0.6498684564266825,
+          "grid_boundary_f1_vs_oracle_ratio": 0.21842881401376354,
+          "s_std_ratio_median": 0.5596117973327637,
+          "hi_lo_soft_iou_drop_median": -0.0004828742541905795,
+          "center_prior_hard_iou": 0.6155038759689923,
+          "center_prior_boundary_f1": 0.12311901504787963,
+          "center_prior_delta_hard_iou": -0.011822750142235855,
+          "center_prior_delta_hard_iou_p": 0.11408859114088592,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.02711905660654506,
+            0.0018768899952921363
+          ],
+          "center_prior_delta_boundary_f1": 0.07666173047013028,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.06220758472288646,
+            0.08990215699453637
+          ],
+          "low_confidence": false
+        },
+        "medium": {
+          "n": 151,
+          "n_local": 151,
+          "n_global": 0,
+          "local_soft_iou_median": 0.39932688859270177,
+          "local_soft_iou_mean": 0.42918680060143616,
+          "local_soft_iou_p10": 0.26413389810792914,
+          "local_soft_iou_p90": 0.6479292080585463,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.43021766965428937,
+          "grid_hard_iou": 0.35231316725978645,
+          "soft_iou_vs_oracle_ratio": 0.42879394049609953,
+          "grid_boundary_f1_vs_oracle_ratio": 0.43541102801044185,
+          "s_std_ratio_median": 0.5125093460083008,
+          "hi_lo_soft_iou_drop_median": -0.032497044154385035,
+          "center_prior_hard_iou": 0.42363112391930835,
+          "center_prior_boundary_f1": 0.2854122621564482,
+          "center_prior_delta_hard_iou": -0.0467445077497872,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.06257507033134846,
+            -0.031934009492996886
+          ],
+          "center_prior_delta_boundary_f1": 0.12866667499654305,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.11076343227946425,
+            0.14616902612739172
+          ],
+          "low_confidence": false
+        },
+        "small": {
+          "n": 52,
+          "n_local": 52,
+          "n_global": 0,
+          "local_soft_iou_median": 0.18656391937979372,
+          "local_soft_iou_mean": 0.1953015318263413,
+          "local_soft_iou_p10": 0.08645633545117218,
+          "local_soft_iou_p90": 0.3123494195529985,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.44875943905070115,
+          "grid_hard_iou": 0.18055555555555555,
+          "soft_iou_vs_oracle_ratio": 0.21753390305268833,
+          "grid_boundary_f1_vs_oracle_ratio": 0.44875943905070115,
+          "s_std_ratio_median": 0.5776296257972717,
+          "hi_lo_soft_iou_drop_median": -0.020102036920958938,
+          "center_prior_hard_iou": 0.1386861313868613,
+          "center_prior_boundary_f1": 0.2775800711743772,
+          "center_prior_delta_hard_iou": -0.034408890743363854,
+          "center_prior_delta_hard_iou_p": 0.12538746125387462,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.08011887762343199,
+            0.00985567694845996
+          ],
+          "center_prior_delta_boundary_f1": 0.13180894907789384,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08141397778974412,
+            0.17883607748047983
+          ],
+          "low_confidence": false
+        },
+        "tiny": {
+          "n": 8,
+          "n_local": 8,
+          "n_global": 0,
+          "local_soft_iou_median": 0.05094283568153,
+          "local_soft_iou_mean": 0.04762249612122983,
+          "local_soft_iou_p10": 0.02057540794424041,
+          "local_soft_iou_p90": 0.07379056246722744,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.8,
+          "grid_hard_iou": 0.2727272727272727,
+          "soft_iou_vs_oracle_ratio": 0.12123877384475339,
+          "grid_boundary_f1_vs_oracle_ratio": 0.8,
+          "s_std_ratio_median": 0.8283854126930237,
+          "hi_lo_soft_iou_drop_median": -0.0048008322471493545,
+          "center_prior_hard_iou": 0.0,
+          "center_prior_boundary_f1": 0.0,
+          "center_prior_delta_hard_iou": 0.10718528918898074,
+          "center_prior_delta_hard_iou_p": 0.06619338066193381,
+          "center_prior_delta_hard_iou_ci95": [
+            0.03799238201412114,
+            0.18306715957454267
+          ],
+          "center_prior_delta_boundary_f1": 0.36708934214235156,
+          "center_prior_delta_boundary_f1_p": 0.03189681031896811,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.16241224048341868,
+            0.5654358063219516
+          ],
+          "low_confidence": true
+        }
+      },
+      "components": {
+        "multi": {
+          "n": 16,
+          "n_local": 16,
+          "n_global": 0,
+          "local_soft_iou_median": 0.3642997233383032,
+          "local_soft_iou_mean": 0.28176400483820463,
+          "local_soft_iou_p10": 0.05094283568153,
+          "local_soft_iou_p90": 0.3847469300541114,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.48973076513781,
+          "grid_hard_iou": 0.3253493013972056,
+          "soft_iou_vs_oracle_ratio": 0.42879394049609953,
+          "grid_boundary_f1_vs_oracle_ratio": 0.4989073888743805,
+          "s_std_ratio_median": 0.6647667288780212,
+          "hi_lo_soft_iou_drop_median": -0.037545165659176316,
+          "center_prior_hard_iou": 0.4246575342465753,
+          "center_prior_boundary_f1": 0.36218375499334216,
+          "center_prior_delta_hard_iou": -0.03789395578517124,
+          "center_prior_delta_hard_iou_p": 0.25047495250474955,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.09230005582101627,
+            0.02757263736054682
+          ],
+          "center_prior_delta_boundary_f1": 0.23429532226270613,
+          "center_prior_delta_boundary_f1_p": 0.00019998000199980003,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.1333349888244831,
+            0.3507433289016984
+          ],
+          "low_confidence": true
+        },
+        "single": {
+          "n": 384,
+          "n_local": 384,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5215555115993579,
+          "local_soft_iou_mean": 0.5003761122458024,
+          "local_soft_iou_p10": 0.21025828342087916,
+          "local_soft_iou_p90": 0.7772398476047845,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.29989822458441706,
+          "grid_hard_iou": 0.4912485414235706,
+          "soft_iou_vs_oracle_ratio": 0.5387067401233506,
+          "grid_boundary_f1_vs_oracle_ratio": 0.30426229508196717,
+          "s_std_ratio_median": 0.5508598685264587,
+          "hi_lo_soft_iou_drop_median": -0.010584757267029676,
+          "center_prior_hard_iou": 0.5311475409836065,
+          "center_prior_boundary_f1": 0.19469026548672566,
+          "center_prior_delta_hard_iou": -0.025047909270002028,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.03552987753795079,
+            -0.014147434000007961
+          ],
+          "center_prior_delta_boundary_f1": 0.10406195290707974,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09178207543473299,
+            0.11613489957343615
+          ],
+          "low_confidence": false
+        }
+      },
+      "boundary": {
+        "compact": {
+          "n": 305,
+          "n_local": 305,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5874059279453998,
+          "local_soft_iou_mean": 0.5516835877305211,
+          "local_soft_iou_p10": 0.27685037989414935,
+          "local_soft_iou_p90": 0.7975558179556683,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.2808335352556336,
+          "grid_hard_iou": 0.5527603074772887,
+          "soft_iou_vs_oracle_ratio": 0.6010866639637218,
+          "grid_boundary_f1_vs_oracle_ratio": 0.28105463441152484,
+          "s_std_ratio_median": 0.547494649887085,
+          "hi_lo_soft_iou_drop_median": -0.007718897590620943,
+          "center_prior_hard_iou": 0.5709090909090909,
+          "center_prior_boundary_f1": 0.15714285714285714,
+          "center_prior_delta_hard_iou": -0.025228025083487565,
+          "center_prior_delta_hard_iou_p": 0.00029997000299970003,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.038129088451790596,
+            -0.012839539994926768
+          ],
+          "center_prior_delta_boundary_f1": 0.0870877104158451,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.0749222426878329,
+            0.09935578492605977
+          ],
+          "low_confidence": false
+        },
+        "complex": {
+          "n": 95,
+          "n_local": 95,
+          "n_global": 0,
+          "local_soft_iou_median": 0.33301096873272595,
+          "local_soft_iou_mean": 0.29883323075779405,
+          "local_soft_iou_p10": 0.08645633545117218,
+          "local_soft_iou_p90": 0.4391638414151407,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.4789731974329936,
+          "grid_hard_iou": 0.2790224032586558,
+          "soft_iou_vs_oracle_ratio": 0.3613782850390926,
+          "grid_boundary_f1_vs_oracle_ratio": 0.4841794883164102,
+          "s_std_ratio_median": 0.5758622884750366,
+          "hi_lo_soft_iou_drop_median": -0.028867744825587405,
+          "center_prior_hard_iou": 0.3234750462107209,
+          "center_prior_boundary_f1": 0.2923976608187134,
+          "center_prior_delta_hard_iou": -0.02663318738715592,
+          "center_prior_delta_hard_iou_p": 0.0164983501649835,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.047483576799397215,
+            -0.00568292299633447
+          ],
+          "center_prior_delta_boundary_f1": 0.18049224627041227,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.14923497653231285,
+            0.2129072484036172
+          ],
+          "low_confidence": false
+        }
+      },
+      "position": {
+        "center": {
+          "n": 147,
+          "n_local": 147,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5205575793836462,
+          "local_soft_iou_mean": 0.5086464175587752,
+          "local_soft_iou_p10": 0.25503777920586895,
+          "local_soft_iou_p90": 0.7065128670214647,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.41502441225285613,
+          "grid_hard_iou": 0.4968944099378882,
+          "soft_iou_vs_oracle_ratio": 0.5355456502074611,
+          "grid_boundary_f1_vs_oracle_ratio": 0.41502441225285613,
+          "s_std_ratio_median": 0.552936315536499,
+          "hi_lo_soft_iou_drop_median": -0.025308554864020366,
+          "center_prior_hard_iou": 0.5357142857142857,
+          "center_prior_boundary_f1": 0.2929047907822923,
+          "center_prior_delta_hard_iou": -0.07361758263067404,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.09445969372092548,
+            -0.05445872242198608
+          ],
+          "center_prior_delta_boundary_f1": 0.09357444133787453,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.07094510844640535,
+            0.11568659330877484
+          ],
+          "low_confidence": false
+        },
+        "edge": {
+          "n": 76,
+          "n_local": 76,
+          "n_global": 0,
+          "local_soft_iou_median": 0.2914764969602551,
+          "local_soft_iou_mean": 0.29477155282198153,
+          "local_soft_iou_p10": 0.08825381094935295,
+          "local_soft_iou_p90": 0.49938225340491826,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.2769792593286202,
+          "grid_hard_iou": 0.21535181236673773,
+          "soft_iou_vs_oracle_ratio": 0.3154786057426436,
+          "grid_boundary_f1_vs_oracle_ratio": 0.2808335352556336,
+          "s_std_ratio_median": 0.4589500427246094,
+          "hi_lo_soft_iou_drop_median": -0.0007587836309912444,
+          "center_prior_hard_iou": 0.17487266553480477,
+          "center_prior_boundary_f1": 0.13228346456692913,
+          "center_prior_delta_hard_iou": 0.028413223905180477,
+          "center_prior_delta_hard_iou_p": 0.004299570042995701,
+          "center_prior_delta_hard_iou_ci95": [
+            0.008946118786990278,
+            0.046236092090752384
+          ],
+          "center_prior_delta_boundary_f1": 0.1271274824311747,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.10275078468184302,
+            0.15243640210197307
+          ],
+          "low_confidence": false
+        },
+        "mid": {
+          "n": 177,
+          "n_local": 177,
+          "n_global": 0,
+          "local_soft_iou_median": 0.6082508793696367,
+          "local_soft_iou_mean": 0.5620281908711233,
+          "local_soft_iou_p10": 0.29562495648483056,
+          "local_soft_iou_p90": 0.7983219417917772,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.26066666666666666,
+          "grid_hard_iou": 0.5577299412915852,
+          "soft_iou_vs_oracle_ratio": 0.6183950400764427,
+          "grid_boundary_f1_vs_oracle_ratio": 0.26297577854671284,
+          "s_std_ratio_median": 0.6010785698890686,
+          "hi_lo_soft_iou_drop_median": -0.006560741295319139,
+          "center_prior_hard_iou": 0.5729166666666666,
+          "center_prior_boundary_f1": 0.12941176470588237,
+          "center_prior_delta_hard_iou": -0.008826671312588425,
+          "center_prior_delta_hard_iou_p": 0.1999800019998,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.022031148186209784,
+            0.0051473604571791
+          ],
+          "center_prior_delta_boundary_f1": 0.11464058492138467,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09662588173862212,
+            0.1343805106808239
+          ],
+          "low_confidence": false
+        }
+      },
+      "softness": {
+        "hard": {
+          "n": 213,
+          "n_local": 213,
+          "n_global": 0,
+          "local_soft_iou_median": 0.591681584723306,
+          "local_soft_iou_mean": 0.5680553436589351,
+          "local_soft_iou_p10": 0.29562495648483056,
+          "local_soft_iou_p90": 0.7999314309612323,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.23443223443223443,
+          "grid_hard_iou": 0.5666003976143141,
+          "soft_iou_vs_oracle_ratio": 0.6039898058316213,
+          "grid_boundary_f1_vs_oracle_ratio": 0.23560287199801935,
+          "s_std_ratio_median": 0.5758622884750366,
+          "hi_lo_soft_iou_drop_median": -0.0010429200052295418,
+          "center_prior_hard_iou": 0.5831381733021077,
+          "center_prior_boundary_f1": 0.130718954248366,
+          "center_prior_delta_hard_iou": -0.015351317047256915,
+          "center_prior_delta_hard_iou_p": 0.020997900209979003,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.028219984330706566,
+            -0.0021960774056570616
+          ],
+          "center_prior_delta_boundary_f1": 0.1008360704961851,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08545813694054301,
+            0.11477330391295529
+          ],
+          "low_confidence": false
+        },
+        "soft": {
+          "n": 187,
+          "n_local": 187,
+          "n_global": 0,
+          "local_soft_iou_median": 0.39324499320620443,
+          "local_soft_iou_mean": 0.40458215497564826,
+          "local_soft_iou_p10": 0.13901830547662625,
+          "local_soft_iou_p90": 0.6531153011526092,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3807553026383859,
+          "grid_hard_iou": 0.35490394337714865,
+          "soft_iou_vs_oracle_ratio": 0.41577843550465926,
+          "grid_boundary_f1_vs_oracle_ratio": 0.3807553026383859,
+          "s_std_ratio_median": 0.5426965951919556,
+          "hi_lo_soft_iou_drop_median": -0.01836966169670684,
+          "center_prior_hard_iou": 0.4539969834087481,
+          "center_prior_boundary_f1": 0.25766871165644173,
+          "center_prior_delta_hard_iou": -0.037191817760309075,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.05545732922814006,
+            -0.020183818856273295
+          ],
+          "center_prior_delta_boundary_f1": 0.11887931581194915,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09692737223375233,
+            0.13953860636168317
+          ],
+          "low_confidence": false
+        }
+      },
+      "region": {
+        "center": {
+          "n": 305,
+          "n_local": 305,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5874059279453998,
+          "local_soft_iou_mean": 0.5536801142890598,
+          "local_soft_iou_p10": 0.291160102145493,
+          "local_soft_iou_p90": 0.7975558179556683,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3131645179516154,
+          "grid_hard_iou": 0.5463029432878679,
+          "soft_iou_vs_oracle_ratio": 0.6010937029883647,
+          "grid_boundary_f1_vs_oracle_ratio": 0.31982063867175664,
+          "s_std_ratio_median": 0.5767754912376404,
+          "hi_lo_soft_iou_drop_median": -0.017263593196724325,
+          "center_prior_hard_iou": 0.5736961451247166,
+          "center_prior_boundary_f1": 0.22381635581061693,
+          "center_prior_delta_hard_iou": -0.04461876460542066,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.05734878415491358,
+            -0.03318826455524301
+          ],
+          "center_prior_delta_boundary_f1": 0.09319602458704379,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.07952173050726791,
+            0.10635089049139222
+          ],
+          "low_confidence": false
+        },
+        "left": {
+          "n": 25,
+          "n_local": 25,
+          "n_global": 0,
+          "local_soft_iou_median": 0.3840087148417146,
+          "local_soft_iou_mean": 0.3430828680345901,
+          "local_soft_iou_p10": 0.08825381094935295,
+          "local_soft_iou_p90": 0.4803511990945125,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.234951173298353,
+          "grid_hard_iou": 0.2962962962962963,
+          "soft_iou_vs_oracle_ratio": 0.3982975440118055,
+          "grid_boundary_f1_vs_oracle_ratio": 0.25949831080713615,
+          "s_std_ratio_median": 0.4323331415653229,
+          "hi_lo_soft_iou_drop_median": -1.2078759096645353e-05,
+          "center_prior_hard_iou": 0.3395348837209302,
+          "center_prior_boundary_f1": 0.12941176470588237,
+          "center_prior_delta_hard_iou": -0.009369541882839968,
+          "center_prior_delta_hard_iou_p": 0.6012398760123988,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.04335537788642399,
+            0.020036967906942003
+          ],
+          "center_prior_delta_boundary_f1": 0.09693289445935642,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.07068806173402807,
+            0.12309392263116471
+          ],
+          "low_confidence": false
+        },
+        "lower": {
+          "n": 41,
+          "n_local": 41,
+          "n_global": 0,
+          "local_soft_iou_median": 0.29772145741876904,
+          "local_soft_iou_mean": 0.2959253169675593,
+          "local_soft_iou_p10": 0.12520509838787724,
+          "local_soft_iou_p90": 0.49938225340491826,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.38216560509554137,
+          "grid_hard_iou": 0.30179445350734097,
+          "soft_iou_vs_oracle_ratio": 0.3301706818903707,
+          "grid_boundary_f1_vs_oracle_ratio": 0.389514943655071,
+          "s_std_ratio_median": 0.5707507133483887,
+          "hi_lo_soft_iou_drop_median": -0.01742852243896953,
+          "center_prior_hard_iou": 0.17034700315457413,
+          "center_prior_boundary_f1": 0.19683413626978669,
+          "center_prior_delta_hard_iou": 0.07701257072377869,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            0.050020061671606865,
+            0.10404430566191336
+          ],
+          "center_prior_delta_boundary_f1": 0.24717546077169905,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.1981772916329049,
+            0.2986550974385103
+          ],
+          "low_confidence": false
+        },
+        "lower left": {
+          "n": 2,
+          "n_local": 2,
+          "n_global": 0,
+          "local_soft_iou_median": 0.08079930247864249,
+          "local_soft_iou_mean": 0.08715091594462648,
+          "local_soft_iou_p10": 0.08079930247864249,
+          "local_soft_iou_p90": 0.09350252941061046,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.1702127659574468,
+          "grid_hard_iou": 0.03536977491961415,
+          "soft_iou_vs_oracle_ratio": 0.09262073818375341,
+          "grid_boundary_f1_vs_oracle_ratio": 0.1745219499057366,
+          "s_std_ratio_median": 0.360400915145874,
+          "hi_lo_soft_iou_drop_median": -0.0028258697764052126,
+          "center_prior_hard_iou": 0.008695652173913044,
+          "center_prior_boundary_f1": 0.11214953271028037,
+          "center_prior_delta_hard_iou": 0.05421756451750464,
+          "center_prior_delta_hard_iou_p": 0.5053494650534947,
+          "center_prior_delta_hard_iou_ci95": [
+            0.02279115856741289,
+            0.08564397046759639
+          ],
+          "center_prior_delta_boundary_f1": 0.14027720065799956,
+          "center_prior_delta_boundary_f1_p": 0.5053494650534947,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.04422851398894284,
+            0.23632588732705628
+          ],
+          "low_confidence": true
+        },
+        "lower right": {
+          "n": 6,
+          "n_local": 6,
+          "n_global": 0,
+          "local_soft_iou_median": 0.12864543777416257,
+          "local_soft_iou_mean": 0.14027118417527204,
+          "local_soft_iou_p10": 0.03228265294327297,
+          "local_soft_iou_p90": 0.20163152770357404,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.16560509554140126,
+          "grid_hard_iou": 0.044897959183673466,
+          "soft_iou_vs_oracle_ratio": 0.17575409082954102,
+          "grid_boundary_f1_vs_oracle_ratio": 0.1672611464968153,
+          "s_std_ratio_median": 0.19406884908676147,
+          "hi_lo_soft_iou_drop_median": -0.0013024824283141,
+          "center_prior_hard_iou": 0.0,
+          "center_prior_boundary_f1": 0.042105263157894736,
+          "center_prior_delta_hard_iou": 0.05351607525110219,
+          "center_prior_delta_hard_iou_p": 0.06329367063293671,
+          "center_prior_delta_hard_iou_ci95": [
+            0.025848329109237286,
+            0.08544731221568307
+          ],
+          "center_prior_delta_boundary_f1": 0.1328693163339292,
+          "center_prior_delta_boundary_f1_p": 0.06329367063293671,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.06674818412700753,
+            0.1960034678785666
+          ],
+          "low_confidence": true
+        },
+        "right": {
+          "n": 16,
+          "n_local": 16,
+          "n_global": 0,
+          "local_soft_iou_median": 0.27932937233639193,
+          "local_soft_iou_mean": 0.2836770966854279,
+          "local_soft_iou_p10": 0.07397388756097391,
+          "local_soft_iou_p90": 0.5732482616805791,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.27837178765709997,
+          "grid_hard_iou": 0.23529411764705882,
+          "soft_iou_vs_oracle_ratio": 0.31883394673405047,
+          "grid_boundary_f1_vs_oracle_ratio": 0.27837178765709997,
+          "s_std_ratio_median": 0.5125093460083008,
+          "hi_lo_soft_iou_drop_median": 0.005792548843831485,
+          "center_prior_hard_iou": 0.25925925925925924,
+          "center_prior_boundary_f1": 0.13496932515337423,
+          "center_prior_delta_hard_iou": 0.012248952369518583,
+          "center_prior_delta_hard_iou_p": 0.5277472252774722,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.015681673259537683,
+            0.04615501100944666
+          ],
+          "center_prior_delta_boundary_f1": 0.09126012811146438,
+          "center_prior_delta_boundary_f1_p": 0.0016998300169983002,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.05221702782628054,
+            0.12771564940110852
+          ],
+          "low_confidence": true
+        },
+        "upper": {
+          "n": 5,
+          "n_local": 5,
+          "n_global": 0,
+          "local_soft_iou_median": 0.35557133881130726,
+          "local_soft_iou_mean": 0.3030888282387401,
+          "local_soft_iou_p10": 0.11080353776734553,
+          "local_soft_iou_p90": 0.35786826165764135,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.21524459613196817,
+          "grid_hard_iou": 0.2820053715308863,
+          "soft_iou_vs_oracle_ratio": 0.3613782850390926,
+          "grid_boundary_f1_vs_oracle_ratio": 0.21524459613196817,
+          "s_std_ratio_median": 0.29192548990249634,
+          "hi_lo_soft_iou_drop_median": 0.001174277045283778,
+          "center_prior_hard_iou": 0.3207150368033649,
+          "center_prior_boundary_f1": 0.2105263157894737,
+          "center_prior_delta_hard_iou": -0.03295378372961292,
+          "center_prior_delta_hard_iou_p": 0.0634936506349365,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.04459509975710306,
+            -0.01864403742758499
+          ],
+          "center_prior_delta_boundary_f1": 0.0376557942493973,
+          "center_prior_delta_boundary_f1_p": 0.2511748825117488,
+          "center_prior_delta_boundary_f1_ci95": [
+            -0.01665432006200892,
+            0.07966603774733667
+          ],
+          "low_confidence": true
+        }
+      },
+      "winner_confidence": {
+        "low": {
+          "n": 176,
+          "n_local": 176,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5493259029854998,
+          "local_soft_iou_mean": 0.512980002516246,
+          "local_soft_iou_p10": 0.21726158303849255,
+          "local_soft_iou_p90": 0.7936816697646117,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.2835746380429356,
+          "grid_hard_iou": 0.5006711409395973,
+          "soft_iou_vs_oracle_ratio": 0.5735765471655474,
+          "grid_boundary_f1_vs_oracle_ratio": 0.28493808440737933,
+          "s_std_ratio_median": 0.5845542550086975,
+          "hi_lo_soft_iou_drop_median": -0.006407165173313856,
+          "center_prior_hard_iou": 0.5431606905710491,
+          "center_prior_boundary_f1": 0.16,
+          "center_prior_delta_hard_iou": -0.027002506647393763,
+          "center_prior_delta_hard_iou_p": 0.0006999300069993001,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.04210985929902784,
+            -0.011782124686367246
+          ],
+          "center_prior_delta_boundary_f1": 0.1080830510740667,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09090382093384497,
+            0.12580601034775235
+          ],
+          "low_confidence": false
+        },
+        "normal": {
+          "n": 224,
+          "n_local": 224,
+          "n_global": 0,
+          "local_soft_iou_median": 0.4822736206448494,
+          "local_soft_iou_mean": 0.47485790507562536,
+          "local_soft_iou_p10": 0.18549734944495605,
+          "local_soft_iou_p90": 0.7558894164836505,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3352941176470588,
+          "grid_hard_iou": 0.45498783454987834,
+          "soft_iou_vs_oracle_ratio": 0.4970941629027377,
+          "grid_boundary_f1_vs_oracle_ratio": 0.339631480324797,
+          "s_std_ratio_median": 0.5254499912261963,
+          "hi_lo_soft_iou_drop_median": -0.013359657681781822,
+          "center_prior_hard_iou": 0.4858156028368794,
+          "center_prior_boundary_f1": 0.22754491017964074,
+          "center_prior_delta_hard_iou": -0.02442972893884918,
+          "center_prior_delta_hard_iou_p": 0.0020997900209979003,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.0400018695239142,
+            -0.008860807787480033
+          ],
+          "center_prior_delta_boundary_f1": 0.11020490215842045,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09203184565322478,
+            0.12820073406566246
+          ],
+          "low_confidence": false
+        }
+      },
+      "upscaled": {
+        "False": {
+          "n": 346,
+          "n_local": 346,
+          "n_global": 0,
+          "local_soft_iou_median": 0.4917445981178435,
+          "local_soft_iou_mean": 0.4839956492574052,
+          "local_soft_iou_p10": 0.18579263328517073,
+          "local_soft_iou_p90": 0.7611551403944344,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3036885245901639,
+          "grid_hard_iou": 0.46064814814814814,
+          "soft_iou_vs_oracle_ratio": 0.5196547850390856,
+          "grid_boundary_f1_vs_oracle_ratio": 0.3052445492044785,
+          "s_std_ratio_median": 0.547494649887085,
+          "hi_lo_soft_iou_drop_median": -0.009143301938076887,
+          "center_prior_hard_iou": 0.5147540983606558,
+          "center_prior_boundary_f1": 0.19683413626978669,
+          "center_prior_delta_hard_iou": -0.027567395511856364,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.03903273949580983,
+            -0.01615482830076563
+          ],
+          "center_prior_delta_boundary_f1": 0.10500309932153751,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09112128693394414,
+            0.11883640293946302
+          ],
+          "low_confidence": false
+        },
+        "True": {
+          "n": 54,
+          "n_local": 54,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5791654596965765,
+          "local_soft_iou_mean": 0.5405584543840216,
+          "local_soft_iou_p10": 0.23633891902215914,
+          "local_soft_iou_p90": 0.7795362242821349,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.34605159982404804,
+          "grid_hard_iou": 0.5272184936614467,
+          "soft_iou_vs_oracle_ratio": 0.5930989987483596,
+          "grid_boundary_f1_vs_oracle_ratio": 0.34605159982404804,
+          "s_std_ratio_median": 0.6064937114715576,
+          "hi_lo_soft_iou_drop_median": -0.018706405313445806,
+          "center_prior_hard_iou": 0.526080476900149,
+          "center_prior_boundary_f1": 0.20055489496630993,
+          "center_prior_delta_hard_iou": -0.012710770465578098,
+          "center_prior_delta_hard_iou_p": 0.37746225377462256,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.0397419095510514,
+            0.016122387206481573
+          ],
+          "center_prior_delta_boundary_f1": 0.13661930939388775,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.10380725537590517,
+            0.17115146352662633
+          ],
+          "low_confidence": false
+        }
+      },
+      "build": {
+        "l1": {
+          "n": 75,
+          "n_local": 75,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5222223007828058,
+          "local_soft_iou_mean": 0.4789885551777833,
+          "local_soft_iou_p10": 0.1669229456529841,
+          "local_soft_iou_p90": 0.7127421062312974,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3352941176470588,
+          "grid_hard_iou": 0.47549019607843135,
+          "soft_iou_vs_oracle_ratio": 0.5533041605121611,
+          "grid_boundary_f1_vs_oracle_ratio": 0.339631480324797,
+          "s_std_ratio_median": 0.552936315536499,
+          "hi_lo_soft_iou_drop_median": -0.01589050677879278,
+          "center_prior_hard_iou": 0.5157894736842106,
+          "center_prior_boundary_f1": 0.19730941704035873,
+          "center_prior_delta_hard_iou": -0.013937364188498917,
+          "center_prior_delta_hard_iou_p": 0.23477652234776522,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.03750516887879691,
+            0.007643622317972055
+          ],
+          "center_prior_delta_boundary_f1": 0.10351366058043876,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.0763953540289649,
+            0.12966629081691436
+          ],
+          "low_confidence": false
+        },
+        "l2": {
+          "n": 57,
+          "n_local": 57,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5027452004578299,
+          "local_soft_iou_mean": 0.4927137562858419,
+          "local_soft_iou_p10": 0.25503777920586895,
+          "local_soft_iou_p90": 0.7065128670214647,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.30775663809324694,
+          "grid_hard_iou": 0.4557823129251701,
+          "soft_iou_vs_oracle_ratio": 0.5259504532870165,
+          "grid_boundary_f1_vs_oracle_ratio": 0.30775663809324694,
+          "s_std_ratio_median": 0.51197749376297,
+          "hi_lo_soft_iou_drop_median": -0.009143301938076887,
+          "center_prior_hard_iou": 0.5029093931837074,
+          "center_prior_boundary_f1": 0.2072072072072072,
+          "center_prior_delta_hard_iou": -0.030783570268859146,
+          "center_prior_delta_hard_iou_p": 0.05469453054694531,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.06200435367156512,
+            -0.0010403299912392582
+          ],
+          "center_prior_delta_boundary_f1": 0.1367862883483094,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.10611135365464701,
+            0.1678787911012421
+          ],
+          "low_confidence": false
+        },
+        "l3": {
+          "n": 53,
+          "n_local": 53,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5732482616805791,
+          "local_soft_iou_mean": 0.5526539768820874,
+          "local_soft_iou_p10": 0.2998520422153762,
+          "local_soft_iou_p90": 0.7975558179556683,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.2674117834903401,
+          "grid_hard_iou": 0.5342465753424658,
+          "soft_iou_vs_oracle_ratio": 0.5832335959626566,
+          "grid_boundary_f1_vs_oracle_ratio": 0.2674117834903401,
+          "s_std_ratio_median": 0.5747866630554199,
+          "hi_lo_soft_iou_drop_median": -0.0022377647718675453,
+          "center_prior_hard_iou": 0.5680379746835443,
+          "center_prior_boundary_f1": 0.17964071856287425,
+          "center_prior_delta_hard_iou": -0.029511918050756033,
+          "center_prior_delta_hard_iou_p": 0.04839516048395161,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.05972362342187189,
+            -0.0015575241898114027
+          ],
+          "center_prior_delta_boundary_f1": 0.09364043105659343,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.06390169876158576,
+            0.12379409838566374
+          ],
+          "low_confidence": false
+        },
+        "l4": {
+          "n": 71,
+          "n_local": 71,
+          "n_global": 0,
+          "local_soft_iou_median": 0.4843232368219997,
+          "local_soft_iou_mean": 0.4847085899909708,
+          "local_soft_iou_p10": 0.20163152770357404,
+          "local_soft_iou_p90": 0.7687700655299738,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.30769230769230765,
+          "grid_hard_iou": 0.45498783454987834,
+          "soft_iou_vs_oracle_ratio": 0.5098955879760702,
+          "grid_boundary_f1_vs_oracle_ratio": 0.30769230769230765,
+          "s_std_ratio_median": 0.5070866942405701,
+          "hi_lo_soft_iou_drop_median": -0.006456449405836617,
+          "center_prior_hard_iou": 0.5245901639344263,
+          "center_prior_boundary_f1": 0.1834862385321101,
+          "center_prior_delta_hard_iou": -0.041751746363253336,
+          "center_prior_delta_hard_iou_p": 0.0093990600939906,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.07336368368137938,
+            -0.01211619347146888
+          ],
+          "center_prior_delta_boundary_f1": 0.10054098168103962,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.07070449978361948,
+            0.12949193798427
+          ],
+          "low_confidence": false
+        },
+        "l5": {
+          "n": 75,
+          "n_local": 75,
+          "n_global": 0,
+          "local_soft_iou_median": 0.44202913192368015,
+          "local_soft_iou_mean": 0.4561084719810831,
+          "local_soft_iou_p10": 0.18549734944495605,
+          "local_soft_iou_p90": 0.72282801585648,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.32298447671507263,
+          "grid_hard_iou": 0.40794223826714804,
+          "soft_iou_vs_oracle_ratio": 0.4651053730228723,
+          "grid_boundary_f1_vs_oracle_ratio": 0.32298447671507263,
+          "s_std_ratio_median": 0.5961520671844482,
+          "hi_lo_soft_iou_drop_median": -0.016634679764011007,
+          "center_prior_hard_iou": 0.4858156028368794,
+          "center_prior_boundary_f1": 0.19361936193619364,
+          "center_prior_delta_hard_iou": -0.02586035781507723,
+          "center_prior_delta_hard_iou_p": 0.0405959404059594,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.049829338328837326,
+            -0.0009192358377472939
+          ],
+          "center_prior_delta_boundary_f1": 0.11930325726978828,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08677504542315172,
+            0.15466751988605984
+          ],
+          "low_confidence": false
+        },
+        "l6": {
+          "n": 69,
+          "n_local": 69,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5774229239288791,
+          "local_soft_iou_mean": 0.5033437589924905,
+          "local_soft_iou_p10": 0.17985313559904945,
+          "local_soft_iou_p90": 0.7778006198624764,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.34847542003733667,
+          "grid_hard_iou": 0.5048975957257347,
+          "soft_iou_vs_oracle_ratio": 0.5844108109919113,
+          "grid_boundary_f1_vs_oracle_ratio": 0.3519434628975265,
+          "s_std_ratio_median": 0.5296924114227295,
+          "hi_lo_soft_iou_drop_median": -0.016668236116487822,
+          "center_prior_hard_iou": 0.5346938775510204,
+          "center_prior_boundary_f1": 0.20749279538904897,
+          "center_prior_delta_hard_iou": -0.013865248524192469,
+          "center_prior_delta_hard_iou_p": 0.24217578242175783,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.03737426657716809,
+            0.00902334551081562
+          ],
+          "center_prior_delta_boundary_f1": 0.10288514858765203,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.06909364397206691,
+            0.13455173614622942
+          ],
+          "low_confidence": false
+        }
+      },
+      "active_primitive_bucket": {
+        ">=3": {
+          "n": 16,
+          "n_local": 16,
+          "n_global": 0,
+          "local_soft_iou_median": 0.07397388756097391,
+          "local_soft_iou_mean": 0.241705892606323,
+          "local_soft_iou_p10": 0.03228265294327297,
+          "local_soft_iou_p90": 0.8028419796156785,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.24489795918367344,
+          "grid_hard_iou": 0.2727272727272727,
+          "soft_iou_vs_oracle_ratio": 0.12123877384475339,
+          "grid_boundary_f1_vs_oracle_ratio": 0.24489795918367344,
+          "s_std_ratio_median": 0.6831399202346802,
+          "hi_lo_soft_iou_drop_median": 5.1529276659523227e-05,
+          "center_prior_hard_iou": 0.012658227848101266,
+          "center_prior_boundary_f1": 0.09417040358744394,
+          "center_prior_delta_hard_iou": 0.051035397941289876,
+          "center_prior_delta_hard_iou_p": 0.07539246075392461,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.0025675629623008573,
+            0.10516052558646755
+          ],
+          "center_prior_delta_boundary_f1": 0.21131038857085058,
+          "center_prior_delta_boundary_f1_p": 0.0022997700229977,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08193135352314432,
+            0.3458314220649063
+          ],
+          "low_confidence": true
+        },
+        "n/a-not-emitted": {
+          "n": 384,
+          "n_local": 384,
+          "n_global": 0,
+          "local_soft_iou_median": 0.515239140188771,
+          "local_soft_iou_mean": 0.5020452002554641,
+          "local_soft_iou_p10": 0.2240041138604876,
+          "local_soft_iou_p90": 0.7583478334018365,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3080013391362571,
+          "grid_hard_iou": 0.486810551558753,
+          "soft_iou_vs_oracle_ratio": 0.5323679395054357,
+          "grid_boundary_f1_vs_oracle_ratio": 0.31249369774927066,
+          "s_std_ratio_median": 0.552936315536499,
+          "hi_lo_soft_iou_drop_median": -0.01288772690191714,
+          "center_prior_hard_iou": 0.5245901639344263,
+          "center_prior_boundary_f1": 0.20087336244541487,
+          "center_prior_delta_hard_iou": -0.028753299008604575,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.04003607469994815,
+            -0.017539495221190114
+          ],
+          "center_prior_delta_boundary_f1": 0.10501965847757372,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09327663985972433,
+            0.11644458922067914
+          ],
+          "low_confidence": false
+        }
+      }
+    },
+    "gt": {
+      "area": {
+        "large": {
+          "n": 189,
+          "n_local": 189,
+          "n_global": 0,
+          "local_soft_iou_median": 0.7036749478499366,
+          "local_soft_iou_mean": 0.6831857142408225,
+          "local_soft_iou_p10": 0.5285218021541543,
+          "local_soft_iou_p90": 0.8003568769804222,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.20767343296899396,
+          "grid_hard_iou": 0.621301775147929,
+          "soft_iou_vs_oracle_ratio": 0.7127110337700641,
+          "grid_boundary_f1_vs_oracle_ratio": 0.20767343296899396,
+          "s_std_ratio_median": 0.4819929301738739,
+          "hi_lo_soft_iou_drop_median": -0.00026376119691129407,
+          "center_prior_hard_iou": 0.6155038759689923,
+          "center_prior_boundary_f1": 0.12311901504787963,
+          "center_prior_delta_hard_iou": 0.0033171642758028194,
+          "center_prior_delta_hard_iou_p": 0.6695330466953304,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.011969367693487165,
+            0.01815503732117375
+          ],
+          "center_prior_delta_boundary_f1": 0.08475372806874301,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.0699804583167569,
+            0.10066775995867411
+          ],
+          "low_confidence": false
+        },
+        "medium": {
+          "n": 151,
+          "n_local": 151,
+          "n_global": 0,
+          "local_soft_iou_median": 0.4176299843739691,
+          "local_soft_iou_mean": 0.43586298289596886,
+          "local_soft_iou_p10": 0.27958022305540603,
+          "local_soft_iou_p90": 0.6463551295649768,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.43021766965428937,
+          "grid_hard_iou": 0.3684210526315789,
+          "soft_iou_vs_oracle_ratio": 0.4401223684598843,
+          "grid_boundary_f1_vs_oracle_ratio": 0.43541102801044185,
+          "s_std_ratio_median": 0.5316066741943359,
+          "hi_lo_soft_iou_drop_median": -0.030492343507292796,
+          "center_prior_hard_iou": 0.42363112391930835,
+          "center_prior_boundary_f1": 0.2854122621564482,
+          "center_prior_delta_hard_iou": -0.03468521818308512,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.04936254539629325,
+            -0.021192956922172643
+          ],
+          "center_prior_delta_boundary_f1": 0.13465142434749436,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.11670461157028632,
+            0.15192246770619966
+          ],
+          "low_confidence": false
+        },
+        "small": {
+          "n": 52,
+          "n_local": 52,
+          "n_global": 0,
+          "local_soft_iou_median": 0.20658439156832142,
+          "local_soft_iou_mean": 0.2004122127048486,
+          "local_soft_iou_p10": 0.07972475584554757,
+          "local_soft_iou_p90": 0.3229766880325292,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.4442050177004772,
+          "grid_hard_iou": 0.1724137931034483,
+          "soft_iou_vs_oracle_ratio": 0.22994632725996786,
+          "grid_boundary_f1_vs_oracle_ratio": 0.4442050177004772,
+          "s_std_ratio_median": 0.5845542550086975,
+          "hi_lo_soft_iou_drop_median": -0.02056848973595847,
+          "center_prior_hard_iou": 0.1386861313868613,
+          "center_prior_boundary_f1": 0.2775800711743772,
+          "center_prior_delta_hard_iou": -0.033939112595358464,
+          "center_prior_delta_hard_iou_p": 0.1332866713328667,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.0798573476323904,
+            0.010916860668672007
+          ],
+          "center_prior_delta_boundary_f1": 0.13359341160236288,
+          "center_prior_delta_boundary_f1_p": 0.00019998000199980003,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08115239417243572,
+            0.18153407433893734
+          ],
+          "low_confidence": false
+        },
+        "tiny": {
+          "n": 8,
+          "n_local": 8,
+          "n_global": 0,
+          "local_soft_iou_median": 0.05094283461709927,
+          "local_soft_iou_mean": 0.04544300043317779,
+          "local_soft_iou_p10": 0.020625963283292154,
+          "local_soft_iou_p90": 0.07377803596409652,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.8,
+          "grid_hard_iou": 0.2608695652173913,
+          "soft_iou_vs_oracle_ratio": 0.12123877131151638,
+          "grid_boundary_f1_vs_oracle_ratio": 0.8,
+          "s_std_ratio_median": 0.8304150700569153,
+          "hi_lo_soft_iou_drop_median": -0.001998470891366594,
+          "center_prior_hard_iou": 0.0,
+          "center_prior_boundary_f1": 0.0,
+          "center_prior_delta_hard_iou": 0.10368287373004355,
+          "center_prior_delta_hard_iou_p": 0.06619338066193381,
+          "center_prior_delta_hard_iou_ci95": [
+            0.03553511705685619,
+            0.17852748154224776
+          ],
+          "center_prior_delta_boundary_f1": 0.35947800630673893,
+          "center_prior_delta_boundary_f1_p": 0.03189681031896811,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.16054277745876805,
+            0.5518548821507094
+          ],
+          "low_confidence": true
+        }
+      },
+      "components": {
+        "multi": {
+          "n": 16,
+          "n_local": 16,
+          "n_global": 0,
+          "local_soft_iou_median": 0.3639661511501226,
+          "local_soft_iou_mean": 0.2822794699413479,
+          "local_soft_iou_p10": 0.05094283461709927,
+          "local_soft_iou_p90": 0.3847521145353191,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.48973076513781,
+          "grid_hard_iou": 0.3253493013972056,
+          "soft_iou_vs_oracle_ratio": 0.42879394049609953,
+          "grid_boundary_f1_vs_oracle_ratio": 0.4989073888743805,
+          "s_std_ratio_median": 0.6647667288780212,
+          "hi_lo_soft_iou_drop_median": -0.03754406771939117,
+          "center_prior_hard_iou": 0.4246575342465753,
+          "center_prior_boundary_f1": 0.36218375499334216,
+          "center_prior_delta_hard_iou": -0.036602037958129684,
+          "center_prior_delta_hard_iou_p": 0.26807319268073193,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.09142754741805846,
+            0.02854248046323105
+          ],
+          "center_prior_delta_boundary_f1": 0.23970028322877546,
+          "center_prior_delta_boundary_f1_p": 0.00019998000199980003,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.14406268669540453,
+            0.3530014409866302
+          ],
+          "low_confidence": true
+        },
+        "single": {
+          "n": 384,
+          "n_local": 384,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5580394524658497,
+          "local_soft_iou_mean": 0.5239737446715175,
+          "local_soft_iou_p10": 0.21641877961354983,
+          "local_soft_iou_p90": 0.793626818951793,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3209076175040518,
+          "grid_hard_iou": 0.5053763440860215,
+          "soft_iou_vs_oracle_ratio": 0.5829567265060973,
+          "grid_boundary_f1_vs_oracle_ratio": 0.32298447671507263,
+          "s_std_ratio_median": 0.5241906046867371,
+          "hi_lo_soft_iou_drop_median": -0.00675535031110186,
+          "center_prior_hard_iou": 0.5311475409836065,
+          "center_prior_boundary_f1": 0.19469026548672566,
+          "center_prior_delta_hard_iou": -0.012917349362779523,
+          "center_prior_delta_hard_iou_p": 0.0212978702129787,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.023568029779604687,
+            -0.0022893899416761565
+          ],
+          "center_prior_delta_boundary_f1": 0.11025598073849076,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09764925759209213,
+            0.12297013972783766
+          ],
+          "low_confidence": false
+        }
+      },
+      "boundary": {
+        "compact": {
+          "n": 305,
+          "n_local": 305,
+          "n_global": 0,
+          "local_soft_iou_median": 0.6267253669290873,
+          "local_soft_iou_mean": 0.5816927521845145,
+          "local_soft_iou_p10": 0.2926845178502155,
+          "local_soft_iou_p90": 0.7983858623447964,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.29396738062487715,
+          "grid_hard_iou": 0.5540261527873366,
+          "soft_iou_vs_oracle_ratio": 0.6371620926441638,
+          "grid_boundary_f1_vs_oracle_ratio": 0.29901639344262293,
+          "s_std_ratio_median": 0.5230565667152405,
+          "hi_lo_soft_iou_drop_median": -0.0022183482358262285,
+          "center_prior_hard_iou": 0.5709090909090909,
+          "center_prior_boundary_f1": 0.15714285714285714,
+          "center_prior_delta_hard_iou": -0.013066996799644386,
+          "center_prior_delta_hard_iou_p": 0.0367963203679632,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.02552206520237929,
+            -0.0014947642196077907
+          ],
+          "center_prior_delta_boundary_f1": 0.0913762068644423,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.07831813818772321,
+            0.1044155836943544
+          ],
+          "low_confidence": false
+        },
+        "complex": {
+          "n": 95,
+          "n_local": 95,
+          "n_global": 0,
+          "local_soft_iou_median": 0.332776870755474,
+          "local_soft_iou_mean": 0.29795894796470895,
+          "local_soft_iou_p10": 0.07972475584554757,
+          "local_soft_iou_p90": 0.44618624974283183,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.4870718232044199,
+          "grid_hard_iou": 0.27515583259127335,
+          "soft_iou_vs_oracle_ratio": 0.3490004766924345,
+          "grid_boundary_f1_vs_oracle_ratio": 0.4889534727267834,
+          "s_std_ratio_median": 0.5768045783042908,
+          "hi_lo_soft_iou_drop_median": -0.025304390814554434,
+          "center_prior_hard_iou": 0.3234750462107209,
+          "center_prior_boundary_f1": 0.2923976608187134,
+          "center_prior_delta_hard_iou": -0.01642590251311447,
+          "center_prior_delta_hard_iou_p": 0.18568143185681432,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.03955588200971624,
+            0.008275088362772794
+          ],
+          "center_prior_delta_boundary_f1": 0.19267113727985222,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.16244617343920847,
+            0.22377051166533157
+          ],
+          "low_confidence": false
+        }
+      },
+      "position": {
+        "center": {
+          "n": 147,
+          "n_local": 147,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5569779884761232,
+          "local_soft_iou_mean": 0.5364750126899065,
+          "local_soft_iou_p10": 0.2920574151159992,
+          "local_soft_iou_p90": 0.7894923014986716,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.42917214191852826,
+          "grid_hard_iou": 0.5141329258976318,
+          "soft_iou_vs_oracle_ratio": 0.5900591703533464,
+          "grid_boundary_f1_vs_oracle_ratio": 0.42917214191852826,
+          "s_std_ratio_median": 0.5426965951919556,
+          "hi_lo_soft_iou_drop_median": -0.024342354533847865,
+          "center_prior_hard_iou": 0.5357142857142857,
+          "center_prior_boundary_f1": 0.2929047907822923,
+          "center_prior_delta_hard_iou": -0.0551708254880428,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.0750049365260542,
+            -0.03618332860534508
+          ],
+          "center_prior_delta_boundary_f1": 0.10386629001881034,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08222358818731895,
+            0.12474141372502166
+          ],
+          "low_confidence": false
+        },
+        "edge": {
+          "n": 76,
+          "n_local": 76,
+          "n_global": 0,
+          "local_soft_iou_median": 0.29494827142534175,
+          "local_soft_iou_mean": 0.3022727563492431,
+          "local_soft_iou_p10": 0.08825381094935295,
+          "local_soft_iou_p90": 0.5338914898372897,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.2906110283159463,
+          "grid_hard_iou": 0.24615384615384617,
+          "soft_iou_vs_oracle_ratio": 0.32109140338295816,
+          "grid_boundary_f1_vs_oracle_ratio": 0.2920534084992926,
+          "s_std_ratio_median": 0.44326362013816833,
+          "hi_lo_soft_iou_drop_median": -0.0005027616915403987,
+          "center_prior_hard_iou": 0.17487266553480477,
+          "center_prior_boundary_f1": 0.13228346456692913,
+          "center_prior_delta_hard_iou": 0.04708827716160991,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            0.026312000794073892,
+            0.06802074180229958
+          ],
+          "center_prior_delta_boundary_f1": 0.14122770675438065,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.1182156268602823,
+            0.16496794905752427
+          ],
+          "low_confidence": false
+        },
+        "mid": {
+          "n": 177,
+          "n_local": 177,
+          "n_global": 0,
+          "local_soft_iou_median": 0.6463551295649768,
+          "local_soft_iou_mean": 0.58693691031054,
+          "local_soft_iou_p10": 0.30308313010090565,
+          "local_soft_iou_p90": 0.7992091465123047,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.26671820641669886,
+          "grid_hard_iou": 0.5533596837944664,
+          "soft_iou_vs_oracle_ratio": 0.6560795988133931,
+          "grid_boundary_f1_vs_oracle_ratio": 0.26671820641669886,
+          "s_std_ratio_median": 0.5890110731124878,
+          "hi_lo_soft_iou_drop_median": -0.0005604551253575174,
+          "center_prior_hard_iou": 0.5729166666666666,
+          "center_prior_boundary_f1": 0.12941176470588237,
+          "center_prior_delta_hard_iou": -0.005731595933206068,
+          "center_prior_delta_hard_iou_p": 0.398960103989601,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.018747479804890988,
+            0.007962125394042474
+          ],
+          "center_prior_delta_boundary_f1": 0.11396525869572209,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09381179628391155,
+            0.13588351616079952
+          ],
+          "low_confidence": false
+        }
+      },
+      "softness": {
+        "hard": {
+          "n": 213,
+          "n_local": 213,
+          "n_global": 0,
+          "local_soft_iou_median": 0.6447448491344545,
+          "local_soft_iou_mean": 0.5983214839659774,
+          "local_soft_iou_p10": 0.29568143684671294,
+          "local_soft_iou_p90": 0.8001734623634946,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.23843416370106763,
+          "grid_hard_iou": 0.5576234788833214,
+          "soft_iou_vs_oracle_ratio": 0.6537822575014068,
+          "grid_boundary_f1_vs_oracle_ratio": 0.23843416370106763,
+          "s_std_ratio_median": 0.5149070620536804,
+          "hi_lo_soft_iou_drop_median": -0.0003520157213365849,
+          "center_prior_hard_iou": 0.5831381733021077,
+          "center_prior_boundary_f1": 0.130718954248366,
+          "center_prior_delta_hard_iou": -0.010205923734363617,
+          "center_prior_delta_hard_iou_p": 0.1688831116888311,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.024592107350048558,
+            0.004391828738315751
+          ],
+          "center_prior_delta_boundary_f1": 0.10269435652686733,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08592149170490397,
+            0.11899074443268054
+          ],
+          "low_confidence": false
+        },
+        "soft": {
+          "n": 187,
+          "n_local": 187,
+          "n_global": 0,
+          "local_soft_iou_median": 0.42328029168308523,
+          "local_soft_iou_mean": 0.4186091625035888,
+          "local_soft_iou_p10": 0.13626464438193128,
+          "local_soft_iou_p90": 0.6645769348888683,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3936902613461667,
+          "grid_hard_iou": 0.4004474272930649,
+          "soft_iou_vs_oracle_ratio": 0.4393754257443144,
+          "grid_boundary_f1_vs_oracle_ratio": 0.3936902613461667,
+          "s_std_ratio_median": 0.5426965951919556,
+          "hi_lo_soft_iou_drop_median": -0.02056848973595847,
+          "center_prior_hard_iou": 0.4539969834087481,
+          "center_prior_boundary_f1": 0.25766871165644173,
+          "center_prior_delta_hard_iou": -0.01803226207068429,
+          "center_prior_delta_hard_iou_p": 0.0324967503249675,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.03515786800610438,
+            -0.002714575819926393
+          ],
+          "center_prior_delta_boundary_f1": 0.12994440211239638,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.10888979224470473,
+            0.1496494229815728
+          ],
+          "low_confidence": false
+        }
+      },
+      "region": {
+        "center": {
+          "n": 305,
+          "n_local": 305,
+          "n_global": 0,
+          "local_soft_iou_median": 0.6267253669290873,
+          "local_soft_iou_mean": 0.581596834183835,
+          "local_soft_iou_p10": 0.30308313010090565,
+          "local_soft_iou_p90": 0.7983858623447964,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.34020313578542555,
+          "grid_hard_iou": 0.5527756059421423,
+          "soft_iou_vs_oracle_ratio": 0.6371620926441638,
+          "grid_boundary_f1_vs_oracle_ratio": 0.35074626865671643,
+          "s_std_ratio_median": 0.5482360124588013,
+          "hi_lo_soft_iou_drop_median": -0.009672959328447917,
+          "center_prior_hard_iou": 0.5736961451247166,
+          "center_prior_boundary_f1": 0.22381635581061693,
+          "center_prior_delta_hard_iou": -0.03367292507692105,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.04587278214243481,
+            -0.021893612432908445
+          ],
+          "center_prior_delta_boundary_f1": 0.09847165901376406,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.0843388698197404,
+            0.1126962381861942
+          ],
+          "low_confidence": false
+        },
+        "left": {
+          "n": 25,
+          "n_local": 25,
+          "n_global": 0,
+          "local_soft_iou_median": 0.38479236792068716,
+          "local_soft_iou_mean": 0.35370543714185565,
+          "local_soft_iou_p10": 0.08825381094935295,
+          "local_soft_iou_p90": 0.4910387553190714,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.28637413394919164,
+          "grid_hard_iou": 0.33179190751445087,
+          "soft_iou_vs_oracle_ratio": 0.39911035654612703,
+          "grid_boundary_f1_vs_oracle_ratio": 0.28783522646934057,
+          "s_std_ratio_median": 0.37763169407844543,
+          "hi_lo_soft_iou_drop_median": -8.497424449038782e-05,
+          "center_prior_hard_iou": 0.3395348837209302,
+          "center_prior_boundary_f1": 0.12941176470588237,
+          "center_prior_delta_hard_iou": 0.04139132433243023,
+          "center_prior_delta_hard_iou_p": 0.1227877212278772,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.0015408856510089987,
+            0.09102919835228293
+          ],
+          "center_prior_delta_boundary_f1": 0.12090762759832373,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08701235038861825,
+            0.15686885841667755
+          ],
+          "low_confidence": false
+        },
+        "lower": {
+          "n": 41,
+          "n_local": 41,
+          "n_global": 0,
+          "local_soft_iou_median": 0.3101061359753598,
+          "local_soft_iou_mean": 0.30497469279233164,
+          "local_soft_iou_p10": 0.12521408100223022,
+          "local_soft_iou_p90": 0.5222198794087857,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.38216560509554137,
+          "grid_hard_iou": 0.30179445350734097,
+          "soft_iou_vs_oracle_ratio": 0.3334483534740255,
+          "grid_boundary_f1_vs_oracle_ratio": 0.3898089171974522,
+          "s_std_ratio_median": 0.5992504358291626,
+          "hi_lo_soft_iou_drop_median": -0.020045496491080173,
+          "center_prior_hard_iou": 0.17034700315457413,
+          "center_prior_boundary_f1": 0.19683413626978669,
+          "center_prior_delta_hard_iou": 0.08100834895676567,
+          "center_prior_delta_hard_iou_p": 9.999000099990002e-05,
+          "center_prior_delta_hard_iou_ci95": [
+            0.055880330548574185,
+            0.10622672964582762
+          ],
+          "center_prior_delta_boundary_f1": 0.2500089133599103,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.20325298082592178,
+            0.29969395251931447
+          ],
+          "low_confidence": false
+        },
+        "lower left": {
+          "n": 2,
+          "n_local": 2,
+          "n_global": 0,
+          "local_soft_iou_median": 0.07955506685650197,
+          "local_soft_iou_mean": 0.09420628204661444,
+          "local_soft_iou_p10": 0.07955506685650197,
+          "local_soft_iou_p90": 0.10885749723672689,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.15911330049261083,
+          "grid_hard_iou": 0.02875399361022364,
+          "soft_iou_vs_oracle_ratio": 0.12478401968342014,
+          "grid_boundary_f1_vs_oracle_ratio": 0.16314148531520856,
+          "s_std_ratio_median": 0.17878012359142303,
+          "hi_lo_soft_iou_drop_median": 0.0019426716553673784,
+          "center_prior_hard_iou": 0.008695652173913044,
+          "center_prior_boundary_f1": 0.11214953271028037,
+          "center_prior_delta_hard_iou": 0.05612081492300705,
+          "center_prior_delta_hard_iou_p": 0.5053494650534947,
+          "center_prior_delta_hard_iou_ci95": [
+            0.016175377258022382,
+            0.09606625258799172
+          ],
+          "center_prior_delta_boundary_f1": 0.14157595935939193,
+          "center_prior_delta_boundary_f1_p": 0.5053494650534947,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.03312904852410686,
+            0.250022870194677
+          ],
+          "low_confidence": true
+        },
+        "lower right": {
+          "n": 6,
+          "n_local": 6,
+          "n_global": 0,
+          "local_soft_iou_median": 0.1341392376286246,
+          "local_soft_iou_mean": 0.1414621423267445,
+          "local_soft_iou_p10": 0.03217806832201311,
+          "local_soft_iou_p90": 0.18845200161222064,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.17088399605652316,
+          "grid_hard_iou": 0.06224066390041494,
+          "soft_iou_vs_oracle_ratio": 0.1824841811366474,
+          "grid_boundary_f1_vs_oracle_ratio": 0.17240974602131354,
+          "s_std_ratio_median": 0.27115750312805176,
+          "hi_lo_soft_iou_drop_median": -0.0017711386813134555,
+          "center_prior_hard_iou": 0.0,
+          "center_prior_boundary_f1": 0.042105263157894736,
+          "center_prior_delta_hard_iou": 0.04475196916914464,
+          "center_prior_delta_hard_iou_p": 0.06329367063293671,
+          "center_prior_delta_hard_iou_ci95": [
+            0.024782868171775396,
+            0.061604069872754165
+          ],
+          "center_prior_delta_boundary_f1": 0.11830659221281463,
+          "center_prior_delta_boundary_f1_p": 0.06329367063293671,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.06401162642577218,
+            0.16448464487763076
+          ],
+          "low_confidence": true
+        },
+        "right": {
+          "n": 16,
+          "n_local": 16,
+          "n_global": 0,
+          "local_soft_iou_median": 0.283625446403477,
+          "local_soft_iou_mean": 0.28418548801938337,
+          "local_soft_iou_p10": 0.07341179923127839,
+          "local_soft_iou_p90": 0.5732834703193433,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.2647669589293955,
+          "grid_hard_iou": 0.23958333333333334,
+          "soft_iou_vs_oracle_ratio": 0.323737599503588,
+          "grid_boundary_f1_vs_oracle_ratio": 0.26955190397028816,
+          "s_std_ratio_median": 0.5094681978225708,
+          "hi_lo_soft_iou_drop_median": 0.004864695216258902,
+          "center_prior_hard_iou": 0.25925925925925924,
+          "center_prior_boundary_f1": 0.13496932515337423,
+          "center_prior_delta_hard_iou": 0.011640124401823914,
+          "center_prior_delta_hard_iou_p": 0.5000499950005,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.013239106829227468,
+            0.04229611385340438
+          ],
+          "center_prior_delta_boundary_f1": 0.0906070000295974,
+          "center_prior_delta_boundary_f1_p": 0.001999800019998,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.05205890212942697,
+            0.12709328151837282
+          ],
+          "low_confidence": true
+        },
+        "upper": {
+          "n": 5,
+          "n_local": 5,
+          "n_global": 0,
+          "local_soft_iou_median": 0.30638455392809044,
+          "local_soft_iou_mean": 0.28092069749176446,
+          "local_soft_iou_p10": 0.11084003588649312,
+          "local_soft_iou_p90": 0.34255688843505555,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.2885661573395146,
+          "grid_hard_iou": 0.2716297786720322,
+          "soft_iou_vs_oracle_ratio": 0.31583747224075837,
+          "grid_boundary_f1_vs_oracle_ratio": 0.2885661573395146,
+          "s_std_ratio_median": 0.48354437947273254,
+          "hi_lo_soft_iou_drop_median": -0.00047971634450683087,
+          "center_prior_hard_iou": 0.3207150368033649,
+          "center_prior_boundary_f1": 0.2105263157894737,
+          "center_prior_delta_hard_iou": -0.039754693000940686,
+          "center_prior_delta_hard_iou_p": 0.0634936506349365,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.05061130487270592,
+            -0.022046318018722512
+          ],
+          "center_prior_delta_boundary_f1": 0.08477710517183493,
+          "center_prior_delta_boundary_f1_p": 0.0634936506349365,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.0686368797556715,
+            0.09939244867982408
+          ],
+          "low_confidence": true
+        }
+      },
+      "winner_confidence": {
+        "low": {
+          "n": 176,
+          "n_local": 176,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5996320258504556,
+          "local_soft_iou_mean": 0.5398134570672222,
+          "local_soft_iou_p10": 0.22729952221376765,
+          "local_soft_iou_p90": 0.7981391438241902,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.30619294349864296,
+          "grid_hard_iou": 0.5248322147651007,
+          "soft_iou_vs_oracle_ratio": 0.6144950096535112,
+          "grid_boundary_f1_vs_oracle_ratio": 0.30769230769230765,
+          "s_std_ratio_median": 0.5508598685264587,
+          "hi_lo_soft_iou_drop_median": -0.0018065963920988748,
+          "center_prior_hard_iou": 0.5431606905710491,
+          "center_prior_boundary_f1": 0.16,
+          "center_prior_delta_hard_iou": -0.01503734607261777,
+          "center_prior_delta_hard_iou_p": 0.0466953304669533,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.02974376427302362,
+            -0.0011839462840857486
+          ],
+          "center_prior_delta_boundary_f1": 0.11529222567451076,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09879434142326708,
+            0.13229049578246163
+          ],
+          "low_confidence": false
+        },
+        "normal": {
+          "n": 224,
+          "n_local": 224,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5009821209621385,
+          "local_soft_iou_mean": 0.4942643795941661,
+          "local_soft_iou_p10": 0.18160172160793925,
+          "local_soft_iou_p90": 0.7771870217055427,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.351206132955644,
+          "grid_hard_iou": 0.47058823529411764,
+          "soft_iou_vs_oracle_ratio": 0.534770511232508,
+          "grid_boundary_f1_vs_oracle_ratio": 0.3527081298165636,
+          "s_std_ratio_median": 0.5201632380485535,
+          "hi_lo_soft_iou_drop_median": -0.009763715198313927,
+          "center_prior_hard_iou": 0.4858156028368794,
+          "center_prior_boundary_f1": 0.22754491017964074,
+          "center_prior_delta_hard_iou": -0.01294340113328877,
+          "center_prior_delta_hard_iou_p": 0.10878912108789121,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.02885920353591463,
+            0.002508849100171322
+          ],
+          "center_prior_delta_boundary_f1": 0.11554495275235253,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09658105280666242,
+            0.13516800292825634
+          ],
+          "low_confidence": false
+        }
+      },
+      "upscaled": {
+        "False": {
+          "n": 346,
+          "n_local": 346,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5231730561477523,
+          "local_soft_iou_mean": 0.5069278783024352,
+          "local_soft_iou_p10": 0.1874094032117161,
+          "local_soft_iou_p90": 0.791952246385312,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3235747303543913,
+          "grid_hard_iou": 0.4857142857142857,
+          "soft_iou_vs_oracle_ratio": 0.5469940774528069,
+          "grid_boundary_f1_vs_oracle_ratio": 0.3268333683546964,
+          "s_std_ratio_median": 0.5350380539894104,
+          "hi_lo_soft_iou_drop_median": -0.007327274458675592,
+          "center_prior_hard_iou": 0.5147540983606558,
+          "center_prior_boundary_f1": 0.19683413626978669,
+          "center_prior_delta_hard_iou": -0.015159826564612339,
+          "center_prior_delta_hard_iou_p": 0.011698830116988301,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.026880631337978522,
+            -0.0038552052553839913
+          ],
+          "center_prior_delta_boundary_f1": 0.11289021971758002,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09853858309156303,
+            0.12708675881875445
+          ],
+          "low_confidence": false
+        },
+        "True": {
+          "n": 54,
+          "n_local": 54,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5861007208747606,
+          "local_soft_iou_mean": 0.561580436671884,
+          "local_soft_iou_p10": 0.26851304641022516,
+          "local_soft_iou_p90": 0.8004868503790801,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3397139400839679,
+          "grid_hard_iou": 0.5127478753541076,
+          "soft_iou_vs_oracle_ratio": 0.5975387732229301,
+          "grid_boundary_f1_vs_oracle_ratio": 0.35096267190569747,
+          "s_std_ratio_median": 0.49694547057151794,
+          "hi_lo_soft_iou_drop_median": -0.0076519303996162025,
+          "center_prior_hard_iou": 0.526080476900149,
+          "center_prior_boundary_f1": 0.20055489496630993,
+          "center_prior_delta_hard_iou": -0.005566569838547094,
+          "center_prior_delta_hard_iou_p": 0.6523347665233477,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.02811728994734584,
+            0.019170459944771383
+          ],
+          "center_prior_delta_boundary_f1": 0.13173120579552175,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.0960468566462698,
+            0.16803564785389735
+          ],
+          "low_confidence": false
+        }
+      },
+      "build": {
+        "l1": {
+          "n": 75,
+          "n_local": 75,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5293702034334394,
+          "local_soft_iou_mean": 0.5033924356448264,
+          "local_soft_iou_p10": 0.15680230061089626,
+          "local_soft_iou_p90": 0.7894923014986716,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.333274629283928,
+          "grid_hard_iou": 0.488822652757079,
+          "soft_iou_vs_oracle_ratio": 0.5691719856476323,
+          "grid_boundary_f1_vs_oracle_ratio": 0.33579725448785636,
+          "s_std_ratio_median": 0.5477487444877625,
+          "hi_lo_soft_iou_drop_median": -0.005003857128631939,
+          "center_prior_hard_iou": 0.5157894736842106,
+          "center_prior_boundary_f1": 0.19730941704035873,
+          "center_prior_delta_hard_iou": -0.006315405626434112,
+          "center_prior_delta_hard_iou_p": 0.601039896010399,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.029971142825655075,
+            0.015874955264188015
+          ],
+          "center_prior_delta_boundary_f1": 0.09742600085926953,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.06856222098461891,
+            0.12328838336728616
+          ],
+          "low_confidence": false
+        },
+        "l2": {
+          "n": 57,
+          "n_local": 57,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5746355178410189,
+          "local_soft_iou_mean": 0.5276978104372992,
+          "local_soft_iou_p10": 0.283625446403477,
+          "local_soft_iou_p90": 0.7783878102396037,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3936902613461667,
+          "grid_hard_iou": 0.5,
+          "soft_iou_vs_oracle_ratio": 0.5975387732229301,
+          "grid_boundary_f1_vs_oracle_ratio": 0.3936902613461667,
+          "s_std_ratio_median": 0.4729113280773163,
+          "hi_lo_soft_iou_drop_median": -0.012121235484927495,
+          "center_prior_hard_iou": 0.5029093931837074,
+          "center_prior_boundary_f1": 0.2072072072072072,
+          "center_prior_delta_hard_iou": 0.0063303733583893835,
+          "center_prior_delta_hard_iou_p": 0.644935506449355,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.02095285865984579,
+            0.030756636499463263
+          ],
+          "center_prior_delta_boundary_f1": 0.1563040118969661,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.12531456467231267,
+            0.18712121970511733
+          ],
+          "low_confidence": false
+        },
+        "l3": {
+          "n": 53,
+          "n_local": 53,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5732834703193433,
+          "local_soft_iou_mean": 0.5639258496799552,
+          "local_soft_iou_p10": 0.30081746226245243,
+          "local_soft_iou_p90": 0.7995306512594026,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.26671820641669886,
+          "grid_hard_iou": 0.5576234788833214,
+          "soft_iou_vs_oracle_ratio": 0.592917020644136,
+          "grid_boundary_f1_vs_oracle_ratio": 0.26955190397028816,
+          "s_std_ratio_median": 0.5337855815887451,
+          "hi_lo_soft_iou_drop_median": -0.0004956455556394124,
+          "center_prior_hard_iou": 0.5680379746835443,
+          "center_prior_boundary_f1": 0.17964071856287425,
+          "center_prior_delta_hard_iou": -0.01001704816587818,
+          "center_prior_delta_hard_iou_p": 0.591040895910409,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.045906112044141634,
+            0.026089865458186704
+          ],
+          "center_prior_delta_boundary_f1": 0.10937056450207937,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.07989209829009042,
+            0.14387924800066962
+          ],
+          "low_confidence": false
+        },
+        "l4": {
+          "n": 71,
+          "n_local": 71,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5231730561477523,
+          "local_soft_iou_mean": 0.5171772921536425,
+          "local_soft_iou_p10": 0.21641877961354983,
+          "local_soft_iou_p90": 0.7985475696657185,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.30769230769230765,
+          "grid_hard_iou": 0.4805378627034678,
+          "soft_iou_vs_oracle_ratio": 0.539688132113139,
+          "grid_boundary_f1_vs_oracle_ratio": 0.30769230769230765,
+          "s_std_ratio_median": 0.5350380539894104,
+          "hi_lo_soft_iou_drop_median": -0.006779716753853915,
+          "center_prior_hard_iou": 0.5245901639344263,
+          "center_prior_boundary_f1": 0.1834862385321101,
+          "center_prior_delta_hard_iou": -0.03435433489409149,
+          "center_prior_delta_hard_iou_p": 0.0178982101789821,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.06292328313544815,
+            -0.007762584909544508
+          ],
+          "center_prior_delta_boundary_f1": 0.10010770737747497,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.07193330656280145,
+            0.1257730883489948
+          ],
+          "low_confidence": false
+        },
+        "l5": {
+          "n": 75,
+          "n_local": 75,
+          "n_global": 0,
+          "local_soft_iou_median": 0.47754678170794035,
+          "local_soft_iou_mean": 0.47352811409533646,
+          "local_soft_iou_p10": 0.18077016103959961,
+          "local_soft_iou_p90": 0.7584482149211962,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.33631044040652913,
+          "grid_hard_iou": 0.41560798548094374,
+          "soft_iou_vs_oracle_ratio": 0.5040183129818266,
+          "grid_boundary_f1_vs_oracle_ratio": 0.33631044040652913,
+          "s_std_ratio_median": 0.5590406060218811,
+          "hi_lo_soft_iou_drop_median": -0.009673759067001186,
+          "center_prior_hard_iou": 0.4858156028368794,
+          "center_prior_boundary_f1": 0.19361936193619364,
+          "center_prior_delta_hard_iou": -0.019835222563519002,
+          "center_prior_delta_hard_iou_p": 0.1040895910408959,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.04438431913169339,
+            0.0031185689135535596
+          ],
+          "center_prior_delta_boundary_f1": 0.11870565274735223,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.0850584412400653,
+            0.1556803838064822
+          ],
+          "low_confidence": false
+        },
+        "l6": {
+          "n": 69,
+          "n_local": 69,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5789743168449057,
+          "local_soft_iou_mean": 0.5183610908918812,
+          "local_soft_iou_p10": 0.20658439156832142,
+          "local_soft_iou_p90": 0.793626818951793,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3581344957040994,
+          "grid_hard_iou": 0.48450889914304546,
+          "soft_iou_vs_oracle_ratio": 0.5900591703533464,
+          "grid_boundary_f1_vs_oracle_ratio": 0.36741957563312794,
+          "s_std_ratio_median": 0.5241906046867371,
+          "hi_lo_soft_iou_drop_median": -0.00644808234428107,
+          "center_prior_hard_iou": 0.5346938775510204,
+          "center_prior_boundary_f1": 0.20749279538904897,
+          "center_prior_delta_hard_iou": -0.014135762312276581,
+          "center_prior_delta_hard_iou_p": 0.24577542245775422,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.03896008850937684,
+            0.009112557298090384
+          ],
+          "center_prior_delta_boundary_f1": 0.1181161057131338,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.08225860575417064,
+            0.1538622123188313
+          ],
+          "low_confidence": false
+        }
+      },
+      "active_primitive_bucket": {
+        ">=3": {
+          "n": 16,
+          "n_local": 16,
+          "n_global": 0,
+          "local_soft_iou_median": 0.07377803596409652,
+          "local_soft_iou_mean": 0.24119518151677385,
+          "local_soft_iou_p10": 0.03217806832201311,
+          "local_soft_iou_p90": 0.805008521956175,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.24347355606654947,
+          "grid_hard_iou": 0.2608695652173913,
+          "soft_iou_vs_oracle_ratio": 0.12123877131151638,
+          "grid_boundary_f1_vs_oracle_ratio": 0.24347355606654947,
+          "s_std_ratio_median": 0.696239173412323,
+          "hi_lo_soft_iou_drop_median": 3.248281144929699e-05,
+          "center_prior_hard_iou": 0.012658227848101266,
+          "center_prior_boundary_f1": 0.09417040358744394,
+          "center_prior_delta_hard_iou": 0.05130640998414172,
+          "center_prior_delta_hard_iou_p": 0.06779322067793221,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.001293303509996633,
+            0.1046372297621646
+          ],
+          "center_prior_delta_boundary_f1": 0.20673884536759796,
+          "center_prior_delta_boundary_f1_p": 0.001999800019998,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.07917775410976008,
+            0.3384264555122464
+          ],
+          "low_confidence": true
+        },
+        "n/a-not-emitted": {
+          "n": 384,
+          "n_local": 384,
+          "n_global": 0,
+          "local_soft_iou_median": 0.5555485558419803,
+          "local_soft_iou_mean": 0.5256855900225414,
+          "local_soft_iou_p10": 0.22736050544441935,
+          "local_soft_iou_p90": 0.791952246385312,
+          "global_soft_iou": null,
+          "grid_boundary_f1": 0.3357472021066491,
+          "grid_hard_iou": 0.5,
+          "soft_iou_vs_oracle_ratio": 0.5770840927360344,
+          "grid_boundary_f1_vs_oracle_ratio": 0.34020313578542555,
+          "s_std_ratio_median": 0.531476616859436,
+          "hi_lo_soft_iou_drop_median": -0.008906686362463723,
+          "center_prior_hard_iou": 0.5245901639344263,
+          "center_prior_boundary_f1": 0.20087336244541487,
+          "center_prior_delta_hard_iou": -0.016580201360374167,
+          "center_prior_delta_hard_iou_p": 0.004199580041995801,
+          "center_prior_delta_hard_iou_ci95": [
+            -0.027131373436757474,
+            -0.005249639633798514
+          ],
+          "center_prior_delta_boundary_f1": 0.11162937398270649,
+          "center_prior_delta_boundary_f1_p": 9.999000099990002e-05,
+          "center_prior_delta_boundary_f1_ci95": [
+            0.09911962481259291,
+            0.12381972160866139
+          ],
+          "low_confidence": false
+        }
+      }
+    }
+  },
+  "worst_class": {
+    "area": "small",
+    "components": "single",
+    "boundary": "complex",
+    "position": "edge",
+    "softness": "soft",
+    "region": "lower",
+    "winner_confidence": "normal",
+    "upscaled": "False",
+    "build": "l5",
+    "active_primitive_bucket": "n/a-not-emitted"
+  },
+  "worst_class_note": {
+    "area": "注：`tiny` 的中位更低（0.051，n=8 < 20），因样本量不足未被选为最差类别，但**不能**据此说它更好。",
+    "components": "注：`multi` 的中位更低（0.364，n=16 < 20），因样本量不足未被选为最差类别，但**不能**据此说它更好。",
+    "boundary": null,
+    "position": null,
+    "softness": null,
+    "region": "注：`lower left` 的中位更低（0.081，n=2 < 20），因样本量不足未被选为最差类别，但**不能**据此说它更好。",
+    "winner_confidence": null,
+    "upscaled": null,
+    "build": null,
+    "active_primitive_bucket": "注：`>=3` 的中位更低（0.074，n=16 < 20），因样本量不足未被选为最差类别，但**不能**据此说它更好。"
+  },
+  "tail_summary": {
+    "n_tail": 81,
+    "counts": {
+      "format_failure": 0,
+      "oracle_ceiling": 10,
+      "context_quality": 0,
+      "s_direction": 6,
+      "s_error": 4,
+      "rho_error": 1,
+      "s_collapse": 13,
+      "upsample_collapse": 0,
+      "area_mismatch": 78,
+      "below_center_prior": 23,
+      "single_primitive": 0,
+      "unexplained": 3
+    },
+    "share": {
+      "format_failure": 0.0,
+      "oracle_ceiling": 0.12345679012345678,
+      "context_quality": 0.0,
+      "s_direction": 0.07407407407407407,
+      "s_error": 0.04938271604938271,
+      "rho_error": 0.012345679012345678,
+      "s_collapse": 0.16049382716049382,
+      "upsample_collapse": 0.0,
+      "area_mismatch": 0.9629629629629629,
+      "below_center_prior": 0.2839506172839506,
+      "single_primitive": 0.0,
+      "unexplained": 0.037037037037037035
+    },
+    "primary_counts": {
+      "format_failure": 0,
+      "oracle_ceiling": 10,
+      "context_quality": 0,
+      "s_direction": 2,
+      "s_error": 1,
+      "rho_error": 0,
+      "s_collapse": 11,
+      "upsample_collapse": 0,
+      "area_mismatch": 54,
+      "below_center_prior": 0,
+      "single_primitive": 0,
+      "unexplained": 3
+    },
+    "primary_share": {
+      "format_failure": 0.0,
+      "oracle_ceiling": 0.12345679012345678,
+      "context_quality": 0.0,
+      "s_direction": 0.024691358024691357,
+      "s_error": 0.012345679012345678,
+      "rho_error": 0.0,
+      "s_collapse": 0.13580246913580246,
+      "upsample_collapse": 0.0,
+      "area_mismatch": 0.6666666666666666,
+      "below_center_prior": 0.0,
+      "single_primitive": 0.0,
+      "unexplained": 0.037037037037037035
+    },
+    "not_tested_counts": {
+      "format_failure": 0,
+      "oracle_ceiling": 0,
+      "context_quality": 0,
+      "s_direction": 69,
+      "s_error": 69,
+      "rho_error": 69,
+      "s_collapse": 0,
+      "upsample_collapse": 0,
+      "area_mismatch": 0,
+      "below_center_prior": 0,
+      "single_primitive": 69,
+      "unexplained": 0
+    },
+    "bottleneck": "area_mismatch",
+    "bottleneck_primary_share": 0.6666666666666666,
+    "unexplained_share": 0.037037037037037035,
+    "note": "share is multi-label and sums above 1; primary_share sums to 1 and uses the upstream-first PRIORITY order. A mechanism listed in not_tested_counts was not measurable on that sample (no oracle, no field cache, or n/a for this readout) -- it is NOT evidence of absence."
+  },
+  "population_summary": {
+    "n_tail": 400,
+    "counts": {
+      "format_failure": 0,
+      "oracle_ceiling": 10,
+      "context_quality": 39,
+      "s_direction": 7,
+      "s_error": 4,
+      "rho_error": 1,
+      "s_collapse": 50,
+      "upsample_collapse": 0,
+      "area_mismatch": 143,
+      "below_center_prior": 120,
+      "single_primitive": 0,
+      "unexplained": 146
+    },
+    "share": {
+      "format_failure": 0.0,
+      "oracle_ceiling": 0.025,
+      "context_quality": 0.0975,
+      "s_direction": 0.0175,
+      "s_error": 0.01,
+      "rho_error": 0.0025,
+      "s_collapse": 0.125,
+      "upsample_collapse": 0.0,
+      "area_mismatch": 0.3575,
+      "below_center_prior": 0.3,
+      "single_primitive": 0.0,
+      "unexplained": 0.365
+    },
+    "primary_counts": {
+      "format_failure": 0,
+      "oracle_ceiling": 10,
+      "context_quality": 39,
+      "s_direction": 3,
+      "s_error": 1,
+      "rho_error": 0,
+      "s_collapse": 37,
+      "upsample_collapse": 0,
+      "area_mismatch": 111,
+      "below_center_prior": 53,
+      "single_primitive": 0,
+      "unexplained": 146
+    },
+    "primary_share": {
+      "format_failure": 0.0,
+      "oracle_ceiling": 0.025,
+      "context_quality": 0.0975,
+      "s_direction": 0.0075,
+      "s_error": 0.0025,
+      "rho_error": 0.0,
+      "s_collapse": 0.0925,
+      "upsample_collapse": 0.0,
+      "area_mismatch": 0.2775,
+      "below_center_prior": 0.1325,
+      "single_primitive": 0.0,
+      "unexplained": 0.365
+    },
+    "not_tested_counts": {
+      "format_failure": 0,
+      "oracle_ceiling": 0,
+      "context_quality": 0,
+      "s_direction": 384,
+      "s_error": 384,
+      "rho_error": 384,
+      "s_collapse": 0,
+      "upsample_collapse": 0,
+      "area_mismatch": 0,
+      "below_center_prior": 0,
+      "single_primitive": 384,
+      "unexplained": 0
+    },
+    "bottleneck": "area_mismatch",
+    "bottleneck_primary_share": 0.2775,
+    "unexplained_share": 0.365,
+    "note": "share is multi-label and sums above 1; primary_share sums to 1 and uses the upstream-first PRIORITY order. A mechanism listed in not_tested_counts was not measurable on that sample (no oracle, no field cache, or n/a for this readout) -- it is NOT evidence of absence."
+  },
+  "conclusions": [
+    "长尾里触发 `area_mismatch` 的 78 个样本中 **78 个是过覆盖**（pred_mean > gt_mean），预测/GT 面积比中位 **3.57**——场倾向于铺开成接近全局的掩膜，而不是缩到指令所指的区域。",
+    "`area` 维度上最差类别是 **small**（softIoU 中位 0.187），最好类别 large（0.639），跨类差 0.453。",
+    "`boundary` 维度上最差类别是 **complex**（softIoU 中位 0.333），最好类别 compact（0.587），跨类差 0.254。",
+    "`position` 维度上最差类别是 **edge**（softIoU 中位 0.291），最好类别 mid（0.608），跨类差 0.317。",
+    "`softness` 维度上最差类别是 **soft**（softIoU 中位 0.393），最好类别 hard（0.592），跨类差 0.198。",
+    "`region` 维度上最差类别是 **lower**（softIoU 中位 0.298），最好类别 center（0.587），跨类差 0.290。",
+    "`winner_confidence` 维度上最差类别是 **normal**（softIoU 中位 0.482），最好类别 low（0.549），跨类差 0.067。",
+    "`upscaled` 维度上最差类别是 **False**（softIoU 中位 0.492），最好类别 True（0.579），跨类差 0.087。",
+    "`build` 维度上最差类别是 **l5**（softIoU 中位 0.442），最好类别 l6（0.577），跨类差 0.135。",
+    "以下维度在本 split 上**只有一个类别**，表里不出现：`topology`——不是模型在这些维度上没差别，是数据里没有对比。",
+    "长尾的 primary 机制以 **area_mismatch** 为首（66.7%）；全体 local 样本上同一机制占 27.8% —— 这是**尾部特有**的机制（全体样本上稀有得多）。"
+  ],
+  "mask_scan_facts": {
+    "root": "/mnt/nfs-ro/bc/data/datasets/where_a-20260805/maskviews/V_where",
+    "status": "complete",
+    "sample_count": 400,
+    "index_rows": 1200,
+    "n_requested": 400,
+    "n_read": 400,
+    "n_missing": 0,
+    "verify_checksums": false,
+    "seconds": 22.21
+  }
+}
