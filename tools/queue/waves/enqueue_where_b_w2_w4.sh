@@ -74,7 +74,22 @@ WAVES=(
 )
 
 echo "Where-B W2-W4: 6 arms, checkpoint ${CKPT}"
+[ -n "${MICRO_BATCH:-}" ] && echo "micro batch: PINNED to ${MICRO_BATCH} for all six arms"
 echo
+
+# Enqueueing a wave means starting it fresh, so its coordination state must go.
+# A lock left by an arm that was killed before it published would otherwise make
+# the *next* run of that arm a follower waiting on a prober that never runs --
+# it would sit there for the whole --pair-timeout and then refuse with rc=80.
+# (Observed for real: tearing down a queued W05 left .wave_w3.prober.lock behind.)
+if [ "${DRY}" -eq 0 ]; then
+  for w in w2 w3 w4; do
+    if [ -e "${RUNS}/.wave_${w}.prober.lock" ] || [ -e "${RUNS}/.wave_${w}.micro_batch" ]; then
+      echo "clearing stale wave state for ${w}"
+      rm -rf "${RUNS}/.wave_${w}.prober.lock" "${RUNS}/.wave_${w}.micro_batch"
+    fi
+  done
+fi
 
 for row in "${WAVES[@]}"; do
   IFS='|' read -r arm gpu wave gate <<<"${row}"

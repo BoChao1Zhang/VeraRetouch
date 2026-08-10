@@ -54,11 +54,30 @@ socket 实际位于 `$XDG_RUNTIME_DIR`。
    **不复用该 verb**，因为它 `nohup setsid` 会把训练甩出 pueue 的进程组。
 5. gate 一律只用本地路径。NFS 前置由 `run_where_b.py` 自己断言（见 QUEUE_USAGE §4.1）。
 
-## 五、待主 agent 决策
+## 五、主 agent 裁定与执行（2026-08-10）
 
-1. **W2–W4 的 micro batch**：已按保守默认（每 wave 内自动协调）入队；
-   EXEC-3 的 W1 用的是显式 `--micro-batch 8`。若需跨 wave 可比，
-   请 `q rm` 掉六个再用 `MICRO_BATCH=8 ...enqueue_where_b_w2_w4.sh` 重入队。**未静默拍板。**
-2. **开机自起**：现状重启后需手动 `q daemon`。是否加 `@reboot` crontab 一行。
-3. **后续波次脚本**（Where 选型 / Stage-What T1–T4、C1–C2 / top-2 复跑）：
-   入队通道已通用化，但各自的 harness 入口未定，未预写 `waves/` 脚本。
+1. **W2–W4 钉 `MICRO_BATCH=8`** —— 已执行。六臂重新入队，逐条核对
+   `--micro-batch 8` 与 gate（W03→`arm_W01.json`、W04→`arm_W02.json`、六臂均含 checkpoint-4976）。
+2. **开机自起** —— 已装，但**机制与原指令不同，理由如下**：
+   `@reboot` crontab **装不上**。`/var/spool/cron/crontabs` 为 `drwx-wx--T root:crontab`
+   且 `crontabs/bc` 非 `bc` 所有；`crontab -` 依赖 rename 覆盖，粘滞位禁止覆盖非自有文件，
+   实测报 `crontab: crontabs/bc: rename: Operation not permitted`，而 `sudo` 要密码。
+   改用 **systemd 用户服务 + linger**（`loginctl enable-linger` 自助执行被 polkit 允许，实测 rc=0）。
+   unit 取自 pueue v4.0.4 官方 `systemd.pueued.service`，只改二进制路径与
+   `Restart=on-failure`。**覆盖面比 `@reboot` 更大**：重启 + 守护进程中途死亡都能自愈。
+   幂等由 `install_autostart.sh` 保证，且**装完自验** enabled/active/守护进程应答三项。
+   cron 路线保留在 `--cron-fallback`（需一条 root 命令）。
+3. **后续波次脚本** —— 按裁定暂不预写。
+
+## 六、第二轮又逼出的两个问题（均已修）
+
+1. **拆队列会瞬间放行后继臂**：`q rm` 掉队头后，W05/W06 在同一秒被提升为 Running
+   并真的 exec 了训练（gate 只有 checkpoint，天然满足）。5 秒内杀停，EXEC-3 的 W01 未受影响。
+   → 文档补「拆队列前先 `q pause` 两张卡」；本次重新入队即按此顺序执行。
+2. **被 kill 的臂会留下 wave 锁**：`.wave_w3.prober.lock` 被夭折的 W05 占着，
+   若不清理，下次 W05 会退化成等一个永不 probe 的伙伴，白等 2h 再 rc=80。
+   → 入队脚本现在会先清掉本次所提交 wave 的 `.wave_<w>.{prober.lock,micro_batch}`。
+
+另：`install_autostart.sh` 的第一版（cron 版）在 `crontab -` 已经失败的情况下照样打印
+"installed:" —— 正是本项目反复吃亏的**假成功**。现版本三项实证（`is-enabled`、`is-active`、
+守护进程实际应答）全过才报成功，任一不过即 dump `systemctl status` 并以非零退出。

@@ -65,9 +65,34 @@ tools/queue/q daemon        # 幂等：已在跑就什么都不做
 
 - 守护进程 socket 已固定到 `~/.local/share/pueue/`（改了 `shared.runtime_directory`）。
   默认的 `/run/user/1001` 是 tmpfs，且用户会话全部退出后可能被 systemd-logind 清掉
-  —— 无人值守跨多天正好会踩到。
-- **重启机器后需要手动跑一次 `q daemon`**（未启用 linger，也没装 systemd 用户服务）。
-  若要开机自起：`crontab -e` 加一行 `@reboot /home/bc/VeraRetouch/tools/queue/q daemon`。
+  —— 无人值守跨多天正好会踩到。开机自起也依赖这条（`@reboot` 时还没有登录会话）。
+
+### 开机自起（已装，无需再操作）
+
+```bash
+tools/queue/install_autostart.sh            # 幂等安装 + 自验
+tools/queue/install_autostart.sh --check    # 查看 linger / enabled / active
+tools/queue/install_autostart.sh --remove
+```
+
+装的是 **systemd 用户服务**（`~/.config/systemd/user/pueued.service`）+ `linger`，**不是 crontab**：
+
+> 本机 `/var/spool/cron/crontabs` 是 `drwx-wx--T root:crontab`，且 `crontabs/bc` 不归 `bc` 所有。
+> `crontab -` 靠"写临时文件再 rename 覆盖"生效，粘滞位禁止覆盖非自己所有的文件，于是报
+> `crontab: crontabs/bc: rename: Operation not permitted`，而本机 `sudo` 要密码 —— 无人值守装不上。
+> `loginctl enable-linger bc` 则被 polkit 允许自助执行（实测 rc=0、`Linger=yes`），
+> 用户级 unit 因此能在无人登录时随开机启动。
+>
+> 若日后仍想用 cron：`tools/queue/install_autostart.sh --cron-fallback` 会打印所需的那一条
+> root 命令（`sudo chown bc:crontab /var/spool/cron/crontabs/bc`）与对应 crontab 行。
+
+unit 取自 pueue v4.0.4 release 里的官方 `systemd.pueued.service`，只改两处：二进制路径指向
+`~/.local/bin/pueued`（我们按用户装），以及 `Restart=on-failure` 取代上游的 `Restart=no`
+—— 半夜挂掉的守护进程应该自己回来，而 `state.json` 是权威状态，重启无损。
+**因此它比原计划的 `@reboot` 更强：不只覆盖重启，还覆盖守护进程中途死亡。**
+
+安装脚本在有任务 `Running` 时**拒绝**接管（接管要先停旧守护进程，会杀掉在跑的训练），
+只安装并 enable，留到下次重启生效；要立刻接管用 `FORCE_TAKEOVER=1`。
 
 ---
 
@@ -114,10 +139,17 @@ tools/queue/q status --json | jq '[.tasks[]|select(.state=="Queued")]|length'
 ### 4.1 Where-B W2–W4（已入队）
 
 ```bash
-tools/queue/waves/enqueue_where_b_w2_w4.sh --dry-run   # 先看要提交什么
-tools/queue/waves/enqueue_where_b_w2_w4.sh             # 提交
-MICRO_BATCH=8 tools/queue/waves/enqueue_where_b_w2_w4.sh   # 显式钉死 micro batch
+tools/queue/waves/enqueue_where_b_w2_w4.sh --dry-run        # 先看要提交什么
+MICRO_BATCH=8 tools/queue/waves/enqueue_where_b_w2_w4.sh    # 当前在用：钉死 micro batch=8
+tools/queue/waves/enqueue_where_b_w2_w4.sh                  # 不钉，走 wave 内自动协调
 ```
+
+> **现状**：六臂已按主 agent 裁定以 `MICRO_BATCH=8` 入队（与 EXEC-3 的 W01/W02 相同），
+> 八臂配置完全同构可比，§4.2 的 wave 协调机制被整体绕过。
+
+入队脚本会先**清掉本次要提交的 wave 的协调残留**（`.wave_<w>.prober.lock` / `.micro_batch`）。
+这不是洁癖：被 kill 掉的臂会留下一把没人释放的锁，下次同一臂再跑就会退化成
+"等一个永远不会 probe 的伙伴"，白等满 `--pair-timeout` 再以 rc=80 拒跑。**已实际踩到过一次。**
 
 排布（依 protocol 的 Wave 表：奇数臂 GPU0、偶数臂 GPU1）：
 
@@ -267,13 +299,16 @@ tools/queue/q log <id> 200                # 看载荷日志
 
 ---
 
-## 9. 待主 agent 决策
+## 9. 主 agent 裁定（2026-08-10，已执行）
 
-1. **W2–W4 的 micro batch 用哪个数。** 现状是「每个 wave 内先起的臂 probe，另一臂钉同值」，
-   保守且自洽，但**跨 wave 可能不同**（MC8 / MC16 / SplitHead / DualCanvas 显存不同）。
-   若最终排名需要跨 wave 可比的 `total_optimizer_steps`，请统一用
-   `MICRO_BATCH=8 tools/queue/waves/enqueue_where_b_w2_w4.sh` 重新入队（先 `q rm` 掉现有六个）。
-   —— 已按保守默认（自动协调）入队，未静默拍板。
-2. **是否给队列加开机自起**（`@reboot` crontab 一行）。现状：重启后需手动 `q daemon`。
-3. **后续波次（Where 选型 / Stage-What T1–T4、C1–C2 / top-2 复跑）的启动命令**尚未写成
-   `waves/` 脚本——需要各自的 harness 入口确定后再补，格式照 `where_b_arm.sh`。
+1. **W2–W4 钉 `MICRO_BATCH=8`**（与 EXEC-3 的 W01/W02 相同），消除跨 wave 配置差异，
+   八臂完全同构可比。✅ 六臂已重新入队，gate 未变（见 §4.1 表）。
+2. **加开机自起。** ✅ 已装，但**改用 systemd 用户服务而非 crontab**——本机 cron 目录 root 属主 +
+   粘滞位，无 sudo 密码装不上（详见 §2）。所得机制比 `@reboot` 更强：还覆盖守护进程中途死亡。
+3. **后续波次脚本暂不预写**，等 W1 实测墙钟与 What preflight 就绪后按 `where_b_arm.sh` 模式补。
+
+### 拆队列时的一个坑（已实测踩到）
+
+`q rm` 掉队头会**立刻**把后面的臂放上卡（队列本来就该这样），所以拆队列前
+**先 `q pause gpu0 gpu1`**，否则 W05/W06 会在你删 W03/W04 的同一秒抢到卡并真的开跑。
+本次演练中它们确实起来了，5 秒内被杀停，EXEC-3 的 W01 未受影响。
