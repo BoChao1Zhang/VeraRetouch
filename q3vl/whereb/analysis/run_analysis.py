@@ -414,7 +414,10 @@ def _render_panels(viz_dir, *, tail, success_ids, by_id, labels, by_attr, split,
         cache = FieldCache(field_cache_dir)
 
     n = 0
-    jobs = [("failure", t["sample_id"], t["rank"]) for t in tail]
+    # only the samples the report says get a figure: the statistical tail is 89
+    # rows on W01 and drawing all of them would produce 73 panels whose
+    # prediction tiles are empty (the field cache covers the selected ones)
+    jobs = [("failure", t["sample_id"], t["rank"]) for t in tail if t.get("in_viz")]
     jobs += [("success", sid, i) for i, sid in enumerate(success_ids)]
     for kind, sid, rank in jobs:
         row = by_id.get(sid)

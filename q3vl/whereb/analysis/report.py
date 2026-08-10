@@ -296,7 +296,12 @@ def render_report(payload: Mapping[str, Any]) -> str:
       "`primary` 的顺序假定越上游的机制越该先修，这是一个工程判断，不是测量结果。")
     A("- **`s_direction` / `s_error` / `rho_error` / `single_primitive` 需要重跑 checkpoint**（`--checkpoint`）。"
       "没跑时它们不是 0，是 not_tested；把它们当 0 读会把瓶颈错误地推给 context。")
+    A("- **`V_where` 的 400 个 `.cgt` 掩膜没有一个带洞、96% 单连通**，所以协议 §13 要求联图覆盖的"
+      "「环形 / 多连通区域」在本 split 上基本取不到样本——这是数据的性质，不是本报告的遗漏。")
     A("- **local softIoU 是被直接优化的量**（`1 - softIoU` 是 L_mask 权重 1.00 的支配项），"
       "所以「哪一类最差」的排序里，它承担的是收敛度而不是独立证据；同一张表里的 grid 边界 F1 与中心先验 Δ 才是没被优化的列。"
       "详见同目录 eval 产物的 `ATTRIBUTION.md`。")
+    A("")
+    A("> 分类学阈值的标定依据、核实记录、以及**待主 agent 决策的 6 项**，见 "
+      "`experiments/Q3VL_metacanvas_where_what_20260804/where_b/WEVAL1_NOTES.md`。")
     return "\n".join(L) + "\n"

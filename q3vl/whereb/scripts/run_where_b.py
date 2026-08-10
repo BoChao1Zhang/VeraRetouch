@@ -46,6 +46,7 @@ import torch
 
 from q3vl.train.collator import Sft2SegCollator
 from q3vl.train.modeling import load_model, load_processor
+from q3vl.train.shardcache import preload as preload_shard_cache
 from q3vl.train.shards import rewrite_read_path, shard_cache_facts
 from q3vl.where.config import CBAND_NORMALIZATION
 from q3vl.whereb.config import (
@@ -217,6 +218,9 @@ def main() -> int:
     ap.add_argument("--dtype", default="bfloat16")
     ap.add_argument("--attn", default="flash_attention_2")
     ap.add_argument("--micro-batch", type=int, default=0, help="0 = probe")
+    ap.add_argument("--no-preload-cache", action="store_true",
+                    help="skip the ~2 min page-cache preload of the local shard "
+                         "cache at startup (PERF-1)")
     ap.add_argument("--prefetch-workers", type=int, default=-1,
                     help="PERF-1 sample prefetch threads; -1 = $Q3VL_PREFETCH_WORKERS "
                          "(default 6), 0 = the exactly-serial pre-PERF-1 loop. "
@@ -245,6 +249,19 @@ def main() -> int:
     mount_info["probed"].update(assert_read_mount(*streamed)["probed"])
     mount_info["streamed_shards_rewritten"] = [str(p) for p in streamed]
     print(json.dumps({"read_mount": mount_info}, indent=2), flush=True)
+
+    # PERF-1.  The cache is only worth what the page cache holds of it: the same
+    # member read costs 0.02 ms from RAM, 6.5 ms from this ext4 volume and 17 ms
+    # from nfs-ro.  Reading the 27.5 GiB once takes ~2 min against an arm that
+    # now runs in about four hours, and it is the difference between 16 ms and
+    # 103 ms of supply per micro-batch.  Doing it here rather than in the warm
+    # job is deliberate: an arm may reach the head of its queue many hours after
+    # the cache was populated, by which time nothing guarantees it is still
+    # resident.
+    cache_facts = shard_cache_facts()
+    if cache_facts["enabled"] and not args.no_preload_cache:
+        cache_facts["preload"] = preload_shard_cache()
+    print(json.dumps({"shard_cache": cache_facts}, indent=2), flush=True)
 
     processor, special_ids = load_processor(args.model_dir, 2048)
     collator = Sft2SegCollator(processor, max_length=2048, system_prompt=None)
@@ -312,7 +329,7 @@ def main() -> int:
                   # PERF-1: which read path the arm actually took, and how much
                   # of it was overlapped.  A cold `shard_cache.enabled=false`
                   # explains a slow arm without needing a second diagnosis.
-                  "shard_cache": shard_cache_facts(),
+                  "shard_cache": {**cache_facts, **shard_cache_facts()},
                   "prefetch_workers": n_prefetch,
                   "oracle_coverage": {
                       "train": train_oracle.coverage(
