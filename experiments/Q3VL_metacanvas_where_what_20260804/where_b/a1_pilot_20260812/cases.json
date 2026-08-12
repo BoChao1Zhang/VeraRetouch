@@ -1,0 +1,165 @@
+{
+  "success": [],
+  "failure": [
+    {
+      "sid": "sft_941e908f94b8da528428c98e0c1bb7c3",
+      "slot": "linear-0",
+      "region": "center",
+      "gt": [
+        "shape_linear",
+        "dir_center"
+      ],
+      "parsed": [
+        "shape_linear",
+        "dir_top",
+        "dir_bottom",
+        "dir_edge",
+        "dir_vertical",
+        "ext_whole"
+      ],
+      "text": "subject: the hikers, rocky trail, shrubs, grasses, and nearby mountain terrain; edit scope: a vertical linear gradient spanning the entire frame, strongest toward the bottom edge and fading toward the top, extending beyond the subject into the background"
+    },
+    {
+      "sid": "sft_a0743e5d9f46aa698e45c95bfb3fc051",
+      "slot": "radial-0",
+      "region": "center",
+      "gt": [
+        "shape_radial",
+        "dir_center"
+      ],
+      "parsed": [
+        "shape_oval",
+        "shape_radial",
+        "dir_center",
+        "dir_edge",
+        "ext_large"
+      ],
+      "text": "subject: the woman and man with the blue gown, nearby paving, fa\u00e7ades, storefronts, and planters; edit scope: a large oval falloff centered on the couple, strongest on them and fading outward past their outline into the surrounding scene, with the far corners unchanged"
+    },
+    {
+      "sid": "sft_f6f678c26f15603c5c49a336ebdfdfc7",
+      "slot": "radial-1",
+      "region": "center",
+      "gt": [
+        "shape_radial",
+        "dir_center"
+      ],
+      "parsed": [
+        "shape_oval",
+        "shape_radial",
+        "dir_center",
+        "dir_edge",
+        "ext_large"
+      ],
+      "text": "subject: the woman carrying a bucket, together with her clothing, boots, bucket, and nearby meadow vegetation; edit scope: a large oval falloff centered on the subject, strongest on her and fading outward past her outline into the surrounding scene, with the far corners unchanged"
+    },
+    {
+      "sid": "sft_d3758b5fcb6e2d68289eb3592145b7f7",
+      "slot": "band-1",
+      "region": "center",
+      "gt": [
+        "shape_band",
+        "dir_center"
+      ],
+      "parsed": [
+        "shape_band",
+        "dir_edge",
+        "dir_vertical"
+      ],
+      "text": "subject: the giraffe, acacia tree, surrounding foliage, and nearby grassland; edit scope: a vertical band through the subject, extending beyond the subject into the background and running off both edges of the frame"
+    },
+    {
+      "sid": "sft_5bbe873ddb1c18a7b01e20a3b137afb0",
+      "slot": "band-0",
+      "region": "center",
+      "gt": [
+        "shape_band",
+        "dir_center"
+      ],
+      "parsed": [
+        "shape_band",
+        "dir_edge",
+        "dir_vertical"
+      ],
+      "text": "subject: the man beside the thatched hut; edit scope: a vertical band through the subject, extending beyond him into the background and running off both edges of the frame"
+    },
+    {
+      "sid": "sft_33179913f916d3b5dc42fa6376c92d01",
+      "slot": "radial-1",
+      "region": "lower",
+      "gt": [
+        "shape_radial",
+        "dir_bottom"
+      ],
+      "parsed": [
+        "shape_band",
+        "dir_edge",
+        "dir_vertical"
+      ],
+      "text": "subject: the woman seated on the fallen tree; edit scope: a vertical band through the subject, extending beyond the subject into the background and running off both edges of the frame"
+    },
+    {
+      "sid": "sft_de128e8877af1a9b5c401073d5b5eec3",
+      "slot": "radial-0",
+      "region": "center",
+      "gt": [
+        "shape_radial",
+        "dir_center"
+      ],
+      "parsed": [
+        "shape_oval",
+        "shape_radial",
+        "dir_center",
+        "dir_edge",
+        "ext_large"
+      ],
+      "text": "subject: the woman, her skin and hair, the chair, table, and surrounding dark wood; edit scope: a large oval falloff centered on the subject, strongest on the subject and fading outward past her outline into the surrounding scene, with the far corners unchanged"
+    },
+    {
+      "sid": "sft_2577a3e9e277c9ef8e00173ad757ac06",
+      "slot": "band-1",
+      "region": "center",
+      "gt": [
+        "shape_band",
+        "dir_center"
+      ],
+      "parsed": [
+        "shape_band",
+        "dir_edge",
+        "dir_vertical"
+      ],
+      "text": "subject: the couple in the car; edit scope: a vertical band through the couple, extending beyond the subject into the background and running off both edges of the frame"
+    },
+    {
+      "sid": "sft_93f8769612353687defd26b493c837c4",
+      "slot": "radial-1",
+      "region": "center",
+      "gt": [
+        "shape_radial",
+        "dir_center"
+      ],
+      "parsed": [
+        "shape_oval",
+        "shape_radial",
+        "dir_center",
+        "dir_edge",
+        "ext_moderate"
+      ],
+      "text": "subject: the child lying on the bed; edit scope: a moderate oval falloff centered on the child, strongest on her and fading outward past her outline into the surrounding bedding and background, with the far corners unchanged"
+    },
+    {
+      "sid": "sft_9c2dcc67d1de5ce78c64009e88201734",
+      "slot": "band-1",
+      "region": "lower",
+      "gt": [
+        "shape_band",
+        "dir_bottom"
+      ],
+      "parsed": [
+        "shape_band",
+        "dir_horizontal"
+      ],
+      "text": "subject: the people approaching the building, the entrance, pavement, and nearby facade; edit scope: a horizontal band through the subject, extending across the background and running beyond both sides of the frame"
+    }
+  ]
+}

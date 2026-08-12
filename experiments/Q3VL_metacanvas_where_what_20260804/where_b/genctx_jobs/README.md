@@ -1,6 +1,7 @@
 # genctx 两卡生产作业 · 启动卡片
 
-**当前状态：已准备，未启动。** 等主 agent 裁定 checkpoint（2488 或 4976）后，一条命令触发。
+**当前状态：已完成。** 产出 `genwhere/{train,V_where,V_what}` 在用（train 覆盖 159,215/159,215，
+two_segment + forced_color，CX-1 兼容软链已建）。下方启动说明保留供追溯与复现。
 背景、墙钟推算、发现的问题与待决策项见 `NOTES.md`。
 
 ```
