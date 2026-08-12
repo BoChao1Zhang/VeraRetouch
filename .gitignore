@@ -8,6 +8,7 @@ __pycache__/
 docs/*.zip
 docs/papers_extracted/
 docs/plan/
+docs/_archive/2026-08-12/paper_digests/
 docs/paper_list.md
 
 # Local build outputs / scratch
@@ -88,13 +89,15 @@ experiments/_archive/**
 .pi-subagents/
 
 # 汇报素材 docs/presentation_*：文字稿与作图脚本入 git，位图/打包/中间缓存不入
-docs/presentation_*/**/*.png
-docs/presentation_*/**/*.jpg
-docs/presentation_*/**/*.jpeg
-docs/presentation_*/**/*.npz
-docs/presentation_*/**/*.zip
-docs/presentation_*/**/*.log
-docs/presentation_*/**/_cache_*.json
+# `docs/**/presentation_*` 形式同时覆盖原位（docs/presentation_*）与归档位
+# （docs/_archive/<日期>/presentation_*，ARCH-2 2026-08-12 起）。
+docs/**/presentation_*/**/*.png
+docs/**/presentation_*/**/*.jpg
+docs/**/presentation_*/**/*.jpeg
+docs/**/presentation_*/**/*.npz
+docs/**/presentation_*/**/*.zip
+docs/**/presentation_*/**/*.log
+docs/**/presentation_*/**/_cache_*.json
 
 # 实验目录：进程控制残留与二进制大块不入 git。
 # 注意日志与 job.marker **仍然入 git**——它们是「长任务提交纪律」的证据，且是文本小文件。
@@ -129,3 +132,4 @@ tools/readout/clip_naclip/bpe_simple_vocab_16e6.txt.gz
 experiments/_archive/**
 !experiments/_archive/**/
 !experiments/_archive/**/*.md
+/lut_reannotated_*.zip

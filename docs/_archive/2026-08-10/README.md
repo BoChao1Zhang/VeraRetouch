@@ -16,7 +16,7 @@
 | `docs/QUEUE_USAGE.md` | GPU 队列使用说明 |
 | `docs/reviews/REVIEW-impl-{S0,WhereA,WhereB,What}.md` | 当前战役四份实现审阅 |
 | `experiments/Q3VL_metacanvas_where_what_20260804/` | 当前战役实验目录 |
-| `docs/archive/`、`docs/assets/`、`docs/presentation_2026-08-05/` | 更早的历史归档 / 图片资产 / 两周汇报，本次未动 |
+| `docs/archive/`、`docs/assets/`、`docs/presentation_2026-08-05/` | 更早的历史归档 / 图片资产 / 两周汇报，本次（ARCH-1）未动。**2026-08-12（ARCH-2）后续移动**：`docs/archive/` → `docs/_archive/2026-08-12/july-docs/`，`docs/presentation_2026-08-05/` → `docs/_archive/2026-08-12/presentation_2026-08-05/`；`docs/assets/` 仍在原处。清单见 `docs/_archive/2026-08-12/README.md` |
 
 ## 1. 文档：原路径 → 新路径
 
