@@ -1,0 +1,13 @@
+{
+  "produced": "2026-08-12",
+  "git_commit": "9c9fdbd5d4814da3fb2a9090073a9b8d03c33339",
+  "python": "/home/bc/envs/q3vl_sft/bin/python",
+  "convention": "matched-area top-k IoU, normal-only (winner_confidence=='normal'), n=224, context=generated",
+  "paired_test": "sign_flip_permutation, n_perm=10000 (q3vl.whereb.metrics.paired_delta)",
+  "auc_keys_found": 0,
+  "new_baseline_M0": {
+    "run": "amort_P3prime_cont2_20260811",
+    "checkpoint": "/home/bc/data/runs/where_b/amort_P3prime_cont2_20260811/amort_step3500.pt",
+    "topk_iou_median_normal_only": 0.79095
+  }
+}

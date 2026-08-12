@@ -1,0 +1,13 @@
+{
+  "python": "3.12.12",
+  "executable": "/home/bc/envs/q3vl_sft/bin/python",
+  "torch": "2.10.0+cu128",
+  "transformers": "4.57.1",
+  "numpy": "1.26.4",
+  "scipy": "1.17.1",
+  "cuda": "12.8",
+  "gpu": "NVIDIA H100",
+  "LD_LIBRARY_PATH": "/home/bc/miniconda3/envs/llm_factory/lib (conda libstdc++ for sqlite3 CXXABI_1.3.15)",
+  "seed": 20260810,
+  "attn_implementation": "eager"
+}

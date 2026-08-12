@@ -1,0 +1,95 @@
+[19:44:21] loading processor + model (eager) ...
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 28.63it/s]
+  model facts: {'attn_implementation': 'eager', 'num_hidden_layers': 36, 'num_attention_heads': 32, 'num_key_value_heads': 8, 'hidden_size': 2560, 'image_token_id': 151655, 'deepstack_visual_indexes': [5, 11, 17], 'patch_size': 16, 'spatial_merge_size': 2}
+  V_where: 896 samples (None)
+  local subset: 400
+  [1/400] 1 forwards, 1s elapsed, ETA 6.2 min
+  [25/400] 25 forwards, 7s elapsed, ETA 1.6 min
+  [50/400] 50 forwards, 12s elapsed, ETA 1.4 min
+  [75/400] 75 forwards, 18s elapsed, ETA 1.3 min
+  [100/400] 100 forwards, 23s elapsed, ETA 1.2 min
+  [125/400] 125 forwards, 28s elapsed, ETA 1.0 min
+  [150/400] 150 forwards, 34s elapsed, ETA 0.9 min
+  [175/400] 175 forwards, 39s elapsed, ETA 0.8 min
+  [200/400] 200 forwards, 45s elapsed, ETA 0.7 min
+  [225/400] 225 forwards, 50s elapsed, ETA 0.6 min
+  [250/400] 250 forwards, 55s elapsed, ETA 0.6 min
+  [275/400] 275 forwards, 61s elapsed, ETA 0.5 min
+  [300/400] 300 forwards, 66s elapsed, ETA 0.4 min
+  [325/400] 325 forwards, 72s elapsed, ETA 0.3 min
+  [350/400] 350 forwards, 77s elapsed, ETA 0.2 min
+  [375/400] 375 forwards, 83s elapsed, ETA 0.1 min
+  [400/400] 400 forwards, 88s elapsed, ETA 0.0 min
+{
+  "experiment": "PR-ATT1-E1",
+  "checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+  "split": "V_where",
+  "arms": [
+    "fixed_phrase"
+  ],
+  "seed": 20260810,
+  "device": "cuda:0",
+  "dtype": "bfloat16",
+  "n_local_requested": 400,
+  "n_forwards": 400,
+  "n_skipped_no_gt": 0,
+  "model_facts": {
+    "attn_implementation": "eager",
+    "num_hidden_layers": 36,
+    "num_attention_heads": 32,
+    "num_key_value_heads": 8,
+    "hidden_size": 2560,
+    "image_token_id": 151655,
+    "deepstack_visual_indexes": [
+      5,
+      11,
+      17
+    ],
+    "patch_size": 16,
+    "spatial_merge_size": 2
+  },
+  "dataset_info": {
+    "split": "V_where",
+    "need_mask": false,
+    "mask_source": null,
+    "n_samples": 896
+  },
+  "shuffle_coverage": {
+    "group_keys": [
+      "source_image_id",
+      "render_mode"
+    ],
+    "n_samples": 896,
+    "n_groups": 264,
+    "n_with_partner": 856,
+    "coverage": 0.9553571428571429,
+    "group_size_hist": {
+      "1": 40,
+      "2": 72,
+      "3": 37,
+      "4": 46,
+      "5": 26,
+      "6": 25,
+      "7": 8,
+      "8": 9,
+      "9": 1
+    }
+  },
+  "fold_counts": {
+    "fit": 435,
+    "oof": 461
+  },
+  "fold_counts_local": {
+    "fit": 200,
+    "oof": 200
+  },
+  "git_commit": "5cac26d7c416a5dfb28e2cb913800a48af13024e",
+  "python": "3.12.12",
+  "torch": "2.10.0+cu128",
+  "transformers": "4.57.1",
+  "hostname": "h3c",
+  "cuda_device_name": "NVIDIA H100",
+  "peak_gpu_mem_gib": 8.910682678222656,
+  "wall_seconds": 93.70248985290527
+}
+[19:45:52] done in 1.6 min

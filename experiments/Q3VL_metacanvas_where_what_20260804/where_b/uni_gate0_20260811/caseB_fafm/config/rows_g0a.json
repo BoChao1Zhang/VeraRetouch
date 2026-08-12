@@ -1,0 +1,2818 @@
+[
+ {
+  "sample_id": "sft_0086d66059abe58c30138658612faa64",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.932475571021514e-16,
+  "uniform_rel_parts": 1.922347144537291e-16,
+  "gauss_rel_sum": 3.2296179612012297e-16,
+  "gauss_rel_parts": 2.248646554904849e-16
+ },
+ {
+  "sample_id": "sft_00c537d901589cd6ba234c702d1ad6d0",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.33475742127724e-16,
+  "uniform_rel_parts": 2.3231956420378945e-16,
+  "gauss_rel_sum": 4.916986150947385e-16,
+  "gauss_rel_parts": 3.248129549588084e-16
+ },
+ {
+  "sample_id": "sft_011a30528b05148332d5bf8461271971",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 4.653673610875416e-16,
+  "uniform_rel_parts": 4.628286872402353e-16,
+  "gauss_rel_sum": 1.0243595695585937e-15,
+  "gauss_rel_parts": 7.125306022469693e-16
+ },
+ {
+  "sample_id": "sft_011d0e06d0ee7c20c8d914dd1ab1761a",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.25931135327639e-16,
+  "uniform_rel_parts": 3.2354650953339606e-16,
+  "gauss_rel_sum": 5.69899039378383e-16,
+  "gauss_rel_parts": 4.0474639368855407e-16
+ },
+ {
+  "sample_id": "sft_016ca8106898bd7c8ee7d5b48bb3ebca",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1720953930182417e-16,
+  "uniform_rel_parts": 2.1602860554876977e-16,
+  "gauss_rel_sum": 3.715423295816781e-16,
+  "gauss_rel_parts": 2.60743784659138e-16
+ },
+ {
+  "sample_id": "sft_018c7864d84048ecd39ad940006db7c8",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.974471895441328e-16,
+  "uniform_rel_parts": 2.9587495320124327e-16,
+  "gauss_rel_sum": 6.347514324607592e-16,
+  "gauss_rel_parts": 4.460846670928948e-16
+ },
+ {
+  "sample_id": "sft_01fa045657c5bd36eb26cf2093c5873d",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.162463400615877e-16,
+  "uniform_rel_parts": 2.1524685650532987e-16,
+  "gauss_rel_sum": 4.802773075889654e-16,
+  "gauss_rel_parts": 3.1846834383978334e-16
+ },
+ {
+  "sample_id": "sft_0216188957612725d196cfb8d991e465",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.7123319981240039e-16,
+  "uniform_rel_parts": 1.7039476082258104e-16,
+  "gauss_rel_sum": 2.863031490592419e-16,
+  "gauss_rel_parts": 1.9717131079381137e-16
+ },
+ {
+  "sample_id": "sft_023e633cf092b32567f6a56b025849f5",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 2.935468611891933e-16,
+  "uniform_rel_parts": 2.919282121991214e-16,
+  "gauss_rel_sum": 5.881849923353999e-16,
+  "gauss_rel_parts": 4.1133137737080847e-16
+ },
+ {
+  "sample_id": "sft_028f5f60928123aea7c17f72495c8916",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.378377607105007e-16,
+  "uniform_rel_parts": 2.367405516396508e-16,
+  "gauss_rel_sum": 4.506495558219244e-16,
+  "gauss_rel_parts": 3.22536539094023e-16
+ },
+ {
+  "sample_id": "sft_029ad9758f4b838c2ec043aad6b77703",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.30299228864563e-16,
+  "uniform_rel_parts": 2.2883310455480053e-16,
+  "gauss_rel_sum": 4.910740411282895e-16,
+  "gauss_rel_parts": 3.4960970438882413e-16
+ },
+ {
+  "sample_id": "sft_02b656d202fb28d4aa63d7af539b87a8",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.008770884038565e-16,
+  "uniform_rel_parts": 1.9997112582565258e-16,
+  "gauss_rel_sum": 3.639259686391061e-16,
+  "gauss_rel_parts": 2.4304852754966855e-16
+ },
+ {
+  "sample_id": "sft_0341e3ba82c7aba8d55eeac016a822f5",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 1.9337612719627256e-16,
+  "uniform_rel_parts": 1.9233892197239324e-16,
+  "gauss_rel_sum": 3.6231603743550984e-16,
+  "gauss_rel_parts": 2.594637133757845e-16
+ },
+ {
+  "sample_id": "sft_037027474aa128771ec7a80efba3b676",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.0456238415618342e-16,
+  "uniform_rel_parts": 2.0344818087591567e-16,
+  "gauss_rel_sum": 3.662150920494495e-16,
+  "gauss_rel_parts": 2.494234713624139e-16
+ },
+ {
+  "sample_id": "sft_0396fdf40cb64d90f32ac3e310426b0f",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.5636957985074627e-16,
+  "uniform_rel_parts": 2.5493053009918746e-16,
+  "gauss_rel_sum": 5.520980546374871e-16,
+  "gauss_rel_parts": 3.82631407812536e-16
+ },
+ {
+  "sample_id": "sft_04597a8493ebe645c4980a537f05bee9",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.722900870385784e-16,
+  "uniform_rel_parts": 1.715454429391159e-16,
+  "gauss_rel_sum": 2.462685859437046e-16,
+  "gauss_rel_parts": 1.7614073691070067e-16
+ },
+ {
+  "sample_id": "sft_04b0423d9a11daa90fa259bcb1eecab8",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.217652016648054e-16,
+  "uniform_rel_parts": 2.2070215031419073e-16,
+  "gauss_rel_sum": 4.4590354133488465e-16,
+  "gauss_rel_parts": 3.049361955443812e-16
+ },
+ {
+  "sample_id": "sft_051c548c69728ee5f69c9d94e8c043a4",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.8264539091782274e-16,
+  "uniform_rel_parts": 1.8173365676806702e-16,
+  "gauss_rel_sum": 3.2448620014345723e-16,
+  "gauss_rel_parts": 2.333238527105435e-16
+ },
+ {
+  "sample_id": "sft_053bd4d7ddde984fc72f5a7094d52c75",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.5796398798486963e-16,
+  "uniform_rel_parts": 2.563573684637733e-16,
+  "gauss_rel_sum": 4.877232914911047e-16,
+  "gauss_rel_parts": 3.4761006003772124e-16
+ },
+ {
+  "sample_id": "sft_0543435d4ba986fbc2936ffcce80de2b",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.0750340548054818e-16,
+  "uniform_rel_parts": 2.0570269194319695e-16,
+  "gauss_rel_sum": 3.5259639644587087e-16,
+  "gauss_rel_parts": 2.6413549275820577e-16
+ },
+ {
+  "sample_id": "sft_056557b6823bffab6804c773f7b6c87d",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.6365840048456897e-16,
+  "uniform_rel_parts": 2.6165100188087735e-16,
+  "gauss_rel_sum": 4.886582249502405e-16,
+  "gauss_rel_parts": 3.541219011081697e-16
+ },
+ {
+  "sample_id": "sft_0575bd0fd5f7b910d1b71c36ddab195e",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.3537767942414994e-16,
+  "uniform_rel_parts": 2.3405116818792424e-16,
+  "gauss_rel_sum": 3.948321589530727e-16,
+  "gauss_rel_parts": 2.9279445925593373e-16
+ },
+ {
+  "sample_id": "sft_0586c8e8eb9c2b4548cf1aa4c11f978f",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 3.184494510039798e-16,
+  "uniform_rel_parts": 3.1649263855181084e-16,
+  "gauss_rel_sum": 5.686608889232839e-16,
+  "gauss_rel_parts": 4.231237798320362e-16
+ },
+ {
+  "sample_id": "sft_05bc7514f4664664cd4eb93eb6a1f15c",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.5924997670269945e-16,
+  "uniform_rel_parts": 1.5857121222375768e-16,
+  "gauss_rel_sum": 2.288943685814312e-16,
+  "gauss_rel_parts": 1.6854939474846426e-16
+ },
+ {
+  "sample_id": "sft_0610602f5f840713ae1773c379ecd2ac",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 1.7258138354624941e-16,
+  "uniform_rel_parts": 1.7168583735874728e-16,
+  "gauss_rel_sum": 3.3638809402534325e-16,
+  "gauss_rel_parts": 2.423957083079588e-16
+ },
+ {
+  "sample_id": "sft_0639e63de7d47bd615bc20959c14b0e5",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.289329017015705e-16,
+  "uniform_rel_parts": 2.2792875933439705e-16,
+  "gauss_rel_sum": 4.0211694258146643e-16,
+  "gauss_rel_parts": 2.966802359446677e-16
+ },
+ {
+  "sample_id": "sft_064380fe0032c19a1356ea931e5a4f54",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.283218458285928e-16,
+  "uniform_rel_parts": 2.2714895948422074e-16,
+  "gauss_rel_sum": 5.474993155727624e-16,
+  "gauss_rel_parts": 3.8528538480840214e-16
+ },
+ {
+  "sample_id": "sft_0693b4c2a0941a6373e0fad597f15c93",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.342835574293079e-16,
+  "uniform_rel_parts": 2.3300740884933207e-16,
+  "gauss_rel_sum": 4.981165091348899e-16,
+  "gauss_rel_parts": 3.509793836092398e-16
+ },
+ {
+  "sample_id": "sft_06f98b3a7bee34a18bf6257766370c6a",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.7642751402789e-16,
+  "uniform_rel_parts": 3.740578954263088e-16,
+  "gauss_rel_sum": 8.02750008204905e-16,
+  "gauss_rel_parts": 5.99712434868485e-16
+ },
+ {
+  "sample_id": "sft_071a34dcd2db65156d969783d064a43b",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.5594599764556666e-16,
+  "uniform_rel_parts": 3.532433987512852e-16,
+  "gauss_rel_sum": 6.770820741745148e-16,
+  "gauss_rel_parts": 5.022087274836427e-16
+ },
+ {
+  "sample_id": "sft_072028fc88e33e360c7ce7624f90bbfb",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.642456622941338e-16,
+  "uniform_rel_parts": 2.62578085664574e-16,
+  "gauss_rel_sum": 5.31332407566159e-16,
+  "gauss_rel_parts": 3.8058703954143154e-16
+ },
+ {
+  "sample_id": "sft_0762398f3b5724660cd3c21fde669645",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.5796713695538698e-16,
+  "uniform_rel_parts": 1.5716127588714976e-16,
+  "gauss_rel_sum": 2.5397807494069145e-16,
+  "gauss_rel_parts": 1.761467298724101e-16
+ },
+ {
+  "sample_id": "sft_0778406ccb24ec3643e69cd666c9fc57",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.9484446233751269e-16,
+  "uniform_rel_parts": 1.938011484349165e-16,
+  "gauss_rel_sum": 3.298258152256805e-16,
+  "gauss_rel_parts": 2.44812381008827e-16
+ },
+ {
+  "sample_id": "sft_07c1fd33aaa04e4927f79fc17d192755",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.93444574404705e-16,
+  "uniform_rel_parts": 2.9187871089426994e-16,
+  "gauss_rel_sum": 5.775266971632726e-16,
+  "gauss_rel_parts": 3.995267756736912e-16
+ },
+ {
+  "sample_id": "sft_0849f95a3e249eb57fc9bf8469a64606",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.8278033723344456e-16,
+  "uniform_rel_parts": 1.8197419532786266e-16,
+  "gauss_rel_sum": 3.217123673874154e-16,
+  "gauss_rel_parts": 2.3825216569713687e-16
+ },
+ {
+  "sample_id": "sft_0911878abe0c6371d7c1d316448ef7cc",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1813016989836506e-16,
+  "uniform_rel_parts": 2.1703083517709513e-16,
+  "gauss_rel_sum": 4.2584252301037715e-16,
+  "gauss_rel_parts": 2.9846845184846393e-16
+ },
+ {
+  "sample_id": "sft_0948eae5b03e8bd07f8be278725a4dae",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.224953818636757e-16,
+  "uniform_rel_parts": 3.211689310936337e-16,
+  "gauss_rel_sum": 7.905318215218369e-16,
+  "gauss_rel_parts": 5.109038426787329e-16
+ },
+ {
+  "sample_id": "sft_0960fe5b2e6d693a2a419aaeb10754de",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.6809991694533575e-16,
+  "uniform_rel_parts": 2.6640215418366426e-16,
+  "gauss_rel_sum": 5.876229596873207e-16,
+  "gauss_rel_parts": 4.1332842484444466e-16
+ },
+ {
+  "sample_id": "sft_0a2bd7329b1cca5f5a453d968315ef6b",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.977273819899796e-16,
+  "uniform_rel_parts": 2.9593142201331024e-16,
+  "gauss_rel_sum": 5.140939568766075e-16,
+  "gauss_rel_parts": 3.6895932657966956e-16
+ },
+ {
+  "sample_id": "sft_0a82dd5e4048df8406ae6022f413cb51",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.0422127969751253e-16,
+  "uniform_rel_parts": 2.0277171766658186e-16,
+  "gauss_rel_sum": 4.0097911111008755e-16,
+  "gauss_rel_parts": 2.9071053898738693e-16
+ },
+ {
+  "sample_id": "sft_0a89f052af131d462777c595b8f74560",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.5071815689932063e-16,
+  "uniform_rel_parts": 2.4911287638914056e-16,
+  "gauss_rel_sum": 5.291588202408247e-16,
+  "gauss_rel_parts": 3.8736678329354734e-16
+ },
+ {
+  "sample_id": "sft_0ab2cfa4963f45b1c2cec6f7331f03c3",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.0844469129216356e-16,
+  "uniform_rel_parts": 2.0730121895275048e-16,
+  "gauss_rel_sum": 3.598573476856431e-16,
+  "gauss_rel_parts": 2.5286894180976584e-16
+ },
+ {
+  "sample_id": "sft_0b3336a969b51f1a4459b682dcae0f17",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 2.1755095223697625e-16,
+  "uniform_rel_parts": 2.1629359559506702e-16,
+  "gauss_rel_sum": 4.1257062982191633e-16,
+  "gauss_rel_parts": 2.8996333650624403e-16
+ },
+ {
+  "sample_id": "sft_0bdc401d331163d3fbabe87143be8396",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 1.8825173174411798e-16,
+  "uniform_rel_parts": 1.872561493892495e-16,
+  "gauss_rel_sum": 3.0276191959903217e-16,
+  "gauss_rel_parts": 2.258917598317803e-16
+ },
+ {
+  "sample_id": "sft_0cfc621033ae2d5107299a81f8e2246a",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.624308966102263e-16,
+  "uniform_rel_parts": 2.6061450665397023e-16,
+  "gauss_rel_sum": 4.599394248969734e-16,
+  "gauss_rel_parts": 3.369462821115031e-16
+ },
+ {
+  "sample_id": "sft_0d01194a275832e18123b0e50fcedb24",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1422468528351264e-16,
+  "uniform_rel_parts": 2.129656128448163e-16,
+  "gauss_rel_sum": 4.0466788894995687e-16,
+  "gauss_rel_parts": 2.811827926486978e-16
+ },
+ {
+  "sample_id": "sft_0d187f072406d53d321b7fdf80aac397",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.051174166779472e-16,
+  "uniform_rel_parts": 3.031233703167646e-16,
+  "gauss_rel_sum": 5.788925104305038e-16,
+  "gauss_rel_parts": 4.099340475835378e-16
+ },
+ {
+  "sample_id": "sft_0d27004a89f4d81cfa865097191430cf",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 2.9559248389024737e-16,
+  "uniform_rel_parts": 2.938786500993798e-16,
+  "gauss_rel_sum": 5.587425967476419e-16,
+  "gauss_rel_parts": 4.0039123831040495e-16
+ },
+ {
+  "sample_id": "sft_0d8386ed981b79d1f267c03d179c4b3c",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 4.118516929503673e-16,
+  "uniform_rel_parts": 4.0897427974521147e-16,
+  "gauss_rel_sum": 7.692693145639146e-16,
+  "gauss_rel_parts": 5.326456882881965e-16
+ },
+ {
+  "sample_id": "sft_0d995e43817905f6aae55ae74c618067",
+  "grid": [
+   32,
+   40
+  ],
+  "uniform_rel_sum": 2.718453764506067e-16,
+  "uniform_rel_parts": 2.698732584217368e-16,
+  "gauss_rel_sum": 5.845350253847168e-16,
+  "gauss_rel_parts": 4.0692285860825263e-16
+ },
+ {
+  "sample_id": "sft_0e424837be4dac7f312fc94caa730654",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.794172853367592e-16,
+  "uniform_rel_parts": 2.7761249998510584e-16,
+  "gauss_rel_sum": 5.990439276915141e-16,
+  "gauss_rel_parts": 3.9797766496311507e-16
+ },
+ {
+  "sample_id": "sft_0e87e6fa562b66c8c6d0b929cb93dcca",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.3226111979665453e-16,
+  "uniform_rel_parts": 2.3107418773926177e-16,
+  "gauss_rel_sum": 5.431936943612519e-16,
+  "gauss_rel_parts": 3.561445144633418e-16
+ },
+ {
+  "sample_id": "sft_0e963e96e721e95cf5ce57fdd7461a1f",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 2.1425420568724745e-16,
+  "uniform_rel_parts": 2.1293368003492513e-16,
+  "gauss_rel_sum": 3.438759119809076e-16,
+  "gauss_rel_parts": 2.429635221940385e-16
+ },
+ {
+  "sample_id": "sft_0eec0f9b30e16c7fd5d183ad3d523814",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.6218345489071464e-16,
+  "uniform_rel_parts": 1.6126938700456386e-16,
+  "gauss_rel_sum": 2.3258522989079125e-16,
+  "gauss_rel_parts": 1.7361502882511216e-16
+ },
+ {
+  "sample_id": "sft_0fbb679bb7f0af5710fb07afdb24a9db",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.6519705541001188e-16,
+  "uniform_rel_parts": 1.642705684227816e-16,
+  "gauss_rel_sum": 3.100154991841732e-16,
+  "gauss_rel_parts": 2.2571323635247543e-16
+ },
+ {
+  "sample_id": "sft_0fbbe52a2b331be7e36ae17c414e0d7b",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.020657485462103e-16,
+  "uniform_rel_parts": 2.0115801067158974e-16,
+  "gauss_rel_sum": 3.8342214110847656e-16,
+  "gauss_rel_parts": 2.8126407851319644e-16
+ },
+ {
+  "sample_id": "sft_102739a36b1a363dc314af15f1c3cf7d",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.9044246611112599e-16,
+  "uniform_rel_parts": 1.894310321442527e-16,
+  "gauss_rel_sum": 3.556640347046755e-16,
+  "gauss_rel_parts": 2.334078409701519e-16
+ },
+ {
+  "sample_id": "sft_1081370ba13ec52915b0c42b2a60203d",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.093061793538396e-16,
+  "uniform_rel_parts": 2.0824728702401373e-16,
+  "gauss_rel_sum": 4.3615640608208097e-16,
+  "gauss_rel_parts": 2.8979498539970824e-16
+ },
+ {
+  "sample_id": "sft_108b99efe2e2dd04e9b315d65115eddb",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.2347052653375905e-16,
+  "uniform_rel_parts": 2.2236211949727457e-16,
+  "gauss_rel_sum": 4.734716858754269e-16,
+  "gauss_rel_parts": 3.296289484076589e-16
+ },
+ {
+  "sample_id": "sft_10c3a6073aae604c9e45a98baccf99cc",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.588364153601569e-16,
+  "uniform_rel_parts": 2.570921601157545e-16,
+  "gauss_rel_sum": 4.695737500030502e-16,
+  "gauss_rel_parts": 3.3282172187726456e-16
+ },
+ {
+  "sample_id": "sft_110c0930887efca47c906838243df868",
+  "grid": [
+   46,
+   32
+  ],
+  "uniform_rel_sum": 2.5494860533608747e-16,
+  "uniform_rel_parts": 2.533342248372029e-16,
+  "gauss_rel_sum": 4.2411790949234336e-16,
+  "gauss_rel_parts": 3.1507652581704633e-16
+ },
+ {
+  "sample_id": "sft_112104c17e2262ae885c447d2a998354",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.1659140626981224e-16,
+  "uniform_rel_parts": 2.1558467936461572e-16,
+  "gauss_rel_sum": 4.541636152687064e-16,
+  "gauss_rel_parts": 3.029407275914607e-16
+ },
+ {
+  "sample_id": "sft_12aa6749ef04e5c064c0aabbf263614b",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.4490265296702435e-16,
+  "uniform_rel_parts": 2.4304658230803834e-16,
+  "gauss_rel_sum": 4.2629403662587667e-16,
+  "gauss_rel_parts": 3.159060613526549e-16
+ },
+ {
+  "sample_id": "sft_12e96ded000cd6a37b33e5b458a9ed0e",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 3.1307355307232744e-16,
+  "uniform_rel_parts": 3.114045032265136e-16,
+  "gauss_rel_sum": 6.274582821987677e-16,
+  "gauss_rel_parts": 4.340934490774842e-16
+ },
+ {
+  "sample_id": "sft_131100f4828176b501e0f16fed0446d5",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.230108032406961e-16,
+  "uniform_rel_parts": 3.210209031150737e-16,
+  "gauss_rel_sum": 5.491891651842084e-16,
+  "gauss_rel_parts": 4.0675709037955077e-16
+ },
+ {
+  "sample_id": "sft_13250dda1a244124cabf782156cce67e",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.485299907419284e-16,
+  "uniform_rel_parts": 2.47019228560436e-16,
+  "gauss_rel_sum": 4.579016278238356e-16,
+  "gauss_rel_parts": 3.3998959132294824e-16
+ },
+ {
+  "sample_id": "sft_134cad329e244d7ca46b754fd8a5fb89",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.343548583112494e-16,
+  "uniform_rel_parts": 3.318290303471941e-16,
+  "gauss_rel_sum": 7.693362557359744e-16,
+  "gauss_rel_parts": 5.282094621685066e-16
+ },
+ {
+  "sample_id": "sft_1351c9a22780846dd03a9aa10cbc13d7",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.8099536307246532e-16,
+  "uniform_rel_parts": 1.8009957954413208e-16,
+  "gauss_rel_sum": 3.3872284844288066e-16,
+  "gauss_rel_parts": 2.3317004392604357e-16
+ },
+ {
+  "sample_id": "sft_13ad4a21238838a066c2c4e1bf8feab0",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1849141864602356e-16,
+  "uniform_rel_parts": 2.1726210081988056e-16,
+  "gauss_rel_sum": 4.1359807463280764e-16,
+  "gauss_rel_parts": 2.9075707018750144e-16
+ },
+ {
+  "sample_id": "sft_13bc325b382d8d48e988ada422b99519",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.2821979193518e-16,
+  "uniform_rel_parts": 2.272458539759758e-16,
+  "gauss_rel_sum": 5.364163051892012e-16,
+  "gauss_rel_parts": 3.656268264732974e-16
+ },
+ {
+  "sample_id": "sft_14127724d3e40a9e83f49a31b3ba2d80",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 1.8490017975293697e-16,
+  "uniform_rel_parts": 1.8399980066883902e-16,
+  "gauss_rel_sum": 3.4530826615828003e-16,
+  "gauss_rel_parts": 2.4776803964294774e-16
+ },
+ {
+  "sample_id": "sft_1427dcff0b1033b2a119cef6b840f72c",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.32117425927011e-16,
+  "uniform_rel_parts": 2.3071679026282367e-16,
+  "gauss_rel_sum": 5.609852280548324e-16,
+  "gauss_rel_parts": 3.7997377992963385e-16
+ },
+ {
+  "sample_id": "sft_145e51dc8ff20d917c8430fbf4ab42e3",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.9909372899260077e-16,
+  "uniform_rel_parts": 2.972962746089134e-16,
+  "gauss_rel_sum": 6.598948838338047e-16,
+  "gauss_rel_parts": 4.497425977571749e-16
+ },
+ {
+  "sample_id": "sft_14a6fe7dfd10da755624729b5ef211d6",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.0372013947105985e-16,
+  "uniform_rel_parts": 2.026867380474269e-16,
+  "gauss_rel_sum": 3.9342196574683925e-16,
+  "gauss_rel_parts": 2.7182843417205864e-16
+ },
+ {
+  "sample_id": "sft_14bda974ca45eed0b4455062d6167a4d",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 3.3317580462606523e-16,
+  "uniform_rel_parts": 3.3137440616384006e-16,
+  "gauss_rel_sum": 6.605453396631098e-16,
+  "gauss_rel_parts": 4.736453543882982e-16
+ },
+ {
+  "sample_id": "sft_152a688747afd44c9d770abd9b7f47d9",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.6850324053415368e-16,
+  "uniform_rel_parts": 1.6761710528620826e-16,
+  "gauss_rel_sum": 3.3540044653521202e-16,
+  "gauss_rel_parts": 2.358316137563891e-16
+ },
+ {
+  "sample_id": "sft_15fa501b126551a4739e0df4bdfc16ff",
+  "grid": [
+   32,
+   74
+  ],
+  "uniform_rel_sum": 1.7821381402706942e-16,
+  "uniform_rel_parts": 1.7748660692485117e-16,
+  "gauss_rel_sum": 3.591949017045454e-16,
+  "gauss_rel_parts": 2.582073874608121e-16
+ },
+ {
+  "sample_id": "sft_16154a295423c6acbf8620de7ada79dc",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.8798470389997645e-16,
+  "uniform_rel_parts": 1.8694506358113243e-16,
+  "gauss_rel_sum": 3.879537149685379e-16,
+  "gauss_rel_parts": 2.6019254808216947e-16
+ },
+ {
+  "sample_id": "sft_163379452bd2b1ad1fceedfd8e8a0194",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.5679056641327878e-16,
+  "uniform_rel_parts": 1.5582082420230083e-16,
+  "gauss_rel_sum": 2.2244792815882357e-16,
+  "gauss_rel_parts": 1.482271749368187e-16
+ },
+ {
+  "sample_id": "sft_16d347c5cae2d1cb5bfde0c328069206",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.0907978260242124e-16,
+  "uniform_rel_parts": 3.0746735312082473e-16,
+  "gauss_rel_sum": 7.024974860599146e-16,
+  "gauss_rel_parts": 5.118075992185008e-16
+ },
+ {
+  "sample_id": "sft_1767118a2e061be1ef13ff0d7948b4e3",
+  "grid": [
+   32,
+   52
+  ],
+  "uniform_rel_sum": 2.861393401321197e-16,
+  "uniform_rel_parts": 2.84428653065972e-16,
+  "gauss_rel_sum": 5.636352506470065e-16,
+  "gauss_rel_parts": 4.0733653613204194e-16
+ },
+ {
+  "sample_id": "sft_17e7b3cc36cbb735801e052aba5478b5",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.7827156088803968e-16,
+  "uniform_rel_parts": 1.7720387320445273e-16,
+  "gauss_rel_sum": 2.8823428832621674e-16,
+  "gauss_rel_parts": 2.088632995096703e-16
+ },
+ {
+  "sample_id": "sft_1837c42bcf4c53752c700229b743b94e",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.766652745583191e-16,
+  "uniform_rel_parts": 1.7555191523261273e-16,
+  "gauss_rel_sum": 2.345987082172621e-16,
+  "gauss_rel_parts": 1.6341013232306745e-16
+ },
+ {
+  "sample_id": "sft_18a5c9e2b0a035095537c002ff7a6924",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.9602488481818056e-16,
+  "uniform_rel_parts": 1.949425537054184e-16,
+  "gauss_rel_sum": 3.311935072636266e-16,
+  "gauss_rel_parts": 2.3132320032243397e-16
+ },
+ {
+  "sample_id": "sft_19102c789ae43f481b2af9d4ab25c128",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.7416879904334845e-16,
+  "uniform_rel_parts": 1.7320809725555082e-16,
+  "gauss_rel_sum": 3.4197877080590076e-16,
+  "gauss_rel_parts": 2.253497995040141e-16
+ },
+ {
+  "sample_id": "sft_19a0dea94563ba616da4ed0d0c99008b",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 1.8113914798844372e-16,
+  "uniform_rel_parts": 1.8004659456513634e-16,
+  "gauss_rel_sum": 4.3295658585354633e-16,
+  "gauss_rel_parts": 3.1668153901210507e-16
+ },
+ {
+  "sample_id": "sft_19bc7dba0266f455ba498e317699989d",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.7766363846229466e-16,
+  "uniform_rel_parts": 1.7671727586439876e-16,
+  "gauss_rel_sum": 3.771102521264721e-16,
+  "gauss_rel_parts": 2.6998546363730166e-16
+ },
+ {
+  "sample_id": "sft_19f8ec6cbb6fdbf5185a28c791d2c08b",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.226548153439052e-16,
+  "uniform_rel_parts": 2.2144529420744016e-16,
+  "gauss_rel_sum": 3.905924419669975e-16,
+  "gauss_rel_parts": 2.8636232989248877e-16
+ },
+ {
+  "sample_id": "sft_1a0d7788b89f2a4988bad04ea6e89cbe",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 3.718063258383534e-16,
+  "uniform_rel_parts": 3.6940119907199086e-16,
+  "gauss_rel_sum": 7.039892920032483e-16,
+  "gauss_rel_parts": 4.864720866559218e-16
+ },
+ {
+  "sample_id": "sft_1a4a62baa091d383877999e8cbc3598e",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.9821129585434367e-16,
+  "uniform_rel_parts": 1.969578947602189e-16,
+  "gauss_rel_sum": 4.465322210741865e-16,
+  "gauss_rel_parts": 3.107049868134406e-16
+ },
+ {
+  "sample_id": "sft_1ad45a059ced8247c41ad60850d6c87c",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.854906811819061e-16,
+  "uniform_rel_parts": 2.8399814395359284e-16,
+  "gauss_rel_sum": 5.231250506897651e-16,
+  "gauss_rel_parts": 3.8201745945270157e-16
+ },
+ {
+  "sample_id": "sft_1adf8522e87b9d0bfc3b26ae1b92213b",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.4317388427066684e-16,
+  "uniform_rel_parts": 3.4089695014810196e-16,
+  "gauss_rel_sum": 6.420906644470573e-16,
+  "gauss_rel_parts": 4.499475243293563e-16
+ },
+ {
+  "sample_id": "sft_1b1189bd506ecc517fd3ee076e93de32",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.4391490170976496e-16,
+  "uniform_rel_parts": 2.4218982760873045e-16,
+  "gauss_rel_sum": 5.188752582488288e-16,
+  "gauss_rel_parts": 3.533239478475045e-16
+ },
+ {
+  "sample_id": "sft_1b1f1c9ab5dc669d15be47161a9b407a",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.7847768966215367e-16,
+  "uniform_rel_parts": 2.7695362293837896e-16,
+  "gauss_rel_sum": 4.744259017215932e-16,
+  "gauss_rel_parts": 3.5041343265939036e-16
+ },
+ {
+  "sample_id": "sft_1b37def70cd2d97d1ccef9e179d34393",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.630930529714797e-16,
+  "uniform_rel_parts": 2.6112007320846186e-16,
+  "gauss_rel_sum": 4.849140250542232e-16,
+  "gauss_rel_parts": 3.4129148599876777e-16
+ },
+ {
+  "sample_id": "sft_1b5e5efec8e1dc8f2cfd5c4ad6a72360",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.262859133462668e-16,
+  "uniform_rel_parts": 2.2483033430953025e-16,
+  "gauss_rel_sum": 4.278303363426766e-16,
+  "gauss_rel_parts": 3.0154906870177813e-16
+ },
+ {
+  "sample_id": "sft_1b616d003b4af17d5bcaae058e4bd91a",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 1.612939899724394e-16,
+  "uniform_rel_parts": 1.6042596056177084e-16,
+  "gauss_rel_sum": 2.7433560773075092e-16,
+  "gauss_rel_parts": 1.979616257879503e-16
+ },
+ {
+  "sample_id": "sft_1bd6305ea75fa3d961bf931ee3e5aede",
+  "grid": [
+   32,
+   52
+  ],
+  "uniform_rel_sum": 2.2788940325541927e-16,
+  "uniform_rel_parts": 2.2645008163665825e-16,
+  "gauss_rel_sum": 4.719823174135411e-16,
+  "gauss_rel_parts": 3.3027575934431315e-16
+ },
+ {
+  "sample_id": "sft_1c0e053579d9fd904493c11abce49dc8",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.9024434523630032e-16,
+  "uniform_rel_parts": 1.8933978298509732e-16,
+  "gauss_rel_sum": 3.3636377560128193e-16,
+  "gauss_rel_parts": 2.5751532662197685e-16
+ },
+ {
+  "sample_id": "sft_1c35a0a72119965aa7cdee40424479b4",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 2.42781594251048e-16,
+  "uniform_rel_parts": 2.414076277171675e-16,
+  "gauss_rel_sum": 4.069017242084274e-16,
+  "gauss_rel_parts": 2.9826186554240404e-16
+ },
+ {
+  "sample_id": "sft_1c4d61bf3db4a8a8205e8f9bb92e5c6a",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.7919953011090583e-16,
+  "uniform_rel_parts": 1.782900477467925e-16,
+  "gauss_rel_sum": 2.689693825627625e-16,
+  "gauss_rel_parts": 1.9684824384680007e-16
+ },
+ {
+  "sample_id": "sft_1cb20b1ae1bf07cf5179e64edc11f12a",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.8299779484003074e-16,
+  "uniform_rel_parts": 1.8186987826253803e-16,
+  "gauss_rel_sum": 3.4596616461466455e-16,
+  "gauss_rel_parts": 2.3300576433079e-16
+ },
+ {
+  "sample_id": "sft_1cd101204bdfc6f852150727ac26bf62",
+  "grid": [
+   52,
+   32
+  ],
+  "uniform_rel_sum": 2.253184162953178e-16,
+  "uniform_rel_parts": 2.2414607393294416e-16,
+  "gauss_rel_sum": 4.451624302431922e-16,
+  "gauss_rel_parts": 3.2039096255991043e-16
+ },
+ {
+  "sample_id": "sft_1d11161c9ce2dabac1e9a9c38e21166b",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.7350313740197258e-16,
+  "uniform_rel_parts": 1.7271330110712563e-16,
+  "gauss_rel_sum": 2.865808853114068e-16,
+  "gauss_rel_parts": 2.0642062314193386e-16
+ },
+ {
+  "sample_id": "sft_1d1e160f68b1735bc930958899e5e96d",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.2602285468464536e-16,
+  "uniform_rel_parts": 2.248891148791193e-16,
+  "gauss_rel_sum": 4.4150765789527357e-16,
+  "gauss_rel_parts": 3.2529689700276756e-16
+ },
+ {
+  "sample_id": "sft_1de5bb32f73d7f618c79d119e305ac8b",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.732601532751052e-16,
+  "uniform_rel_parts": 1.7233931261146494e-16,
+  "gauss_rel_sum": 3.1635938039458116e-16,
+  "gauss_rel_parts": 2.273460124333162e-16
+ },
+ {
+  "sample_id": "sft_1df4129dd9a1c6292092fbcc0fa1e00e",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 3.001785731071106e-16,
+  "uniform_rel_parts": 2.982136385890934e-16,
+  "gauss_rel_sum": 6.461232298550478e-16,
+  "gauss_rel_parts": 4.382630443645527e-16
+ },
+ {
+  "sample_id": "sft_1e2ffb45b6b7993119def7b1c433abaf",
+  "grid": [
+   32,
+   64
+  ],
+  "uniform_rel_sum": 1.8556935688550077e-16,
+  "uniform_rel_parts": 1.8477904689440565e-16,
+  "gauss_rel_sum": 3.9562773383095384e-16,
+  "gauss_rel_parts": 2.8583160254067333e-16
+ },
+ {
+  "sample_id": "sft_1ec5a28b25f692aad242faedad96b86e",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 3.1417559638360924e-16,
+  "uniform_rel_parts": 3.1200865940641467e-16,
+  "gauss_rel_sum": 6.998625455645057e-16,
+  "gauss_rel_parts": 4.965494174262375e-16
+ },
+ {
+  "sample_id": "sft_1ecbf1aa24cb476ff19308046a76d8a7",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.789357204654011e-16,
+  "uniform_rel_parts": 2.7740260607939064e-16,
+  "gauss_rel_sum": 6.157698208502419e-16,
+  "gauss_rel_parts": 4.2282811376781273e-16
+ },
+ {
+  "sample_id": "sft_1f0a5f2488af034a7e216572662741be",
+  "grid": [
+   44,
+   32
+  ],
+  "uniform_rel_sum": 2.3346540512961223e-16,
+  "uniform_rel_parts": 2.317806248873684e-16,
+  "gauss_rel_sum": 4.777685048965701e-16,
+  "gauss_rel_parts": 3.368562450609098e-16
+ },
+ {
+  "sample_id": "sft_1f27ae93fd6317f345a0ebbee9e99e85",
+  "grid": [
+   32,
+   44
+  ],
+  "uniform_rel_sum": 1.748603940696876e-16,
+  "uniform_rel_parts": 1.740666588058612e-16,
+  "gauss_rel_sum": 3.3505329285875455e-16,
+  "gauss_rel_parts": 2.314206992471003e-16
+ },
+ {
+  "sample_id": "sft_1f7c894318a708567f74f5e8fff39a78",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.622230583118421e-16,
+  "uniform_rel_parts": 3.5975855698155304e-16,
+  "gauss_rel_sum": 6.543525944430724e-16,
+  "gauss_rel_parts": 4.747467951544506e-16
+ },
+ {
+  "sample_id": "sft_1f82ddb870b7a5ce40d32ed502a32dd1",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.7913365428942617e-16,
+  "uniform_rel_parts": 1.7827101998142087e-16,
+  "gauss_rel_sum": 3.1346293231823327e-16,
+  "gauss_rel_parts": 2.295852287344482e-16
+ },
+ {
+  "sample_id": "sft_1fc6f0b89bf7fc11cf935c420b985d28",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.695604054769276e-16,
+  "uniform_rel_parts": 1.6871796619001561e-16,
+  "gauss_rel_sum": 2.76492997589165e-16,
+  "gauss_rel_parts": 1.8937583739265459e-16
+ },
+ {
+  "sample_id": "sft_2004eb4dc58a28bd0e59e7b337c0929c",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.3750153050992224e-16,
+  "uniform_rel_parts": 2.3645654094179385e-16,
+  "gauss_rel_sum": 3.960065506261224e-16,
+  "gauss_rel_parts": 2.994849032956243e-16
+ },
+ {
+  "sample_id": "sft_2051847c0ae2a936e8b6d1e1a4abe74b",
+  "grid": [
+   32,
+   50
+  ],
+  "uniform_rel_sum": 1.716357906780974e-16,
+  "uniform_rel_parts": 1.7073653438540211e-16,
+  "gauss_rel_sum": 2.8283978166726494e-16,
+  "gauss_rel_parts": 2.061022510371155e-16
+ },
+ {
+  "sample_id": "sft_2093176882383796816a45e66eb2e9f4",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.529319032602253e-16,
+  "uniform_rel_parts": 2.5147413851778663e-16,
+  "gauss_rel_sum": 5.152037129091579e-16,
+  "gauss_rel_parts": 3.534810061584719e-16
+ },
+ {
+  "sample_id": "sft_2094d82bbfeda82ca159d480fa35d13f",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.012549693877656e-16,
+  "uniform_rel_parts": 1.9993302510470154e-16,
+  "gauss_rel_sum": 4.470365820021164e-16,
+  "gauss_rel_parts": 3.0419004665848012e-16
+ },
+ {
+  "sample_id": "sft_20d3c885c02dbec9f4e94bdc5dfaec2c",
+  "grid": [
+   50,
+   32
+  ],
+  "uniform_rel_sum": 1.9501914025175672e-16,
+  "uniform_rel_parts": 1.9387203013820095e-16,
+  "gauss_rel_sum": 3.61632363904655e-16,
+  "gauss_rel_parts": 2.574160363795293e-16
+ },
+ {
+  "sample_id": "sft_210eb20f59c1fe83ddf43f67d315132c",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.3340850355466577e-16,
+  "uniform_rel_parts": 2.3203075416805275e-16,
+  "gauss_rel_sum": 5.018888694132147e-16,
+  "gauss_rel_parts": 3.3812719354348873e-16
+ },
+ {
+  "sample_id": "sft_214600d94e020d82cdaa9c656aad065b",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.476387614106284e-16,
+  "uniform_rel_parts": 2.4593838282406924e-16,
+  "gauss_rel_sum": 5.386048742102089e-16,
+  "gauss_rel_parts": 3.4855664721460743e-16
+ },
+ {
+  "sample_id": "sft_215b41d73e60726f9822ac3107367b8b",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.7941906230973292e-16,
+  "uniform_rel_parts": 1.782912567052346e-16,
+  "gauss_rel_sum": 3.2860057108984896e-16,
+  "gauss_rel_parts": 2.233657097720512e-16
+ },
+ {
+  "sample_id": "sft_216f52a889f52e1745228749c7970926",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.2129708190139664e-16,
+  "uniform_rel_parts": 2.200725830139727e-16,
+  "gauss_rel_sum": 4.231837606015693e-16,
+  "gauss_rel_parts": 2.8490903004937777e-16
+ },
+ {
+  "sample_id": "sft_21707716c11cf5b47498f23a4f6cbf24",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.066124482435788e-16,
+  "uniform_rel_parts": 2.0555006305083075e-16,
+  "gauss_rel_sum": 3.799968089389561e-16,
+  "gauss_rel_parts": 2.7701774298085724e-16
+ },
+ {
+  "sample_id": "sft_218772fef09e521e8cdb3564d9b46209",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.7929480105617764e-16,
+  "uniform_rel_parts": 2.777475808803132e-16,
+  "gauss_rel_sum": 6.904943506567759e-16,
+  "gauss_rel_parts": 4.586495071995253e-16
+ },
+ {
+  "sample_id": "sft_21bfafec2d97c45cc12cfe4354ab4804",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 1.975381421778914e-16,
+  "uniform_rel_parts": 1.965265841439836e-16,
+  "gauss_rel_sum": 3.6298741505533877e-16,
+  "gauss_rel_parts": 2.7015273209436507e-16
+ },
+ {
+  "sample_id": "sft_2223f2be34b96beffb0ef8627e600c01",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 2.4923683834423343e-16,
+  "uniform_rel_parts": 2.4788750157697705e-16,
+  "gauss_rel_sum": 4.982451589629914e-16,
+  "gauss_rel_parts": 3.772898709676547e-16
+ },
+ {
+  "sample_id": "sft_22bcaf28fc9a39862dd38848b739d656",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.303276990810484e-16,
+  "uniform_rel_parts": 2.2891852339538346e-16,
+  "gauss_rel_sum": 5.302106119857309e-16,
+  "gauss_rel_parts": 3.532743654528071e-16
+ },
+ {
+  "sample_id": "sft_22e0496d28e23f7d4a168418bc59c5ba",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.3082231553902466e-16,
+  "uniform_rel_parts": 2.2949475463256993e-16,
+  "gauss_rel_sum": 4.763865839356206e-16,
+  "gauss_rel_parts": 3.3403578595313593e-16
+ },
+ {
+  "sample_id": "sft_22f9bb818529aaabeaca787c52ee4b3e",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.3593768692358734e-16,
+  "uniform_rel_parts": 2.346276349467439e-16,
+  "gauss_rel_sum": 4.3661034541669807e-16,
+  "gauss_rel_parts": 2.8903884481637613e-16
+ },
+ {
+  "sample_id": "sft_2307a63b0c55111a70de0d4e9863a489",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.8704422267215998e-16,
+  "uniform_rel_parts": 1.8607245033386944e-16,
+  "gauss_rel_sum": 3.234103808941787e-16,
+  "gauss_rel_parts": 2.4409661320604395e-16
+ },
+ {
+  "sample_id": "sft_231b91717897819b9f06f40ea5734df0",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.9354889100477688e-16,
+  "uniform_rel_parts": 1.9250114405787164e-16,
+  "gauss_rel_sum": 3.384538946163129e-16,
+  "gauss_rel_parts": 2.32894950432247e-16
+ },
+ {
+  "sample_id": "sft_2380e44019949fdbbef878d47ab220b4",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.4122196749187487e-16,
+  "uniform_rel_parts": 2.3945259073025027e-16,
+  "gauss_rel_sum": 4.969810991840631e-16,
+  "gauss_rel_parts": 3.616012392598162e-16
+ },
+ {
+  "sample_id": "sft_23991029c72731ca809cb0bec91e9d8e",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.939145677930799e-16,
+  "uniform_rel_parts": 1.928903054539686e-16,
+  "gauss_rel_sum": 3.583914063828592e-16,
+  "gauss_rel_parts": 2.6235937479340586e-16
+ },
+ {
+  "sample_id": "sft_242c99b4ab5ba7d8b51fec399edd0e6c",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 3.16638537427604e-16,
+  "uniform_rel_parts": 3.149446827884871e-16,
+  "gauss_rel_sum": 7.019677107747716e-16,
+  "gauss_rel_parts": 4.794414344323595e-16
+ },
+ {
+  "sample_id": "sft_243615d1be4234ee7c9ca32046af53af",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.0205926083334424e-16,
+  "uniform_rel_parts": 2.009952078194851e-16,
+  "gauss_rel_sum": 3.7081841255071505e-16,
+  "gauss_rel_parts": 2.549714708729483e-16
+ },
+ {
+  "sample_id": "sft_24e5ada393130bbf3d839e9071f6c7ae",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.823688975008542e-16,
+  "uniform_rel_parts": 2.8032350612882786e-16,
+  "gauss_rel_sum": 5.595328201162185e-16,
+  "gauss_rel_parts": 3.895904031661018e-16
+ },
+ {
+  "sample_id": "sft_25023b4cac442a55ea40ca8945af2a3e",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.6775631247112566e-16,
+  "uniform_rel_parts": 1.6692533234023642e-16,
+  "gauss_rel_sum": 3.115528421434878e-16,
+  "gauss_rel_parts": 2.0866887277985733e-16
+ },
+ {
+  "sample_id": "sft_25351a479dffa98de9d3577c14656383",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 2.46845233591173e-16,
+  "uniform_rel_parts": 2.453261045816773e-16,
+  "gauss_rel_sum": 5.37917154338705e-16,
+  "gauss_rel_parts": 3.6675897941107516e-16
+ },
+ {
+  "sample_id": "sft_2569a948c6f3ba9525ed1e0a2df98607",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 1.7020314479579977e-16,
+  "uniform_rel_parts": 1.6931261421870068e-16,
+  "gauss_rel_sum": 2.915583526649675e-16,
+  "gauss_rel_parts": 1.9141642826194222e-16
+ },
+ {
+  "sample_id": "sft_256c2ff92e08c20af40996f196bac4e0",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.855045070896222e-16,
+  "uniform_rel_parts": 1.8448787492040354e-16,
+  "gauss_rel_sum": 3.3511000913979105e-16,
+  "gauss_rel_parts": 2.2280346931828495e-16
+ },
+ {
+  "sample_id": "sft_257ebc495f4fdc1b3982ae2e98fdd628",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.5848431126225616e-16,
+  "uniform_rel_parts": 2.5689928417967693e-16,
+  "gauss_rel_sum": 5.295330622625796e-16,
+  "gauss_rel_parts": 3.688244669249931e-16
+ },
+ {
+  "sample_id": "sft_25806035a5092ad5ae7253242ed40e43",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.0826578929909834e-16,
+  "uniform_rel_parts": 2.0723821153587012e-16,
+  "gauss_rel_sum": 4.549864605963517e-16,
+  "gauss_rel_parts": 3.3684555341899426e-16
+ },
+ {
+  "sample_id": "sft_2626fbc15149cef94ee0ed59574578a1",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 2.1551414084281775e-16,
+  "uniform_rel_parts": 2.1444204370169545e-16,
+  "gauss_rel_sum": 4.697385024651702e-16,
+  "gauss_rel_parts": 3.386727436319964e-16
+ },
+ {
+  "sample_id": "sft_264f8aa295422cbc4ac77b7101e52933",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.2172775927315896e-16,
+  "uniform_rel_parts": 3.197782736364481e-16,
+  "gauss_rel_sum": 6.064181250938515e-16,
+  "gauss_rel_parts": 4.3462378840741926e-16
+ },
+ {
+  "sample_id": "sft_26587a750c7467dcc8cc3eb617262df0",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 2.406934887603986e-16,
+  "uniform_rel_parts": 2.392735061525036e-16,
+  "gauss_rel_sum": 5.384628069752553e-16,
+  "gauss_rel_parts": 3.8470693480619685e-16
+ },
+ {
+  "sample_id": "sft_26682ac1a07bf21ba6b6b9f8470c1dcf",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.1889491544529894e-16,
+  "uniform_rel_parts": 2.176504812103197e-16,
+  "gauss_rel_sum": 4.119421569980234e-16,
+  "gauss_rel_parts": 2.901949881872183e-16
+ },
+ {
+  "sample_id": "sft_2714adb5b5d12ceb67eb1fe2d5ff5978",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.0504768595242044e-16,
+  "uniform_rel_parts": 2.0400727269697882e-16,
+  "gauss_rel_sum": 3.966819541007871e-16,
+  "gauss_rel_parts": 2.6915306445684603e-16
+ },
+ {
+  "sample_id": "sft_27256c12d5d66fd4b992989cc94c2dad",
+  "grid": [
+   32,
+   46
+  ],
+  "uniform_rel_sum": 1.902927031973189e-16,
+  "uniform_rel_parts": 1.8934149150129575e-16,
+  "gauss_rel_sum": 3.0085480839867145e-16,
+  "gauss_rel_parts": 2.2325765075733125e-16
+ },
+ {
+  "sample_id": "sft_275c90b1a5e14c603cddae665fa4e6a1",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 1.9038088992154262e-16,
+  "uniform_rel_parts": 1.8936471305556355e-16,
+  "gauss_rel_sum": 3.4988883059340505e-16,
+  "gauss_rel_parts": 2.4180403894624386e-16
+ },
+ {
+  "sample_id": "sft_27af330e7a1799ccf5ea7a26490d059b",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 2.0188583160040013e-16,
+  "uniform_rel_parts": 2.0095173970193408e-16,
+  "gauss_rel_sum": 4.09631043488038e-16,
+  "gauss_rel_parts": 2.921043157171224e-16
+ },
+ {
+  "sample_id": "sft_2854ada33f62d69b488a59db7a7a5abf",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 2.2080693293969802e-16,
+  "uniform_rel_parts": 2.1903773964288818e-16,
+  "gauss_rel_sum": 4.178541147734849e-16,
+  "gauss_rel_parts": 2.9514574921559626e-16
+ },
+ {
+  "sample_id": "sft_28e46d67f00f486ae687f5a2f06d8909",
+  "grid": [
+   46,
+   32
+  ],
+  "uniform_rel_sum": 1.8361083145213108e-16,
+  "uniform_rel_parts": 1.8243493229103934e-16,
+  "gauss_rel_sum": 3.532738045469906e-16,
+  "gauss_rel_parts": 2.580424876626408e-16
+ },
+ {
+  "sample_id": "sft_292b81a23f761202d7449a8e61c48dc9",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.640187720107804e-16,
+  "uniform_rel_parts": 2.620387878035909e-16,
+  "gauss_rel_sum": 5.064219395465476e-16,
+  "gauss_rel_parts": 3.544244059938377e-16
+ },
+ {
+  "sample_id": "sft_2993080e62c32b58ccb44c36e4d66df4",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.0367032020304287e-16,
+  "uniform_rel_parts": 2.023414410765253e-16,
+  "gauss_rel_sum": 4.541936889896132e-16,
+  "gauss_rel_parts": 2.9664470749440093e-16
+ },
+ {
+  "sample_id": "sft_29e27b4dd03140dddc27dff852e543ad",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.527813908704753e-16,
+  "uniform_rel_parts": 2.5080505857067316e-16,
+  "gauss_rel_sum": 4.7954993443974525e-16,
+  "gauss_rel_parts": 3.318521928981388e-16
+ },
+ {
+  "sample_id": "sft_2a0bc9cca3c87889d2045509bc1270bf",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.785066631699305e-16,
+  "uniform_rel_parts": 2.7655655613318526e-16,
+  "gauss_rel_sum": 5.343459646270904e-16,
+  "gauss_rel_parts": 3.7336336883639334e-16
+ },
+ {
+  "sample_id": "sft_2a46ec18ed2d5de6614397fd61a43560",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.2549822979797813e-16,
+  "uniform_rel_parts": 2.2418734580658033e-16,
+  "gauss_rel_sum": 4.2952377078954853e-16,
+  "gauss_rel_parts": 3.0026884654744144e-16
+ },
+ {
+  "sample_id": "sft_2a66306da7854995b56bdbc0571f9d79",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.5631822055046418e-16,
+  "uniform_rel_parts": 1.5563709215591732e-16,
+  "gauss_rel_sum": 2.1440767027112513e-16,
+  "gauss_rel_parts": 1.604116164205301e-16
+ },
+ {
+  "sample_id": "sft_2a86bd3a25c08f6957ce100668c8ff4f",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.014412803544852e-16,
+  "uniform_rel_parts": 2.996556815961328e-16,
+  "gauss_rel_sum": 6.807415243987265e-16,
+  "gauss_rel_parts": 4.582983341193034e-16
+ },
+ {
+  "sample_id": "sft_2ab9ce219234ce44c0c3c90aa22f9d89",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.14592344634417e-16,
+  "uniform_rel_parts": 2.133583302447911e-16,
+  "gauss_rel_sum": 4.225418030235553e-16,
+  "gauss_rel_parts": 2.9672446810886883e-16
+ },
+ {
+  "sample_id": "sft_2b6142074d918c3ac2fd3e80a76b3d9d",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 2.374814125129614e-16,
+  "uniform_rel_parts": 2.3567306885093473e-16,
+  "gauss_rel_sum": 4.253233981445083e-16,
+  "gauss_rel_parts": 3.0612837886862107e-16
+ },
+ {
+  "sample_id": "sft_2bec7224ff2d7652e43ad9bbf5e6cd57",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 2.8113195447141496e-16,
+  "uniform_rel_parts": 2.7921907709071283e-16,
+  "gauss_rel_sum": 4.960018651726478e-16,
+  "gauss_rel_parts": 3.6578803698774955e-16
+ },
+ {
+  "sample_id": "sft_2c66e31ac1d7efa459254e81394150e3",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.207757816298882e-16,
+  "uniform_rel_parts": 2.1962654903282454e-16,
+  "gauss_rel_sum": 4.1064778583491094e-16,
+  "gauss_rel_parts": 2.7577668492089216e-16
+ },
+ {
+  "sample_id": "sft_2ced3e1a8ff37e4da7bb4e5eb275d468",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.5476381058303223e-16,
+  "uniform_rel_parts": 2.530909460038538e-16,
+  "gauss_rel_sum": 4.93100751131002e-16,
+  "gauss_rel_parts": 3.323917681534438e-16
+ },
+ {
+  "sample_id": "sft_2cee09d74c6c9db656479eee52c2a45d",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 3.45656873615057e-16,
+  "uniform_rel_parts": 3.4378448501942217e-16,
+  "gauss_rel_sum": 7.162477905143134e-16,
+  "gauss_rel_parts": 5.196843224845361e-16
+ },
+ {
+  "sample_id": "sft_2d1e92a5febdcba73a50dc5cba183939",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 1.9639013568501535e-16,
+  "uniform_rel_parts": 1.9541568889124963e-16,
+  "gauss_rel_sum": 3.7660038134102437e-16,
+  "gauss_rel_parts": 2.433221676045624e-16
+ },
+ {
+  "sample_id": "sft_2d3223108af357ae3487ff5ab6884c66",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.4088611445319733e-16,
+  "uniform_rel_parts": 3.390512471971924e-16,
+  "gauss_rel_sum": 6.931595989938983e-16,
+  "gauss_rel_parts": 4.826304437220868e-16
+ },
+ {
+  "sample_id": "sft_2d9a6389bfe8a200394e76382aa41c2b",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.9783894768564443e-16,
+  "uniform_rel_parts": 1.9648091597554264e-16,
+  "gauss_rel_sum": 3.484520884404617e-16,
+  "gauss_rel_parts": 2.454354840493247e-16
+ },
+ {
+  "sample_id": "sft_2dfc4f888553e6c60a54e8eb77289c36",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 3.0335695096838235e-16,
+  "uniform_rel_parts": 3.010023771500038e-16,
+  "gauss_rel_sum": 5.860131393047422e-16,
+  "gauss_rel_parts": 4.191573788566669e-16
+ },
+ {
+  "sample_id": "sft_2eed574afabe56c5f61b8f7d07f33a92",
+  "grid": [
+   32,
+   74
+  ],
+  "uniform_rel_sum": 3.098496531730342e-16,
+  "uniform_rel_parts": 3.0815781566111574e-16,
+  "gauss_rel_sum": 6.160168289971097e-16,
+  "gauss_rel_parts": 4.340919975801011e-16
+ },
+ {
+  "sample_id": "sft_2f02898c60b286557819c5c2cdabf494",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1760098898032113e-16,
+  "uniform_rel_parts": 2.1653121907497105e-16,
+  "gauss_rel_sum": 4.686481175358147e-16,
+  "gauss_rel_parts": 3.098958360039203e-16
+ },
+ {
+  "sample_id": "sft_2f1768419848359d5db21ed31d21065c",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.0673645965881724e-16,
+  "uniform_rel_parts": 3.0481526068970203e-16,
+  "gauss_rel_sum": 6.3602700913694855e-16,
+  "gauss_rel_parts": 4.394456098201406e-16
+ },
+ {
+  "sample_id": "sft_2f280b6cbab7ff9ab69804f3c97948f0",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 2.52620736019039e-16,
+  "uniform_rel_parts": 2.5082653992942447e-16,
+  "gauss_rel_sum": 5.002705461938252e-16,
+  "gauss_rel_parts": 3.634473926465085e-16
+ },
+ {
+  "sample_id": "sft_2f2e26a404f3a3b94c39252e7e679911",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.6226224844129756e-16,
+  "uniform_rel_parts": 2.6093083181538256e-16,
+  "gauss_rel_sum": 5.176319983993306e-16,
+  "gauss_rel_parts": 3.7244276725447867e-16
+ },
+ {
+  "sample_id": "sft_2f91ce55a663d486a9d06371dac7afaf",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.5769519403219917e-16,
+  "uniform_rel_parts": 2.5597937945401333e-16,
+  "gauss_rel_sum": 5.268468671411392e-16,
+  "gauss_rel_parts": 3.6257425431099273e-16
+ },
+ {
+  "sample_id": "sft_2fa3d8b804c7db6743dcb0b45ab45856",
+  "grid": [
+   32,
+   46
+  ],
+  "uniform_rel_sum": 1.6657370202114589e-16,
+  "uniform_rel_parts": 1.6567878837823876e-16,
+  "gauss_rel_sum": 2.8238737640751464e-16,
+  "gauss_rel_parts": 1.9081621203354803e-16
+ },
+ {
+  "sample_id": "sft_30113f9d4d9a5f4420761ccf2698b992",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.0263339058306968e-16,
+  "uniform_rel_parts": 2.014926880059679e-16,
+  "gauss_rel_sum": 4.1054483591243693e-16,
+  "gauss_rel_parts": 2.909722183077722e-16
+ },
+ {
+  "sample_id": "sft_3016e709c1589082a8a8ffac93619508",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.8845659622120286e-16,
+  "uniform_rel_parts": 2.866685573196639e-16,
+  "gauss_rel_sum": 5.75607624376232e-16,
+  "gauss_rel_parts": 3.9084526940768595e-16
+ },
+ {
+  "sample_id": "sft_304630828f59f6273f7cd65d06c3378a",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.296325278441135e-16,
+  "uniform_rel_parts": 2.283461855023094e-16,
+  "gauss_rel_sum": 4.709335271716216e-16,
+  "gauss_rel_parts": 3.32294121828753e-16
+ },
+ {
+  "sample_id": "sft_30d7e1a90b1a20ddbb1b69f9ddd3d17e",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1530858140548601e-16,
+  "uniform_rel_parts": 2.1408603400112186e-16,
+  "gauss_rel_sum": 4.670738264265931e-16,
+  "gauss_rel_parts": 3.330077511760324e-16
+ },
+ {
+  "sample_id": "sft_30fcb64fa7b797653f54898caa58d2b8",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.6570974159393996e-16,
+  "uniform_rel_parts": 1.6498747055751941e-16,
+  "gauss_rel_sum": 2.7543088695998207e-16,
+  "gauss_rel_parts": 1.9307647819545614e-16
+ },
+ {
+  "sample_id": "sft_310d30d7a6430723659819cbe173772b",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.8717436843082902e-16,
+  "uniform_rel_parts": 1.8636491157377025e-16,
+  "gauss_rel_sum": 3.3074370123002875e-16,
+  "gauss_rel_parts": 2.4066397354841826e-16
+ },
+ {
+  "sample_id": "sft_31464ede5de8dda7901e505e3ccdfa9a",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.1024615227201606e-16,
+  "uniform_rel_parts": 3.079766478878729e-16,
+  "gauss_rel_sum": 5.806002243039224e-16,
+  "gauss_rel_parts": 3.9393932184468937e-16
+ },
+ {
+  "sample_id": "sft_31ad42e348c79e576832d58146de80f4",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.0342188861213328e-16,
+  "uniform_rel_parts": 2.0249953309483617e-16,
+  "gauss_rel_sum": 4.1314926751081607e-16,
+  "gauss_rel_parts": 2.9672824473170423e-16
+ },
+ {
+  "sample_id": "sft_31b31b09a333f33e7760297a05734d94",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 3.5310246848949117e-16,
+  "uniform_rel_parts": 3.509205943193134e-16,
+  "gauss_rel_sum": 6.047093901691208e-16,
+  "gauss_rel_parts": 4.45536382370383e-16
+ },
+ {
+  "sample_id": "sft_31e4db7fb19a0f83a6566a61447499f6",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 2.488129048630079e-16,
+  "uniform_rel_parts": 2.4738531029798784e-16,
+  "gauss_rel_sum": 5.399101407733673e-16,
+  "gauss_rel_parts": 3.7885685471265863e-16
+ },
+ {
+  "sample_id": "sft_323ead0a17542edcc0874fd56171577b",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.9899668538079638e-16,
+  "uniform_rel_parts": 1.9789823702590546e-16,
+  "gauss_rel_sum": 3.5612486145165693e-16,
+  "gauss_rel_parts": 2.4373400245287245e-16
+ },
+ {
+  "sample_id": "sft_3259bcbc9b8e99fdfc7dd74475d25518",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1209413134238082e-16,
+  "uniform_rel_parts": 2.1114587264447277e-16,
+  "gauss_rel_sum": 4.83731648326388e-16,
+  "gauss_rel_parts": 3.301258920423755e-16
+ },
+ {
+  "sample_id": "sft_32a9cb650fcb65610aacb7772a4fd02e",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.6016513312250235e-16,
+  "uniform_rel_parts": 2.583327589210218e-16,
+  "gauss_rel_sum": 5.02687459546142e-16,
+  "gauss_rel_parts": 3.724262956901978e-16
+ },
+ {
+  "sample_id": "sft_32dffa68544143ca813bd86b4b9216c2",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 3.3898329958781854e-16,
+  "uniform_rel_parts": 3.3718501981009763e-16,
+  "gauss_rel_sum": 7.035483862875694e-16,
+  "gauss_rel_parts": 5.165938599875375e-16
+ },
+ {
+  "sample_id": "sft_33271d87c18425b8350802342352a352",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.6591667341330894e-16,
+  "uniform_rel_parts": 2.646141888838691e-16,
+  "gauss_rel_sum": 6.381886889879593e-16,
+  "gauss_rel_parts": 4.0529102018072556e-16
+ },
+ {
+  "sample_id": "sft_33b31f730cc485548ab10fbaabd1b79e",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 1.704276735850534e-16,
+  "uniform_rel_parts": 1.696919835707007e-16,
+  "gauss_rel_sum": 3.021364859565457e-16,
+  "gauss_rel_parts": 2.0867073713068805e-16
+ },
+ {
+  "sample_id": "sft_33bef1dd7881b203825ae7f18ecb0356",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.8519988967734583e-16,
+  "uniform_rel_parts": 3.819694567716468e-16,
+  "gauss_rel_sum": 7.153633486386547e-16,
+  "gauss_rel_parts": 5.188571559511579e-16
+ },
+ {
+  "sample_id": "sft_33e37bd415b3e15fd53387115c5668f8",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.016645020055977e-16,
+  "uniform_rel_parts": 2.0062227659496846e-16,
+  "gauss_rel_sum": 4.100603871426632e-16,
+  "gauss_rel_parts": 2.8849222402727137e-16
+ },
+ {
+  "sample_id": "sft_33ee6af09958a42aa1f62f7517bc24cc",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.799261694243534e-16,
+  "uniform_rel_parts": 2.780312808824399e-16,
+  "gauss_rel_sum": 4.882706201680711e-16,
+  "gauss_rel_parts": 3.44719019493361e-16
+ },
+ {
+  "sample_id": "sft_33f9547564a1dd9d4225a43953b64a40",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1785951752747654e-16,
+  "uniform_rel_parts": 2.1648168456557212e-16,
+  "gauss_rel_sum": 3.960651496968008e-16,
+  "gauss_rel_parts": 2.8079488925526455e-16
+ },
+ {
+  "sample_id": "sft_3415f8a42724d5869ac5b41a20b1b852",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.3543290114181486e-16,
+  "uniform_rel_parts": 3.332751574134708e-16,
+  "gauss_rel_sum": 7.432257812664419e-16,
+  "gauss_rel_parts": 5.118445597987815e-16
+ },
+ {
+  "sample_id": "sft_342f3c3e7f897b3ac2493c221ca304e4",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.5303656443840208e-16,
+  "uniform_rel_parts": 2.512686729256363e-16,
+  "gauss_rel_sum": 5.594117776390467e-16,
+  "gauss_rel_parts": 3.950996753729097e-16
+ },
+ {
+  "sample_id": "sft_34c88469d80ff2e8f2a618245b7886c8",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.9749196153389464e-16,
+  "uniform_rel_parts": 1.9618358879132814e-16,
+  "gauss_rel_sum": 3.6374094601054635e-16,
+  "gauss_rel_parts": 2.5815535704244385e-16
+ },
+ {
+  "sample_id": "sft_34d29f8cd6ad8de10c22b556504172e3",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.8361439072679615e-16,
+  "uniform_rel_parts": 1.8264385962771222e-16,
+  "gauss_rel_sum": 3.1779877982044247e-16,
+  "gauss_rel_parts": 2.221985398392753e-16
+ },
+ {
+  "sample_id": "sft_3519b5bd9b6808b9dd365b489c05ec53",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.81042256666638e-16,
+  "uniform_rel_parts": 1.800900924122093e-16,
+  "gauss_rel_sum": 3.858929154086692e-16,
+  "gauss_rel_parts": 2.5691551403685607e-16
+ },
+ {
+  "sample_id": "sft_35a5b36aa6e86cdf00c1f7dfaefc75fa",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 3.4015816669441453e-16,
+  "uniform_rel_parts": 3.380156165379487e-16,
+  "gauss_rel_sum": 6.905113502379512e-16,
+  "gauss_rel_parts": 4.663458952127185e-16
+ },
+ {
+  "sample_id": "sft_35b024ba8ed0d9aa3d1c9114749f4378",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.7495775914991367e-16,
+  "uniform_rel_parts": 2.7344215637820466e-16,
+  "gauss_rel_sum": 4.656206682377251e-16,
+  "gauss_rel_parts": 3.2188990854443346e-16
+ },
+ {
+  "sample_id": "sft_35b178bd28bb65fe67324f57f7e518de",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 2.5224723700137267e-16,
+  "uniform_rel_parts": 2.505413349185814e-16,
+  "gauss_rel_sum": 5.165703971410997e-16,
+  "gauss_rel_parts": 3.6860449041993383e-16
+ },
+ {
+  "sample_id": "sft_35b38f801e67ef032af44cf9350ad0ae",
+  "grid": [
+   32,
+   40
+  ],
+  "uniform_rel_sum": 1.6015612880326222e-16,
+  "uniform_rel_parts": 1.59429080394117e-16,
+  "gauss_rel_sum": 2.3399125981974386e-16,
+  "gauss_rel_parts": 1.6970873676723401e-16
+ },
+ {
+  "sample_id": "sft_35f466d49c2e4635c2a472eb535e0bc2",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.255887414344848e-16,
+  "uniform_rel_parts": 2.243353435820097e-16,
+  "gauss_rel_sum": 3.9678327624042576e-16,
+  "gauss_rel_parts": 2.848983072438869e-16
+ },
+ {
+  "sample_id": "sft_3694b1807aca3f17c8036a35e739730e",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 3.0273639987715367e-16,
+  "uniform_rel_parts": 3.0109171352117927e-16,
+  "gauss_rel_sum": 7.484259815373587e-16,
+  "gauss_rel_parts": 5.16593911621118e-16
+ },
+ {
+  "sample_id": "sft_36ee1b9abd650fdf977267da7423f7ce",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.292163891513734e-16,
+  "uniform_rel_parts": 2.279200170736206e-16,
+  "gauss_rel_sum": 4.671748978663434e-16,
+  "gauss_rel_parts": 3.182053139576192e-16
+ },
+ {
+  "sample_id": "sft_3711e6a78dcea0ff9783107b6e13944e",
+  "grid": [
+   32,
+   50
+  ],
+  "uniform_rel_sum": 2.3604959832522097e-16,
+  "uniform_rel_parts": 2.346939133300516e-16,
+  "gauss_rel_sum": 5.995290043148009e-16,
+  "gauss_rel_parts": 4.222272605210831e-16
+ },
+ {
+  "sample_id": "sft_37848abbf608315e4de96e8144114f1b",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.6837455725949626e-16,
+  "uniform_rel_parts": 1.6736188457481576e-16,
+  "gauss_rel_sum": 2.5611136657831615e-16,
+  "gauss_rel_parts": 1.8103132180542667e-16
+ },
+ {
+  "sample_id": "sft_37bdecef19ecf0bac5af76c82ac78902",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.8885041177014094e-16,
+  "uniform_rel_parts": 1.876153805924262e-16,
+  "gauss_rel_sum": 2.718358673779975e-16,
+  "gauss_rel_parts": 2.0223349406272726e-16
+ },
+ {
+  "sample_id": "sft_3831912a323dff212857a5284ac0f2ab",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 3.5534518565575613e-16,
+  "uniform_rel_parts": 3.5279895918612636e-16,
+  "gauss_rel_sum": 6.358607380228735e-16,
+  "gauss_rel_parts": 4.589619700530618e-16
+ },
+ {
+  "sample_id": "sft_38ffb255db3059cf61fee9861811f44f",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 2.4819592383779274e-16,
+  "uniform_rel_parts": 2.467586768826267e-16,
+  "gauss_rel_sum": 4.807801465379814e-16,
+  "gauss_rel_parts": 3.3085560901937275e-16
+ },
+ {
+  "sample_id": "sft_392a4e2b7b251c37261df447d62bfc1a",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.8826365306726076e-16,
+  "uniform_rel_parts": 2.862105972720134e-16,
+  "gauss_rel_sum": 5.190904828210054e-16,
+  "gauss_rel_parts": 3.759061024150345e-16
+ },
+ {
+  "sample_id": "sft_393e3675ebd5db77c2ae4b3f5c8bc83d",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 1.837674014822243e-16,
+  "uniform_rel_parts": 1.8259290401348563e-16,
+  "gauss_rel_sum": 3.0289952449245733e-16,
+  "gauss_rel_parts": 2.1327555216569904e-16
+ },
+ {
+  "sample_id": "sft_39d27ee89b94d3818920115b9ed82bbd",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.2059370253552965e-16,
+  "uniform_rel_parts": 2.1935289601203631e-16,
+  "gauss_rel_sum": 5.070352077566689e-16,
+  "gauss_rel_parts": 3.5169836543785525e-16
+ },
+ {
+  "sample_id": "sft_39dcab222959befecd75fe12c9d0d7d4",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.5481716947008733e-16,
+  "uniform_rel_parts": 1.5399846073727233e-16,
+  "gauss_rel_sum": 2.362425313916274e-16,
+  "gauss_rel_parts": 1.6522416835905495e-16
+ },
+ {
+  "sample_id": "sft_39f235ab9d0f8a4d52ef7cb8c9dfbf87",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 1.7796494713553934e-16,
+  "uniform_rel_parts": 1.770194528720759e-16,
+  "gauss_rel_sum": 3.267790993558857e-16,
+  "gauss_rel_parts": 2.3555021361731627e-16
+ },
+ {
+  "sample_id": "sft_3a7e702169d8f85dfecdaf3487cde0ee",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.3880294963123377e-16,
+  "uniform_rel_parts": 2.372915499927219e-16,
+  "gauss_rel_sum": 5.105770931612922e-16,
+  "gauss_rel_parts": 3.485429239606962e-16
+ },
+ {
+  "sample_id": "sft_3aa1a427bd2bee4f13d00d7359e11dcd",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.9523988445747927e-16,
+  "uniform_rel_parts": 1.9416949922398742e-16,
+  "gauss_rel_sum": 3.905606352863209e-16,
+  "gauss_rel_parts": 2.733116691156528e-16
+ },
+ {
+  "sample_id": "sft_3ab8c30cd497f2d804d8dee9dc6cecae",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 1.6977010498595308e-16,
+  "uniform_rel_parts": 1.6882028498778814e-16,
+  "gauss_rel_sum": 2.5402410214405505e-16,
+  "gauss_rel_parts": 1.8877538783689212e-16
+ },
+ {
+  "sample_id": "sft_3b5c811c70320f64830fbd08e1ed5a7c",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.1508234522384903e-16,
+  "uniform_rel_parts": 2.1368828870458652e-16,
+  "gauss_rel_sum": 4.566072300867255e-16,
+  "gauss_rel_parts": 3.1643696881282954e-16
+ },
+ {
+  "sample_id": "sft_3b66913899aa3d633f0c70c1e5a4fd8f",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.6598357041425244e-16,
+  "uniform_rel_parts": 2.640981988160168e-16,
+  "gauss_rel_sum": 5.152438909087381e-16,
+  "gauss_rel_parts": 3.8518859847937585e-16
+ },
+ {
+  "sample_id": "sft_3bf8c5676b82569f4e9e1223e62be28b",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.2878474695306156e-16,
+  "uniform_rel_parts": 2.270178485822062e-16,
+  "gauss_rel_sum": 5.016618842335129e-16,
+  "gauss_rel_parts": 3.51651489864298e-16
+ },
+ {
+  "sample_id": "sft_3bfe65992f3e7a2c04cebf3339111131",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.583424487280383e-16,
+  "uniform_rel_parts": 2.570188881267894e-16,
+  "gauss_rel_sum": 4.705975625354447e-16,
+  "gauss_rel_parts": 3.3227298527298973e-16
+ },
+ {
+  "sample_id": "sft_3c90efa43180a505529ecc6af40ec29a",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.803685111365561e-16,
+  "uniform_rel_parts": 2.7847371048400294e-16,
+  "gauss_rel_sum": 5.463028312115467e-16,
+  "gauss_rel_parts": 3.9244086647914414e-16
+ },
+ {
+  "sample_id": "sft_3cb82367e119c0fc3ef7d1819d66144e",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 2.1804018585645406e-16,
+  "uniform_rel_parts": 2.1689814297627442e-16,
+  "gauss_rel_sum": 4.485286912917713e-16,
+  "gauss_rel_parts": 3.1094036177114204e-16
+ },
+ {
+  "sample_id": "sft_3cc16df95550036fad4b892566c3e928",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.9234893117668933e-16,
+  "uniform_rel_parts": 3.897570368286538e-16,
+  "gauss_rel_sum": 6.634169075962735e-16,
+  "gauss_rel_parts": 4.845988695608112e-16
+ },
+ {
+  "sample_id": "sft_3d2f51b63f3a1c3568ad7a71dcdee5b1",
+  "grid": [
+   32,
+   42
+  ],
+  "uniform_rel_sum": 2.644960781555879e-16,
+  "uniform_rel_parts": 2.626963010415634e-16,
+  "gauss_rel_sum": 5.06284834689059e-16,
+  "gauss_rel_parts": 3.2937471165093166e-16
+ },
+ {
+  "sample_id": "sft_3d3c818cfe8e77a1da207ee7e2b250a9",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.988195585213588e-16,
+  "uniform_rel_parts": 2.9641126138355567e-16,
+  "gauss_rel_sum": 6.560028893776668e-16,
+  "gauss_rel_parts": 4.3732354923108833e-16
+ },
+ {
+  "sample_id": "sft_3da06a2ebc0cbd2ad5fd2aeb6a5a56d2",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.9690318586540013e-16,
+  "uniform_rel_parts": 1.9566247589022439e-16,
+  "gauss_rel_sum": 3.6482129758779903e-16,
+  "gauss_rel_parts": 2.6810612456250044e-16
+ },
+ {
+  "sample_id": "sft_3da5a497d03a211e15888316623c0bb8",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 2.697678960304281e-16,
+  "uniform_rel_parts": 2.680415884005753e-16,
+  "gauss_rel_sum": 5.55607684818873e-16,
+  "gauss_rel_parts": 3.9854238077229106e-16
+ },
+ {
+  "sample_id": "sft_3e7c906e0a99de4d4d752d0fe81cf77c",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 3.070997443460253e-16,
+  "uniform_rel_parts": 3.045823828665862e-16,
+  "gauss_rel_sum": 5.421117520696077e-16,
+  "gauss_rel_parts": 4.0299169667742965e-16
+ },
+ {
+  "sample_id": "sft_3ea3bbadf8a4aa1ad1f6042e854e1eda",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.539313139490866e-16,
+  "uniform_rel_parts": 2.524911387161963e-16,
+  "gauss_rel_sum": 4.963112064054448e-16,
+  "gauss_rel_parts": 3.6394649296185964e-16
+ },
+ {
+  "sample_id": "sft_3eba2345ed272eb9f709a903eb7b1855",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.457965938761437e-16,
+  "uniform_rel_parts": 2.440212816858095e-16,
+  "gauss_rel_sum": 4.594218918148148e-16,
+  "gauss_rel_parts": 3.115400473401199e-16
+ },
+ {
+  "sample_id": "sft_3ebe5b7e6cbf4d7ef00f0bfece403ee5",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.6711243457772404e-16,
+  "uniform_rel_parts": 1.6637863295120192e-16,
+  "gauss_rel_sum": 2.634809503804964e-16,
+  "gauss_rel_parts": 2.0237643321580952e-16
+ },
+ {
+  "sample_id": "sft_3ed7edaaa8c67f7ff5f3e68e23e3aace",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.9755710417048443e-16,
+  "uniform_rel_parts": 2.9515335405081245e-16,
+  "gauss_rel_sum": 6.052953447135796e-16,
+  "gauss_rel_parts": 4.4304485180670393e-16
+ },
+ {
+  "sample_id": "sft_3efb98ca59f7b7cb1ba8683adc116c59",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.3058447241845355e-16,
+  "uniform_rel_parts": 2.290624595048943e-16,
+  "gauss_rel_sum": 3.924114445473119e-16,
+  "gauss_rel_parts": 2.760888463085702e-16
+ },
+ {
+  "sample_id": "sft_3f09ce7ce5848491b8db28ce94bf39d1",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 1.9241424136390035e-16,
+  "uniform_rel_parts": 1.9156021599720386e-16,
+  "gauss_rel_sum": 3.3117731433220955e-16,
+  "gauss_rel_parts": 2.4103103453367597e-16
+ },
+ {
+  "sample_id": "sft_3f5aa41cb14be4a3bf73f1a2d52d0a2f",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.923131584912132e-16,
+  "uniform_rel_parts": 2.9058489281831813e-16,
+  "gauss_rel_sum": 5.68951893782626e-16,
+  "gauss_rel_parts": 4.1829679106679563e-16
+ },
+ {
+  "sample_id": "sft_3f7e047695274590260cbb23b20578e9",
+  "grid": [
+   32,
+   46
+  ],
+  "uniform_rel_sum": 1.6336006282070967e-16,
+  "uniform_rel_parts": 1.6261129684300423e-16,
+  "gauss_rel_sum": 2.6979668903048035e-16,
+  "gauss_rel_parts": 1.9374016789733254e-16
+ },
+ {
+  "sample_id": "sft_3fbc88a099e9518ab532b8db8783ea89",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.5110403197183e-16,
+  "uniform_rel_parts": 2.4994089763956223e-16,
+  "gauss_rel_sum": 6.144157471564058e-16,
+  "gauss_rel_parts": 4.3808635441220283e-16
+ },
+ {
+  "sample_id": "sft_40b8fa021f1271d1bab54e138ab39b72",
+  "grid": [
+   44,
+   32
+  ],
+  "uniform_rel_sum": 2.654915756754393e-16,
+  "uniform_rel_parts": 2.6419140919010816e-16,
+  "gauss_rel_sum": 5.409380435663353e-16,
+  "gauss_rel_parts": 3.766601906576593e-16
+ },
+ {
+  "sample_id": "sft_40cb121ebf270204541be1199c973b22",
+  "grid": [
+   32,
+   32
+  ],
+  "uniform_rel_sum": 2.5862571046741967e-16,
+  "uniform_rel_parts": 2.569875868253563e-16,
+  "gauss_rel_sum": 5.1229682224755e-16,
+  "gauss_rel_parts": 3.625441805906216e-16
+ },
+ {
+  "sample_id": "sft_424487a3a589bbe99c06e7453b2511dd",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.317680189390445e-16,
+  "uniform_rel_parts": 2.305833195375892e-16,
+  "gauss_rel_sum": 4.796656445092736e-16,
+  "gauss_rel_parts": 3.37734035301452e-16
+ },
+ {
+  "sample_id": "sft_4292f6d53604a7ffeb5050f21c1f8875",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.2138085379056461e-16,
+  "uniform_rel_parts": 2.20081118710289e-16,
+  "gauss_rel_sum": 5.07673991213092e-16,
+  "gauss_rel_parts": 3.572632506141354e-16
+ },
+ {
+  "sample_id": "sft_42b5b0f1e641f2375092d3a4eb5d3dde",
+  "grid": [
+   40,
+   32
+  ],
+  "uniform_rel_sum": 3.0632169180822554e-16,
+  "uniform_rel_parts": 3.0430658651340207e-16,
+  "gauss_rel_sum": 6.896499623673407e-16,
+  "gauss_rel_parts": 4.768350646201895e-16
+ },
+ {
+  "sample_id": "sft_42bee3c930a84398b2074b8bf3ad2184",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.6039912305576065e-16,
+  "uniform_rel_parts": 2.5858673133608245e-16,
+  "gauss_rel_sum": 5.355266550581638e-16,
+  "gauss_rel_parts": 3.7501247796792434e-16
+ },
+ {
+  "sample_id": "sft_43a85446160c8338410dad3ba9c4d430",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 1.932479681122839e-16,
+  "uniform_rel_parts": 1.9221105118693087e-16,
+  "gauss_rel_sum": 3.689304647997554e-16,
+  "gauss_rel_parts": 2.746235789004786e-16
+ },
+ {
+  "sample_id": "sft_44bcb06e3c692117189c2eb19d6a3fb6",
+  "grid": [
+   42,
+   32
+  ],
+  "uniform_rel_sum": 3.056930093185532e-16,
+  "uniform_rel_parts": 3.0389439151563406e-16,
+  "gauss_rel_sum": 5.694024573596185e-16,
+  "gauss_rel_parts": 4.204958453845794e-16
+ },
+ {
+  "sample_id": "sft_44ea25adcd327d4b75e5ecd99929d961",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.7663660802878916e-16,
+  "uniform_rel_parts": 2.7486956803457474e-16,
+  "gauss_rel_sum": 5.275426758934077e-16,
+  "gauss_rel_parts": 3.655173792668228e-16
+ },
+ {
+  "sample_id": "sft_44efa37528a85764d7b0d3daaf7f9ff5",
+  "grid": [
+   48,
+   32
+  ],
+  "uniform_rel_sum": 2.2853437116859704e-16,
+  "uniform_rel_parts": 2.2720803069916447e-16,
+  "gauss_rel_sum": 4.854145810512092e-16,
+  "gauss_rel_parts": 3.462768066543607e-16
+ },
+ {
+  "sample_id": "sft_45021c61d8d55e1356b96a9adfb9c48b",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.392420659304399e-16,
+  "uniform_rel_parts": 2.378107808238048e-16,
+  "gauss_rel_sum": 5.315265828613368e-16,
+  "gauss_rel_parts": 3.880537424971848e-16
+ },
+ {
+  "sample_id": "sft_457fc817e8513446b606824421da8510",
+  "grid": [
+   32,
+   48
+  ],
+  "uniform_rel_sum": 2.122436910724472e-16,
+  "uniform_rel_parts": 2.1116188713221702e-16,
+  "gauss_rel_sum": 4.83411674962443e-16,
+  "gauss_rel_parts": 3.159855972191626e-16
+ }
+]

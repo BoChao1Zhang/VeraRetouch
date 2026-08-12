@@ -1,0 +1,20 @@
+{
+  "source": "RESEARCH_ceiling-push_2026-08-11.md \u00a72.1 (defaults; main-agent ruling pending -- changes to be appended as a dated changelog, never edited in place)",
+  "D0_3": {
+    "trigger": "worst 25% by confidence carry >= 60% of total loss",
+    "then": "(iii) tail under-learning opened"
+  },
+  "D0_5": {
+    "trigger": "a DoF with < 30% language coverage",
+    "then": "(i) fault is partly in DATA, densification arm opened"
+  },
+  "D0_7": {
+    "U_replay<=0.85": "(ii) dominates; stop pushing mean IoU",
+    "0.85-0.93": "(ii) real, handle in parallel with fixes",
+    ">=0.95": "(ii) essentially excluded"
+  },
+  "D0_8": {
+    "trigger": "model median inside the contradiction band [q25,q75]",
+    "then": "(ii) dominant"
+  }
+}

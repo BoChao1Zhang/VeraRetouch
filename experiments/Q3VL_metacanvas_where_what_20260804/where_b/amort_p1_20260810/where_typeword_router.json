@@ -1,0 +1,117 @@
+{
+  "split": "V_where",
+  "n": 396,
+  "n_with_generated_text": 396,
+  "keywords": {
+    "radial": [
+      "oval",
+      "falloff",
+      "centered",
+      "centred",
+      "corners",
+      "unchanged",
+      "surrounding",
+      "elliptical",
+      "radial",
+      "vignette"
+    ],
+    "linear": [
+      "toward",
+      "spanning",
+      "gradient",
+      "opposite",
+      "fading",
+      "strongest",
+      "horizontal",
+      "vertical",
+      "diagonal"
+    ],
+    "band": [
+      "band",
+      "both",
+      "edges",
+      "running",
+      "strip",
+      "beyond",
+      "extending",
+      "through"
+    ],
+    "semantic": [
+      "within",
+      "stays",
+      "itself",
+      "confined",
+      "only the subject",
+      "subject only"
+    ]
+  },
+  "gt_accuracy": 0.9393939393939394,
+  "gt_n": 396,
+  "gt_per_class": {
+    "band": {
+      "n_true": 108,
+      "recall": 1.0,
+      "precision": 0.8244274809160306
+    },
+    "linear": {
+      "n_true": 111,
+      "recall": 0.9279279279279279,
+      "precision": 1.0
+    },
+    "radial": {
+      "n_true": 100,
+      "recall": 0.85,
+      "precision": 1.0
+    },
+    "semantic": {
+      "n_true": 77,
+      "recall": 0.987012987012987,
+      "precision": 1.0
+    }
+  },
+  "gt_confusion": {
+    "band->band": 108,
+    "linear->band": 8,
+    "linear->linear": 103,
+    "radial->band": 15,
+    "radial->radial": 85,
+    "semantic->semantic": 76,
+    "semantic->unknown": 1
+  },
+  "generated_accuracy": 0.7424242424242424,
+  "generated_n": 396,
+  "generated_per_class": {
+    "band": {
+      "n_true": 108,
+      "recall": 0.6759259259259259,
+      "precision": 0.6083333333333333
+    },
+    "linear": {
+      "n_true": 111,
+      "recall": 0.6576576576576577,
+      "precision": 0.6822429906542056
+    },
+    "radial": {
+      "n_true": 100,
+      "recall": 0.71,
+      "precision": 0.7717391304347826
+    },
+    "semantic": {
+      "n_true": 77,
+      "recall": 1.0,
+      "precision": 1.0
+    }
+  },
+  "generated_confusion": {
+    "band->band": 73,
+    "band->linear": 24,
+    "band->radial": 11,
+    "linear->band": 28,
+    "linear->linear": 73,
+    "linear->radial": 10,
+    "radial->band": 19,
+    "radial->linear": 10,
+    "radial->radial": 71,
+    "semantic->semantic": 77
+  }
+}

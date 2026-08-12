@@ -1,0 +1,10 @@
+?? docs/WHERE_HEAD_REDESIGN_DELTA_2026-08-10.md
+?? docs/WHERE_HEAD_REDESIGN_PROPOSAL_2026-08-10.md
+?? experiments/Q3VL_metacanvas_where_what_20260804/where_b/probe_e1_whereattn_20260810/
+?? q3vl/whereb/attnprobe.py
+?? q3vl/whereb/attnread.py
+?? q3vl/whereb/scripts/analyze_attn_probe.py
+?? q3vl/whereb/scripts/analyze_attn_sink.py
+?? q3vl/whereb/scripts/run_attn_probe.py
+?? q3vl/whereb/scripts/viz_attn_probe.py
+?? q3vl/whereb/tests/test_attnread.py

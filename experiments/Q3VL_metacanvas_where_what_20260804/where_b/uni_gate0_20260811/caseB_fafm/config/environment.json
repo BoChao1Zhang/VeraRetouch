@@ -1,0 +1,11 @@
+{
+  "python": "3.13.5",
+  "python_exe": "/home/bc/miniconda3/bin/python (Gate cards need no model)",
+  "torch": "2.6.0+cu124",
+  "cuda": "12.4",
+  "gpu": [
+    "NVIDIA H100",
+    "NVIDIA H100"
+  ],
+  "platform": "Linux-5.15.0-187-generic-x86_64-with-glibc2.35"
+}

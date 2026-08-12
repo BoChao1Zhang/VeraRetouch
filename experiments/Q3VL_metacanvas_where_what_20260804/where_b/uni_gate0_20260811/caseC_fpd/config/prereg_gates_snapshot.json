@@ -1,0 +1,15 @@
+{
+  "verdict": "fail",
+  "gates": {
+    "E0": {
+      "falsified_geometric": false,
+      "falsified_contour": true,
+      "gate_line": "geometric mean soft-IoU >= 0.92; contour (oracle segment selection) mean >= 0.8"
+    },
+    "offline_compile_check": {
+      "gate": "pass",
+      "gate_line": "adjacent-bin rendered-field soft-IoU difference <= 0.02"
+    },
+    "verdict": "fail"
+  }
+}

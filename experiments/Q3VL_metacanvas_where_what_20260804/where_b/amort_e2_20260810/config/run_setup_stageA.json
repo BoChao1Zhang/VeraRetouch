@@ -1,0 +1,23 @@
+{
+  "argv": {
+    "cache": "/home/bc/data/runs/where_b/amort_cache_20260810",
+    "oracle": "/mnt/nfs-ro/bc/data/datasets/where_a-20260805/oracle/BA-3-Joint/s5/V_where",
+    "out": "experiments/Q3VL_metacanvas_where_what_20260804/where_b/amort_e2_20260810",
+    "readout": "band",
+    "target_cond": 1000.0,
+    "lambda_scan": [
+      0.0,
+      0.1,
+      0.3,
+      1.0,
+      3.0,
+      10.0
+    ],
+    "workers": 40,
+    "limit": null,
+    "seed": 20260810
+  },
+  "git_commit": "9c9fdbd5d4814da3fb2a9090073a9b8d03c33339",
+  "python": "3.12.12",
+  "torch": "2.10.0+cu128"
+}

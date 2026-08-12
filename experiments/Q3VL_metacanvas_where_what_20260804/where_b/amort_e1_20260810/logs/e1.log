@@ -1,0 +1,24 @@
+  [100/400] 2s
+  [200/400] 5s
+  [300/400] 8s
+  [400/400] 11s
+
+=== E1 ===
+n = 400   oracle soft-IoU median 0.9737
+structural_cond    median 3.014e+05  p10 2.168e+05  p90 4.155e+05  max 5.619e+05
+effective_cond     median 8.356e+05  p10 4.266e+05  p90 2.741e+07  max 4.632e+19
+near-zero eigenvalues (rel<1e-08): median 0.0 p90 1.0 max 58
+effective rank (of 71): median 71.0  min 70
+frac cells with non-negligible Lambda: median 0.284
+multi-start: 18 restarts, loss spread median 0.5206, restarts within 1% of best: median 1.0
+oracle w* per-dim std: median 0.0490 min 0.0303 max 0.4418
+
+VERDICT: {
+  "gate": "condition number median < 1e2 AND no near-zero spectrum -> M1 downgraded",
+  "effective_cond_median": 835598.8318689825,
+  "near_zero_eig_median": 0.0,
+  "cond_below_1e2": false,
+  "no_near_zero": true,
+  "M1_downgraded": false
+}
+done in 0.2 min

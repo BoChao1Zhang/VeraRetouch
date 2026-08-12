@@ -1,0 +1,12 @@
+job: PR-ATT1-E1 full attention export (V_where local 400 x {gt, shuffled})
+pid: 707582
+launched: 2026-08-10T18:56:45+08:00
+gpu: CUDA_VISIBLE_DEVICES=0 (H100 #0; W01 training holds 27.9 GiB on the same card)
+command:
+  LD_LIBRARY_PATH=/home/bc/miniconda3/envs/llm_factory/lib CUDA_VISIBLE_DEVICES=0 \
+  /home/bc/envs/q3vl_sft/bin/python -m q3vl.whereb.scripts.run_attn_probe \
+    --out /home/bc/data/runs/where_b/probe_e1_20260810/export --arms gt,shuffled
+log: experiments/Q3VL_metacanvas_where_what_20260804/where_b/probe_e1_whereattn_20260810/logs/export_full.log
+out: /home/bc/data/runs/where_b/probe_e1_20260810/export
+liveness proven with: ps -p 707582 (NEVER pgrep -- it matches its own grep shell)
+eta: ~13 min from launch

@@ -1,0 +1,34 @@
+{
+  "verdict": "fail",
+  "gates": {
+    "E0a": {
+      "gate": "fail",
+      "gate_line": "median relative superposition residual of D_I <= 0.01"
+    },
+    "by_parameterisation": {
+      "A71": {
+        "E0b": {
+          "gate": "pass",
+          "gate_line": "median relative amplification <= 50.0 for at least one eps"
+        },
+        "E0c": {
+          "gate": "fail",
+          "gate_line": "overall median soft-IoU >= 0.85 and semantic >= 0.75",
+          "falsified_contour": true
+        }
+      },
+      "A71p": {
+        "E0b": {
+          "gate": "pass",
+          "gate_line": "median relative amplification <= 50.0 for at least one eps"
+        },
+        "E0c": {
+          "gate": "fail",
+          "gate_line": "overall median soft-IoU >= 0.85 and semantic >= 0.75",
+          "falsified_contour": true
+        }
+      }
+    },
+    "verdict": "fail"
+  }
+}

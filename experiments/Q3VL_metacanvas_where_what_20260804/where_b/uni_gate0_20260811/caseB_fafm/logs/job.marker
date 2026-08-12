@@ -1,0 +1,3 @@
+PID=1708550
+cmd=/home/bc/miniconda3/bin/python -m q3vl.whereb.scripts.run_uni_gate0_b --out /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/uni_gate0_20260811/caseB_fafm --split train --n-g0a 256 --n-g0b 1000 --device cuda:0
+log=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/uni_gate0_20260811/caseB_fafm/logs/run.log

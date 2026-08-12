@@ -1,0 +1,26 @@
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  9.49it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 13.74it/s]
+VLM loaded (13s)
+P-W5 similarity fields: 400 (44s)
+W01: loaded /home/bc/data/runs/where_b/W01/where_b_final.pt (46s)
+  W01/gt: 400 fields (165s)
+  W01/antonym: 400 fields (246s)
+  W01/shuffled: 382 fields (322s)
+W02: loaded /home/bc/data/runs/where_b/W02/where_b_final.pt (325s)
+  W02/gt: 400 fields (389s)
+  W02/antonym: 400 fields (462s)
+  W02/shuffled: 382 fields (539s)
+
+=== E3 ===
+[W01]
+  (i)  cross-sample mean pairwise corr of output   0.5253   (GT reference 0.2328)
+       per-cell cross-sample std / GT std          0.6977
+  (ii) corr(out, centre prior) 0.6430 | corr(out, GT) 0.4694 | corr(out, P-W5) 0.1286
+  (iii) paired |gt - antonym| 0.00150 | |gt - shuffled| 0.21903 | identical-field rate 0.020
+  VERDICT {"M3_copies_geometric_prior": true, "M3_output_near_constant": false, "M4_no_conditioning": true, "corr_centre_median": 0.6430242186337296, "corr_gt_median": 0.46944559059287605}
+[W02]
+  (i)  cross-sample mean pairwise corr of output   0.5206   (GT reference 0.2328)
+       per-cell cross-sample std / GT std          0.7202
+  (ii) corr(out, centre prior) 0.6077 | corr(out, GT) 0.5251 | corr(out, P-W5) 0.1208
+  (iii) paired |gt - antonym| 0.00277 | |gt - shuffled| 0.22110 | identical-field rate 0.020
+  VERDICT {"M3_copies_geometric_prior": true, "M3_output_near_constant": false, "M4_no_conditioning": true, "corr_centre_median": 0.6076903285570748, "corr_gt_median": 0.5250525759123594}
+done in 9.0 min -> experiments/Q3VL_metacanvas_where_what_20260804/where_b/amort_e3_20260810

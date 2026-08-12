@@ -1,0 +1,226 @@
+{
+  "eval_dir": "/home/bc/data/runs/where_b/amort_P3prime_cont_20260811/eval_final",
+  "split": "V_where",
+  "context": "generated",
+  "n_rows": 400,
+  "D0_3_risk_coverage": {
+    "total_loss": 100.48844552838557,
+    "n": 400,
+    "loss_share_worst_10pct": 0.13209143407403534,
+    "loss_share_worst_25pct": 0.2869724381292107,
+    "loss_share_worst_50pct": 0.5294055813313309,
+    "tail_concentrated": false,
+    "score": "pred_std / pred_area (GT-free commitment proxy)",
+    "by_family": {
+      "radial": {
+        "total_loss": 24.747802895007652,
+        "n": 100,
+        "loss_share_worst_10pct": 0.0992073208251864,
+        "loss_share_worst_25pct": 0.25557123415665894,
+        "loss_share_worst_50pct": 0.4457365913609359,
+        "tail_concentrated": false
+      },
+      "linear": {
+        "total_loss": 28.95789693789512,
+        "n": 112,
+        "loss_share_worst_10pct": 0.10984574306721391,
+        "loss_share_worst_25pct": 0.29377493119211723,
+        "loss_share_worst_50pct": 0.5735120786865257,
+        "tail_concentrated": false
+      },
+      "band": {
+        "total_loss": 32.30996128591971,
+        "n": 108,
+        "loss_share_worst_10pct": 0.14027512632020617,
+        "loss_share_worst_25pct": 0.266600144841135,
+        "loss_share_worst_50pct": 0.48904151206166036,
+        "tail_concentrated": false
+      },
+      "semantic": {
+        "total_loss": 14.472784409563094,
+        "n": 80,
+        "loss_share_worst_10pct": 0.1342147700047105,
+        "loss_share_worst_25pct": 0.2460396618244454,
+        "loss_share_worst_50pct": 0.4406656558513002,
+        "tail_concentrated": false
+      }
+    }
+  },
+  "D0_5_language_coverage": {
+    "n_instructions": 400,
+    "coverage": {
+      "direction": {
+        "coverage": 0.0975,
+        "n_distinct_words": 4,
+        "under_evidenced": true
+      },
+      "extent": {
+        "coverage": 0.0925,
+        "n_distinct_words": 7,
+        "under_evidenced": true
+      },
+      "shape": {
+        "coverage": 0.0025,
+        "n_distinct_words": 1,
+        "under_evidenced": true
+      },
+      "position": {
+        "coverage": 0.8675,
+        "n_distinct_words": 13,
+        "under_evidenced": false
+      }
+    },
+    "by_family": {
+      "direction": {
+        "band": 0.05555555555555555,
+        "linear": 0.08928571428571429,
+        "radial": 0.12,
+        "semantic": 0.1375
+      },
+      "extent": {
+        "band": 0.10185185185185185,
+        "linear": 0.10714285714285714,
+        "radial": 0.09,
+        "semantic": 0.0625
+      },
+      "shape": {
+        "band": 0.0,
+        "linear": 0.0,
+        "radial": 0.01,
+        "semantic": 0.0
+      },
+      "position": {
+        "band": 0.9074074074074074,
+        "linear": 0.8303571428571429,
+        "radial": 0.88,
+        "semantic": 0.85
+      }
+    },
+    "top_words": {
+      "direction": [
+        [
+          "lower",
+          31
+        ],
+        [
+          "top",
+          5
+        ],
+        [
+          "left",
+          4
+        ],
+        [
+          "upper",
+          1
+        ]
+      ],
+      "extent": [
+        [
+          "part",
+          22
+        ],
+        [
+          "broad",
+          5
+        ],
+        [
+          "whole",
+          5
+        ],
+        [
+          "small",
+          4
+        ],
+        [
+          "large",
+          1
+        ],
+        [
+          "edge",
+          1
+        ],
+        [
+          "all",
+          1
+        ]
+      ],
+      "shape": [
+        [
+          "circular",
+          1
+        ]
+      ],
+      "position": [
+        [
+          "surrounding",
+          286
+        ],
+        [
+          "background",
+          72
+        ],
+        [
+          "around",
+          72
+        ],
+        [
+          "near",
+          44
+        ],
+        [
+          "center",
+          20
+        ],
+        [
+          "outside",
+          10
+        ],
+        [
+          "foreground",
+          9
+        ],
+        [
+          "beyond",
+          8
+        ]
+      ]
+    }
+  },
+  "D0_8a_contradiction_band": {
+    "model_median_iou": 0.7656257170391446,
+    "n_pairs_examined": 712,
+    "instr_jaccard": {
+      "median": 0.2361111111111111,
+      "p90": 0.33285714285714274,
+      "max": 0.5208333333333334
+    },
+    "registered_cut_0.60_n": 0,
+    "by_cut": {
+      "0.30": {
+        "n": 129,
+        "q25": 0.521484375,
+        "median": 0.7041942604856513,
+        "q75": 0.8652714192282538,
+        "model_inside_band": true
+      },
+      "0.35": {
+        "n": 39,
+        "q25": 0.6183168153287083,
+        "median": 0.7497129735935706,
+        "q75": 0.9008152173913043,
+        "model_inside_band": true
+      },
+      "0.40": {
+        "n": 14,
+        "q25": 0.693633644859813,
+        "median": 0.7709985402611749,
+        "q75": 0.8640813253012049,
+        "model_inside_band": true
+      }
+    },
+    "note": "pairs are different edits of the SAME source image; a high-GT-IoU pair means two differently-worded instructions that nonetheless select the same region",
+    "verdict": "see by_cut"
+  },
+  "n_pairs_total": 712
+}

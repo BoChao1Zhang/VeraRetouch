@@ -1,0 +1,47 @@
+{
+  "schema": "q3vl.whereb.attnfields/1",
+  "arm": "gt",
+  "n_samples": 400,
+  "norm": {
+    "kind": "raw_post_softmax_attention",
+    "normalisation_applied": "none",
+    "clamp_applied": false,
+    "per_image_normalisation": false,
+    "domain": {
+      "instr_text": [
+        0.0,
+        0.19189453125
+      ],
+      "where_close": [
+        0.0,
+        0.7734375
+      ],
+      "where_content": [
+        0.0,
+        0.15576171875
+      ],
+      "where_special": [
+        0.0,
+        0.66015625
+      ]
+    },
+    "col_profile_domain": [
+      0.0,
+      0.132568359375
+    ],
+    "consumption_advice": "Post-softmax attention rows restricted to image columns: values are NON-NEGATIVE and small (order 1/n_img), and they do NOT sum to 1 over the image block because the row's remaining mass sits on text tokens. Do NOT rescale per image (red line). To make heads commensurable use whole-arm constants only -- see attnprobe.head_norm_constants, which multiplies by n_img (a deterministic geometric factor) and then standardises with fit-fold constants. The FUSED field that comes out of that pipeline CROSSES ZERO and must never be clamped to (0,1): clamping is the silent failure mode of this contract, since the values stay inside the anchors while the axis is destroyed.",
+    "frac_cells_negative_raw": {
+      "where_special": 0.0,
+      "where_content": 0.0,
+      "instr_text": 0.0,
+      "where_close": 0.0
+    }
+  },
+  "consumer_assertion_record": {
+    "n_checked": 100,
+    "all_passed": true,
+    "max_frac_saturated": 0.45160816333912035,
+    "any_crosses_zero": false,
+    "note": "raw attention is non-negative so crosses_zero=False is expected HERE; the fused/diff field is the one that crosses zero"
+  }
+}

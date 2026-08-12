@@ -1,0 +1,114 @@
+[18:56:16] loading processor + model (eager) ...
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 25.66it/s]
+  model facts: {'attn_implementation': 'eager', 'num_hidden_layers': 36, 'num_attention_heads': 32, 'num_key_value_heads': 8, 'hidden_size': 2560, 'image_token_id': 151655, 'deepstack_visual_indexes': [5, 11, 17], 'patch_size': 16, 'spatial_merge_size': 2}
+  V_where: 896 samples (None)
+  local subset: 400
+  [1/400] 2 forwards, 2s elapsed, ETA 13.2 min
+  [25/400] 50 forwards, 24s elapsed, ETA 5.9 min
+  !! sft_196581f1b55fa1d928bb62e8ebbd500d: no shuffle partner, arm skipped
+  [50/400] 99 forwards, 46s elapsed, ETA 5.4 min
+  !! sft_23f23875e43693d005aac4cb2debb96f: no shuffle partner, arm skipped
+  [75/400] 148 forwards, 68s elapsed, ETA 4.9 min
+  [100/400] 198 forwards, 90s elapsed, ETA 4.5 min
+  !! sft_4c75baf87db33d200cad867990bc78e9: no shuffle partner, arm skipped
+  !! sft_4f57c27bdd500c30da6ad2a0b5f5bf9c: no shuffle partner, arm skipped
+  !! sft_57d92a6b8e543d03ad7933d2f44676dc: no shuffle partner, arm skipped
+  [125/400] 245 forwards, 111s elapsed, ETA 4.1 min
+  [150/400] 295 forwards, 132s elapsed, ETA 3.7 min
+  [175/400] 345 forwards, 153s elapsed, ETA 3.3 min
+  [200/400] 395 forwards, 175s elapsed, ETA 2.9 min
+  !! sft_94801b6bec48725eedfe116f4cb0d9e8: no shuffle partner, arm skipped
+  !! sft_9609c0ca0503689e905b60bd44115024: no shuffle partner, arm skipped
+  !! sft_9842e34eef0e7b81c23a56cb5630d7e6: no shuffle partner, arm skipped
+  [225/400] 442 forwards, 196s elapsed, ETA 2.5 min
+  [250/400] 492 forwards, 217s elapsed, ETA 2.2 min
+  !! sft_a911f8b395d9da9627f6c1233b6ffecf: no shuffle partner, arm skipped
+  !! sft_b0c159a321f22f458076249847ee765c: no shuffle partner, arm skipped
+  [275/400] 540 forwards, 239s elapsed, ETA 1.8 min
+  !! sft_b6c712669cb2534f791297a6dae73815: no shuffle partner, arm skipped
+  !! sft_bcc238efd97d832dc021564795c4415e: no shuffle partner, arm skipped
+  [300/400] 588 forwards, 260s elapsed, ETA 1.4 min
+  !! sft_c7c25fd3992769db7626ff3264510178: no shuffle partner, arm skipped
+  [325/400] 637 forwards, 282s elapsed, ETA 1.1 min
+  !! sft_db4dc077ab0d66c1dd62520a521531a4: no shuffle partner, arm skipped
+  [350/400] 686 forwards, 304s elapsed, ETA 0.7 min
+  !! sft_ebbbc49bd6ff7bcbc7af19564d1d81d3: no shuffle partner, arm skipped
+  !! sft_ee2842c4d83ef09fa6b1b10cb7953e8d: no shuffle partner, arm skipped
+  [375/400] 734 forwards, 325s elapsed, ETA 0.4 min
+  !! sft_f4948fda445484356ca3dedfac4e8548: no shuffle partner, arm skipped
+  !! sft_f49b47f3d915cf9aaa24308600987d9e: no shuffle partner, arm skipped
+  [400/400] 782 forwards, 345s elapsed, ETA 0.0 min
+{
+  "experiment": "PR-ATT1-E1",
+  "checkpoint": "/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
+  "split": "V_where",
+  "arms": [
+    "gt",
+    "shuffled"
+  ],
+  "seed": 20260810,
+  "device": "cuda:0",
+  "dtype": "bfloat16",
+  "n_local_requested": 400,
+  "n_forwards": 782,
+  "n_skipped_no_gt": 0,
+  "model_facts": {
+    "attn_implementation": "eager",
+    "num_hidden_layers": 36,
+    "num_attention_heads": 32,
+    "num_key_value_heads": 8,
+    "hidden_size": 2560,
+    "image_token_id": 151655,
+    "deepstack_visual_indexes": [
+      5,
+      11,
+      17
+    ],
+    "patch_size": 16,
+    "spatial_merge_size": 2
+  },
+  "dataset_info": {
+    "split": "V_where",
+    "need_mask": false,
+    "mask_source": null,
+    "n_samples": 896
+  },
+  "shuffle_coverage": {
+    "group_keys": [
+      "source_image_id",
+      "render_mode"
+    ],
+    "n_samples": 896,
+    "n_groups": 264,
+    "n_with_partner": 856,
+    "coverage": 0.9553571428571429,
+    "group_size_hist": {
+      "1": 40,
+      "2": 72,
+      "3": 37,
+      "4": 46,
+      "5": 26,
+      "6": 25,
+      "7": 8,
+      "8": 9,
+      "9": 1
+    }
+  },
+  "fold_counts": {
+    "fit": 435,
+    "oof": 461
+  },
+  "fold_counts_local": {
+    "fit": 200,
+    "oof": 200
+  },
+  "git_commit": "5cac26d7c416a5dfb28e2cb913800a48af13024e",
+  "python": "3.12.12",
+  "torch": "2.10.0+cu128",
+  "transformers": "4.57.1",
+  "hostname": "h3c",
+  "cuda_device_name": "NVIDIA H100",
+  "peak_gpu_mem_gib": 8.91229248046875,
+  "wall_seconds": 351.0445327758789
+}
+[19:02:05] done in 5.9 min

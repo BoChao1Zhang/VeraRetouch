@@ -1,0 +1,114 @@
+{
+  "prompt_variant": "v4a  (_geometry_words; v4b numeric form is NOT in production)",
+  "source": "dataset_build/src/construct/responses.py :: _geometry_words / axis_bucket / compass_bucket",
+  "geom_dim": 21,
+  "note_dim_change": "20 -> 21: added ext_moderate, the q=3 MIDDLE bucket, which had no slot",
+  "phrase_rules": {
+    "diagonal, running from the upper left down to the lower right": [
+      "dir_diagonal"
+    ],
+    "diagonal, running from the lower left up to the upper right": [
+      "dir_diagonal"
+    ],
+    "moderately wide": [
+      "ext_moderate"
+    ]
+  },
+  "fixes": [
+    "token regex [a-z-]+ -> [a-z]+ : hyphenated compass corners were one token and matched nothing",
+    "phrase-before-word: 'moderately wide' no longer also fires ext_large",
+    "phrase-before-word: diagonal axis descriptor no longer fires 4 spurious direction slots"
+  ],
+  "v4a_term_to_slot": {
+    "narrow": [
+      "ext_small"
+    ],
+    "moderately wide": [
+      "<phrase rule>",
+      "ext_large",
+      "ext_moderate"
+    ],
+    "broad": [
+      "ext_large"
+    ],
+    "tight": [
+      "ext_small"
+    ],
+    "moderate": [
+      "ext_moderate"
+    ],
+    "large": [
+      "ext_large"
+    ],
+    "horizontal": [
+      "dir_horizontal"
+    ],
+    "vertical": [
+      "dir_vertical"
+    ],
+    "diagonal, running from the upper left down to the lower right": [
+      "<phrase rule>",
+      "dir_bottom",
+      "dir_left",
+      "dir_right",
+      "dir_top"
+    ],
+    "diagonal, running from the lower left up to the upper right": [
+      "<phrase rule>",
+      "dir_bottom",
+      "dir_left",
+      "dir_right",
+      "dir_top"
+    ],
+    "right edge": [
+      "dir_edge",
+      "dir_right"
+    ],
+    "lower-right corner": [
+      "dir_edge"
+    ],
+    "bottom edge": [
+      "dir_bottom",
+      "dir_edge"
+    ],
+    "lower-left corner": [
+      "dir_edge"
+    ],
+    "left edge": [
+      "dir_edge",
+      "dir_left"
+    ],
+    "upper-left corner": [
+      "dir_edge"
+    ],
+    "top edge": [
+      "dir_edge",
+      "dir_top"
+    ],
+    "upper-right corner": [
+      "dir_edge"
+    ],
+    "straight band": [
+      "shape_band"
+    ],
+    "oval falloff": [
+      "shape_oval",
+      "shape_radial"
+    ],
+    "linear gradient": [
+      "shape_linear"
+    ],
+    "centred on the subject": [
+      "dir_center"
+    ],
+    "spanning the whole frame": [
+      "ext_whole",
+      "shape_linear"
+    ],
+    "passes through the subject and runs off both edges of the frame": [
+      "dir_edge"
+    ]
+  },
+  "uncovered_terms": [],
+  "continuous_quantities": "angle/width/coverage are q=3 quantised INTO WORDS at generation time; no continuous residual exists for any text route to recover"
+}

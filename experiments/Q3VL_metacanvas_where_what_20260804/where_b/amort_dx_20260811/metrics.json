@@ -1,0 +1,348 @@
+{
+  "n": 400,
+  "context": "generated",
+  "calibration": {
+    "hi": {
+      "r_hi": 0.045,
+      "energy_frac": 0.995,
+      "tau": 0.009803920984268188,
+      "tau_quantile": 0.7,
+      "n_samples": 320,
+      "note": "B_hi and tau are ARM CONSTANTS fitted on GT analytic fields; per-image calibration is forbidden (numbers must be comparable across samples and across arms)"
+    },
+    "lo": {
+      "r_hi": 0.375,
+      "energy_frac": 0.995,
+      "tau": 0.12330865714490115,
+      "tau_quantile": 0.7,
+      "n_samples": 320,
+      "note": "B_hi and tau are ARM CONSTANTS fitted on GT analytic fields; per-image calibration is forbidden (numbers must be comparable across samples and across arms)"
+    }
+  },
+  "dx": {
+    "analytic": {
+      "n": 320,
+      "D_total": {
+        "P1": -0.0037349108869848763,
+        "P3prime": -0.0031594015547148596
+      },
+      "dx1_operator_only_E_HF": 0.00014314313384001972,
+      "dx1_bilinear_E_HF": -1.681707393251743e-05,
+      "dx1_kappa_ratio": 1.5215751935184225,
+      "dx1_soft_iou": 0.9916041966492134,
+      "dx2_E_HF_bilin": {
+        "P1": -0.003991938428630746,
+        "P3prime": -0.003348272622629848
+      },
+      "dx3_coarse": {
+        "P1": {
+          "E_HF": -0.003212792693351739,
+          "MVR": 0.10526315789473684,
+          "AFR": 0.04026887194794524
+        },
+        "P3prime": {
+          "E_HF": -0.0031899404662340675,
+          "MVR": 0.0,
+          "AFR": 0.0609935836930542
+        }
+      },
+      "dx3_floor": {
+        "MVR": 0.0,
+        "AFR": 0.020643085578707997
+      },
+      "iou_guided": {
+        "P1": 0.6900349422580219,
+        "P3prime": 0.7404524904433255
+      },
+      "iou_bilin": {
+        "P1": 0.6901884371600585,
+        "P3prime": 0.7404973468036747
+      },
+      "kappa_ratio_guided": {
+        "P1": 5.134052248136762,
+        "P3prime": 3.3975667819201893
+      },
+      "dx2_delta_b": {
+        "P1": -0.06881758345066258,
+        "P3prime": -0.05978064663326221
+      }
+    },
+    "semantic": {
+      "n": 80,
+      "D_total": {
+        "P1": -0.006307153116020614,
+        "P3prime": -0.006422011037485683
+      },
+      "dx1_operator_only_E_HF": -0.0031245816797901035,
+      "dx1_bilinear_E_HF": -0.00906457042261868,
+      "dx1_kappa_ratio": 5.480517387347692,
+      "dx1_soft_iou": 0.9247340390640383,
+      "dx2_E_HF_bilin": {
+        "P1": -0.009821956378996227,
+        "P3prime": -0.009705466966013352
+      },
+      "dx3_coarse": {
+        "P1": {
+          "E_HF": -0.0063577163210001,
+          "MVR": 0.4829994220766712,
+          "AFR": 0.11224476263928493
+        },
+        "P3prime": {
+          "E_HF": -0.006831585893136109,
+          "MVR": 0.48815953850676075,
+          "AFR": 0.10958039357966398
+        }
+      },
+      "dx3_floor": {
+        "MVR": 0.48717948717948717,
+        "AFR": 0.12591430876318166
+      },
+      "iou_guided": {
+        "P1": 0.8271976855761327,
+        "P3prime": 0.8263006344516943
+      },
+      "iou_bilin": {
+        "P1": 0.8182075932053521,
+        "P3prime": 0.8241791225243096
+      },
+      "kappa_ratio_guided": {
+        "P1": 4.171011138656288,
+        "P3prime": 4.264676146503008
+      },
+      "dx2_delta_b": {
+        "P1": -0.5572725440972353,
+        "P3prime": -0.5112815766528476
+      }
+    }
+  },
+  "by_family": {
+    "radial": {
+      "n": 100,
+      "D_total": {
+        "P1": 0.0005032171698246815,
+        "P3prime": 0.0004078077054429322
+      },
+      "delta_b": {
+        "P1": 0.8745566220004353,
+        "P3prime": 0.9588745786648829
+      },
+      "coarse_MVR": {
+        "P1": 0.0,
+        "P3prime": 0.0
+      },
+      "floor_MVR": 0.0,
+      "coarse_AFR": {
+        "P1": 0.046815759020113396,
+        "P3prime": 0.061328586460293016
+      },
+      "floor_AFR": 0.016128595530895823,
+      "kappa_ratio": {
+        "P1": 6.495204850833584,
+        "P3prime": 3.3975667819201893
+      },
+      "iou_guided": {
+        "P1": 0.6329301210568795,
+        "P3prime": 0.7845471084746461
+      },
+      "iou_bilin": {
+        "P1": 0.6320737528351945,
+        "P3prime": 0.7806855512409143
+      }
+    },
+    "linear": {
+      "n": 112,
+      "D_total": {
+        "P1": -0.011150524445732573,
+        "P3prime": -0.011537639818507533
+      },
+      "delta_b": {
+        "P1": -0.024741661554320782,
+        "P3prime": -0.017098339331910628
+      },
+      "coarse_MVR": {
+        "P1": 0.4358974358974359,
+        "P3prime": 0.42857142857142855
+      },
+      "floor_MVR": 0.0,
+      "coarse_AFR": {
+        "P1": 0.0360424358678314,
+        "P3prime": 0.05556112229230971
+      },
+      "floor_AFR": 0.07933307866039777,
+      "kappa_ratio": {
+        "P1": 1.101940836574478,
+        "P3prime": 1.1746735337056158
+      },
+      "iou_guided": {
+        "P1": 0.7269526115958087,
+        "P3prime": 0.7304633853599816
+      },
+      "iou_bilin": {
+        "P1": 0.7256393029107124,
+        "P3prime": 0.7277848704009907
+      }
+    },
+    "band": {
+      "n": 108,
+      "D_total": {
+        "P1": -0.002943290753233773,
+        "P3prime": -0.0029475471365765114
+      },
+      "delta_b": {
+        "P1": -0.0381593523553192,
+        "P3prime": -0.010812349650563213
+      },
+      "coarse_MVR": {
+        "P1": 0.40351654846335694,
+        "P3prime": 0.3684210526315789
+      },
+      "floor_MVR": 0.4902348715992881,
+      "coarse_AFR": {
+        "P1": 0.03938091415004674,
+        "P3prime": 0.07094573972317605
+      },
+      "floor_AFR": 0.01774290633151635,
+      "kappa_ratio": {
+        "P1": 5.1165200645472,
+        "P3prime": 4.118959282585378
+      },
+      "iou_guided": {
+        "P1": 0.6952561403646753,
+        "P3prime": 0.7069145757225261
+      },
+      "iou_bilin": {
+        "P1": 0.695789455899758,
+        "P3prime": 0.7093282571217789
+      }
+    },
+    "semantic": {
+      "n": 80,
+      "D_total": {
+        "P1": -0.006307153116020614,
+        "P3prime": -0.006422011037485683
+      },
+      "delta_b": {
+        "P1": -0.5572725440972353,
+        "P3prime": -0.5112815766528476
+      },
+      "coarse_MVR": {
+        "P1": 0.4829994220766712,
+        "P3prime": 0.48815953850676075
+      },
+      "floor_MVR": 0.48717948717948717,
+      "coarse_AFR": {
+        "P1": 0.11224476263928493,
+        "P3prime": 0.10958039357966398
+      },
+      "floor_AFR": 0.12591430876318166,
+      "kappa_ratio": {
+        "P1": 4.171011138656288,
+        "P3prime": 4.264676146503008
+      },
+      "iou_guided": {
+        "P1": 0.8271976855761327,
+        "P3prime": 0.8263006344516943
+      },
+      "iou_bilin": {
+        "P1": 0.8182075932053521,
+        "P3prime": 0.8241791225243096
+      }
+    }
+  },
+  "dx6_oracle_routing": {
+    "P1": {
+      "analytic_delta_iou": -5.623322839998224e-05,
+      "semantic_delta_iou": 0.0,
+      "analytic_kappa_ratio_guided": 5.134052248136762
+    },
+    "P3prime": {
+      "analytic_delta_iou": -0.0005441666020196689,
+      "semantic_delta_iou": 0.0,
+      "analytic_kappa_ratio_guided": 3.3975667819201893
+    }
+  },
+  "dx4_loss_audit": {
+    "contour_warp": {
+      "BCE": {
+        "abs_weighted_delta_median": 0.11960817500948906,
+        "weighted_base_median": 0.17709920555353165,
+        "rel_delta_vs_total": 0.705157862965898,
+        "verdict": "visible (>=20%)"
+      },
+      "SDF_boundary": {
+        "abs_weighted_delta_median": 0.0007489701732993127,
+        "weighted_base_median": 0.00533443707972765,
+        "rel_delta_vs_total": 0.004415602920009788,
+        "verdict": "blind (<5%)"
+      },
+      "area_band": {
+        "abs_weighted_delta_median": 0.0,
+        "weighted_base_median": 0.0,
+        "rel_delta_vs_total": 0.0,
+        "verdict": "blind (<5%)"
+      },
+      "TOTAL": {
+        "abs_weighted_delta_median": 0.12739432868547737,
+        "weighted_base_median": 0.16961900489404796,
+        "rel_delta_vs_total": 0.7510616440949756,
+        "verdict": "visible (>=20%)"
+      }
+    },
+    "texture_engrave": {
+      "BCE": {
+        "abs_weighted_delta_median": 0.011992648243904114,
+        "weighted_base_median": 0.17709920555353165,
+        "rel_delta_vs_total": 0.0707034465353413,
+        "verdict": "partial (5-20%)"
+      },
+      "SDF_boundary": {
+        "abs_weighted_delta_median": 0.0001514304429292679,
+        "weighted_base_median": 0.00533443707972765,
+        "rel_delta_vs_total": 0.0008927681365885769,
+        "verdict": "blind (<5%)"
+      },
+      "area_band": {
+        "abs_weighted_delta_median": 0.0,
+        "weighted_base_median": 0.0,
+        "rel_delta_vs_total": 0.0,
+        "verdict": "blind (<5%)"
+      },
+      "TOTAL": {
+        "abs_weighted_delta_median": 0.012129443883895863,
+        "weighted_base_median": 0.16961900489404796,
+        "rel_delta_vs_total": 0.07150993422861127,
+        "verdict": "partial (5-20%)"
+      }
+    },
+    "global_widen": {
+      "BCE": {
+        "abs_weighted_delta_median": 0.2662598378956318,
+        "weighted_base_median": 0.17709920555353165,
+        "rel_delta_vs_total": 1.569752387487182,
+        "verdict": "visible (>=20%)"
+      },
+      "SDF_boundary": {
+        "abs_weighted_delta_median": 0.002292025089263916,
+        "weighted_base_median": 0.00533443707972765,
+        "rel_delta_vs_total": 0.013512784671125875,
+        "verdict": "blind (<5%)"
+      },
+      "area_band": {
+        "abs_weighted_delta_median": 0.009466804563999176,
+        "weighted_base_median": 0.0,
+        "rel_delta_vs_total": 0.055812168983732625,
+        "verdict": "partial (5-20%)"
+      },
+      "TOTAL": {
+        "abs_weighted_delta_median": 0.2825670616235584,
+        "weighted_base_median": 0.16961900489404796,
+        "rel_delta_vs_total": 1.6658926975786887,
+        "verdict": "visible (>=20%)"
+      }
+    }
+  },
+  "dx5_probe": {
+    "error": "RuntimeError: probe got 0 usable samples from 1200 (mode='gt'); skip reasons: [('RuntimeError: sft_417c6608235ec56eeb4e17f733eaf535: local sample opened with need_ma', 1), ('RuntimeError: sft_7dc85aa5b23073fcdde58c2041ccd199: local sample opened with need_ma', 1), ('RuntimeError: sft_dd496e283cd35b7e9256fc0abcec1ddb: local sample opened with need_ma', 1)]",
+    "traceback": "Traceback (most recent call last):\n  File \"/home/bc/VeraRetouch/q3vl/whereb/scripts/run_amort_dx.py\", line 397, in main\n    res[\"dx5_probe\"] = _dx5(args, builder, ds, idx, fam, ctx)\n                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/bc/VeraRetouch/q3vl/whereb/scripts/run_amort_dx.py\", line 473, in _dx5\n    Xtr, Ytr = feats(tr_ds, tr_idx, tr_fam, \"gt\")\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/bc/VeraRetouch/q3vl/whereb/scripts/run_amort_dx.py\", line 452, in feats\n    raise RuntimeError(\nRuntimeError: probe got 0 usable samples from 1200 (mode='gt'); skip reasons: [('RuntimeError: sft_417c6608235ec56eeb4e17f733eaf535: local sample opened with need_ma', 1), ('RuntimeError: sft_7dc85aa5b23073fcdde58c2041ccd199: local sample opened with need_ma', 1), ('RuntimeError: sft_dd496e283cd35b7e9256fc0abcec1ddb: local sample opened with need_ma', 1)]\n"
+  }
+}

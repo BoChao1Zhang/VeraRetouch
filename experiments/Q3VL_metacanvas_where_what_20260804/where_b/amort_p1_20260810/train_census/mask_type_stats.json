@@ -1,0 +1,70 @@
+{
+  "splits": {
+    "train": {
+      "n_local": 75544,
+      "n_resolved": 75110,
+      "n_failed": 434,
+      "family_counts": {
+        "linear": 23148,
+        "semantic": 13113,
+        "radial": 19685,
+        "band": 19164
+      },
+      "family_fracs": {
+        "linear": 0.30818799094661165,
+        "semantic": 0.1745839435494608,
+        "radial": 0.26208227932365863,
+        "band": 0.25514578618026895
+      },
+      "slot_counts": {
+        "linear-0": 11561,
+        "semantic-0": 6541,
+        "radial-0": 9824,
+        "semantic-1": 6572,
+        "radial-1": 9861,
+        "linear-1": 11587,
+        "band-0": 9565,
+        "band-1": 9599
+      },
+      "by_build": {
+        "l1": {
+          "semantic": 2333,
+          "radial": 3380,
+          "linear": 3952,
+          "band": 3279
+        },
+        "l2": {
+          "radial": 3034,
+          "linear": 3704,
+          "band": 2986,
+          "semantic": 2069
+        },
+        "l3": {
+          "semantic": 2204,
+          "linear": 3857,
+          "radial": 3265,
+          "band": 3272
+        },
+        "l4": {
+          "linear": 3855,
+          "band": 3250,
+          "radial": 3288,
+          "semantic": 2152
+        },
+        "l5": {
+          "band": 3150,
+          "linear": 3918,
+          "semantic": 2243,
+          "radial": 3395
+        },
+        "l6": {
+          "semantic": 2112,
+          "linear": 3862,
+          "radial": 3323,
+          "band": 3227
+        }
+      },
+      "semantic_frac": 0.1745839435494608
+    }
+  }
+}

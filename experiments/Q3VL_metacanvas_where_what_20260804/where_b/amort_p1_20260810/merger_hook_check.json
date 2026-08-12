@@ -1,0 +1,108 @@
+{
+  "n": 6,
+  "worst_rel_max_abs_diff": 3.612402713660038e-09,
+  "worst_corr": 0.9999999999999999,
+  "worst_min_row_cosine": 0.9999997615814209,
+  "pass": true,
+  "elapsed_s": 2.1,
+  "rows": [
+    {
+      "sample_id": "sft_00680d96738cd6077be81308b15e19b3",
+      "shape": [
+        384,
+        2560
+      ],
+      "max_abs_diff": 2.9802322387695312e-08,
+      "rel_max_abs_diff": 3.2218726905616556e-09,
+      "corr": 1.0,
+      "min_row_cosine": 0.9999997615814209,
+      "median_abs_diff": 0.0,
+      "grid16": [
+        32,
+        48
+      ]
+    },
+    {
+      "sample_id": "sft_0116bd2d61059b9ca7c8d4e316bbba2f",
+      "shape": [
+        384,
+        2560
+      ],
+      "max_abs_diff": 2.9802322387695312e-08,
+      "rel_max_abs_diff": 3.612402713660038e-09,
+      "corr": 1.0,
+      "min_row_cosine": 0.9999998807907104,
+      "median_abs_diff": 0.0,
+      "grid16": [
+        32,
+        48
+      ]
+    },
+    {
+      "sample_id": "sft_01f6c38e06702c5e58f1a149f506c3e6",
+      "shape": [
+        384,
+        2560
+      ],
+      "max_abs_diff": 2.9802322387695312e-08,
+      "rel_max_abs_diff": 3.5584862552472014e-09,
+      "corr": 1.0,
+      "min_row_cosine": 0.9999998211860657,
+      "median_abs_diff": 0.0,
+      "grid16": [
+        48,
+        32
+      ]
+    },
+    {
+      "sample_id": "sft_045e0ea385f753a8eb5219c2b955aeb5",
+      "shape": [
+        384,
+        2560
+      ],
+      "max_abs_diff": 2.9802322387695312e-08,
+      "rel_max_abs_diff": 2.3260349180640244e-09,
+      "corr": 1.0,
+      "min_row_cosine": 0.9999997615814209,
+      "median_abs_diff": 0.0,
+      "grid16": [
+        32,
+        48
+      ]
+    },
+    {
+      "sample_id": "sft_047ea535fb7208bf982d2ce4fc001429",
+      "shape": [
+        384,
+        2560
+      ],
+      "max_abs_diff": 2.9802322387695312e-08,
+      "rel_max_abs_diff": 2.457923495892397e-09,
+      "corr": 0.9999999999999999,
+      "min_row_cosine": 0.9999997615814209,
+      "median_abs_diff": 0.0,
+      "grid16": [
+        48,
+        32
+      ]
+    },
+    {
+      "sample_id": "sft_05192516d62c6c79bf88645fc741732c",
+      "shape": [
+        256,
+        2560
+      ],
+      "max_abs_diff": 2.9802322387695312e-08,
+      "rel_max_abs_diff": 3.311369154188368e-09,
+      "corr": 0.9999999999999999,
+      "min_row_cosine": 0.9999998211860657,
+      "median_abs_diff": 0.0,
+      "grid16": [
+        32,
+        32
+      ]
+    }
+  ],
+  "split": "V_where",
+  "cache": "/home/bc/data/runs/where_b/amort_cache_20260810"
+}

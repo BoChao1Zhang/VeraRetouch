@@ -1,0 +1,8 @@
+basis B (64, 1024)
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 19.90it/s]Loading checkpoint shards: 100%|██████████| 2/2 [00:00<00:00, 19.77it/s]
+V_where local: 400
+  [100/400] 20s
+  [200/400] 33s
+  [300/400] 45s
+  [400/400] 57s
+done 400 samples in 1.0 min -> /home/bc/data/runs/where_b/amort_cache_20260810
