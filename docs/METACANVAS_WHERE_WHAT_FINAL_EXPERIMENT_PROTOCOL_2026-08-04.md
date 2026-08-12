@@ -1,5 +1,15 @@
 # Qwen3-VL MetaCanvas Where/What 最终实验方案（2026-08-04）
 
+> ## ⚠️ 架构部分已作废（2026-08-11 追加）——**详见发现文档 `docs/WHERE_STATE_2026-08-11.md`**
+> ##（唯一入口是 `docs/EXPERIMENT_INDEX.md`，2026-08-12 收敛）
+>
+> **本文的 W01-W08 实验矩阵与 MetaCanvas query 架构（`MetaCanvas query → cross-attn(Q, H_where)
+> → cross-attn(Q, F_pre) → 全局 (w, ρ)`）已于 2026-08-10 被用户终裁作废**，死亡路线见发现文档 WHERE_STATE
+> §三（死因 = M3 输出被中心先验支配 + S3 w\* 不可回归）。
+>
+> **本文档仅存档数据契约与评测协议等仍被引用的部分；架构部分禁止作为设计依据。**
+> 当前最优配方是 P3' + 家族门控上采样，见 WHERE_STATE §一。本文与 WHERE_STATE / EXPERIMENT_INDEX 冲突时，以后二者为准。
+
 > 状态：**DESIGN FROZEN / NOT IMPLEMENTED / NOT STARTED**  
 > 版本：v1.0  
 > 上游定档：[`QWEN3_VL_BASE_SFT_SPEC_2026-08-04.md`](QWEN3_VL_BASE_SFT_SPEC_2026-08-04.md)  
