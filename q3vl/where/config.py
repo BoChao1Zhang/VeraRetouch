@@ -359,6 +359,18 @@ class FitConfig:
     reject_loss: float = FIT_REJECT_LOSS
     reject_alpha: float = FIT_REJECT_ALPHA
     seed: int = 0
+    #: PR-AMORT E2 only.  Tikhonov weight on the *effective* coefficient vector
+    #: ``w_eff = alpha * w_dir``; since ``||w_dir|| == 1`` by construction this
+    #: is ``lambda * alpha^2``.  It must NOT be put on ``w_raw``: ``_forward``
+    #: normalises ``w_raw``, so its magnitude is pure gauge and a penalty there
+    #: would shrink nothing the mask can see.  On ``w_eff`` it is the honest
+    #: ridge: spending part of the unit direction on a near-null direction of
+    #: ``Phi`` shrinks ``||Phi w_dir||`` and forces ``alpha`` up, which this
+    #: term then charges for -- the ``s^2/(s^2+lambda)`` shrinkage of ridge,
+    #: written in this parametrisation.
+    #: **0.0 is the published-oracle setting and must stay the default**: every
+    #: latent under ``where_a-20260805`` was fitted without it.
+    ridge_lambda: float = 0.0
     # where the L-BFGS itself runs; see FIT_DEVICE.  "" means "same device as
     # the caller", which is what the first S2 run did -- and paid 3.5x for.
     device: str = FIT_DEVICE

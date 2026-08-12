@@ -29,14 +29,14 @@ statement that cannot quietly become false.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Iterator, Sequence
 
 import torch
 
 from q3vl.train.constants import IGNORE_INDEX  # noqa: F401  (documents the label space)
-from q3vl.where.fpre import FPreHook
+from q3vl.where.fpre import FPreHook, MergerHook
 
 from .config import TEXT_HIDDEN, WHERE_HIDDEN_FINAL_NORM, WHERE_HIDDEN_LAYER
 
@@ -122,6 +122,11 @@ class EncodeResult:
     grid_w: int
     n_prompt_tokens: int
     meta: dict[str, Any] = field(default_factory=dict)
+    #: PR-AMORT.  The merger output on the H/32 grid -- ``(grid_h/2, grid_w/2,
+    #: 2560)``, i.e. the image embedding the LLM actually receives.  ``None``
+    #: unless the :class:`FrozenVLM` was built with ``want_merger=True``, so
+    #: every pre-existing caller keeps its current cost exactly.
+    f_merger: torch.Tensor | None = None
 
 
 class FrozenVLM:
@@ -136,6 +141,7 @@ class FrozenVLM:
         layer: int = WHERE_HIDDEN_LAYER,
         final_norm: bool = WHERE_HIDDEN_FINAL_NORM,
         use_hook: bool = True,
+        want_merger: bool = False,
     ):
         self.model = model
         self.processor = processor
@@ -143,6 +149,10 @@ class FrozenVLM:
         self.layer = layer
         self.final_norm = final_norm
         self.use_hook = use_hook
+        #: PR-AMORT.  Capture the merger output alongside ``F_pre`` in the *same*
+        #: forward (protocol 2.3: no second visual pass).  Off by default so the
+        #: Where-B arms are bit-identical to their published runs.
+        self.want_merger = want_merger
         self.visual = resolve_visual(model)
         self.lm = resolve_language_model(model)
         self.pad_id = processor.tokenizer.pad_token_id
@@ -172,31 +182,30 @@ class FrozenVLM:
         dtype = next(self.model.parameters()).dtype
 
         fhook = FPreHook(self.visual)
+        mhook = MergerHook(self.visual) if self.want_merger else None
         lhook = LastLayerHook(self.lm, self.layer) if self.use_hook else None
         kwargs: dict[str, Any] = {}
         if lhook is None:
             kwargs["output_hidden_states"] = True
 
-        with fhook.attached():
+        # ExitStack, not nested `with`: the merger hook is optional and nesting
+        # it by hand would duplicate the model call a third time.  All hooks are
+        # attached across the SAME forward -- that is the whole point (protocol
+        # 2.3: F_pre, the merger output and H_where come from one pass).
+        with ExitStack() as stack:
+            stack.enter_context(fhook.attached())
+            if mhook is not None:
+                stack.enter_context(mhook.attached())
             if lhook is not None:
-                with lhook.attached():
-                    out = self.model(
-                        input_ids=input_ids.to(self.device),
-                        attention_mask=attn.to(self.device),
-                        pixel_values=img["pixel_values"].to(self.device, dtype),
-                        image_grid_thw=grid_thw.to(self.device),
-                        **kwargs,
-                    )
-                hidden = lhook.captured
-            else:
-                out = self.model(
-                    input_ids=input_ids.to(self.device),
-                    attention_mask=attn.to(self.device),
-                    pixel_values=img["pixel_values"].to(self.device, dtype),
-                    image_grid_thw=grid_thw.to(self.device),
-                    **kwargs,
-                )
-                hidden = out.hidden_states[self.layer]
+                stack.enter_context(lhook.attached())
+            out = self.model(
+                input_ids=input_ids.to(self.device),
+                attention_mask=attn.to(self.device),
+                pixel_values=img["pixel_values"].to(self.device, dtype),
+                image_grid_thw=grid_thw.to(self.device),
+                **kwargs,
+            )
+            hidden = lhook.captured if lhook is not None else out.hidden_states[self.layer]
         del out
         if hidden is None:
             raise RuntimeError("no decoder hidden states captured")
@@ -208,10 +217,17 @@ class FrozenVLM:
             )
 
         fpre = fhook.split(grid_thw)
+        merged = mhook.split(grid_thw) if mhook is not None else None
         results = []
         for i, it in enumerate(items):
             n_p, n_w = len(it.prompt_ids), len(it.where_ids)
             g = fpre[i]
+            fm = merged[i].float() if merged is not None else None
+            if fm is not None and (fm.shape[0] * 2, fm.shape[1] * 2) != tuple(g.shape[:2]):
+                raise AssertionError(
+                    f"{it.sample_id}: merged grid {tuple(fm.shape[:2])} is not "
+                    f"half of the F_pre grid {tuple(g.shape[:2])}"
+                )
             results.append(EncodeResult(
                 sample_id=it.sample_id,
                 f_pre=g.float(),
@@ -219,6 +235,7 @@ class FrozenVLM:
                 grid_h=int(g.shape[0]), grid_w=int(g.shape[1]),
                 n_prompt_tokens=n_p,
                 meta={"n_where_tokens": n_w, "seq_len": n_p + n_w},
+                f_merger=fm,
             ))
         return results
 
@@ -272,6 +289,7 @@ class FrozenVLM:
             "layer": self.layer,
             "final_norm": self.final_norm,
             "use_hook": self.use_hook,
+            "want_merger": self.want_merger,
             "text_hidden": TEXT_HIDDEN,
             "n_text_layers": len(self.lm.layers),
             "n_vision_blocks": len(self.visual.blocks),

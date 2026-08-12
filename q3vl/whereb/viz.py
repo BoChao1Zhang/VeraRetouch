@@ -193,15 +193,24 @@ def grid_to_img(grid_h: int, grid_w: int, out_h: int, out_w: int) -> dict[str, A
 def overlay_grid_on_image(
     field: torch.Tensor, image: torch.Tensor, *, alpha: float = 0.5,
     valid: torch.Tensor | None = None, mode: str = "valid_cells",
+    fixed: tuple[float, float] | None = None,
     allow_all_valid: bool = False,
 ) -> tuple[np.ndarray, FieldRender]:
-    """Blend a grid field onto a ``(3, H, W)`` image via the exact inverse map."""
+    """Blend a grid field onto a ``(3, H, W)`` image via the exact inverse map.
+
+    ``fixed`` forwards an explicit ``(vmin, vmax)`` to :func:`render_field`.  Two
+    panels that exist in order to be compared with each other -- a field and the
+    same field under a shuffled instruction -- must share one scale, or the
+    comparison is between two different colour mappings and shows nothing
+    (review nit N4).
+    """
     if image.dim() != 3 or image.shape[0] != 3:
         raise ValueError(f"expected (3, H, W) image, got {tuple(image.shape)}")
     gh, gw = field.shape[-2:]
     out_h, out_w = image.shape[-2:]
     m = grid_to_img(gh, gw, out_h, out_w)
-    r = render_field(field, valid, mode=mode, allow_all_valid=allow_all_valid)
+    r = render_field(field, valid, mode=mode, fixed=fixed,
+                     allow_all_valid=allow_all_valid)
     # nearest-neighbour expansion by an integer factor == the exact inverse map
     big = np.repeat(np.repeat(r.rgba[..., :3], m["scale_y"], axis=0),
                     m["scale_x"], axis=1)

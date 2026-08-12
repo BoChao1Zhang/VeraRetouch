@@ -36,6 +36,7 @@ __all__ = [
     "shuffle_from_grid",
     "grid_from_geometry",
     "FPreHook",
+    "MergerHook",
     "load_vision_tower",
     "extract_fpre",
 ]
@@ -121,6 +122,85 @@ class FPreHook:
             off += n
         if off != x.shape[0]:
             raise AssertionError(f"grid_thw covers {off} tokens, hook saw {x.shape[0]}")
+        return out
+
+
+class MergerHook:
+    """Forward hook on ``visual.merger`` -- the H/32 image embedding the LLM sees.
+
+    PR-AMORT needs this because the *only* spatial conditioning channel with
+    demonstrated word specificity (P-W5: ``merger_out . E[subject noun]``,
+    Delta=+0.021, p=1.4e-7) is scored in the merged space, and nothing in
+    Where-B captured it: :class:`FPreHook` sits on the last vision **block**,
+    i.e. one module *before* the merger, and ``EncodeResult`` carried only
+    ``f_pre`` and ``h_where``.
+
+    Crucially this is not a second visual forward.  ``Qwen3VLVisionModel.forward``
+    ends with ``hidden_states = self.merger(hidden_states)`` and returns it, so
+    the tensor is already computed in the same pass that produces ``F_pre``;
+    it was merely never read.  Hooking it is therefore free and protocol-2.3
+    safe (verified against transformers 4.57.1, 2026-08-10).
+
+    ``dump_amort_cache.py`` obtained the identical tensor as ``visual(...)[0]``;
+    hooking the merger reproduces that layout exactly, which is what lets the
+    online path and E1's 400-sample cache be compared without a conversion.
+
+    Ordering: the pre-merge sequence is blocked as ``(gh/m, gw/m, m, m)`` and
+    ``Qwen3VLVisionPatchMerger`` folds every ``m*m`` **consecutive** tokens with
+    ``x.view(-1, hidden*m*m)``.  One merged row is therefore exactly one ``m x m``
+    block, and the merged rows run row-major over the ``(gh/m, gw/m)`` grid --
+    so :meth:`split` reshapes directly and must **not** call
+    :func:`unshuffle_to_grid` (that is the un-blocking the merger already did).
+    """
+
+    def __init__(self, visual: torch.nn.Module):
+        self.visual = visual
+        merger = getattr(visual, "merger", None)
+        if merger is None:
+            raise AttributeError(
+                "vision tower has no .merger; expected Qwen3VLVisionModel with "
+                "a Qwen3VLVisionPatchMerger (transformers 4.57.1)"
+            )
+        self.merger = merger
+        self.merge = int(getattr(visual, "spatial_merge_size", SPATIAL_MERGE))
+        self.captured: torch.Tensor | None = None
+        self._handle = None
+
+    def _fn(self, _module, _inputs, output):
+        self.captured = output[0] if isinstance(output, tuple) else output
+
+    @contextmanager
+    def attached(self) -> Iterator["MergerHook"]:
+        self.captured = None
+        self._handle = self.merger.register_forward_hook(self._fn)
+        try:
+            yield self
+        finally:
+            self._handle.remove()
+            self._handle = None
+
+    def split(self, grid_thw: torch.Tensor) -> list[torch.Tensor]:
+        """Per image ``(gh/m, gw/m, out_hidden)`` on the merged (H/32) grid."""
+        if self.captured is None:
+            raise RuntimeError("hook captured nothing; did the forward run?")
+        x = self.captured
+        if x.dim() == 3 and x.shape[0] == 1:
+            x = x.squeeze(0)
+        x = x.reshape(-1, x.shape[-1])
+        m = self.merge
+        out, off = [], 0
+        for t, h, w in grid_thw.tolist():
+            h, w, t = int(h), int(w), int(t)
+            if h % m or w % m:
+                raise ValueError(f"grid {h}x{w} is not divisible by merge {m}")
+            gh, gw = h // m, w // m
+            n = t * gh * gw
+            out.append(x[off:off + n].reshape(gh, gw, x.shape[-1]))
+            off += n
+        if off != x.shape[0]:
+            raise AssertionError(
+                f"grid_thw implies {off} merged tokens, hook saw {x.shape[0]}"
+            )
         return out
 
 

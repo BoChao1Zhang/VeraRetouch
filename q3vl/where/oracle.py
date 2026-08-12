@@ -346,8 +346,13 @@ def fit_latent(
 
         def closure():
             opt.zero_grad(set_to_none=True)
-            m, _, _ = _forward(raw, phi, readout)
+            m, _, alpha_c = _forward(raw, phi, readout)
             loss = objective_value(cfg.objective, m, target)
+            if cfg.ridge_lambda:
+                # Tikhonov on w_eff = alpha * w_dir; ||w_dir|| == 1 so this is
+                # lambda * alpha^2.  See FitConfig.ridge_lambda for why the
+                # penalty cannot live on w_raw.
+                loss = loss + cfg.ridge_lambda * alpha_c ** 2
             loss.backward()
             return loss
 
