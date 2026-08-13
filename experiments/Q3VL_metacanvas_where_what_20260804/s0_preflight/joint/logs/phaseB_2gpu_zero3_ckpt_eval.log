@@ -1,336 +1,0 @@
-
-*****************************************
-Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
-*****************************************
-2026-08-05 02:09:56,289 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpgbw10gr1/test.c -o /tmp/tmpgbw10gr1/test.o
-2026-08-05 02:09:56,327 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpgbw10gr1/test.o -laio -o /tmp/tmpgbw10gr1/a.out
-2026-08-05 02:09:56,371 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmp2q26el7o/test.c -o /tmp/tmp2q26el7o/test.o
-2026-08-05 02:09:56,411 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmp2q26el7o/test.o -L/usr/local/cuda -L/usr/local/cuda/lib64 -lcufile -o /tmp/tmp2q26el7o/a.out
-2026-08-05 02:09:56,448 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpbz_mrzf_/test.c -o /tmp/tmpbz_mrzf_/test.o
-2026-08-05 02:09:56,491 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpbz_mrzf_/test.o -laio -o /tmp/tmpbz_mrzf_/a.out
-2026-08-05 02:09:56,505 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmprz64lrbh/test.c -o /tmp/tmprz64lrbh/test.o
-2026-08-05 02:09:56,523 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpnwgdg8y_/test.c -o /tmp/tmpnwgdg8y_/test.o
-2026-08-05 02:09:56,542 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmprz64lrbh/test.o -laio -o /tmp/tmprz64lrbh/a.out
-2026-08-05 02:09:56,562 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpnwgdg8y_/test.o -L/usr/local/cuda -L/usr/local/cuda/lib64 -lcufile -o /tmp/tmpnwgdg8y_/a.out
-2026-08-05 02:09:56,633 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmp_jfgp48d/test.c -o /tmp/tmp_jfgp48d/test.o
-2026-08-05 02:09:56,651 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmp_jfgp48d/test.o -laio -o /tmp/tmp_jfgp48d/a.out
-NCCL version 2.27.5+cuda12.9
-/home/bc/VeraRetouch/q3vl/train/train_sft.py:142: UserWarning: Q3VL_ALLOW_NONSPEC is set -- spec-frozen hyperparameters violated:
-  - eval_steps: spec 500, config 4
-  - save_steps: spec 500, config 2
-  - save_total_limit: spec 3, config 1
-  batch_info = validate_frozen_hyperparameters(train_args, world_size, allow_nonspec)
-/home/bc/VeraRetouch/q3vl/train/train_sft.py:142: UserWarning: Q3VL_ALLOW_NONSPEC is set -- spec-frozen hyperparameters violated:
-  - eval_steps: spec 500, config 4
-  - save_steps: spec 500, config 2
-  - save_total_limit: spec 3, config 1
-  batch_info = validate_frozen_hyperparameters(train_args, world_size, allow_nonspec)
-2026-08-05 02:09:58,061 INFO [__main__] transformers 4.57.1 | torch 2.10.0+cu128
-2026-08-05 02:09:58,061 INFO [__main__] batch plan: {'spec_violations': ['eval_steps: spec 500, config 4', 'save_steps: spec 500, config 2', 'save_total_limit: spec 3, config 1'], 'effective_global_batch': 32, 'per_device_train_batch_size': 4, 'gradient_accumulation_steps': 4, 'world_size': 2}
-2026-08-05 02:10:08,710 INFO [__main__] shard verification PASSED (2 shards)
-2026-08-05 02:10:09,461 INFO [__main__] special token ids: {'<where>': 151669, '</where>': 151670, '<color>': 151671, '</color>': 151672}
-Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  1.98it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:01<00:01,  1.53s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:01<00:00,  1.07s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:01<00:00,  1.01it/s]
-Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.43s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.44s/it]
-2026-08-05 02:10:13,016 INFO [__main__] embeddings: {"tokenizer_len": 151673, "embedding_rows_before": 151936, "zero3_partitioned": true, "tie_word_embeddings": true, "resize_action": "kept", "embedding_rows_after": 151936, "reinit": {"ref_rows": 151669, "mean_row_l2": 0.3362230658531189, "ref_mean_row_l2": 1.0807218551635742, "per_dim_std_mean": 0.02054288052022457, "noise_scale": 0.001, "rows": [151669, 151670, 151671, 151672], "min_pairwise_distance": 0.0016162680694833398}, "tied_ok": true}
-2026-08-05 02:10:13,017 INFO [__main__] 
-total params      : 4,437,815,808
-trainable params  : 4,131,573,248 (93.0993%)
-frozen params     : 306,242,560 (6.9007%)
-
-| subtree | tensors | params | trainable | frozen |
-|---|---:|---:|---:|---:|
-| `vision_blocks` | 288 | 302,309,376 | 0 | 302,309,376 |
-| `vision_patch_embed` | 2 | 1,573,888 | 0 | 1,573,888 |
-| `vision_pos_embed` | 1 | 2,359,296 | 0 | 2,359,296 |
-| `vision_merger` | 6 | 27,271,680 | 27,271,680 | 0 |
-| `vision_deepstack_mergers` | 18 | 81,833,472 | 81,833,472 | 0 |
-| `language_embed_tokens` | 1 | 388,956,160 | 388,956,160 | 0 |
-| `language_layers` | 396 | 3,633,509,376 | 3,633,509,376 | 0 |
-| `language_norm` | 1 | 2,560 | 2,560 | 0 |
-
-TRAINABLE parameter groups:
-  + model.visual.merger.norm.weight  [x1]  1,024
-  + model.visual.merger.norm.bias  [x1]  1,024
-  + model.visual.merger.linear_fc1.weight  [x1]  16,777,216
-  + model.visual.merger.linear_fc1.bias  [x1]  4,096
-  + model.visual.merger.linear_fc2.weight  [x1]  10,485,760
-  + model.visual.merger.linear_fc2.bias  [x1]  2,560
-  + model.visual.deepstack_merger_list.{i}.norm.weight  [x3]  12,288
-  + model.visual.deepstack_merger_list.{i}.norm.bias  [x3]  12,288
-  + model.visual.deepstack_merger_list.{i}.linear_fc1.weight  [x3]  50,331,648
-  + model.visual.deepstack_merger_list.{i}.linear_fc1.bias  [x3]  12,288
-  + model.visual.deepstack_merger_list.{i}.linear_fc2.weight  [x3]  31,457,280
-  + model.visual.deepstack_merger_list.{i}.linear_fc2.bias  [x3]  7,680
-  + model.language_model.embed_tokens.weight  [x1]  388,956,160
-  + model.language_model.layers.{i}.self_attn.q_proj.weight  [x36]  377,487,360
-  + model.language_model.layers.{i}.self_attn.k_proj.weight  [x36]  94,371,840
-  + model.language_model.layers.{i}.self_attn.v_proj.weight  [x36]  94,371,840
-  + model.language_model.layers.{i}.self_attn.o_proj.weight  [x36]  377,487,360
-  + model.language_model.layers.{i}.self_attn.q_norm.weight  [x36]  4,608
-  + model.language_model.layers.{i}.self_attn.k_norm.weight  [x36]  4,608
-  + model.language_model.layers.{i}.mlp.gate_proj.weight  [x36]  896,532,480
-  + model.language_model.layers.{i}.mlp.up_proj.weight  [x36]  896,532,480
-  + model.language_model.layers.{i}.mlp.down_proj.weight  [x36]  896,532,480
-  + model.language_model.layers.{i}.input_layernorm.weight  [x36]  92,160
-  + model.language_model.layers.{i}.post_attention_layernorm.weight  [x36]  92,160
-  + model.language_model.norm.weight  [x1]  2,560
-FROZEN parameter groups:
-  - model.visual.patch_embed.proj.weight  [x1]  1,572,864
-  - model.visual.patch_embed.proj.bias  [x1]  1,024
-  - model.visual.pos_embed.weight  [x1]  2,359,296
-  - model.visual.blocks.{i}.norm1.weight  [x24]  24,576
-  - model.visual.blocks.{i}.norm1.bias  [x24]  24,576
-  - model.visual.blocks.{i}.norm2.weight  [x24]  24,576
-  - model.visual.blocks.{i}.norm2.bias  [x24]  24,576
-  - model.visual.blocks.{i}.attn.qkv.weight  [x24]  75,497,472
-  - model.visual.blocks.{i}.attn.qkv.bias  [x24]  73,728
-  - model.visual.blocks.{i}.attn.proj.weight  [x24]  25,165,824
-  - model.visual.blocks.{i}.attn.proj.bias  [x24]  24,576
-  - model.visual.blocks.{i}.mlp.linear_fc1.weight  [x24]  100,663,296
-  - model.visual.blocks.{i}.mlp.linear_fc1.bias  [x24]  98,304
-  - model.visual.blocks.{i}.mlp.linear_fc2.weight  [x24]  100,663,296
-  - model.visual.blocks.{i}.mlp.linear_fc2.bias  [x24]  24,576
-2026-08-05 02:10:17,242 INFO [__main__] data manifest: {"path": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/manifest/terminal_manifest.json", "schema_version": "q3vl.sft2seg.splits/1", "digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840", "top_level_keys": ["audit", "counts", "created_at", "datasets", "digest", "distributions", "eval_group_counts", "model_dir", "model_max_length", "n_effective", "producer", "reserve", "schema_version", "source_builds", "split_authority", "splits", "status"], "n_effective_train": 159215, "n_eval": 896, "expected_steps_per_epoch": 4976, "train_index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl", "index_layout": "nested"}
-The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'eos_token_id': 151645, 'bos_token_id': None, 'pad_token_id': 151643}.
-The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'eos_token_id': 151645, 'bos_token_id': None, 'pad_token_id': 151643}.
-2026-08-05 02:10:17,555 WARNING [accelerate.accelerator] Gradient accumulation steps mismatch: GradientAccumulationPlugin has 1, DeepSpeed config has 4. Using DeepSpeed's value.
-Parameter Offload - Persistent parameters statistics: param_count = 354, numel = 569856
-2026-08-05 02:10:23,772 WARNING [q3vl.train.trainer] [protected-checkpoints] steps_per_epoch(from trainer state)=8 -> half_epoch_step=4, full_epoch_step=8  WARNING: manifest-derived ceil(N_effective/global_batch)=4976 differs from trainer max_steps=8
-  0%|          | 0/8 [00:00<?, ?it/s]2026-08-05 02:10:23,981 WARNING [q3vl.train.trainer] [protected-checkpoints] steps_per_epoch(from trainer state)=8 -> half_epoch_step=4, full_epoch_step=8  WARNING: manifest-derived ceil(N_effective/global_batch)=4976 differs from trainer max_steps=8
- 12%|█▎        | 1/8 [00:11<01:20, 11.53s/it] 25%|██▌       | 2/8 [00:16<00:47,  7.89s/it] 38%|███▊      | 3/8 [09:41<21:50, 262.12s/it] 50%|█████     | 4/8 [09:47<10:43, 160.95s/it]
-  0%|          | 0/112 [00:00<?, ?it/s][A
-  2%|▏         | 2/112 [00:00<00:23,  4.78it/s][A
-  3%|▎         | 3/112 [00:00<00:34,  3.16it/s][A
-  4%|▎         | 4/112 [00:01<00:38,  2.80it/s][A
-  4%|▍         | 5/112 [00:01<00:44,  2.43it/s][A
-  5%|▌         | 6/112 [00:02<00:50,  2.12it/s][A
-  6%|▋         | 7/112 [00:03<00:54,  1.94it/s][A
-  7%|▋         | 8/112 [00:03<00:52,  1.97it/s][A
-  8%|▊         | 9/112 [00:04<01:01,  1.67it/s][A
-  9%|▉         | 10/112 [00:05<01:08,  1.48it/s][A
- 10%|▉         | 11/112 [00:05<01:07,  1.50it/s][A
- 11%|█         | 12/112 [00:06<01:01,  1.62it/s][A
- 12%|█▏        | 13/112 [00:07<01:03,  1.57it/s][A
- 12%|█▎        | 14/112 [00:07<01:04,  1.52it/s][A
- 13%|█▎        | 15/112 [00:08<01:03,  1.53it/s][A
- 14%|█▍        | 16/112 [00:09<01:10,  1.35it/s][A
- 15%|█▌        | 17/112 [00:09<01:04,  1.46it/s][A
- 16%|█▌        | 18/112 [00:10<00:57,  1.64it/s][A
- 17%|█▋        | 19/112 [00:10<00:51,  1.81it/s][A
- 18%|█▊        | 20/112 [00:11<00:47,  1.93it/s][A
- 19%|█▉        | 21/112 [00:11<00:44,  2.04it/s][A
- 20%|█▉        | 22/112 [00:11<00:42,  2.13it/s][A
- 21%|██        | 23/112 [00:12<00:40,  2.19it/s][A
- 21%|██▏       | 24/112 [00:12<00:39,  2.20it/s][A
- 22%|██▏       | 25/112 [00:13<00:38,  2.25it/s][A
- 23%|██▎       | 26/112 [00:13<00:37,  2.29it/s][A
- 24%|██▍       | 27/112 [00:14<00:36,  2.31it/s][A
- 25%|██▌       | 28/112 [00:14<00:35,  2.33it/s][A
- 26%|██▌       | 29/112 [00:14<00:35,  2.34it/s][A
- 27%|██▋       | 30/112 [00:15<00:34,  2.36it/s][A
- 28%|██▊       | 31/112 [00:15<00:34,  2.37it/s][A
- 29%|██▊       | 32/112 [00:16<00:33,  2.36it/s][A
- 29%|██▉       | 33/112 [00:16<00:33,  2.37it/s][A
- 30%|███       | 34/112 [00:17<00:32,  2.38it/s][A
- 31%|███▏      | 35/112 [00:17<00:32,  2.38it/s][A
- 32%|███▏      | 36/112 [00:17<00:32,  2.37it/s][A
- 33%|███▎      | 37/112 [00:18<00:31,  2.37it/s][A
- 34%|███▍      | 38/112 [00:18<00:31,  2.36it/s][A
- 35%|███▍      | 39/112 [00:19<00:30,  2.36it/s][A
- 36%|███▌      | 40/112 [00:19<00:30,  2.37it/s][A
- 37%|███▋      | 41/112 [00:20<00:30,  2.36it/s][A
- 38%|███▊      | 42/112 [00:20<00:29,  2.36it/s][A
- 38%|███▊      | 43/112 [00:20<00:29,  2.37it/s][A
- 39%|███▉      | 44/112 [00:21<00:29,  2.28it/s][A
- 40%|████      | 45/112 [00:21<00:31,  2.15it/s][A
- 41%|████      | 46/112 [00:22<00:36,  1.83it/s][A
- 42%|████▏     | 47/112 [00:23<00:40,  1.62it/s][A
- 43%|████▎     | 48/112 [00:24<00:41,  1.54it/s][A
- 44%|████▍     | 49/112 [00:24<00:38,  1.63it/s][A
- 45%|████▍     | 50/112 [00:25<00:38,  1.60it/s][A
- 46%|████▌     | 51/112 [00:25<00:36,  1.69it/s][A
- 46%|████▋     | 52/112 [00:26<00:32,  1.84it/s][A
- 47%|████▋     | 53/112 [00:26<00:31,  1.87it/s][A
- 48%|████▊     | 54/112 [00:27<00:35,  1.64it/s][A
- 49%|████▉     | 55/112 [00:28<00:38,  1.48it/s][A
- 50%|█████     | 56/112 [00:29<00:37,  1.49it/s][A
- 51%|█████     | 57/112 [00:29<00:34,  1.61it/s][A
- 52%|█████▏    | 58/112 [00:30<00:31,  1.70it/s][A
- 53%|█████▎    | 59/112 [00:30<00:31,  1.68it/s][A
- 54%|█████▎    | 60/112 [00:31<00:34,  1.50it/s][A
- 54%|█████▍    | 61/112 [00:32<00:37,  1.36it/s][A
- 55%|█████▌    | 62/112 [00:32<00:33,  1.51it/s][A
- 56%|█████▋    | 63/112 [00:33<00:29,  1.64it/s][A
- 57%|█████▋    | 64/112 [00:33<00:26,  1.80it/s][A
- 58%|█████▊    | 65/112 [00:34<00:24,  1.93it/s][A
- 59%|█████▉    | 66/112 [00:34<00:22,  2.04it/s][A
- 60%|█████▉    | 67/112 [00:35<00:21,  2.14it/s][A
- 61%|██████    | 68/112 [00:35<00:19,  2.21it/s][A
- 62%|██████▏   | 69/112 [00:35<00:19,  2.21it/s][A
- 62%|██████▎   | 70/112 [00:36<00:18,  2.24it/s][A
- 63%|██████▎   | 71/112 [00:36<00:17,  2.28it/s][A
- 64%|██████▍   | 72/112 [00:37<00:17,  2.32it/s][A
- 65%|██████▌   | 73/112 [00:37<00:16,  2.34it/s][A
- 66%|██████▌   | 74/112 [00:38<00:16,  2.34it/s][A
- 67%|██████▋   | 75/112 [00:38<00:15,  2.34it/s][A
- 68%|██████▊   | 76/112 [00:38<00:15,  2.36it/s][A
- 69%|██████▉   | 77/112 [00:39<00:14,  2.36it/s][A
- 70%|██████▉   | 78/112 [00:39<00:14,  2.36it/s][A
- 71%|███████   | 79/112 [00:40<00:13,  2.37it/s][A
- 71%|███████▏  | 80/112 [00:40<00:13,  2.37it/s][A
- 72%|███████▏  | 81/112 [00:41<00:13,  2.37it/s][A
- 73%|███████▎  | 82/112 [00:41<00:12,  2.36it/s][A
- 74%|███████▍  | 83/112 [00:41<00:12,  2.37it/s][A
- 75%|███████▌  | 84/112 [00:42<00:11,  2.36it/s][A
- 76%|███████▌  | 85/112 [00:42<00:11,  2.33it/s][A
- 77%|███████▋  | 86/112 [00:43<00:11,  2.33it/s][A
- 78%|███████▊  | 87/112 [00:43<00:10,  2.34it/s][A
- 79%|███████▊  | 88/112 [00:43<00:10,  2.36it/s][A
- 79%|███████▉  | 89/112 [00:44<00:09,  2.37it/s][A
- 80%|████████  | 90/112 [00:44<00:09,  2.36it/s][A
- 81%|████████▏ | 91/112 [00:45<00:08,  2.37it/s][A
- 82%|████████▏ | 92/112 [00:45<00:08,  2.37it/s][A
- 83%|████████▎ | 93/112 [00:46<00:07,  2.39it/s][A
- 84%|████████▍ | 94/112 [00:46<00:07,  2.37it/s][A
- 85%|████████▍ | 95/112 [00:46<00:07,  2.38it/s][A
- 86%|████████▌ | 96/112 [00:47<00:06,  2.37it/s][A
- 87%|████████▋ | 97/112 [00:47<00:06,  2.39it/s][A
- 88%|████████▊ | 98/112 [00:48<00:05,  2.38it/s][A
- 88%|████████▊ | 99/112 [00:48<00:05,  2.38it/s][A
- 89%|████████▉ | 100/112 [00:49<00:05,  2.38it/s][A
- 90%|█████████ | 101/112 [00:49<00:04,  2.38it/s][A
- 91%|█████████ | 102/112 [00:49<00:04,  2.40it/s][A
- 92%|█████████▏| 103/112 [00:50<00:03,  2.39it/s][A
- 93%|█████████▎| 104/112 [00:50<00:03,  2.42it/s][A
- 94%|█████████▍| 105/112 [00:51<00:02,  2.44it/s][A
- 95%|█████████▍| 106/112 [00:51<00:02,  2.46it/s][A
- 96%|█████████▌| 107/112 [00:51<00:02,  2.47it/s][A
- 96%|█████████▋| 108/112 [00:52<00:01,  2.50it/s][A
- 97%|█████████▋| 109/112 [00:52<00:01,  2.51it/s][A
- 98%|█████████▊| 110/112 [00:53<00:00,  2.52it/s][A
- 99%|█████████▉| 111/112 [00:53<00:00,  2.46it/s][A
-100%|██████████| 112/112 [00:54<00:00,  1.98it/s][A                                              
-                                                 [A{'eval_loss': 2.5979745388031006, 'eval_runtime': 56.3285, 'eval_samples_per_second': 15.907, 'eval_steps_per_second': 1.988, 'epoch': 0.0}
- 50%|█████     | 4/8 [10:43<10:43, 160.95s/it]
-100%|██████████| 112/112 [00:54<00:00,  1.98it/s][A
-                                                 [A                                              {'eval_seg_where_loss': 3.9988642937807213, 'eval_seg_where_acc': 0.40477600157884347, 'eval_seg_where_tokens': 10134.0, 'eval_seg_color_loss': 2.4573518894096575, 'eval_seg_color_acc': 0.47395050897160096, 'eval_seg_color_tokens': 83207.0, 'eval_seg_eos_loss': 0.10791222538266863, 'eval_seg_eos_acc': 1.0, 'eval_seg_eos_tokens': 896.0, 'eval_seg_assistant_loss': 2.600783755523054, 'eval_seg_assistant_acc': 0.47151331218099046, 'epoch': 0.0}
- 50%|█████     | 4/8 [10:43<10:43, 160.95s/it] 62%|██████▎   | 5/8 [20:14<16:26, 328.99s/it] 75%|███████▌  | 6/8 [20:18<07:17, 218.64s/it] 88%|████████▊ | 7/8 [29:45<05:32, 332.51s/it]100%|██████████| 8/8 [29:52<00:00, 228.87s/it]
-  0%|          | 0/112 [00:00<?, ?it/s][A
-  2%|▏         | 2/112 [00:00<00:28,  3.81it/s][A
-  3%|▎         | 3/112 [00:00<00:35,  3.08it/s][A
-  4%|▎         | 4/112 [00:01<00:38,  2.78it/s][A
-  4%|▍         | 5/112 [00:01<00:40,  2.62it/s][A
-  5%|▌         | 6/112 [00:02<00:42,  2.50it/s][A
-  6%|▋         | 7/112 [00:02<00:43,  2.44it/s][A
-  7%|▋         | 8/112 [00:03<00:42,  2.42it/s][A
-  8%|▊         | 9/112 [00:03<00:42,  2.41it/s][A
-  9%|▉         | 10/112 [00:03<00:42,  2.40it/s][A
- 10%|▉         | 11/112 [00:04<00:42,  2.40it/s][A
- 11%|█         | 12/112 [00:04<00:41,  2.39it/s][A
- 12%|█▏        | 13/112 [00:05<00:41,  2.38it/s][A
- 12%|█▎        | 14/112 [00:05<00:40,  2.39it/s][A
- 13%|█▎        | 15/112 [00:06<00:40,  2.39it/s][A
- 14%|█▍        | 16/112 [00:06<00:40,  2.40it/s][A
- 15%|█▌        | 17/112 [00:06<00:39,  2.40it/s][A
- 16%|█▌        | 18/112 [00:07<00:38,  2.41it/s][A
- 17%|█▋        | 19/112 [00:07<00:38,  2.41it/s][A
- 18%|█▊        | 20/112 [00:08<00:38,  2.41it/s][A
- 19%|█▉        | 21/112 [00:08<00:37,  2.40it/s][A
- 20%|█▉        | 22/112 [00:08<00:37,  2.40it/s][A
- 21%|██        | 23/112 [00:09<00:37,  2.40it/s][A
- 21%|██▏       | 24/112 [00:09<00:36,  2.40it/s][A
- 22%|██▏       | 25/112 [00:10<00:36,  2.41it/s][A
- 23%|██▎       | 26/112 [00:10<00:36,  2.38it/s][A
- 24%|██▍       | 27/112 [00:10<00:35,  2.40it/s][A
- 25%|██▌       | 28/112 [00:11<00:35,  2.40it/s][A
- 26%|██▌       | 29/112 [00:11<00:34,  2.39it/s][A
- 27%|██▋       | 30/112 [00:12<00:34,  2.40it/s][A
- 28%|██▊       | 31/112 [00:12<00:33,  2.40it/s][A
- 29%|██▊       | 32/112 [00:13<00:33,  2.40it/s][A
- 29%|██▉       | 33/112 [00:13<00:32,  2.40it/s][A
- 30%|███       | 34/112 [00:13<00:32,  2.42it/s][A
- 31%|███▏      | 35/112 [00:14<00:32,  2.41it/s][A
- 32%|███▏      | 36/112 [00:14<00:31,  2.41it/s][A
- 33%|███▎      | 37/112 [00:15<00:31,  2.41it/s][A
- 34%|███▍      | 38/112 [00:15<00:30,  2.44it/s][A
- 35%|███▍      | 39/112 [00:15<00:30,  2.41it/s][A
- 36%|███▌      | 40/112 [00:16<00:29,  2.41it/s][A
- 37%|███▋      | 41/112 [00:16<00:30,  2.34it/s][A
- 38%|███▊      | 42/112 [00:17<00:29,  2.36it/s][A
- 38%|███▊      | 43/112 [00:17<00:29,  2.38it/s][A
- 39%|███▉      | 44/112 [00:18<00:28,  2.38it/s][A
- 40%|████      | 45/112 [00:18<00:28,  2.33it/s][A
- 41%|████      | 46/112 [00:18<00:28,  2.35it/s][A
- 42%|████▏     | 47/112 [00:19<00:27,  2.38it/s][A
- 43%|████▎     | 48/112 [00:19<00:26,  2.38it/s][A
- 44%|████▍     | 49/112 [00:20<00:26,  2.39it/s][A
- 45%|████▍     | 50/112 [00:20<00:26,  2.36it/s][A
- 46%|████▌     | 51/112 [00:21<00:25,  2.37it/s][A
- 46%|████▋     | 52/112 [00:21<00:25,  2.34it/s][A
- 47%|████▋     | 53/112 [00:21<00:25,  2.35it/s][A
- 48%|████▊     | 54/112 [00:22<00:24,  2.37it/s][A
- 49%|████▉     | 55/112 [00:22<00:23,  2.38it/s][A
- 50%|█████     | 56/112 [00:23<00:23,  2.39it/s][A
- 51%|█████     | 57/112 [00:23<00:22,  2.41it/s][A
- 52%|█████▏    | 58/112 [00:23<00:22,  2.41it/s][A
- 53%|█████▎    | 59/112 [00:24<00:22,  2.40it/s][A
- 54%|█████▎    | 60/112 [00:24<00:21,  2.40it/s][A
- 54%|█████▍    | 61/112 [00:25<00:21,  2.40it/s][A
- 55%|█████▌    | 62/112 [00:25<00:21,  2.37it/s][A
- 56%|█████▋    | 63/112 [00:26<00:24,  2.04it/s][A
- 57%|█████▋    | 64/112 [00:26<00:25,  1.87it/s][A
- 58%|█████▊    | 65/112 [00:27<00:26,  1.75it/s][A
- 59%|█████▉    | 66/112 [00:28<00:26,  1.72it/s][A
- 60%|█████▉    | 67/112 [00:29<00:28,  1.56it/s][A
- 61%|██████    | 68/112 [00:29<00:30,  1.45it/s][A
- 62%|██████▏   | 69/112 [00:30<00:28,  1.51it/s][A
- 62%|██████▎   | 70/112 [00:30<00:25,  1.64it/s][A
- 63%|██████▎   | 71/112 [00:31<00:25,  1.60it/s][A
- 64%|██████▍   | 72/112 [00:32<00:25,  1.56it/s][A
- 65%|██████▌   | 73/112 [00:32<00:25,  1.53it/s][A
- 66%|██████▌   | 74/112 [00:33<00:26,  1.43it/s][A
- 67%|██████▋   | 75/112 [00:34<00:23,  1.57it/s][A
- 68%|██████▊   | 76/112 [00:35<00:24,  1.47it/s][A
- 69%|██████▉   | 77/112 [00:35<00:23,  1.49it/s][A
- 70%|██████▉   | 78/112 [00:36<00:21,  1.60it/s][A
- 71%|███████   | 79/112 [00:36<00:19,  1.73it/s][A
- 71%|███████▏  | 80/112 [00:37<00:16,  1.89it/s][A
- 72%|███████▏  | 81/112 [00:37<00:15,  2.03it/s][A
- 73%|███████▎  | 82/112 [00:37<00:14,  2.12it/s][A
- 74%|███████▍  | 83/112 [00:38<00:13,  2.21it/s][A
- 75%|███████▌  | 84/112 [00:38<00:12,  2.27it/s][A
- 76%|███████▌  | 85/112 [00:39<00:11,  2.31it/s][A
- 77%|███████▋  | 86/112 [00:39<00:11,  2.33it/s][A
- 78%|███████▊  | 87/112 [00:39<00:10,  2.35it/s][A
- 79%|███████▊  | 88/112 [00:40<00:10,  2.37it/s][A
- 79%|███████▉  | 89/112 [00:40<00:09,  2.36it/s][A
- 80%|████████  | 90/112 [00:41<00:09,  2.38it/s][A
- 81%|████████▏ | 91/112 [00:41<00:08,  2.39it/s][A
- 82%|████████▏ | 92/112 [00:42<00:08,  2.39it/s][A
- 83%|████████▎ | 93/112 [00:42<00:07,  2.39it/s][A
- 84%|████████▍ | 94/112 [00:42<00:07,  2.39it/s][A
- 85%|████████▍ | 95/112 [00:43<00:07,  2.39it/s][A
- 86%|████████▌ | 96/112 [00:43<00:06,  2.40it/s][A
- 87%|████████▋ | 97/112 [00:44<00:06,  2.40it/s][A
- 88%|████████▊ | 98/112 [00:44<00:05,  2.41it/s][A
- 88%|████████▊ | 99/112 [00:44<00:05,  2.42it/s][A
- 89%|████████▉ | 100/112 [00:45<00:04,  2.42it/s][A
- 90%|█████████ | 101/112 [00:45<00:04,  2.41it/s][A
- 91%|█████████ | 102/112 [00:46<00:04,  2.42it/s][A
- 92%|█████████▏| 103/112 [00:46<00:03,  2.42it/s][A
- 93%|█████████▎| 104/112 [00:46<00:03,  2.45it/s][A
- 94%|█████████▍| 105/112 [00:47<00:02,  2.47it/s][A
- 95%|█████████▍| 106/112 [00:47<00:02,  2.49it/s][A
- 96%|█████████▌| 107/112 [00:48<00:01,  2.51it/s][A
- 96%|█████████▋| 108/112 [00:48<00:01,  2.53it/s][A
- 97%|█████████▋| 109/112 [00:48<00:01,  2.53it/s][A
- 98%|█████████▊| 110/112 [00:49<00:00,  2.54it/s][A
- 99%|█████████▉| 111/112 [00:49<00:00,  2.54it/s][A
-100%|██████████| 112/112 [00:50<00:00,  2.03it/s][A                                              
-                                                 [A{'eval_loss': 2.1702332496643066, 'eval_runtime': 52.0869, 'eval_samples_per_second': 17.202, 'eval_steps_per_second': 2.15, 'epoch': 0.0}
-100%|██████████| 8/8 [30:44<00:00, 228.87s/it]
-100%|██████████| 112/112 [00:50<00:00,  2.03it/s][A
-                                                 [A                                              {'eval_seg_where_loss': 3.150938221894003, 'eval_seg_where_acc': 0.53700414446418, 'eval_seg_where_tokens': 10134.0, 'eval_seg_color_loss': 2.079545222882108, 'eval_seg_color_acc': 0.5222998065066641, 'eval_seg_color_tokens': 83207.0, 'eval_seg_eos_loss': 0.07820026300448392, 'eval_seg_eos_acc': 1.0, 'eval_seg_eos_tokens': 896.0, 'eval_seg_assistant_loss': 2.1757313447656164, 'eval_seg_assistant_acc': 0.5284230185595892, 'epoch': 0.0}
-100%|██████████| 8/8 [30:44<00:00, 228.87s/it]                                              {'train_runtime': 2403.7149, 'train_samples_per_second': 0.107, 'train_steps_per_second': 0.003, 'train_loss': 2.7588913440704346, 'epoch': 0.0}
-100%|██████████| 8/8 [40:03<00:00, 228.87s/it]100%|██████████| 8/8 [40:06<00:00, 300.84s/it]
-2026-08-05 02:52:07,207 INFO [__main__] training finished: {'train_runtime': 2403.7149, 'train_samples_per_second': 0.107, 'train_steps_per_second': 0.003, 'total_flos': 589102022656.0, 'train_loss': 2.7588913440704346, 'epoch': 0.00160787860516531}

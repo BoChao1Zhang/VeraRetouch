@@ -1,8 +1,0 @@
-{"script":"q3vl/whereb/scripts/run_a1_pilot.py --stage 1 --n 500",
- "git_commit":"9c9fdbd5d4814da3fb2a9090073a9b8d03c33339",
- "python":"/home/bc/envs/q3vl_sft/bin/python",
- "seed":20260812,
- "split":"train (local, exclude_low)",
- "checkpoint":"/home/bc/data/runs/q3vl_base_sft_20260804/checkpoint-4976",
- "text_source":"GenContextStore(train) cached self-generated <where> spans",
- "gt_source":".vrmeta.json slot_id + region"}

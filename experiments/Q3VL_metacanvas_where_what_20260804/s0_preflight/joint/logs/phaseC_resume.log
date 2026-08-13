@@ -1,334 +1,0 @@
-
-*****************************************
-Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
-*****************************************
-2026-08-05 02:55:02,985 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpadwnw_vi/test.c -o /tmp/tmpadwnw_vi/test.o
-2026-08-05 02:55:02,985 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpo361tf60/test.c -o /tmp/tmpo361tf60/test.o
-2026-08-05 02:55:03,058 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpo361tf60/test.o -laio -o /tmp/tmpo361tf60/a.out
-2026-08-05 02:55:03,058 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpadwnw_vi/test.o -laio -o /tmp/tmpadwnw_vi/a.out
-2026-08-05 02:55:03,184 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpf3yiz6kw/test.c -o /tmp/tmpf3yiz6kw/test.o
-2026-08-05 02:55:03,184 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmp1c5glfw8/test.c -o /tmp/tmp1c5glfw8/test.o
-2026-08-05 02:55:03,222 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmp1c5glfw8/test.o -L/usr/local/cuda -L/usr/local/cuda/lib64 -lcufile -o /tmp/tmp1c5glfw8/a.out
-2026-08-05 02:55:03,223 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpf3yiz6kw/test.o -L/usr/local/cuda -L/usr/local/cuda/lib64 -lcufile -o /tmp/tmpf3yiz6kw/a.out
-2026-08-05 02:55:03,288 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpa3w2lbqh/test.c -o /tmp/tmpa3w2lbqh/test.o
-2026-08-05 02:55:03,295 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -O2 -isystem /home/bc/miniconda3/envs/llm_factory/include -fPIC -c /tmp/tmpla0s8s70/test.c -o /tmp/tmpla0s8s70/test.o
-2026-08-05 02:55:03,323 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpla0s8s70/test.o -laio -o /tmp/tmpla0s8s70/a.out
-2026-08-05 02:55:03,326 INFO [root] gcc -pthread -B /home/bc/miniconda3/envs/llm_factory/compiler_compat /tmp/tmpa3w2lbqh/test.o -laio -o /tmp/tmpa3w2lbqh/a.out
-NCCL version 2.27.5+cuda12.9
-/home/bc/VeraRetouch/q3vl/train/train_sft.py:142: UserWarning: Q3VL_ALLOW_NONSPEC is set -- spec-frozen hyperparameters violated:
-  - eval_steps: spec 500, config 6
-  - save_steps: spec 500, config 6
-  - save_total_limit: spec 3, config 1
-  batch_info = validate_frozen_hyperparameters(train_args, world_size, allow_nonspec)
-/home/bc/VeraRetouch/q3vl/train/train_sft.py:142: UserWarning: Q3VL_ALLOW_NONSPEC is set -- spec-frozen hyperparameters violated:
-  - eval_steps: spec 500, config 6
-  - save_steps: spec 500, config 6
-  - save_total_limit: spec 3, config 1
-  batch_info = validate_frozen_hyperparameters(train_args, world_size, allow_nonspec)
-2026-08-05 02:55:06,162 INFO [__main__] transformers 4.57.1 | torch 2.10.0+cu128
-2026-08-05 02:55:06,162 INFO [__main__] batch plan: {'spec_violations': ['eval_steps: spec 500, config 6', 'save_steps: spec 500, config 6', 'save_total_limit: spec 3, config 1'], 'effective_global_batch': 32, 'per_device_train_batch_size': 4, 'gradient_accumulation_steps': 4, 'world_size': 2}
-2026-08-05 02:56:08,971 INFO [__main__] shard verification PASSED (2 shards)
-2026-08-05 02:56:09,792 INFO [__main__] special token ids: {'<where>': 151669, '</where>': 151670, '<color>': 151671, '</color>': 151672}
-Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:00<00:00,  1.99it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:01<00:01,  1.51s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:01<00:00,  1.04s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:01<00:00,  1.04it/s]
-Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.33s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:02<00:00,  1.36s/it]
-2026-08-05 02:56:13,330 INFO [__main__] embeddings: {"tokenizer_len": 151673, "embedding_rows_before": 151936, "zero3_partitioned": true, "tie_word_embeddings": true, "resize_action": "kept", "embedding_rows_after": 151936, "reinit": {"ref_rows": 151669, "mean_row_l2": 0.3362230658531189, "ref_mean_row_l2": 1.0807218551635742, "per_dim_std_mean": 0.02054288052022457, "noise_scale": 0.001, "rows": [151669, 151670, 151671, 151672], "min_pairwise_distance": 0.0016162680694833398}, "tied_ok": true}
-2026-08-05 02:56:13,330 INFO [__main__] 
-total params      : 4,437,815,808
-trainable params  : 4,131,573,248 (93.0993%)
-frozen params     : 306,242,560 (6.9007%)
-
-| subtree | tensors | params | trainable | frozen |
-|---|---:|---:|---:|---:|
-| `vision_blocks` | 288 | 302,309,376 | 0 | 302,309,376 |
-| `vision_patch_embed` | 2 | 1,573,888 | 0 | 1,573,888 |
-| `vision_pos_embed` | 1 | 2,359,296 | 0 | 2,359,296 |
-| `vision_merger` | 6 | 27,271,680 | 27,271,680 | 0 |
-| `vision_deepstack_mergers` | 18 | 81,833,472 | 81,833,472 | 0 |
-| `language_embed_tokens` | 1 | 388,956,160 | 388,956,160 | 0 |
-| `language_layers` | 396 | 3,633,509,376 | 3,633,509,376 | 0 |
-| `language_norm` | 1 | 2,560 | 2,560 | 0 |
-
-TRAINABLE parameter groups:
-  + model.visual.merger.norm.weight  [x1]  1,024
-  + model.visual.merger.norm.bias  [x1]  1,024
-  + model.visual.merger.linear_fc1.weight  [x1]  16,777,216
-  + model.visual.merger.linear_fc1.bias  [x1]  4,096
-  + model.visual.merger.linear_fc2.weight  [x1]  10,485,760
-  + model.visual.merger.linear_fc2.bias  [x1]  2,560
-  + model.visual.deepstack_merger_list.{i}.norm.weight  [x3]  12,288
-  + model.visual.deepstack_merger_list.{i}.norm.bias  [x3]  12,288
-  + model.visual.deepstack_merger_list.{i}.linear_fc1.weight  [x3]  50,331,648
-  + model.visual.deepstack_merger_list.{i}.linear_fc1.bias  [x3]  12,288
-  + model.visual.deepstack_merger_list.{i}.linear_fc2.weight  [x3]  31,457,280
-  + model.visual.deepstack_merger_list.{i}.linear_fc2.bias  [x3]  7,680
-  + model.language_model.embed_tokens.weight  [x1]  388,956,160
-  + model.language_model.layers.{i}.self_attn.q_proj.weight  [x36]  377,487,360
-  + model.language_model.layers.{i}.self_attn.k_proj.weight  [x36]  94,371,840
-  + model.language_model.layers.{i}.self_attn.v_proj.weight  [x36]  94,371,840
-  + model.language_model.layers.{i}.self_attn.o_proj.weight  [x36]  377,487,360
-  + model.language_model.layers.{i}.self_attn.q_norm.weight  [x36]  4,608
-  + model.language_model.layers.{i}.self_attn.k_norm.weight  [x36]  4,608
-  + model.language_model.layers.{i}.mlp.gate_proj.weight  [x36]  896,532,480
-  + model.language_model.layers.{i}.mlp.up_proj.weight  [x36]  896,532,480
-  + model.language_model.layers.{i}.mlp.down_proj.weight  [x36]  896,532,480
-  + model.language_model.layers.{i}.input_layernorm.weight  [x36]  92,160
-  + model.language_model.layers.{i}.post_attention_layernorm.weight  [x36]  92,160
-  + model.language_model.norm.weight  [x1]  2,560
-FROZEN parameter groups:
-  - model.visual.patch_embed.proj.weight  [x1]  1,572,864
-  - model.visual.patch_embed.proj.bias  [x1]  1,024
-  - model.visual.pos_embed.weight  [x1]  2,359,296
-  - model.visual.blocks.{i}.norm1.weight  [x24]  24,576
-  - model.visual.blocks.{i}.norm1.bias  [x24]  24,576
-  - model.visual.blocks.{i}.norm2.weight  [x24]  24,576
-  - model.visual.blocks.{i}.norm2.bias  [x24]  24,576
-  - model.visual.blocks.{i}.attn.qkv.weight  [x24]  75,497,472
-  - model.visual.blocks.{i}.attn.qkv.bias  [x24]  73,728
-  - model.visual.blocks.{i}.attn.proj.weight  [x24]  25,165,824
-  - model.visual.blocks.{i}.attn.proj.bias  [x24]  24,576
-  - model.visual.blocks.{i}.mlp.linear_fc1.weight  [x24]  100,663,296
-  - model.visual.blocks.{i}.mlp.linear_fc1.bias  [x24]  98,304
-  - model.visual.blocks.{i}.mlp.linear_fc2.weight  [x24]  100,663,296
-  - model.visual.blocks.{i}.mlp.linear_fc2.bias  [x24]  24,576
-2026-08-05 02:56:19,026 INFO [__main__] data manifest: {"path": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/manifest/terminal_manifest.json", "schema_version": "q3vl.sft2seg.splits/1", "digest": "9278d721bb1e234c0a6e7ad94f8f8ae1eab10844602a26a1cfb0e20cab7ac840", "top_level_keys": ["audit", "counts", "created_at", "datasets", "digest", "distributions", "eval_group_counts", "model_dir", "model_max_length", "n_effective", "producer", "reserve", "schema_version", "source_builds", "split_authority", "splits", "status"], "n_effective_train": 159215, "n_eval": 896, "expected_steps_per_epoch": 4976, "train_index": "/mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl", "index_layout": "nested"}
-max_steps is given, it will override any value given in num_train_epochs
-Using auto half precision backend
-loading configuration file /home/bc/data/models/Qwen3-VL-4B-Instruct/config.json
-Model config Qwen3VLConfig {
-  "architectures": [
-    "Qwen3VLForConditionalGeneration"
-  ],
-  "image_token_id": 151655,
-  "model_type": "qwen3_vl",
-  "text_config": {
-    "attention_bias": false,
-    "attention_dropout": 0.0,
-    "bos_token_id": 151643,
-    "dtype": "bfloat16",
-    "eos_token_id": 151645,
-    "head_dim": 128,
-    "hidden_act": "silu",
-    "hidden_size": 2560,
-    "initializer_range": 0.02,
-    "intermediate_size": 9728,
-    "max_position_embeddings": 262144,
-    "model_type": "qwen3_vl_text",
-    "num_attention_heads": 32,
-    "num_hidden_layers": 36,
-    "num_key_value_heads": 8,
-    "rms_norm_eps": 1e-06,
-    "rope_scaling": {
-      "mrope_interleaved": true,
-      "mrope_section": [
-        24,
-        20,
-        20
-      ],
-      "rope_type": "default"
-    },
-    "rope_theta": 5000000,
-    "tie_word_embeddings": true,
-    "use_cache": true,
-    "vocab_size": 151936
-  },
-  "tie_word_embeddings": true,
-  "transformers_version": "4.57.1",
-  "video_token_id": 151656,
-  "vision_config": {
-    "deepstack_visual_indexes": [
-      5,
-      11,
-      17
-    ],
-    "depth": 24,
-    "hidden_act": "gelu_pytorch_tanh",
-    "hidden_size": 1024,
-    "in_channels": 3,
-    "initializer_range": 0.02,
-    "intermediate_size": 4096,
-    "model_type": "qwen3_vl",
-    "num_heads": 16,
-    "num_position_embeddings": 2304,
-    "out_hidden_size": 2560,
-    "patch_size": 16,
-    "spatial_merge_size": 2,
-    "temporal_patch_size": 2
-  },
-  "vision_end_token_id": 151653,
-  "vision_start_token_id": 151652
-}
-
-The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'eos_token_id': 151645, 'bos_token_id': None, 'pad_token_id': 151643}.
-The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'eos_token_id': 151645, 'bos_token_id': None, 'pad_token_id': 151643}.
-2026-08-05 02:56:19,447 WARNING [accelerate.accelerator] Gradient accumulation steps mismatch: GradientAccumulationPlugin has 1, DeepSpeed config has 4. Using DeepSpeed's value.
-Parameter Offload - Persistent parameters statistics: param_count = 354, numel = 569856
-Attempting to resume from /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseB/checkpoint-4
-Warning: The following arguments do not match the ones in the `trainer_state.json` within the checkpoint directory: 
-	eval_steps: 6 (from args) != 4 (from trainer_state.json)
-	save_steps: 6 (from args) != 2 (from trainer_state.json)
-2026-08-05 03:05:24,042 WARNING [q3vl.train.trainer] [protected-checkpoints] steps_per_epoch(from trainer state)=6 -> half_epoch_step=3, full_epoch_step=6  WARNING: manifest-derived ceil(N_effective/global_batch)=4976 differs from trainer max_steps=6
-***** Running training *****
-  Num examples = 159,215
-  Num Epochs = 1
-  Instantaneous batch size per device = 4
-  Total train batch size (w. parallel, distributed & accumulation) = 32
-  Gradient Accumulation steps = 4
-  Total optimization steps = 6
-  Number of trainable parameters = 4,131,573,248
-Warning: The following arguments do not match the ones in the `trainer_state.json` within the checkpoint directory: 
-	eval_steps: 6 (from args) != 4 (from trainer_state.json)
-	save_steps: 6 (from args) != 2 (from trainer_state.json)
-  Continuing training from checkpoint, will skip to saved global_step
-  Continuing training from epoch 0
-  Continuing training from global step 4
-  Will skip the first 0 epochs then the first 16 batches in the first epoch.
-  0%|          | 0/6 [00:00<?, ?it/s]2026-08-05 03:05:24,114 WARNING [q3vl.train.trainer] [protected-checkpoints] steps_per_epoch(from trainer state)=6 -> half_epoch_step=3, full_epoch_step=6  WARNING: manifest-derived ceil(N_effective/global_batch)=4976 differs from trainer max_steps=6
- 83%|████████▎ | 5/6 [00:18<00:03,  3.63s/it]100%|██████████| 6/6 [00:23<00:00,  3.95s/it]
-***** Running Evaluation *****
-  Num examples = 896
-  Batch size = 4
-
-  0%|          | 0/112 [00:00<?, ?it/s][A
-  2%|▏         | 2/112 [00:00<00:25,  4.33it/s][A
-  3%|▎         | 3/112 [00:00<00:34,  3.14it/s][A
-  4%|▎         | 4/112 [00:01<00:38,  2.79it/s][A
-  4%|▍         | 5/112 [00:01<00:42,  2.53it/s][A
-  5%|▌         | 6/112 [00:02<00:43,  2.46it/s][A
-  6%|▋         | 7/112 [00:02<00:43,  2.42it/s][A
-  7%|▋         | 8/112 [00:03<00:43,  2.40it/s][A
-  8%|▊         | 9/112 [00:03<00:43,  2.36it/s][A
-  9%|▉         | 10/112 [00:03<00:43,  2.34it/s][A
- 10%|▉         | 11/112 [00:04<00:44,  2.27it/s][A
- 11%|█         | 12/112 [00:04<00:44,  2.24it/s][A
- 12%|█▏        | 13/112 [00:05<00:43,  2.26it/s][A
- 12%|█▎        | 14/112 [00:05<00:45,  2.18it/s][A
- 13%|█▎        | 15/112 [00:06<00:44,  2.16it/s][A
- 14%|█▍        | 16/112 [00:06<00:45,  2.12it/s][A
- 15%|█▌        | 17/112 [00:07<00:45,  2.10it/s][A
- 16%|█▌        | 18/112 [00:07<00:43,  2.14it/s][A
- 17%|█▋        | 19/112 [00:08<00:42,  2.19it/s][A
- 18%|█▊        | 20/112 [00:08<00:41,  2.19it/s][A
- 19%|█▉        | 21/112 [00:09<00:41,  2.18it/s][A
- 20%|█▉        | 22/112 [00:09<00:40,  2.20it/s][A
- 21%|██        | 23/112 [00:09<00:40,  2.22it/s][A
- 21%|██▏       | 24/112 [00:10<00:38,  2.26it/s][A
- 22%|██▏       | 25/112 [00:10<00:38,  2.27it/s][A
- 23%|██▎       | 26/112 [00:11<00:38,  2.26it/s][A
- 24%|██▍       | 27/112 [00:11<00:37,  2.27it/s][A
- 25%|██▌       | 28/112 [00:12<00:36,  2.29it/s][A
- 26%|██▌       | 29/112 [00:12<00:36,  2.27it/s][A
- 27%|██▋       | 30/112 [00:12<00:35,  2.29it/s][A
- 28%|██▊       | 31/112 [00:13<00:35,  2.29it/s][A
- 29%|██▊       | 32/112 [00:13<00:34,  2.30it/s][A
- 29%|██▉       | 33/112 [00:14<00:34,  2.31it/s][A
- 30%|███       | 34/112 [00:14<00:33,  2.32it/s][A
- 31%|███▏      | 35/112 [00:15<00:32,  2.33it/s][A
- 32%|███▏      | 36/112 [00:15<00:32,  2.30it/s][A
- 33%|███▎      | 37/112 [00:16<00:33,  2.25it/s][A
- 34%|███▍      | 38/112 [00:16<00:32,  2.26it/s][A
- 35%|███▍      | 39/112 [00:16<00:31,  2.28it/s][A
- 36%|███▌      | 40/112 [00:17<00:31,  2.28it/s][A
- 37%|███▋      | 41/112 [00:17<00:31,  2.24it/s][A
- 38%|███▊      | 42/112 [00:18<00:31,  2.22it/s][A
- 38%|███▊      | 43/112 [00:18<00:30,  2.25it/s][A
- 39%|███▉      | 44/112 [00:19<00:30,  2.23it/s][A
- 40%|████      | 45/112 [00:19<00:30,  2.22it/s][A
- 41%|████      | 46/112 [00:20<00:29,  2.20it/s][A
- 42%|████▏     | 47/112 [00:20<00:29,  2.21it/s][A
- 43%|████▎     | 48/112 [00:21<00:29,  2.19it/s][A
- 44%|████▍     | 49/112 [00:21<00:28,  2.21it/s][A
- 45%|████▍     | 50/112 [00:21<00:27,  2.23it/s][A
- 46%|████▌     | 51/112 [00:22<00:27,  2.26it/s][A
- 46%|████▋     | 52/112 [00:22<00:26,  2.27it/s][A
- 47%|████▋     | 53/112 [00:23<00:26,  2.23it/s][A
- 48%|████▊     | 54/112 [00:23<00:25,  2.25it/s][A
- 49%|████▉     | 55/112 [00:24<00:25,  2.22it/s][A
- 50%|█████     | 56/112 [00:24<00:25,  2.18it/s][A
- 51%|█████     | 57/112 [00:25<00:25,  2.17it/s][A
- 52%|█████▏    | 58/112 [00:25<00:24,  2.17it/s][A
- 53%|█████▎    | 59/112 [00:25<00:24,  2.20it/s][A
- 54%|█████▎    | 60/112 [00:26<00:23,  2.21it/s][A
- 54%|█████▍    | 61/112 [00:26<00:22,  2.22it/s][A
- 55%|█████▌    | 62/112 [00:27<00:22,  2.19it/s][A
- 56%|█████▋    | 63/112 [00:27<00:22,  2.20it/s][A
- 57%|█████▋    | 64/112 [00:28<00:21,  2.22it/s][A
- 58%|█████▊    | 65/112 [00:28<00:21,  2.21it/s][A
- 59%|█████▉    | 66/112 [00:29<00:20,  2.21it/s][A
- 60%|█████▉    | 67/112 [00:29<00:20,  2.23it/s][A
- 61%|██████    | 68/112 [00:30<00:19,  2.23it/s][A
- 62%|██████▏   | 69/112 [00:30<00:19,  2.26it/s][A
- 62%|██████▎   | 70/112 [00:30<00:18,  2.21it/s][A
- 63%|██████▎   | 71/112 [00:31<00:18,  2.23it/s][A
- 64%|██████▍   | 72/112 [00:31<00:17,  2.24it/s][A
- 65%|██████▌   | 73/112 [00:32<00:17,  2.24it/s][A
- 66%|██████▌   | 74/112 [00:32<00:17,  2.23it/s][A
- 67%|██████▋   | 75/112 [00:33<00:16,  2.26it/s][A
- 68%|██████▊   | 76/112 [00:33<00:15,  2.29it/s][A
- 69%|██████▉   | 77/112 [00:34<00:15,  2.28it/s][A
- 70%|██████▉   | 78/112 [00:34<00:15,  2.26it/s][A
- 71%|███████   | 79/112 [00:34<00:14,  2.26it/s][A
- 71%|███████▏  | 80/112 [00:35<00:14,  2.26it/s][A
- 72%|███████▏  | 81/112 [00:35<00:13,  2.28it/s][A
- 73%|███████▎  | 82/112 [00:36<00:13,  2.29it/s][A
- 74%|███████▍  | 83/112 [00:36<00:12,  2.31it/s][A
- 75%|███████▌  | 84/112 [00:37<00:12,  2.24it/s][A
- 76%|███████▌  | 85/112 [00:37<00:11,  2.26it/s][A
- 77%|███████▋  | 86/112 [00:37<00:11,  2.28it/s][A
- 78%|███████▊  | 87/112 [00:38<00:10,  2.29it/s][A
- 79%|███████▊  | 88/112 [00:38<00:10,  2.32it/s][A
- 79%|███████▉  | 89/112 [00:39<00:09,  2.33it/s][A
- 80%|████████  | 90/112 [00:39<00:09,  2.35it/s][A
- 81%|████████▏ | 91/112 [00:40<00:08,  2.35it/s][A
- 82%|████████▏ | 92/112 [00:40<00:08,  2.35it/s][A
- 83%|████████▎ | 93/112 [00:40<00:08,  2.33it/s][A
- 84%|████████▍ | 94/112 [00:41<00:07,  2.31it/s][A
- 85%|████████▍ | 95/112 [00:41<00:07,  2.31it/s][A
- 86%|████████▌ | 96/112 [00:42<00:06,  2.33it/s][A
- 87%|████████▋ | 97/112 [00:42<00:06,  2.33it/s][A
- 88%|████████▊ | 98/112 [00:43<00:06,  2.32it/s][A
- 88%|████████▊ | 99/112 [00:43<00:05,  2.28it/s][A
- 89%|████████▉ | 100/112 [00:43<00:05,  2.29it/s][A
- 90%|█████████ | 101/112 [00:44<00:04,  2.29it/s][A
- 91%|█████████ | 102/112 [00:44<00:04,  2.30it/s][A
- 92%|█████████▏| 103/112 [00:45<00:03,  2.31it/s][A
- 93%|█████████▎| 104/112 [00:45<00:03,  2.35it/s][A
- 94%|█████████▍| 105/112 [00:46<00:02,  2.37it/s][A
- 95%|█████████▍| 106/112 [00:46<00:02,  2.41it/s][A
- 96%|█████████▌| 107/112 [00:46<00:02,  2.42it/s][A
- 96%|█████████▋| 108/112 [00:47<00:01,  2.41it/s][A
- 97%|█████████▋| 109/112 [00:47<00:01,  2.43it/s][A
- 98%|█████████▊| 110/112 [00:48<00:00,  2.44it/s][A
- 99%|█████████▉| 111/112 [00:48<00:00,  2.46it/s][A
-100%|██████████| 112/112 [00:49<00:00,  2.23it/s][A                                             
-                                                 [A{'eval_loss': 2.2815146446228027, 'eval_runtime': 50.8147, 'eval_samples_per_second': 17.633, 'eval_steps_per_second': 2.204, 'epoch': 0.0}
-100%|██████████| 6/6 [01:14<00:00,  3.95s/it]
-100%|██████████| 112/112 [00:49<00:00,  2.23it/s][A
-                                                 [A                                             {'eval_seg_where_loss': 3.3680250500230504, 'eval_seg_where_acc': 0.5023682652457075, 'eval_seg_where_tokens': 10134.0, 'eval_seg_color_loss': 2.1777835965925907, 'eval_seg_color_acc': 0.5070486858076845, 'eval_seg_color_tokens': 83207.0, 'eval_seg_eos_loss': 0.0804237375102405, 'eval_seg_eos_acc': 1.0, 'eval_seg_eos_tokens': 896.0, 'eval_seg_assistant_loss': 2.285837465617777, 'eval_seg_assistant_acc': 0.5112323185160818, 'epoch': 0.0}
-100%|██████████| 6/6 [01:14<00:00,  3.95s/it]Saving model checkpoint to /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6
-Configuration saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/config.json
-Configuration saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/generation_config.json
-The model is bigger than the maximum size per checkpoint (5GB) and is going to be split in 2 checkpoint shards. You can find where each parameters has been saved in the index located at /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/model.safetensors.index.json.
-Image processor saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/preprocessor_config.json
-chat template saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/chat_template.jinja
-tokenizer config file saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/tokenizer_config.json
-Special tokens file saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/special_tokens_map.json
-Video processor saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/video_preprocessor_config.json
-chat template saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/checkpoint-6/chat_template.jinja
-
-
-Training completed. Do not forget to share your model on huggingface.co/models =)
-
-
-                                             {'train_runtime': 632.3919, 'train_samples_per_second': 0.304, 'train_steps_per_second': 0.009, 'train_loss': 0.8263768355051676, 'epoch': 0.0}
-100%|██████████| 6/6 [10:32<00:00,  3.95s/it]100%|██████████| 6/6 [10:32<00:00, 105.40s/it]
-Saving model checkpoint to /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume
-Configuration saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/config.json
-Configuration saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/generation_config.json
-The model is bigger than the maximum size per checkpoint (5GB) and is going to be split in 2 checkpoint shards. You can find where each parameters has been saved in the index located at /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/model.safetensors.index.json.
-Image processor saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/preprocessor_config.json
-chat template saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/chat_template.jinja
-tokenizer config file saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/tokenizer_config.json
-Special tokens file saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/special_tokens_map.json
-Video processor saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/video_preprocessor_config.json
-chat template saved in /mnt/nfs/bc/runs/q3vl_smoke_joint_20260805/phaseC_resume/chat_template.jinja
-2026-08-05 03:17:34,394 INFO [__main__] training finished: {'train_runtime': 632.3919, 'train_samples_per_second': 0.304, 'train_steps_per_second': 0.009, 'total_flos': 418711928832.0, 'train_loss': 0.8263768355051676, 'epoch': 0.0012059089538739825}

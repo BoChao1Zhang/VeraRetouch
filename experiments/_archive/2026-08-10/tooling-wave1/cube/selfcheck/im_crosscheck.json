@@ -1,9 +1,0 @@
-{
- "npy": "/var/cache/veradata/dcube/npy33/e18__e18_000001.npy",
- "max_abs": 0.036425553387417285,
- "mean_abs": 0.0003671895164690886,
- "de00_max": 0.7523918509849072,
- "de00_mean": 0.0268571682082753,
- "verdict_convention_ok": true,
- "note": "residual = IM trilinear-on-64^3 vs our tetrahedral-on-33^3 + 16-bit quantization; a row-order error would give tens of \u0394E"
-}

@@ -1,4 +1,0 @@
-pid=1033539
-cmd=/home/bc/envs/q3vl_sft/bin/python merge_genctx.py --split train --mode forced_color --shard-root /mnt/nfs-ro/bc/data/datasets/where_b-20260805/genwhere/_shards/forced_color/train --num-shards 8 --out /mnt/nfs/bc/data/datasets/where_b-20260805/genwhere/train-forced_color
-log=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b/genctx_jobs/logs/merge_forced_color_train.log
-started=2026-08-10T19:56:25+08:00

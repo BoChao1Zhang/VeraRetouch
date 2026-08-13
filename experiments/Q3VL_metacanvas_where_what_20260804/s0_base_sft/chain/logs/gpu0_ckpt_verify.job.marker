@@ -1,8 +1,0 @@
-pid=1580925
-cmd=bash /home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/job_gpu0_ckpt_verify.sh
-log=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/gpu0_ckpt_verify.log
-rc_file=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/gpu0_ckpt_verify.rc
-phase_dir=/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/s0_base_sft/chain/logs/phase_gpu0_ckpt_verify
-started_at=2026-08-05T11:49:53+08:00
-liveness_ps_p=true
-dispatched_by=./chain_after_sft.sh

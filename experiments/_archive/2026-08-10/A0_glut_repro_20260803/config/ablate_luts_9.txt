@@ -1,9 +1,0 @@
-e18__e18_001006	/home/bc/data/datasets/recipes/e18/e18_001006.cube
-e18__e18_001514	/home/bc/data/datasets/recipes/e18/e18_001514.cube
-e18__e18_001615	/home/bc/data/datasets/recipes/e18/e18_001615.cube
-e18__e18_001959	/home/bc/data/datasets/recipes/e18/e18_001959.cube
-e18__e18_001961	/home/bc/data/datasets/recipes/e18/e18_001961.cube
-e18__e18_002049	/home/bc/data/datasets/recipes/e18/e18_002049.cube
-e18__e18_002594	/home/bc/data/datasets/recipes/e18/e18_002594.cube
-e18__e18_002631	/home/bc/data/datasets/recipes/e18/e18_002631.cube
-quandian__quandian_004319	/home/bc/data/datasets/recipes/quandian/quandian_004319.cube

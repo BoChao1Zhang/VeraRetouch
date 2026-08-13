@@ -1,1 +1,0 @@
-{"run_dir":"/home/bc/data/runs/where_b/amort_B2PCH_shuffle_20260812","pueue_id":43,"git_commit":"9c9fdbd5d4814da3fb2a9090073a9b8d03c33339","baseline_ckpt":"/home/bc/data/runs/where_b/amort_P3prime_cont2_20260811/amort_step3500.pt","baseline_miou_normal_only":0.79095,"trainable_params":3855296,"pch":"full"}
