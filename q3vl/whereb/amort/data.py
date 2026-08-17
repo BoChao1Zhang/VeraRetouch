@@ -16,10 +16,14 @@ What this adds on top of :class:`q3vl.whereb.data.BatchBuilder`
 
 from __future__ import annotations
 
+import json
 import re
+import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 import torch
@@ -35,7 +39,24 @@ from .simfield import SimFieldNorm, WordEmbedder, gaussian_soften, similarity_fi
     subject_nouns
 
 __all__ = ["ORIENTATION_WORDS", "word_ids_of", "family_labels", "is_semantic_text",
-           "ForeignIndex", "AmortSampleInputs", "AmortBatchBuilder"]
+           "ForeignIndex", "ConstructGeomStore", "AmortSampleInputs",
+           "AmortBatchBuilder"]
+
+#: the three GT-code sources ``geom_source`` accepts, and what each one is.
+GEOM_SOURCES = ("parsed", "vrmeta", "construction")
+
+
+def check_geom_source(source: str) -> str:
+    """Reject an unrecognised ``geom_source`` instead of falling through.
+
+    The dispatch used to be ``if vrmeta ... else parsed``, so a typo in a queue
+    job would have run the deployable arm under the GT arm's name and produced a
+    perfectly plausible number.  Queue jobs are addressed by name, not by id.
+    """
+    if source not in GEOM_SOURCES:
+        raise ValueError(
+            f"geom_source must be one of {GEOM_SOURCES}, got {source!r}")
+    return source
 
 
 #: Frozen 32-slot vocabulary, parsed from the **instruction text only**.
@@ -70,6 +91,82 @@ def is_semantic_text(where_text: str) -> bool:
     from q3vl.whereb.scripts.where_typeword_router import route
 
     return route(where_text or "")[0] == "semantic"
+
+
+class ConstructGeomStore:
+    """AMD-8 GT code: the geometry parameters the reasoning template read.
+
+    Why a sqlite sidecar and not the published per-sample member: the parameters
+    are in the databuild projection (``canonical_candidates.payload->'geometry'``,
+    keyed by ``candidate_id``) and **not** in ``.vrmeta.json``, which carries
+    ``slot_id`` and ``region`` only.  A training loop cannot open a Postgres
+    connection per sample -- and ``psycopg`` is not even installed in the
+    training environment -- so the parameters are materialised once by
+    ``scripts/export_construct_geometry.py``.
+
+    Why not ``region``: it is a 3x3 centroid bucket of the rendered mask whose
+    middle cell holds 82% of V_where, and the campaign data discipline forbids
+    reading it as a direction.  A sample this store cannot answer for therefore
+    gets its shape slot from ``slot_id`` and **zeros** in direction/extent --
+    never a region backfill.
+    """
+
+    def __init__(self, path, missing_is_fatal: bool = False):
+        self.path = str(path)
+        self.missing_is_fatal = bool(missing_is_fatal)
+        # ONE CONNECTION PER THREAD -- sqlite objects may not cross threads, and
+        # this store is read from the same builder that `family_labels` showed
+        # (72% of 75,544 lookups) degrades *silently* when that is violated.
+        self._local = threading.local()
+        self.n_hit = self.n_miss = 0
+        if not Path(self.path).is_file():
+            raise FileNotFoundError(
+                f"construction geometry sidecar not found: {self.path} -- build "
+                "it with q3vl/whereb/scripts/export_construct_geometry.py")
+
+    def _conn(self):
+        c = getattr(self._local, "conn", None)
+        if c is None:
+            c = self._local.conn = sqlite3.connect(
+                f"file:{self.path}?mode=ro", uri=True)
+        return c
+
+    def row(self, candidate_id: str) -> dict[str, Any] | None:
+        got = self._conn().execute(
+            "select slot_id, slot_mode, geometry, effective_alpha_mean "
+            "from candidate_geometry where candidate_id=?",
+            (str(candidate_id),)).fetchone()
+        if got is None:
+            return None
+        return {"slot_id": got[0], "slot_mode": got[1],
+                "geometry": json.loads(got[2]) if got[2] else None,
+                "effective_alpha_mean": got[3]}
+
+    def code(self, record: Mapping[str, Any]):
+        """``(c_disc, c_cont, conf)`` for one q3vl dataset record, or ``None``.
+
+        ``size`` comes from ``image.oriented_w/h`` -- the aspect ratio the
+        annotator saw.  Without it the axis bucket is computed in normalised
+        coordinates, where a 3:2 frame moves 45 deg to 33.7 deg and samples
+        cross orientation bucket edges.
+        """
+        from .geomparse import geom_features_from_construction
+
+        got = self.row(str(record.get("candidate_id") or ""))
+        if got is None:
+            self.n_miss += 1
+            if self.missing_is_fatal:
+                raise KeyError(f"no construction geometry for "
+                               f"{record.get('sample_id')}")
+            return None
+        self.n_hit += 1
+        img = record.get("image") or {}
+        size = None
+        if img.get("oriented_w") and img.get("oriented_h"):
+            size = (float(img["oriented_w"]), float(img["oriented_h"]))
+        return geom_features_from_construction(
+            got["slot_id"], got["geometry"], size,
+            alpha_mean=got["effective_alpha_mean"])
 
 
 def family_labels(ds, indices: Sequence[int], workers: int = 32) -> dict[str, str]:
@@ -215,6 +312,21 @@ class AmortSampleInputs:
     route_semantic: bool
     geom: Any = None
     meta: dict[str, Any] = field(default_factory=dict)
+    # --- EPR-018..023 (all defaults None: the live four never see them) ------
+    #: the language condition, ``(K, 2560)``.  ``K = 1`` for every
+    #: single-position readout; see :mod:`q3vl.whereb.readout`.
+    h_cond: torch.Tensor | None = None
+    #: the :class:`~q3vl.whereb.readout.ReplyPlan` that produced ``h_cond``,
+    #: as a dict -- the recorded index, not a searched-for one.
+    readout: dict[str, Any] | None = None
+    #: pixel-resolution GT, ``(H, W)``, from :mod:`q3vl.whereb.amort.pixgt`
+    gt_pix: torch.Tensor | None = None
+    #: ``render`` / ``cgt1024`` / ``maskhi512`` -- the guard column that says how
+    #: much of a run's supervision was the analytic target it claims
+    gt_pix_source: str = ""
+    #: the :class:`~q3vl.whereb.amort.pixgt.PixGT` itself, kept for the
+    #: point-sampled arms (closed-form evaluation at arbitrary coordinates)
+    pixgt: Any = None
 
 
 class AmortBatchBuilder:
@@ -242,9 +354,16 @@ class AmortBatchBuilder:
         geom_inject: bool = False,
         geom_shuffle: bool = False,
         geom_source: str = "parsed",
+        geom_db: str | None = None,
         geom_seed: int = 20260811,
         attn_implementation: str = "",
         checkpoint: str = "",
+        #: EPR-018..023.  All three default to None = the exact pre-existing
+        #: path: `where_ids = ctx.token_ids`, `h_cond`/`gt_pix` never set.
+        readout=None,                 # q3vl.whereb.readout.ReadoutBuilder
+        color_texts: Mapping[str, str] | None = None,
+        pixgt=None,                   # q3vl.whereb.amort.pixgt.PixGTProvider
+        pixgt_size=None,              # (gh, gw) -> (H, W)
     ):
         self.collator = collator
         self.tokenizer = collator.tokenizer
@@ -280,11 +399,29 @@ class AmortBatchBuilder:
         self.geom_inject = geom_inject
         #: negative control: permute the slots, preserve the active-bit count
         self.geom_shuffle = geom_shuffle
-        #: "parsed" = from the generated <where> text (deployable, ~82% quality)
-        #: "vrmeta" = the construction-side ground truth (go/no-go upper bound)
-        self.geom_source = geom_source
+        #: "parsed"       = from the generated <where> text (deployable, ~82%)
+        #: "vrmeta"       = DEPRECATED residual GT: shape from slot_id, direction
+        #:                  from `region` (82% the constant "center"), no extent
+        #: "construction" = AMD-8 GT: the geometry parameters the v4a reasoning
+        #:                  template read, so direction and extent are real
+        self.geom_source = check_geom_source(geom_source)
         self._vrmeta_cache: dict[str, Any] = {}
+        self._construct_cache: dict[str, Any] = {}
+        self._construct_errors: dict[str, int] = {}
+        self.geom_store: ConstructGeomStore | None = None
+        if geom_inject and geom_source == "construction":
+            from q3vl.whereb.config import CONSTRUCT_GEOM_DB
+            self.geom_store = ConstructGeomStore(geom_db or CONSTRUCT_GEOM_DB)
         self._geom_rng = np.random.default_rng(geom_seed)
+        self._geom_seen = self._geom_nonzero = 0
+        # --- EPR-018..023 seams -------------------------------------------
+        self.readout = readout
+        self.color_texts = dict(color_texts or {})
+        self.pixgt = pixgt
+        #: default: the decoder-native 4x grid every one of the six proposals
+        #: supervises on.  Overridden per arm (MATTE renders at spec-5).
+        self.pixgt_size = pixgt_size or (lambda gh, gw: (4 * gh, 4 * gw))
+        self.readout_errors: dict[str, int] = {}
         if not getattr(vlm, "want_merger", False):
             raise RuntimeError(
                 "AmortBatchBuilder needs the merger output; build the FrozenVLM "
@@ -384,6 +521,35 @@ class AmortBatchBuilder:
             self._vrmeta_cache[sample_id] = v
         return self._vrmeta_cache[sample_id]
 
+    def _construction_code(self, sample_id: str):
+        """AMD-8 GT code, cached per sample; thread-local sqlite inside the store.
+
+        A sample the sidecar cannot answer for keeps whatever ``slot_id`` says
+        about its shape and takes zeros in direction/extent -- the same
+        degradation the EPR-004 recompute reports for the ``semantic`` family,
+        which declares no geometry by construction.  It is never backfilled from
+        `region`.
+        """
+        if sample_id in self._construct_cache:
+            return self._construct_cache[sample_id]
+        v = None
+        try:
+            idx = self.id_to_index.get(sample_id)
+            if idx is not None and self.dataset is not None and self.geom_store:
+                got = self.geom_store.code(self.dataset.record(idx))
+                if got is not None:
+                    v = got[0]
+        except Exception as exc:  # noqa: BLE001
+            # Counted, not swallowed.  A GT arm whose lookup is broken trains on
+            # an all-zero code and reports a perfectly ordinary loss curve; the
+            # only way that is distinguishable from "the code did not help" is
+            # this counter reaching `facts()`.
+            key = f"{type(exc).__name__}: {str(exc)[:80]}"
+            self._construct_errors[key] = self._construct_errors.get(key, 0) + 1
+            v = None
+        self._construct_cache[sample_id] = v
+        return v
+
     def _geom_of(self, text: str, sample_id: str = ""):
         """Geometry code for the conditioning; source per `geom_source`."""
         if not self.geom_inject:
@@ -396,8 +562,14 @@ class AmortBatchBuilder:
             v = self._vrmeta_code(sample_id)
             if v is None:
                 v = _np.zeros(GEOM_DIM, dtype=_np.float32)
+        elif self.geom_source == "construction":
+            v = self._construction_code(sample_id)
+            if v is None:
+                v = _np.zeros(GEOM_DIM, dtype=_np.float32)
         else:
             v = geom_features(text or "")
+        self._geom_seen += 1
+        self._geom_nonzero += int(v.sum() > 0)
         if self.geom_shuffle:
             v = shuffle_features(v, self._geom_rng)
         return torch.from_numpy(v).to(self.device)
@@ -505,20 +677,28 @@ class AmortBatchBuilder:
         # bools are not `True`, so compare by value rather than identity.
         norm_modes = [m if isinstance(m, str) else ("foreign" if bool(m) else "gt")
                       for m in modes]
-        items, ctxs, instructions = [], [], []
+        items, ctxs, instructions, plans = [], [], [], []
         for s, mode in zip(samples, norm_modes):
             ctx, instr, fake = self.context_for(s, mode)
             ctxs.append((ctx, bool(fake)))
             instructions.append(instr)
             enc = self.collator.encode_one(_PromptShim(s, instruction=instr))
             n_p = enc["n_prompt_tokens"]
+            # EPR-018..023: the reply span the readout needs is longer than the
+            # <where> span the live arms feed (it runs through <color> to
+            # <seg_where>), and the readout index is recorded HERE, at
+            # concatenation time -- never searched for afterwards.
+            plan = self._plan_for(s, ctx)
+            plans.append(plan)
+            where_ids = ctx.token_ids if plan is None else plan.token_ids
             items.append(EncodeItem(sample_id=s.sample_id, image=s.image,
                                     prompt_ids=enc["input_ids"][:n_p],
-                                    where_ids=ctx.token_ids))
+                                    where_ids=where_ids))
 
         encoded = self.vlm.encode(items)
         out: list[AmortSampleInputs] = []
-        for s, e, (ctx, fake), instr in zip(samples, encoded, ctxs, instructions):
+        for s, e, (ctx, fake), instr, plan in zip(samples, encoded, ctxs,
+                                                  instructions, plans):
             gh, gw = e.grid_h, e.grid_w
             flat = e.f_pre.reshape(gh * gw, -1)
             with torch.no_grad():
@@ -543,6 +723,15 @@ class AmortBatchBuilder:
             gt_low = area_resize(gt_hi[None, None], (gh, gw))[0, 0].to(self.device)
             wid = word_ids_of(instr)
             fam = self.families.get(s.sample_id, "unknown")
+            h_cond = None
+            if plan is not None:
+                from q3vl.whereb.readout import readout_hidden
+
+                h_cond = readout_hidden(e.h_where, plan).to(self.device)
+            pg = None
+            if self.pixgt is not None:
+                pg = self.pixgt.get(s, record=self._record_of(s), family=fam,
+                                    size=self.pixgt_size(gh, gw))
             out.append(AmortSampleInputs(
                 sample_id=s.sample_id,
                 feat=feat,
@@ -568,15 +757,76 @@ class AmortBatchBuilder:
                 route_semantic=is_semantic_text(ctx.text or s.where_text),
                 geom=self._geom_of(ctx.text or s.where_text, s.sample_id),
                 meta={"instruction": instr, "n_words": len(wid),
+                      # the text the sample was CONDITIONED on, so a code
+                      # producer downstream parses the same span the tower saw
+                      # rather than the sample's own GT under a control context
+                      "context_text": ctx.text or s.where_text,
                       "render_mode": s.meta.get("render_mode"),
                       "build": s.meta.get("build"),
                       "winner_confidence": s.meta.get("winner_confidence")},
+                h_cond=h_cond,
+                readout=(plan.to_dict() if plan is not None else None),
+                gt_pix=(None if pg is None else pg.alpha.to(self.device)),
+                gt_pix_source=("" if pg is None else pg.source),
+                pixgt=pg,
             ))
         return out
 
+    # -- EPR-018..023 seams -------------------------------------------------
+    def _plan_for(self, s, ctx):
+        """The reply span + readout index for one sample, or ``None``.
+
+        ``None`` whenever no ``ReadoutBuilder`` was attached, which is every
+        live arm -- and then ``build`` uses ``ctx.token_ids`` exactly as before.
+        """
+        if self.readout is None:
+            return None
+        color_ids = color_text = None
+        if self.readout.needs_color():
+            if ctx.mode == "generated" and self.genctx is not None:
+                color_ids = self.genctx.color_ids(s.sample_id)
+            else:
+                color_text = self.color_texts.get(s.sample_id)
+                if color_text is None:
+                    color_text = getattr(s, "color_text", None)
+                if color_text is None:
+                    raise KeyError(
+                        f"{s.sample_id}: the teacher <color> span is needed by "
+                        f"--readout {self.readout.spec.kind} but no colour text "
+                        "is available.  Pass color_texts= to AmortBatchBuilder "
+                        "(build it with q3vl.whereb.readout.color_texts_of).")
+        return self.readout.plan_for(sample_id=s.sample_id, where_ctx=ctx,
+                                     color_text=color_text, color_ids=color_ids)
+
+    def _record_of(self, s) -> dict[str, Any] | None:
+        """The raw dataset record, when the pixel-GT source actually needs it.
+
+        Only the ``.cgt.png`` branch does (it resolves through the build's own
+        catalogue); the analytic branch reads ``candidate_id`` off ``s.meta``
+        and the ``.maskhi`` branch needs only the sample id.  So this is lazy --
+        a second shard read per sample is not paid unless it buys something.
+        """
+        if self.pixgt is None or self.dataset is None:
+            return None
+        if not self.pixgt.needs_record(self.families.get(s.sample_id, "unknown")):
+            return None
+        i = self.id_to_index.get(s.sample_id)
+        if i is None:
+            return None
+        return self.dataset.record(i)
+
     def facts(self) -> dict[str, Any]:
         rep = self.domain_reports
+        extra: dict[str, Any] = {}
+        # additive only when the seam is in use, so the live arms' `facts()`
+        # keeps its exact shape
+        if self.readout is not None:
+            extra["readout"] = self.readout.facts()
+        if self.pixgt is not None:
+            extra["gt_pix"] = self.pixgt.facts()
+            extra["gt_pix_source"] = self.pixgt.facts()["counts"]
         return {
+            **extra,
             "norm": self.norm.to_dict(),
             "n_domain_checks": len(rep),
             "max_frac_outside_tol": max((r["frac_outside_tol"] for r in rep), default=0.0),
@@ -592,4 +842,14 @@ class AmortBatchBuilder:
             "sep_margin": self.sep_margin,
             "context_fallbacks": dict(self.context_fallbacks),
             "domain_violations": self.domain_violations,
+            # loud, not silent: a broken sidecar lookup degrades the GT arm into
+            # a shape-only arm and nothing else in the run would ever complain
+            "geom_source": self.geom_source if self.geom_inject else None,
+            "geom_code_nonzero_fraction": (
+                self._geom_nonzero / max(1, self._geom_seen)
+                if self.geom_inject else None),
+            "geom_store": ({"hit": self.geom_store.n_hit,
+                            "miss": self.geom_store.n_miss,
+                            "errors": dict(self._construct_errors)}
+                           if self.geom_store is not None else None),
         }

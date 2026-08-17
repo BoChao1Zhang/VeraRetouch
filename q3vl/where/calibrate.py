@@ -123,7 +123,29 @@ class WhereASample:
         return self.mask_hi is not None and self.guide_hi is not None
 
 
-def make_scheduler(optimizer, total_steps: int, warmup_ratio: float, kind: str):
+#: every ``kind`` :func:`make_scheduler` understands.  Anything else keeps the
+#: historical "warm up, then hold at 1.0" behaviour -- unchanged on purpose, the
+#: live arms pass ``"cosine"`` and the ceiling rows pass a constant.
+SCHEDULER_KINDS: tuple[str, ...] = (
+    "cosine", "constant", "linear", "multistep", "warmup_multistep",
+)
+
+
+def scale_milestones(fracs, total_steps: int) -> list[int]:
+    """``(60000/90000, 80000/90000), 1200 -> [800, 1067]``.
+
+    The reference recipes in the EPR-018..023 batch quote absolute iteration
+    counts against 90k / 134k / 5k horizons; this campaign runs 1200 steps
+    (U4 step-matching), so every milestone is carried over **as a fraction** and
+    the arithmetic is done here instead of once per arm.
+    """
+    return [int(round(float(f) * int(total_steps))) for f in fracs]
+
+
+def make_scheduler(optimizer, total_steps: int, warmup_ratio: float, kind: str,
+                   *, warmup_steps: int | None = None,
+                   warmup_factor: float | None = None,
+                   milestones=(), gamma: float = 0.1, values=None):
     """Protocol 10.2: linear warmup over 3% of steps, then cosine to 0.
 
     ``total_steps`` must be the number of steps that will *actually* run, i.e.
@@ -131,12 +153,57 @@ def make_scheduler(optimizer, total_steps: int, warmup_ratio: float, kind: str):
     unfiltered count stretches the warmup and leaves cosine unfinished, so the
     arms stop at different points on the schedule and stop being comparable
     (REVIEW-impl-WhereA B-3).
+
+    The keyword arguments are the EPR-018..023 extension; **with none of them
+    passed, every branch below is the original two-line body**, so the live arms
+    get a bit-identical schedule.
+
+    ``kind`` beyond ``"cosine"``:
+
+    ``"linear"``
+        LISA's DeepSpeed ``WarmupDecayLR``: linear warmup, then linear decay to
+        0 at ``total_steps`` (``train_ds.py:279-287``).
+    ``"multistep"``
+        ``gamma ** #(milestones passed)`` after the warmup, or an explicit
+        ``values`` ladder (ViTMatte's ``MultiStepParamScheduler(values=[1.0,
+        0.1, 0.05])``, ``ViTMatte_S_100ep.py:12``).
+    ``"warmup_multistep"``
+        detectron2's ``WarmupMultiStepLR``: the same ladder, but the warmup goes
+        from ``warmup_factor`` to 1 linearly (``defaults.py:549-551``,
+        ``WARMUP_FACTOR = 1/1000``) rather than from ``1/warmup``.
+
+    ``warmup_steps`` overrides the ``warmup_ratio`` derivation (the recipes
+    specify absolute warmup lengths); ``milestones`` are absolute steps -- use
+    :func:`scale_milestones` to carry a fraction over.
     """
-    warmup = max(1, int(round(total_steps * warmup_ratio)))
+    warmup = (max(1, int(round(total_steps * warmup_ratio)))
+              if warmup_steps is None else max(1, int(warmup_steps)))
+    ms = sorted(int(m) for m in (milestones or ()))
+    if values is not None:
+        values = [float(v) for v in values]
+        if len(values) != len(ms) + 1:
+            raise ValueError(
+                f"multistep values must have len(milestones) + 1 = {len(ms) + 1} "
+                f"entries, got {len(values)}")
+    if kind in ("multistep", "warmup_multistep") and not ms:
+        raise ValueError(f"scheduler kind {kind!r} needs milestones")
+
+    def _ladder(step: int) -> float:
+        k = sum(1 for m in ms if step >= m)
+        return values[k] if values is not None else gamma ** k
 
     def lr_lambda(step: int) -> float:
         if step < warmup:
-            return (step + 1) / warmup
+            if warmup_factor is None:
+                return (step + 1) / warmup
+            # detectron2 WarmupParamScheduler: factor -> 1 over `warmup` steps
+            a = step / warmup
+            return float(warmup_factor) * (1.0 - a) + a
+        if kind == "linear":
+            p = (step - warmup) / max(1, total_steps - warmup)
+            return max(0.0, 1.0 - min(1.0, p))
+        if kind in ("multistep", "warmup_multistep"):
+            return _ladder(step)
         if kind != "cosine":
             return 1.0
         p = (step - warmup) / max(1, total_steps - warmup)

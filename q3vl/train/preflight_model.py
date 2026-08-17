@@ -222,6 +222,8 @@ def check_special_tokens(processor, special_ids: dict[str, int], model, out_dir:
     off_diag = pair[~torch.eye(len(SPECIAL_TOKENS), dtype=torch.bool, device=pair.device)]
 
     saved_files = sorted(p.name for p in save_dir.iterdir())
+    # Every check below is written over ``SPECIAL_TOKENS`` rather than a literal
+    # 4, so the v2seg 6-tuple (incl. <seg_where>/<seg_color>) is covered as-is.
     checks = {
         "all_single_token": True,  # verify_single_token would have raised
         "ids_distinct": len(set(ids.values())) == len(SPECIAL_TOKENS),
@@ -401,7 +403,9 @@ def run_batch_plan_probe(model, collator, device, steps: int = 2) -> dict[str, A
 
 # --- pipeline checks on mock data -----------------------------------------
 def check_pipeline(collator, dataset) -> dict[str, Any]:
-    from .constants import IGNORE_INDEX, SEG_COLOR, SEG_EOS, SEG_IGNORE, SEG_WHERE
+    from .constants import (
+        IGNORE_INDEX, SEG_COLOR, SEG_EOS, SEG_IGNORE, SEG_SEGCOLOR, SEG_SEGWHERE, SEG_WHERE,
+    )
 
     tok = collator.tokenizer
     ids = {t: tok(t, add_special_tokens=False)["input_ids"][0] for t in SPECIAL_TOKENS}
@@ -423,7 +427,11 @@ def check_pipeline(collator, dataset) -> dict[str, Any]:
         ),
         "prompt_fully_masked": bool((segs[~supervised] == SEG_IGNORE).all()),
         "where_before_color": True,
+        # named for the original 4-tuple; the loop below covers every entry of
+        # SPECIAL_TOKENS, i.e. all 6 under v2seg.
         "all_four_tokens_supervised": True,
+        # v2seg: </color> < <seg_where> < <seg_color> < <|im_end|>
+        "seg_tail_between_color_and_eos": True,
         "seq_within_limit": int(input_ids.shape[1]) <= collator.max_length,
     }
     for row in range(n):
@@ -431,8 +439,15 @@ def check_pipeline(collator, dataset) -> dict[str, Any]:
         w = (s == SEG_WHERE).nonzero().flatten()
         c = (s == SEG_COLOR).nonzero().flatten()
         e = (s == SEG_EOS).nonzero().flatten()
+        sw = (s == SEG_SEGWHERE).nonzero().flatten()
+        sc = (s == SEG_SEGCOLOR).nonzero().flatten()
         if not (len(w) and len(c) and int(w[-1]) < int(c[0])):
             checks["where_before_color"] = False
+        tail_ok = len(c) and len(sw) == 1 and len(sc) == 1 and int(c[-1]) < int(sw[0]) < int(sc[0])
+        if tail_ok and len(e):  # len(e)==0 only when supervise_eos is off
+            tail_ok = int(sc[0]) < int(e[0])
+        if not tail_ok:
+            checks["seg_tail_between_color_and_eos"] = False
         row_ids = input_ids[row]
         for t, tid in ids.items():
             pos = (row_ids == tid).nonzero().flatten()

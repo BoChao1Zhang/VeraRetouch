@@ -23,7 +23,10 @@ from q3vl.whereb.fields import phi_dir_fast, predict_fields
 from q3vl.whereb.losses import curve_grid
 from q3vl.whereb.qwhere import fpre_grid_positions
 
-SPECIALS = ("<where>", "</where>", "<color>", "</color>")
+# Mirrors q3vl.train.constants.SPECIAL_TOKENS. The v2seg pair is APPENDED, so
+# the four original tokens keep ids 10..13 here just as they keep 151669..151672
+# in the real tokenizer.
+SPECIALS = ("<where>", "</where>", "<color>", "</color>", "<seg_where>", "<seg_color>")
 
 
 class FakeTokenizer:

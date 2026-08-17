@@ -47,6 +47,21 @@ MAX_QA_SCORER_INSTANCES = 4
 DEFAULT_QA_WINNER_MARGIN_ABSTAIN = 1.0
 DEFAULT_QA_WINNER_MARGIN_LOW = 2.0
 
+# How many groups one eligible source may produce.  Every build up to L7 rendered
+# each source at most once, so ``target_groups`` was silently capped by the size
+# of the eligible pool (L7: 28,189 sources against a 400,000 target).  Raising
+# this lets the pool be walked again, round-robin, with the coverage selector
+# handing the repeat pass a different major/minor/preset set — the diversity then
+# comes from source x preset rather than from source alone.  ``0`` means "walk
+# the pool until the target is met".  1 is the historical behaviour and the
+# default: at 1 the allocation, every derived ID and every journal line are
+# byte-identical to a build that predates the key.
+# Optional in [sources] so configs written before the key keep loading.
+DEFAULT_MAX_SOURCE_USES = 1
+# Typo guard only (``max_source_uses = 100000`` is a mistake, not a plan); the
+# real ceiling is target_groups.
+MAX_SOURCE_USES_LIMIT = 1000
+
 
 @dataclass(frozen=True, slots=True)
 class MixConfig:
@@ -58,6 +73,9 @@ class MixConfig:
 class SourcesConfig:
     subject_cache: Path
     postgres_dsn: str
+    # Trailing default keeps positional construction working; the loader always
+    # supplies the validated [sources] value.
+    max_source_uses: int = DEFAULT_MAX_SOURCE_USES
 
 
 @dataclass(frozen=True, slots=True)
@@ -417,13 +435,23 @@ def _build(data: Mapping[str, Any]) -> DatabuildConfig:
     mix = MixConfig(local=local_ratio, global_=global_ratio)
 
     sources_t = _table(data, "sources")
-    _keys(sources_t, {"subject_cache", "postgres_dsn"},
+    _keys(sources_t, {"subject_cache", "postgres_dsn", "max_source_uses"},
           {"subject_cache", "postgres_dsn"}, "sources")
+    max_source_uses = (
+        _typed(sources_t, "max_source_uses", int, "sources")
+        if "max_source_uses" in sources_t else DEFAULT_MAX_SOURCE_USES
+    )
+    if max_source_uses < 0 or max_source_uses > MAX_SOURCE_USES_LIMIT:
+        raise ConfigError(
+            "sources.max_source_uses must be 0 (unbounded) or in "
+            f"[1, {MAX_SOURCE_USES_LIMIT}]"
+        )
     sources = SourcesConfig(
         subject_cache=_absolute(_typed(sources_t, "subject_cache", str, "sources"),
                                 "sources.subject_cache"),
         postgres_dsn=_url(_typed(sources_t, "postgres_dsn", str, "sources"),
                           "sources.postgres_dsn", frozenset({"postgres", "postgresql"})),
+        max_source_uses=max_source_uses,
     )
 
     presets_t = _table(data, "presets")

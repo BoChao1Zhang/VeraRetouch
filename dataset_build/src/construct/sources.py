@@ -27,7 +27,7 @@ from dataset_build.tools.land import (
     SUBJECT_MIN_AREA,
 )
 
-from .config import MixConfig
+from .config import DEFAULT_MAX_SOURCE_USES, MixConfig
 from .state import stable_id
 
 
@@ -455,6 +455,43 @@ def scene_stratified_order(
     return ordered
 
 
+def _reuse_prefix_labels(
+    pool_size: int,
+    targets: Mapping[str, int],
+    mix: MixConfig,
+    max_source_uses: int,
+    target_groups: int,
+) -> list[str]:
+    """Mode labels for a pool that will be walked more than once.
+
+    With reuse the initial quota is no longer "one source per group": a mode
+    needs only ``ceil(target / uses)`` sources to reach its target, and the pool
+    is split so both modes run out of passes at the same time.  Anything left
+    over stays a replacement, exactly as it is without reuse.
+    """
+    # ``0`` means unbounded, which in practice is bounded by the target itself.
+    per_source = max_source_uses or max(1, target_groups)
+    need = {
+        mode: -(-int(targets[mode]) // per_source) for mode in ("local", "global")
+    }
+    if need["local"] + need["global"] <= pool_size:
+        counts = need
+    else:
+        # Scarce pool: split it by the weights the targets came from, then hand
+        # a mode that cannot consume its share back to the one that can.  Without
+        # the cap a zero-target mode would strand sources it will never render.
+        counts = largest_remainder({"local": mix.local, "global": mix.global_}, pool_size)
+        counts = {mode: min(counts[mode], need[mode]) for mode in need}
+        spare = pool_size - sum(counts.values())
+        for mode in sorted(need, key=lambda item: (-need[item], item)):
+            take = min(need[mode] - counts[mode], spare)
+            counts[mode] += take
+            spare -= take
+    labels = ["local"] * counts["local"]
+    labels.extend(["global"] * counts["global"])
+    return labels
+
+
 def allocate_sources(
     sources: Iterable[SourceRecord],
     *,
@@ -462,19 +499,29 @@ def allocate_sources(
     seed: int,
     target_groups: int,
     mix: MixConfig,
+    max_source_uses: int = DEFAULT_MAX_SOURCE_USES,
 ) -> SourceAllocation:
     ordered = scene_stratified_order(sources, build_id, seed)
     targets = mode_targets(mix, target_groups)
-    if len(ordered) < target_groups:
-        # The orchestrator records an explicit target shortfall after consuming this pool.
-        target_prefix = len(ordered)
+    if max_source_uses == DEFAULT_MAX_SOURCE_USES:
+        if len(ordered) < target_groups:
+            # The orchestrator records an explicit target shortfall after consuming this pool.
+            target_prefix = len(ordered)
+        else:
+            target_prefix = target_groups
+        prefix_labels = ["local"] * min(targets["local"], target_prefix)
+        prefix_labels.extend(
+            ["global"] * min(targets["global"], target_prefix - len(prefix_labels))
+        )
+        # If a scarce pool truncates one quota, fill remaining prefix positions by
+        # configured weight.
+        while len(prefix_labels) < target_prefix:
+            prefix_labels.append("local" if mix.local >= mix.global_ else "global")
     else:
-        target_prefix = target_groups
-    prefix_labels = ["local"] * min(targets["local"], target_prefix)
-    prefix_labels.extend(["global"] * min(targets["global"], target_prefix - len(prefix_labels)))
-    # If a scarce pool truncates one quota, fill remaining prefix positions by configured weight.
-    while len(prefix_labels) < target_prefix:
-        prefix_labels.append("local" if mix.local >= mix.global_ else "global")
+        prefix_labels = _reuse_prefix_labels(
+            len(ordered), targets, mix, max_source_uses, target_groups
+        )
+        target_prefix = len(prefix_labels)
     random.Random(_seed_int(build_id, seed, "initial-modes")).shuffle(prefix_labels)
 
     remaining_n = len(ordered) - target_prefix

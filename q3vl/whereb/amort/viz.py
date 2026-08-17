@@ -91,7 +91,8 @@ def write_panels(
                 out = model.forward_geo(x.feat, cond, x.phi_dir, sim=x.sim,
                                         center=x.center,
                                         geom=getattr(x, 'geom', None),
-                                        grid_h=x.grid_h, grid_w=x.grid_w)
+                                        grid_h=x.grid_h, grid_w=x.grid_w,
+                                        h_where=x.cond_h, h_mask=x.cond_mask)
             m = out["m_low"].float().cpu()
             gt = x.gt_low.float().cpu()
             gh, gw = x.grid_h, x.grid_w
@@ -111,7 +112,8 @@ def write_panels(
                     o2 = model.forward_geo(x2.feat, c2, x2.phi_dir, sim=x2.sim,
                                            center=x2.center,
                                            geom=getattr(x2, 'geom', None),
-                                           grid_h=x2.grid_h, grid_w=x2.grid_w)
+                                           grid_h=x2.grid_h, grid_w=x2.grid_w,
+                                           h_where=x2.cond_h, h_mask=x2.cond_mask)
                 m_shuf = o2["m_low"].float().cpu()
             except Exception:
                 m_shuf = None

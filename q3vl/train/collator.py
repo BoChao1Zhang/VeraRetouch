@@ -7,10 +7,18 @@ label boundaries are exact rather than recovered by string search:
     [ <|im_start|>assistant\\n                                                 ]   <- ignored
     [ <where> ... </where>                                                     ]   <- supervised, seg=1
     [ <color> ... </color>                                                     ]   <- supervised, seg=2
+    [ <seg_where>                                                              ]   <- supervised, seg=4  (v2seg)
+    [ <seg_color>                                                              ]   <- supervised, seg=5  (v2seg)
     [ <|im_end|>\\n                                                            ]   <- supervised, seg=3
 
 Everything before the first ``<where>`` token carries ``IGNORE_INDEX``: system,
 user text, chat template scaffolding and every image placeholder token.
+
+v2seg (2026-08-14): the two single-token readouts sit between ``</color>`` and
+``<|im_end|>`` so their hidden states have already attended to both completed
+reasoning segments. They are ALWAYS supervised -- ``supervise_eos`` governs the
+stop token only, and a readout token the model never learns to emit would make
+the readout head unreachable at inference time.
 
 The trailing ``<|im_end|>`` is supervised by default. Spec 4.4 names the two
 segments explicitly and is silent on the stop token; leaving it unsupervised is
@@ -28,7 +36,8 @@ import torch
 
 from .constants import (
     COLOR_CLOSE, COLOR_OPEN, IGNORE_INDEX, MODEL_MAX_LENGTH,
-    SEG_COLOR, SEG_EOS, SEG_IGNORE, SEG_WHERE, WHERE_CLOSE, WHERE_OPEN,
+    SEG_COLOR, SEG_COLOR_TOK, SEG_EOS, SEG_IGNORE, SEG_SEGCOLOR, SEG_SEGWHERE,
+    SEG_WHERE, SEG_WHERE_TOK, WHERE_CLOSE, WHERE_OPEN,
 )
 from .imageproc import assert_grid_matches
 
@@ -55,6 +64,9 @@ class CollatorStats:
     seq_lengths: list[int] = field(default_factory=list)
     where_lengths: list[int] = field(default_factory=list)
     color_lengths: list[int] = field(default_factory=list)
+    # v2seg: expected to be a constant 2; tracked so a tokenizer that ever
+    # splits a readout token into >1 piece shows up in the preflight snapshot.
+    seg_tail_lengths: list[int] = field(default_factory=list)
 
     def snapshot(self) -> dict[str, Any]:
         def q(xs, p):
@@ -73,6 +85,10 @@ class CollatorStats:
             },
             "where_tokens": {"p50": q(self.where_lengths, 0.5), "max": max(self.where_lengths, default=None)},
             "color_tokens": {"p50": q(self.color_lengths, 0.5), "max": max(self.color_lengths, default=None)},
+            "seg_tail_tokens": {
+                "p50": q(self.seg_tail_lengths, 0.5),
+                "max": max(self.seg_tail_lengths, default=None),
+            },
             "visual_token_hist": dict(sorted(self.n_visual_tokens.items())),
         }
 
@@ -116,9 +132,13 @@ class Sft2SegCollator:
 
     @staticmethod
     def build_target_text(where_text: str, color_text: str) -> str:
+        # Must stay byte-identical to the concatenation in `encode_one`;
+        # `check_concat_equivalence` asserts it (v2seg appends the two readout
+        # tokens directly after </color>, with no separator).
         return (
             f"{WHERE_OPEN}{where_text}{WHERE_CLOSE}"
             f"{COLOR_OPEN}{color_text}{COLOR_CLOSE}"
+            f"{SEG_WHERE_TOK}{SEG_COLOR_TOK}"
         )
 
     def _expand_image_placeholder(self, prompt_text: str, n_visual_tokens: int) -> str:
@@ -140,19 +160,28 @@ class Sft2SegCollator:
 
         where_ids = self._ids(f"{WHERE_OPEN}{sample.where_text}{WHERE_CLOSE}")
         color_ids = self._ids(f"{COLOR_OPEN}{sample.color_text}{COLOR_CLOSE}")
+        # v2seg: tokenised separately so each readout token keeps its own
+        # diagnostic segment id (they are single tokens, asserted by
+        # tokens.verify_single_token at startup).
+        segwhere_ids = self._ids(SEG_WHERE_TOK)
+        segcolor_ids = self._ids(SEG_COLOR_TOK)
         eos_ids = self._ids(f"{IM_END}\n")
 
-        input_ids = prompt_ids + where_ids + color_ids + eos_ids
+        input_ids = prompt_ids + where_ids + color_ids + segwhere_ids + segcolor_ids + eos_ids
         labels = (
             [IGNORE_INDEX] * len(prompt_ids)
             + where_ids
             + color_ids
+            + segwhere_ids   # v2seg readout tokens are always supervised
+            + segcolor_ids
             + (eos_ids if self.supervise_eos else [IGNORE_INDEX] * len(eos_ids))
         )
         segments = (
             [SEG_IGNORE] * len(prompt_ids)
             + [SEG_WHERE] * len(where_ids)
             + [SEG_COLOR] * len(color_ids)
+            + [SEG_SEGWHERE] * len(segwhere_ids)
+            + [SEG_SEGCOLOR] * len(segcolor_ids)
             + [SEG_EOS if self.supervise_eos else SEG_IGNORE] * len(eos_ids)
         )
 
@@ -171,6 +200,7 @@ class Sft2SegCollator:
             self.stats.seq_lengths.append(len(input_ids))
             self.stats.where_lengths.append(len(where_ids))
             self.stats.color_lengths.append(len(color_ids))
+            self.stats.seg_tail_lengths.append(len(segwhere_ids) + len(segcolor_ids))
         return {
             "input_ids": input_ids,
             "labels": labels,
@@ -178,6 +208,7 @@ class Sft2SegCollator:
             "n_prompt_tokens": len(prompt_ids),
             "n_where_tokens": len(where_ids),
             "n_color_tokens": len(color_ids),
+            "n_seg_tail_tokens": len(segwhere_ids) + len(segcolor_ids),  # v2seg
         }
 
     # -- batch --------------------------------------------------------------

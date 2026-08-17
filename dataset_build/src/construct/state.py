@@ -366,13 +366,60 @@ class ArtifactStore:
             if row.get("error_code") == ASSETS_LOST_CODE and row.get("group_id")
         }
 
+    def group_records(self) -> list[dict[str, Any]]:
+        """A snapshot of the durable groups, safe to walk off the writer's thread.
+
+        ``groups`` is a plain dict, and CPython raises ``RuntimeError: dictionary
+        changed size during iteration`` the instant an insert lands mid-walk.
+        While rendering and annotation ran strictly in series that could not
+        happen, so every reader walked the live dict.  With the annotation pass
+        driven beside the render loop it is the ordinary case — the render thread
+        appends groups while the annotation thread walks them looking for work —
+        and the two must not be allowed to meet.  The copy is taken under the
+        same lock ``append_group`` holds, so it is a whole number of groups.
+
+        Only the *list* is copied: the rows are shared, which is sound because a
+        journalled record is never mutated afterwards (``append_group`` deep-copies
+        what it is handed and every consumer treats what it gets as read-only).
+        ``failures`` needs no equivalent because it is a list, and list iteration
+        under a concurrent ``append`` is well defined — the iterator re-reads the
+        length each step, so it either sees the new row or stops before it.
+        """
+        with self._lock:
+            return list(self.groups.values())
+
+    def sft_records(self) -> list[dict[str, Any]]:
+        """A snapshot of the durable SFT rows; see ``group_records``.
+
+        The mirror image of that race: here the annotation threads are the
+        writers and the render thread is the reader, because every manifest it
+        writes counts SFT rows and reports the annotation backends.
+        """
+        with self._lock:
+            return list(self.sft.values())
+
     def completed_sources(self) -> set[str]:
-        return {str(row["source_id"]) for row in self.groups.values()}
+        return {str(row["source_id"]) for row in self.group_records()}
+
+    def completed_source_uses(self) -> dict[str, int]:
+        """Durable groups per source — the resume-stable ``use_index`` cursor.
+
+        Without source reuse this is ``completed_sources()`` with every value 1,
+        and the orchestrator's ``> use_index`` test degenerates to the membership
+        test it replaced.  Lost groups are counted here for the same reason
+        ``completed_sources`` counts them: a group whose assets died still owns
+        its ``group_id``, so its use is spent.
+        """
+        counts: dict[str, int] = {}
+        for row in self.group_records():
+            source_id = str(row["source_id"])
+            counts[source_id] = counts.get(source_id, 0) + 1
+        return counts
 
     def completed_annotation_tasks(self) -> set[str]:
         completed = {
             str(row["annotation_task_id"])
-            for row in self.sft.values()
+            for row in self.sft_records()
             if row.get("annotation_task_id")
         }
         completed.update(
@@ -386,7 +433,7 @@ class ArtifactStore:
         done = self.completed_annotation_tasks()
         lost = self.lost_group_ids()
         tasks: list[dict[str, Any]] = []
-        for group in sorted(self.groups.values(), key=lambda row: str(row["group_id"])):
+        for group in sorted(self.group_records(), key=lambda row: str(row["group_id"])):
             if str(group["group_id"]) in lost:
                 continue
             candidates = {row["candidate_id"]: row for row in group["candidates"]}

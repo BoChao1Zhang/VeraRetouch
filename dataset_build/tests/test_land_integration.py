@@ -200,8 +200,20 @@ class LandCheckpointTests(LandFixture):
                 (mirror / name).read_bytes(), (config.output_root / name).read_bytes()
             )
         self.assertEqual(list(mirror.glob("*.tmp")), [])
+        # The ledgers are mirrored incrementally, so the directory also carries
+        # the offsets that were committed — and nothing else.
         self.assertEqual(
-            sorted(path.name for path in mirror.iterdir()), sorted(names)
+            sorted(path.name for path in mirror.iterdir()),
+            sorted((*names, agent.MIRROR_STATE_NAME)),
+        )
+        state = json.loads((mirror / agent.MIRROR_STATE_NAME).read_text())
+        self.assertEqual(state["version"], 1)
+        self.assertEqual(
+            {name: entry["bytes"] for name, entry in state["files"].items()},
+            {
+                name: (config.output_root / name).stat().st_size
+                for name in names if name.endswith(".jsonl")
+            },
         )
 
     def test_wiped_output_root_is_restored_from_the_mirror_and_resumes(self) -> None:
@@ -351,8 +363,8 @@ class SftDatasetTests(LandFixture):
         outcome: dict[str, str] = {}
 
         class PartialAnnotator(FakeAnnotator):
-            def drain(self, *, max_workers=None):
-                tasks = self.store.pending_annotation_tasks()
+            def drain(self, *, max_workers=None, only=None):
+                tasks = self.tasks(only)
                 for index, task in enumerate(tasks):
                     if index == 0:
                         outcome[str(task["candidate_id"])] = "failed"
@@ -609,8 +621,12 @@ class PrefetchWiringTests(LandFixture):
             manifest = self.build(config, dependencies)
 
         self.assertEqual(manifest["status"], "complete")
+        # Still exact rather than a subset check: "disabled" has to report every
+        # counter at rest, including the buffer budget's two, or a build with no
+        # archive would be indistinguishable from one whose buffer was reaped.
         self.assertEqual(
-            manifest["prefetch"], {"enabled": False, "buffered": 0, "errors": 0}
+            manifest["prefetch"],
+            {"enabled": False, "buffered": 0, "errors": 0, "bytes": 0, "evicted": 0},
         )
         self.assertFalse((config.output_root / "prefetch").exists())
         self.assertIsNone(prefetch_dir())

@@ -7,12 +7,25 @@ pre-registered structural decisions of the experiment.
 
 from __future__ import annotations
 
-# --- spec 4.3: the four new special tokens, in registration order -----------
+# --- spec 4.3: the four original special tokens, in registration order ------
 WHERE_OPEN = "<where>"
 WHERE_CLOSE = "</where>"
 COLOR_OPEN = "<color>"
 COLOR_CLOSE = "</color>"
-SPECIAL_TOKENS: tuple[str, ...] = (WHERE_OPEN, WHERE_CLOSE, COLOR_OPEN, COLOR_CLOSE)
+
+# --- v2seg (2026-08-14): two trailing readout tokens ------------------------
+# Emitted AFTER </color> and BEFORE <|im_end|>, one per reasoning segment, so
+# each carries a hidden state that has already attended to the whole segment.
+# They MUST stay at the END of SPECIAL_TOKENS: registration order fixes the ids,
+# and q3vl/whereb/attnread.py hard-codes <where>=151669 / </where>=151670.
+# Appending keeps 151669..151672 and gives the new pair 151673 / 151674.
+SEG_WHERE_TOK = "<seg_where>"
+SEG_COLOR_TOK = "<seg_color>"
+
+SPECIAL_TOKENS: tuple[str, ...] = (
+    WHERE_OPEN, WHERE_CLOSE, COLOR_OPEN, COLOR_CLOSE,  # ids 151669..151672
+    SEG_WHERE_TOK, SEG_COLOR_TOK,                      # v2seg, ids 151673/151674
+)
 
 # --- spec 4.2: the seven legacy reasoning tags that must NOT survive --------
 # Source of truth for the tag strings: dataset_build/src/construct/responses.py
@@ -60,7 +73,15 @@ SEG_IGNORE = 0  # prompt, template, image placeholders
 SEG_WHERE = 1  # <where> ... </where>
 SEG_COLOR = 2  # <color> ... </color>
 SEG_EOS = 3  # <|im_end|>\n
-SEGMENT_NAMES = {SEG_WHERE: "where", SEG_COLOR: "color", SEG_EOS: "eos"}
+SEG_SEGWHERE = 4  # v2seg: the single <seg_where> readout token
+SEG_SEGCOLOR = 5  # v2seg: the single <seg_color> readout token
+SEGMENT_NAMES = {
+    SEG_WHERE: "where",
+    SEG_COLOR: "color",
+    SEG_EOS: "eos",
+    SEG_SEGWHERE: "segwhere",
+    SEG_SEGCOLOR: "segcolor",
+}
 
 # --- spec 2.2: Arm B trainable boundary inside model.visual ----------------
 # NOTE (spec 2.2 warning): merger and deepstack mergers live *inside*

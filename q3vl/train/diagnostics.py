@@ -15,10 +15,19 @@ import torch.nn.functional as F
 
 from .constants import (
     COLOR_CLOSE, COLOR_OPEN, IGNORE_INDEX, LEGACY_SEGMENT_TAGS,
-    SEG_COLOR, SEG_EOS, SEG_WHERE, WHERE_CLOSE, WHERE_OPEN,
+    SEG_COLOR, SEG_COLOR_TOK, SEG_EOS, SEG_SEGCOLOR, SEG_SEGWHERE, SEG_WHERE,
+    SEG_WHERE_TOK, WHERE_CLOSE, WHERE_OPEN,
 )
 
-_SEGMENTS = ((SEG_WHERE, "where"), (SEG_COLOR, "color"), (SEG_EOS, "eos"))
+# The registry every per-segment metric iterates over. v2seg adds the two
+# single-token readout segments -> train_seg_segwhere_* / train_seg_segcolor_*.
+_SEGMENTS = (
+    (SEG_WHERE, "where"),
+    (SEG_COLOR, "color"),
+    (SEG_SEGWHERE, "segwhere"),
+    (SEG_SEGCOLOR, "segcolor"),
+    (SEG_EOS, "eos"),
+)
 
 
 @dataclass
@@ -94,7 +103,14 @@ _LEGACY_RE = re.compile("|".join(re.escape(t) for t in LEGACY_SEGMENT_TAGS))
 
 
 def parse_two_segment(text: str) -> dict[str, Any]:
-    """Structural check on one generated assistant string."""
+    """Structural check on one generated assistant string.
+
+    v2seg: the two readout tokens trail ``</color>``. Nothing here requires
+    ``</color>`` to end the string -- both spans are cut at the tag indices --
+    so the tail is simply ignored by the span logic, and neither readout token
+    contains ``<where>``/``<color>`` as a substring, so the duplicate-tag counts
+    below are unaffected. ``seg_tail_ok`` reports the tail explicitly.
+    """
     idx = {t: text.find(t) for t in (WHERE_OPEN, WHERE_CLOSE, COLOR_OPEN, COLOR_CLOSE)}
     present = {t: i >= 0 for t, i in idx.items()}
     complete = all(present.values())
@@ -105,6 +121,11 @@ def parse_two_segment(text: str) -> dict[str, Any]:
     if order_ok:
         where_body = text[idx[WHERE_OPEN] + len(WHERE_OPEN): idx[WHERE_CLOSE]].strip()
         color_body = text[idx[COLOR_OPEN] + len(COLOR_OPEN): idx[COLOR_CLOSE]].strip()
+    # v2seg: <seg_where> then <seg_color>, both after </color>.
+    i_sw, i_sc = text.find(SEG_WHERE_TOK), text.find(SEG_COLOR_TOK)
+    seg_tail_ok = bool(
+        complete and i_sw >= 0 and i_sc >= 0 and idx[COLOR_CLOSE] < i_sw < i_sc
+    )
     return {
         "tags_complete": complete,
         "order_ok": order_ok,
@@ -112,6 +133,7 @@ def parse_two_segment(text: str) -> dict[str, Any]:
         "color_nonempty": bool(color_body),
         "where_in_color": bool(where_body) and bool(color_body) and where_body in color_body,
         "legacy_tag_leak": bool(_LEGACY_RE.search(text)),
+        "seg_tail_ok": seg_tail_ok,
         "n_where_open": text.count(WHERE_OPEN),
         "n_color_open": text.count(COLOR_OPEN),
         "where_body": where_body,
@@ -133,6 +155,7 @@ def aggregate_generation_diagnostics(parsed: list[dict[str, Any]], prefix: str =
         f"{prefix}color_nonempty_rate": rate("color_nonempty"),
         f"{prefix}where_copied_into_color_rate": rate("where_in_color"),
         f"{prefix}legacy_tag_leak_rate": rate("legacy_tag_leak"),
+        f"{prefix}seg_tail_ok_rate": rate("seg_tail_ok"),  # v2seg
         f"{prefix}duplicate_where_rate": sum(1 for p in parsed if p["n_where_open"] > 1) / n,
         f"{prefix}duplicate_color_rate": sum(1 for p in parsed if p["n_color_open"] > 1) / n,
     }

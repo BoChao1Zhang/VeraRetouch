@@ -29,7 +29,7 @@ import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
@@ -204,7 +204,7 @@ def _sam_proposals(
     dedupe_iou: float,
 ) -> dict[str, Any]:
     torch = masker._torch
-    image, native = masker._as_pil(row["source_path"])
+    image, native = masker._as_pil(_read_path(row))
     height, width = native
     inputs = masker._proc(
         images=image, text=row["main_subject"], return_tensors="pt"
@@ -242,6 +242,7 @@ def _proposals_from_result(
         return {
             "asset_id": row["asset_id"],
             "source_path": row["source_path"],
+            "read_path": row.get("read_path"),
             "legacy_union_path": row.get("mask_path") or "",
             "stratum": row.get("stratum") or "",
             "scene": row.get("scene") or "",
@@ -303,6 +304,7 @@ def _proposals_from_result(
     return {
         "asset_id": row["asset_id"],
         "source_path": row["source_path"],
+        "read_path": row.get("read_path"),
         "legacy_union_path": row.get("mask_path") or "",
         "stratum": row.get("stratum") or "",
         "scene": row.get("scene") or "",
@@ -385,7 +387,7 @@ def _numbered_overlay(
     stable_order: list[int],
     out_path: Path,
 ) -> dict[int, int]:
-    source = _preview_source(record["source_path"])
+    source = _preview_source(_read_path(record))
     output = source.copy()
     display_to_stable: dict[int, int] = {}
     proposal_by_id = {item["stable_id"]: item for item in record["proposals"]}
@@ -475,6 +477,18 @@ def _focus_proposals(record: dict[str, Any], radius_fraction: float) -> None:
     record["proposals"] = focused
     if not focused:
         record["status"] = "no_center_candidate"
+
+
+def _read_path(row: Mapping[str, Any]) -> str:
+    """Where this machine can open the pixels of ``row``'s source.
+
+    ``source_path`` stays the original absolute path everywhere: it is the cache
+    key (``mask_cache.path_key``) and the value the consumer gate resolves
+    through the archive-aware ``path_exists``.  When the local copy is gone, a
+    producer may add ``read_path`` pointing at a prefetched copy; only the pixel
+    reads follow it.
+    """
+    return str(row.get("read_path") or row["source_path"])
 
 
 def _data_uri(path: str, long_edge: int = 1024) -> str:
@@ -596,6 +610,9 @@ def _call_subject_label(
     timeout: float,
     *,
     api_key: str = "EMPTY",
+    reasoning_effort: str | None = None,
+    expect_model: str | None = None,
+    max_output_tokens: int = 320,
 ) -> tuple[str, str, dict[str, Any]]:
     started = time.perf_counter()
     try:
@@ -604,12 +621,15 @@ def _call_subject_label(
             api_key=api_key,
             model=model,
             content=[
-                {"type": "input_image", "image_url": _data_uri(row["source_path"])},
+                {"type": "input_image", "image_url": _data_uri(_read_path(row))},
                 {"type": "input_text", "text": _subject_prompt()},
             ],
             schema_name="sam3_subject_label",
             schema=SUBJECT_LABEL_SCHEMA,
             timeout=timeout,
+            max_output_tokens=max_output_tokens,
+            reasoning_effort=reasoning_effort,
+            expect_model=expect_model,
         )
     except ResponsesVlmError as error:
         return row["asset_id"], variant_name, {
@@ -733,6 +753,9 @@ def _call_selector(
     timeout: float,
     *,
     api_key: str = "EMPTY",
+    reasoning_effort: str | None = None,
+    expect_model: str | None = None,
+    max_output_tokens: int = 320,
 ) -> tuple[str, str, dict[str, Any]]:
     variant = record["variants"][variant_name]
     mapping = {int(k): int(v) for k, v in variant["display_to_stable"].items()}
@@ -743,13 +766,16 @@ def _call_selector(
             api_key=api_key,
             model=model,
             content=[
-                {"type": "input_image", "image_url": _data_uri(record["source_path"])},
+                {"type": "input_image", "image_url": _data_uri(_read_path(record))},
                 {"type": "input_image", "image_url": _data_uri(variant["overlay_path"])},
                 {"type": "input_text", "text": _selector_prompt(record, sorted(mapping))},
             ],
             schema_name="sam3_subject_selection",
             schema=SUBJECT_SELECTION_SCHEMA,
             timeout=timeout,
+            max_output_tokens=max_output_tokens,
+            reasoning_effort=reasoning_effort,
+            expect_model=expect_model,
         )
     except ResponsesVlmError as error:
         return record["asset_id"], variant_name, {
@@ -790,7 +816,7 @@ def _single_mask_overlay(
     result: dict[str, Any] | None,
     size: tuple[int, int],
 ) -> Image.Image:
-    source = _preview_source(record["source_path"])
+    source = _preview_source(_read_path(record))
     if not result or result.get("status") != "ok" or result.get("decision") != "select":
         panel = _fit(source, size)
         draw = ImageDraw.Draw(panel)
@@ -820,7 +846,7 @@ def _single_mask_overlay(
 
 
 def _legacy_overlay(record: dict[str, Any], size: tuple[int, int]) -> Image.Image:
-    source = _preview_source(record["source_path"])
+    source = _preview_source(_read_path(record))
     path = record.get("legacy_union_path") or ""
     if not path or not os.path.exists(path):
         return _fit(source, size)
@@ -847,7 +873,7 @@ def _contact_sheets(records: list[dict[str, Any]], out_dir: Path) -> list[str]:
         row_height = panel_size[1] + 72
         sheet = Image.new("RGB", (panel_size[0] * 5, row_height * len(batch)), (8, 8, 8))
         for row_index, record in enumerate(batch):
-            source = _fit(_preview_source(record["source_path"]), panel_size)
+            source = _fit(_preview_source(_read_path(record)), panel_size)
             variant_a = record.get("variants", {}).get("a", {})
             overlay_path = variant_a.get("overlay_path")
             if overlay_path and os.path.exists(overlay_path):

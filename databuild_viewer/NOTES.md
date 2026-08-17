@@ -11,11 +11,11 @@ evaluation experiment.
 - `CLAUDE.md`: a tooling task must record source verification, assumptions, and
   decisions before implementation. The s-cache numeric-domain and long-job
   rules do not apply to this viewer request.
-- `docs/archive/DATABUILD_IMPLEMENTATION_2026-07-27.md` section 1 and stages
+- `docs/_archive/2026-08-12/july-docs/DATABUILD_IMPLEMENTATION_2026-07-27.md` section 1 and stages
   D/E: the four canonical JSONL files plus `manifest.json` are the ledger;
   PostgreSQL is only a rebuildable viewer projection. Landed asset paths remain
   their historical staging keys and must be resolved through the archive index.
-- `docs/archive/DATABUILD_IO_REFACTOR_2026-07-27.md` section 4 step 4 and
+- `docs/_archive/2026-08-12/july-docs/DATABUILD_IO_REFACTOR_2026-07-27.md` section 4 step 4 and
   section 6: `datasets/groups/<build_id>` is authoritative for every candidate
   and `C_GT`; `datasets/sft/<build_id>` is a winner-only derivative. A group's
   members are physically adjacent. Published datasets are uncompressed USTAR

@@ -4,6 +4,10 @@ Values that spec 7/8 freeze are the *defaults* here; a config file may restate
 them but :func:`validate_frozen_hyperparameters` refuses to run if any is
 changed, except for the one calibration knob the spec explicitly allows
 (micro-batch 4xGAS4 -> 2xGAS8 on OOM, with global batch pinned to 32).
+
+v2seg (2026-08-14) adds one more *declared* escape: ``single_card_variant``
+moves the expected world size to 1 and the allowed (micro, GAS) set to
+``((4, 8),)``. Global batch stays 32 and every other frozen value stays frozen.
 """
 
 from __future__ import annotations
@@ -98,6 +102,16 @@ class SFTTrainingArguments(TrainingArguments):
     data_seed: int | None = 42
     save_safetensors: bool = True
     # custom
+    single_card_variant: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "v2seg 2026-08-14 single-card variant: allow world_size=1 with "
+                "(micro, GAS)=(4, 8). Global batch stays 32. Default False keeps "
+                "the spec-7.2 two-GPU contract bit-for-bit."
+            )
+        },
+    )
     diag_every_n_steps: int = 50
     gen_diag_samples: int = 0
     gen_diag_max_new_tokens: int = 512
@@ -130,6 +144,12 @@ FROZEN_HPARAMS: dict[str, Any] = {
 
 ALLOWED_BATCH_COMBOS = ((4, 4), (2, 8))  # (per_device_train_batch_size, GAS) at world_size 2
 
+# v2seg (2026-08-14) single-card variant: the ONLY combination that keeps the
+# global batch at 32 on one GPU. Opting in requires `single_card_variant: true`
+# in the config -- it is a declared variant, not the Q3VL_ALLOW_NONSPEC smoke
+# backdoor, so every other frozen hyperparameter is still enforced.
+ALLOWED_BATCH_COMBOS_SINGLE_CARD = ((4, 8),)
+
 
 def validate_frozen_hyperparameters(
     args: SFTTrainingArguments, world_size: int, allow_nonspec: bool = False
@@ -139,8 +159,17 @@ def validate_frozen_hyperparameters(
     ``allow_nonspec`` (env ``Q3VL_ALLOW_NONSPEC=1``) downgrades the failure to a
     warning. It exists solely so the single-GPU integration smoke can exercise
     the real entrypoint; the real run must never set it.
+
+    ``args.single_card_variant`` (config ``training.single_card_variant: true``)
+    is a *declared* variant, not a downgrade: it moves the expected world size
+    to 1 and the allowed (micro, GAS) set to ``((4, 8),)``. The global-batch-32
+    equality and every frozen hyperparameter are still hard errors, and the
+    violation list is recorded either way.
     """
     violations = []
+    single_card = bool(getattr(args, "single_card_variant", False))
+    expected_world_size = 1 if single_card else 2
+    allowed_combos = ALLOWED_BATCH_COMBOS_SINGLE_CARD if single_card else ALLOWED_BATCH_COMBOS
     for key, want in FROZEN_HPARAMS.items():
         got = getattr(args, key)
         if isinstance(want, float):
@@ -153,10 +182,10 @@ def validate_frozen_hyperparameters(
             violations.append(f"{key}: spec {want!r}, config {got!r}")
 
     combo = (args.per_device_train_batch_size, args.gradient_accumulation_steps)
-    if combo not in ALLOWED_BATCH_COMBOS:
+    if combo not in allowed_combos:
         violations.append(
             f"(per_device_train_batch_size, gradient_accumulation_steps)={combo} is not one of "
-            f"{ALLOWED_BATCH_COMBOS} (spec 7.2)"
+            f"{allowed_combos} (spec 7.2, single_card_variant={single_card})"
         )
     effective = args.per_device_train_batch_size * args.gradient_accumulation_steps * world_size
     if effective != GLOBAL_BATCH_SIZE:
@@ -165,8 +194,11 @@ def validate_frozen_hyperparameters(
             f"(micro {args.per_device_train_batch_size} x GAS {args.gradient_accumulation_steps} "
             f"x world_size {world_size})"
         )
-    if world_size != 2:
-        violations.append(f"world_size {world_size} != 2 (spec 7.2)")
+    if world_size != expected_world_size:
+        violations.append(
+            f"world_size {world_size} != {expected_world_size} "
+            f"(spec 7.2, single_card_variant={single_card})"
+        )
     if violations:
         message = "spec-frozen hyperparameters violated:\n  - " + "\n  - ".join(violations)
         if not allow_nonspec:
@@ -176,6 +208,7 @@ def validate_frozen_hyperparameters(
         warnings.warn("Q3VL_ALLOW_NONSPEC is set -- " + message, stacklevel=2)
     return {
         "spec_violations": violations,
+        "single_card_variant": single_card,
         "effective_global_batch": effective,
         "per_device_train_batch_size": args.per_device_train_batch_size,
         "gradient_accumulation_steps": args.gradient_accumulation_steps,

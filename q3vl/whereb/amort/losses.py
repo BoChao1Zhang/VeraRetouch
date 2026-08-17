@@ -54,7 +54,7 @@ import torch
 __all__ = ["LossWeights", "signed_distance_field", "bce_soft", "sdf_boundary",
            "area_band", "empty_mask", "paired_separation", "amort_sample_loss",
            "AmortLoss", "aggregate", "excess_curvature", "monotonicity_hinge",
-           "eikonal"]
+           "eikonal", "uniq_wta_loss"]
 
 
 @dataclass(frozen=True)
@@ -83,8 +83,31 @@ class LossWeights:
     #: hinge is satisfiable by a flat field, so the constraint has to demand a
     #: slope, not merely a non-negative one.
     mono_eps: float = 0.02
+    #: --- UNIQ head (EPR-011) ----------------------------------------------
+    #: Off by default: consumed only by the UNIQ arm's winner-takes-all loss.
+    #: `uniq_cls` supervises the winner's family class, `uniq_sel` distils the
+    #: winner index into the (GT-free) selection head used at inference.
+    uniq_cls: float = 0.0
+    uniq_sel: float = 0.0
+    #: --- EPR-012: IoU regression selection head ---------------------------
+    #: `uniq_iou` weights an L1 (or MSE) regression of the selection head's
+    #: score onto each query's *real* matched-area top-k IoU against the GT
+    #: (SAM2 `supervise_all_iou` form).  0.0 = the pre-registered baseline,
+    #: which supervises the selection head only through `uniq_sel`'s CE.
+    #: The IoU target is computed under `no_grad` and is NEVER a field loss.
+    uniq_iou: float = 0.0
+    #: ablation: SAM v1 口径 -- regress only the winner's score
+    uniq_iou_winner_only: bool = False
+    #: ablation: MSE instead of L1 (SAM v1 used MSE, SAM2 defaults to L1)
+    uniq_iou_mse: bool = False
+    #: --- EPR-015: relaxed WTA (MHP arXiv:1612.00197 Eq.12) ----------------
+    #: `uniq_eps` = the association relaxation: the winner keeps 1-eps and the
+    #: K-1 losers share eps.  `uniq_hdrop` = hypothesis dropout probability.
+    #: BOTH at 0.0 short-circuits to the bit-identical hard-WTA line.
+    uniq_eps: float = 0.0
+    uniq_hdrop: float = 0.0
 
-    def to_dict(self) -> dict[str, float]:
+    def to_dict(self) -> dict[str, Any]:
         return {k: getattr(self, k) for k in self.__dataclass_fields__}
 
 
@@ -303,6 +326,196 @@ def amort_sample_loss(
     return AmortLoss(total=total, terms=terms, stats=stats)
 
 
+def uniq_wta_loss(
+    s_all: torch.Tensor,
+    mask_of,
+    gt: torch.Tensor,
+    w: LossWeights,
+    *,
+    valid: torch.Tensor | None = None,
+    phi_sdf: torch.Tensor | None = None,
+    gt_partner: torch.Tensor | None = None,
+    is_fake: bool = False,
+    structural: bool = False,
+    family: str = "",
+    cls_logits: torch.Tensor | None = None,
+    sel_logits: torch.Tensor | None = None,
+    aux_groups: int = 0,
+    aux_lambda: float = 1.0,
+) -> AmortLoss:
+    """Winner-takes-all over K query fields (UNIQ arm, EPR-011).
+
+    The winner is the query with the smallest *field* loss (the same five
+    pre-registered terms, unchanged weights); only the winner's field gradient
+    flows, which is the min-over-M treatment of the "GT is one sample of a
+    distribution" ambiguity (Probabilistic U-Net line, arXiv:1806.05034 --
+    this is its cheap deterministic corner).  Two small auxiliary CE terms
+    supervise the winner's family class and distil the winner index into the
+    GT-free selection head; both are reported per step and pre-registered in
+    ``loss_preregistration.json`` like every other weight.
+
+    Foreign instructions charge **all K queries** with the empty-mask term: if
+    only the winner were charged, the K-1 losers would be free to emit fields
+    the selection head could later pick on a real foreign instruction.
+
+    ``aux_groups`` (EPR-016) is the one-to-many training-time extension: the
+    field stack carries ``(1 + aux_groups) * K`` rows, every group runs the
+    SAME criterion with the SAME coefficients (H-DETR ``train_hybrid``) on its
+    own winner, and the auxiliary groups enter as
+    ``lambda * (1/m) * sum_g total_g`` (Group DETR Eq.7's group mean).  0 = the
+    single-group baseline, which takes the untouched code path below.
+    """
+    if not aux_groups:
+        return _uniq_wta_group(
+            s_all, mask_of, gt, w, valid=valid, phi_sdf=phi_sdf,
+            gt_partner=gt_partner, is_fake=is_fake, structural=structural,
+            family=family, cls_logits=cls_logits, sel_logits=sel_logits)
+
+    m = int(aux_groups)
+    k = int(s_all.shape[0]) // (1 + m)
+    if k * (1 + m) != int(s_all.shape[0]):
+        raise AssertionError(
+            f"uniq aux groups: {int(s_all.shape[0])} field rows are not "
+            f"divisible into {1 + m} groups")
+
+    def _slice(t, g):
+        return None if t is None else t[g * k:(g + 1) * k]
+
+    #: the formal group keeps the full criterion INCLUDING the selection-head
+    #: distillation; the auxiliary groups never feed sel (their rows do not
+    #: exist at inference, so they cannot be selected).
+    out = _uniq_wta_group(
+        s_all[:k], mask_of, gt, w, valid=valid, phi_sdf=phi_sdf,
+        gt_partner=gt_partner, is_fake=is_fake, structural=structural,
+        family=family, cls_logits=_slice(cls_logits, 0), sel_logits=sel_logits)
+    total, terms, stats = out.total, dict(out.terms), dict(out.stats)
+    scale = float(aux_lambda) / float(m)
+    for g in range(1, m + 1):
+        sub = _uniq_wta_group(
+            s_all[g * k:(g + 1) * k], mask_of, gt, w, valid=valid,
+            phi_sdf=phi_sdf, gt_partner=gt_partner, is_fake=is_fake,
+            structural=structural, family=family,
+            cls_logits=_slice(cls_logits, g), sel_logits=None)
+        total = total + scale * sub.total
+        for name, v in sub.terms.items():
+            terms[f"{name}_aux{g - 1}"] = v
+        if "uniq_winner" in sub.stats:
+            stats[f"uniq_winner_aux{g - 1}"] = sub.stats["uniq_winner"]
+    stats["uniq_aux_groups"] = float(m)
+    return AmortLoss(total=total, terms=terms, stats=stats)
+
+
+def _uniq_wta_group(
+    s_all: torch.Tensor,
+    mask_of,
+    gt: torch.Tensor,
+    w: LossWeights,
+    *,
+    valid: torch.Tensor | None = None,
+    phi_sdf: torch.Tensor | None = None,
+    gt_partner: torch.Tensor | None = None,
+    is_fake: bool = False,
+    structural: bool = False,
+    family: str = "",
+    cls_logits: torch.Tensor | None = None,
+    sel_logits: torch.Tensor | None = None,
+) -> AmortLoss:
+    """One WTA group.  This is the pre-registered EPR-011 body verbatim, plus
+    the two default-off switches EPR-012 (IoU regression on the selection
+    head) and EPR-015 (relaxed Kronecker delta + hypothesis dropout)."""
+    import torch.nn.functional as F  # noqa: PLC0415
+
+    n_q = int(s_all.shape[0])
+    zero = s_all.sum() * 0.0
+    if is_fake:
+        terms = {"fake": empty_mask(mask_of(s_all), valid)}
+        for k in ("bce", "sdf", "area", "sep", "curv", "mono"):
+            terms[k] = zero
+        with torch.no_grad():
+            fake_area = float(_valid_mean(mask_of(s_all), valid))
+        return AmortLoss(total=w.fake * terms["fake"], terms=terms,
+                         stats={"is_fake": 1.0, "pred_area": fake_area})
+
+    per = [amort_sample_loss(mask_of(s_all[k]), gt, w, valid=valid,
+                             phi_sdf=phi_sdf, gt_partner=gt_partner,
+                             is_fake=False, structural=structural)
+           for k in range(n_q)]
+    det = torch.stack([p.total.detach() for p in per])
+    keep = None
+    if w.uniq_hdrop > 0.0:
+        # EPR-015 / MHP 3.3 hypothesis dropout.  RNG is touched ONLY here, so
+        # the hdrop=0 path leaves the global stream bit-identical (N1 lesson).
+        keep = torch.rand(n_q) >= float(w.uniq_hdrop)
+        if not bool(keep.any()):
+            keep = torch.ones(n_q, dtype=torch.bool)   # all dropped -> no drop
+        j = int(det.masked_fill(~keep.to(det.device), float("inf")).argmin())
+    else:
+        j = int(det.argmin())
+    if w.uniq_eps == 0.0 and w.uniq_hdrop == 0.0:
+        total = per[j].total                            # baseline, bit-exact
+    else:
+        eps = float(w.uniq_eps)
+        kept = [k for k in range(n_q)
+                if keep is None or bool(keep[k])]
+        n_lose = len(kept) - 1
+        dhat = [0.0] * n_q
+        dhat[j] = (1.0 - eps) if n_lose > 0 else 1.0
+        if n_lose > 0:
+            for k in kept:
+                if k != j:
+                    dhat[k] = eps / n_lose
+        # sep is a contrastive hinge against the partner GT and has no Eq.12
+        # counterpart, so only the winner's share of it is back-propagated.
+        total = None
+        for k in range(n_q):
+            if dhat[k] == 0.0:
+                continue
+            fit = per[k].total - w.sep * per[k].terms["sep"]
+            total = fit * dhat[k] if total is None else total + fit * dhat[k]
+        total = total + w.sep * per[j].terms["sep"]
+    terms = dict(per[j].terms)
+    stats = dict(per[j].stats)
+    from .uniq import UNIQ_FAMILIES  # noqa: PLC0415
+
+    if cls_logits is not None and w.uniq_cls and family in UNIQ_FAMILIES:
+        tgt = torch.tensor([UNIQ_FAMILIES.index(family)],
+                           device=cls_logits.device)
+        terms["uniq_cls"] = F.cross_entropy(cls_logits[j:j + 1], tgt)
+        total = total + w.uniq_cls * terms["uniq_cls"]
+    if sel_logits is not None and w.uniq_sel:
+        tgt = torch.tensor([j], device=sel_logits.device)
+        terms["uniq_sel"] = F.cross_entropy(sel_logits.reshape(1, -1), tgt)
+        total = total + w.uniq_sel * terms["uniq_sel"]
+    if sel_logits is not None and w.uniq_iou:
+        # EPR-012.  The regression target is the SAME number the board reports
+        # (`evaluate._uniq_row`'s `uniq_query_ious`): matched-area top-k hard
+        # IoU, computed under no_grad.  IoU is therefore a target for the
+        # SELECTION head only -- it never enters a field loss (red line).
+        from q3vl.whereb.metrics import (  # noqa: PLC0415
+            gt_area_k, hard_iou, topk_mask)
+
+        pred = sel_logits.reshape(-1)
+        with torch.no_grad():
+            k_area = gt_area_k(gt)
+            gt_k = topk_mask(gt, k_area)
+            tgt_iou = torch.tensor(
+                [hard_iou(topk_mask(mask_of(s_all[q]).float(), k_area), gt_k)
+                 for q in range(n_q)],
+                device=pred.device, dtype=pred.dtype)
+        err = (pred - tgt_iou)
+        err = err ** 2 if w.uniq_iou_mse else err.abs()
+        terms["uniq_iou"] = err[j] if w.uniq_iou_winner_only else err.mean()
+        total = total + w.uniq_iou * terms["uniq_iou"]
+        with torch.no_grad():
+            stats["uniq_iou_mae"] = float((pred - tgt_iou).abs().mean())
+            stats["uniq_iou_target_best"] = float(tgt_iou.max())
+    with torch.no_grad():
+        stats["uniq_winner"] = float(j)
+        if sel_logits is not None:
+            stats["uniq_sel_correct"] = float(int(sel_logits.argmax()) == j)
+    return AmortLoss(total=total, terms=terms, stats=stats)
+
+
 def aggregate(losses: Sequence[AmortLoss]) -> tuple[torch.Tensor, dict[str, Any]]:
     """Mean over the micro-batch, plus the early-warning columns.
 
@@ -311,6 +524,13 @@ def aggregate(losses: Sequence[AmortLoss]) -> tuple[torch.Tensor, dict[str, Any]
     ratio above 1.5 inside the first 20% of steps, or a std ratio below 0.5, is
     the over-coverage signature W01/W02 died of, and it is visible long before
     any evaluation runs.
+
+    The ``uniq_*`` stats are aggregated for the same reason: they are the
+    mechanism read-outs EPR-012/015 name (selection-head IoU MAE, the achievable
+    best-of-K target, winner index and its spread, the selection head's
+    agreement with the WTA winner, and the number of live auxiliary groups).
+    They are produced per sample and were being dropped on the floor by this
+    function, so no arm could show *why* it moved -- only that it did.
     """
     if not losses:
         raise ValueError("no losses to aggregate")
@@ -320,6 +540,11 @@ def aggregate(losses: Sequence[AmortLoss]) -> tuple[torch.Tensor, dict[str, Any]
     for k in keys:
         vals = [x.terms[k] for x in losses if k in x.terms]
         out[f"L_{k}"] = float(torch.stack(vals).mean().detach())
+    for k in sorted({k for x in losses for k in x.stats if k.startswith("uniq_")}):
+        v = [float(x.stats[k]) for x in losses if k in x.stats]
+        out[f"{k}_mean"] = float(np.mean(v))
+        out[f"{k}_median"] = float(np.median(v))
+        out[f"{k}_n"] = len(v)
     real = [x for x in losses if x.stats.get("is_fake", 0.0) < 0.5]
     out["n"] = len(losses)
     out["n_fake"] = len(losses) - len(real)

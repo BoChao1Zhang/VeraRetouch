@@ -93,13 +93,23 @@ class FakeAnnotator:
             "qa": candidate["qa"],
         })
 
-    def drain(self, *, max_workers=None):
+    def tasks(self, only=None):
+        """The pending queue this drain owns, honouring the batch contract."""
+        return [
+            task for task in self.store.pending_annotation_tasks()
+            if only is None or str(task["task_id"]) in only
+        ]
+
+    def drain(self, *, max_workers=None, only=None):
         completed = 0
-        for task in self.store.pending_annotation_tasks():
+        for task in self.tasks(only):
             self.append_task(task)
             completed += 1
         self.store.checkpoint()
-        return {"completed": completed, "terminal": 0, "transport_failed": 0, "pending": 0}
+        return {
+            "completed": completed, "terminal": 0, "transport_failed": 0,
+            "pending": len(self.store.pending_annotation_tasks()),
+        }
 
 
 class OrchestrationFixture(unittest.TestCase):
@@ -709,19 +719,19 @@ class PipelineTests(OrchestrationFixture):
         resumed_task_ids = []
 
         class InterruptingAnnotator(FakeAnnotator):
-            def drain(self, *, max_workers=None):
-                task = self.store.pending_annotation_tasks()[0]
+            def drain(self, *, max_workers=None, only=None):
+                task = self.tasks(only)[0]
                 interrupted_task_ids.append(task["task_id"])
                 self.append_task(task)
                 self.store.checkpoint()
                 raise KeyboardInterrupt("annotation interrupted")
 
         class RecordingAnnotator(FakeAnnotator):
-            def drain(self, *, max_workers=None):
+            def drain(self, *, max_workers=None, only=None):
                 resumed_task_ids.extend(
-                    task["task_id"] for task in self.store.pending_annotation_tasks()
+                    task["task_id"] for task in self.tasks(only)
                 )
-                return super().drain(max_workers=max_workers)
+                return super().drain(max_workers=max_workers, only=only)
 
         dependencies = self.dependencies(inventory)
         dependencies.annotator_factory = (
@@ -734,7 +744,12 @@ class PipelineTests(OrchestrationFixture):
         self.assertEqual(len(first_rows), 1)
         self.assertEqual(first_rows[0]["annotation_task_id"], interrupted_task_ids[0])
         manifest = json.loads((config.output_root / "manifest.json").read_text())
-        self.assertEqual(manifest["phase"], "annotation")
+        # "rendering", not "annotation": the annotator is now driven from the
+        # render pass boundaries, so the interrupt is raised on the main thread
+        # while the renderer still owns the build.  The closing drain's own
+        # interrupt still leaves "annotation" — see
+        # test_annotation_interleave.AnnotationInterleaveTests.
+        self.assertEqual(manifest["phase"], "rendering")
 
         dependencies.annotator_factory = lambda _config, store: RecordingAnnotator(store)
         with mock.patch("construct.agent.preprocess_source", self.small_preprocess):

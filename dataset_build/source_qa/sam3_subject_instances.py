@@ -143,7 +143,9 @@ def _sam_forward_batch(masker, sam_rows: list, img_works: list, min_score: float
     try:
         images, sizes = [], []
         for r in sam_rows:
-            image, native = masker._as_pil(r["source_path"])   # native = (H, W)
+            # 像素走 read_path（预取副本），source_path 始终保持原始逻辑路径
+            image, native = masker._as_pil(          # native = (H, W)
+                r.get("read_path") or r["source_path"])
             images.append(image)
             sizes.append(_capped(native))
         inputs = masker._proc(
@@ -228,6 +230,16 @@ def run(args: argparse.Namespace, rows_override: list[dict] | None = None) -> di
     print(f"pending: {len(todo)} (shard {args.shard_i}/{args.shard_n})", flush=True)
     if not todo:
         return {}
+
+    # 外部 relay 的两个开关：reasoning effort（本地 vLLM 无此概念）与返回模型校验
+    # （provider 有偷换前科）。缺省 None 时 payload 与调用完全退回本地 vLLM 形状。
+    vlm_opts = {
+        "api_key": getattr(args, "vlm_api_key", "EMPTY"),
+        "reasoning_effort": getattr(args, "vlm_effort", None) or None,
+        "expect_model": (args.vlm_model if getattr(args, "vlm_verify_model", False)
+                         else None),
+        "max_output_tokens": int(getattr(args, "vlm_max_output_tokens", 320)),
+    }
 
     work = Path(args.work_dir)
     work.mkdir(parents=True, exist_ok=True)
@@ -337,7 +349,7 @@ def run(args: argparse.Namespace, rows_override: list[dict] | None = None) -> di
             _prepare_overlays(record, img_work, args.seed)
             _, _, sel = _call_selector(
                 record, "a", args.vlm_base_url, args.vlm_model, args.vlm_timeout,
-                api_key=getattr(args, "vlm_api_key", "EMPTY"),
+                **vlm_opts,
             )
             record["selection"] = {"a": sel}
             return finalize(record, row)
@@ -348,7 +360,7 @@ def run(args: argparse.Namespace, rows_override: list[dict] | None = None) -> di
         try:
             return _call_subject_label(
                 r, "a", args.vlm_base_url, args.vlm_model, args.vlm_timeout,
-                api_key=getattr(args, "vlm_api_key", "EMPTY"),
+                **vlm_opts,
             )[2]
         except Exception as e:  # noqa: BLE001 - 源图缺失/损坏等，单图记账不拖垮批
             return {"status": "source_unreadable", "error": type(e).__name__}
@@ -462,6 +474,21 @@ def relabel_sources(
     return run(args, rows_override=rows)
 
 
+def _external_endpoint(config_path: str, endpoint_id: str) -> tuple[str, str]:
+    """Read one relay's base_url/api_key out of a databuild TOML.
+
+    The credential is 0600 on disk and stays there: it is read at start-up into
+    the process and never echoed into logs, argv or the cache metadata.
+    """
+    import tomllib
+    with open(config_path, "rb") as handle:
+        endpoints = tomllib.load(handle)["annotation"]["external_endpoints"]
+    for endpoint in endpoints:
+        if not endpoint_id or str(endpoint.get("id")) == endpoint_id:
+            return str(endpoint["base_url"]), str(endpoint["api_key"])
+    raise SystemExit(f"no external endpoint {endpoint_id!r} in {config_path}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -488,11 +515,24 @@ def main() -> None:
     r.add_argument("--vlm-model", default="qwen3_5-35b-a3b")
     r.add_argument("--vlm-workers", type=int, default=32)
     r.add_argument("--vlm-timeout", type=float, default=120.0)
+    r.add_argument("--vlm-config", default="",
+                   help="databuild TOML holding [[annotation.external_endpoints]]; "
+                        "its base_url/api_key replace --vlm-base-url")
+    r.add_argument("--vlm-endpoint", default="",
+                   help="endpoint id inside --vlm-config (default: the first one)")
+    r.add_argument("--vlm-effort", default="",
+                   help="reasoning effort for a hosted model; empty = local vLLM shape")
+    r.add_argument("--vlm-max-output-tokens", type=int, default=320)
+    r.add_argument("--vlm-verify-model", action="store_true",
+                   help="fail (and retry) a response whose model != --vlm-model")
     a = ap.parse_args()
     if a.cmd == "dump-pool":
         dump_pool(a.out)
     else:
         a.shard_i, a.shard_n = (int(x) for x in a.shard.split("/"))
+        if a.vlm_config:
+            a.vlm_base_url, a.vlm_api_key = _external_endpoint(
+                a.vlm_config, a.vlm_endpoint)
         run(a)
 
 

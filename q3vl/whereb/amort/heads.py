@@ -323,8 +323,25 @@ class P3PrimeHead(nn.Module):
         self.gain = nn.Parameter(torch.tensor(float(gain)))
 
     def forward(self, feat: torch.Tensor, extra: torch.Tensor | None,
-                cond: torch.Tensor | None, inject=None) -> torch.Tensor:
-        raw = self.to_field(apply_inject(self.tower(feat, extra, cond), inject))
+                cond: torch.Tensor | None, inject=None,
+                inject_logit=None) -> torch.Tensor:
+        """``inject`` is proposal tap B, ``inject_logit`` is tap A.
+
+        Tap A is a *logit* residual, not a feature residual: §2.2(4) reads
+        ``logits_final = logits_uncond + tanh(gamma) . logit_cond`` where
+        ``logit_cond`` is the rank-1 hypernetwork dotted against the penultimate
+        features.  It therefore has to be applied here, between ``to_field`` and
+        the tanh squash, and cannot be folded into ``apply_inject``.
+
+        Note which tensor tap A reads: the features **after** tap B, i.e. exactly
+        the tensor ``to_field`` consumes.  With both taps zero-initialised the
+        ordering is unobservable at step 0; afterwards "U = the dense head's
+        penultimate features" is the honest reading of §2.2(4).
+        """
+        codes = apply_inject(self.tower(feat, extra, cond), inject)
+        raw = self.to_field(codes)
+        if inject_logit is not None:
+            raw = raw + inject_logit(codes)
         return S_SCALE * torch.tanh(raw / S_SCALE)
 
     def mask_of(self, s_field: torch.Tensor) -> torch.Tensor:

@@ -34,7 +34,125 @@ from q3vl.where.calibrate import make_scheduler
 
 from .losses import LossWeights, aggregate, amort_sample_loss, signed_distance_field
 
-__all__ = ["AmortTrainConfig", "AmortTrainer", "compute_micro_batch"]
+__all__ = ["AmortTrainConfig", "AmortTrainer", "compute_micro_batch",
+           "OptimizerSpec", "build_optimizer"]
+
+
+# --------------------------------------------------------------------------- #
+# per-arm optimizer (EPR-018..023 shared infrastructure)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class OptimizerSpec:
+    """A per-arm override of the hard-coded AdamW.
+
+    The default instance reproduces the previous hard-coded construction
+    **exactly** -- same class, same two parameter groups in the same order, same
+    ``lr`` from ``cfg.learning_rate``, ``betas`` not passed so torch's default
+    ``(0.9, 0.999)`` applies.  ``AmortTrainer`` builds this default when no spec
+    is given, so P1 / P3prime / SHAPE3 / UNIQ are untouched.
+
+    The EPR-018..023 recipes need, between them: AdamW with explicit betas
+    ``(0.9, 0.95)`` and ``wd = 0`` (LISA), AdamW ``lr 8e-4 / wd 0.1`` (SAM),
+    plain Adam with no decay and no grouping (LIIF), and SGD ``0.01 / momentum
+    0.9 / wd 1e-4`` with detectron2's norm-exempt grouping (PointRend, CondInst).
+
+    ``grouping``:
+
+    ``"dim"``
+        the campaign's own split -- ``dim > 1`` gets ``weight_decay``,
+        ``dim <= 1`` gets 0.  This is the current behaviour and the default.
+    ``"norm_bias"``
+        detectron2's: parameters of normalisation modules get
+        ``norm_weight_decay`` (``WEIGHT_DECAY_NORM = 0.0``,
+        ``defaults.py:541``), **bias included in the decayed group**
+        (``defaults.py:577`` ties bias decay to ``WEIGHT_DECAY``).
+    ``"none"``
+        one group, one decay -- LIIF's ``Adam(params, lr=1e-4)``.
+    """
+
+    type: str = "adamw"                 # adamw | adam | sgd
+    lr: float | None = None             # None -> cfg.learning_rate
+    weight_decay: float | None = None   # None -> cfg.weight_decay
+    betas: tuple[float, float] | None = None   # None -> the class default
+    eps: float | None = None
+    momentum: float = 0.9
+    nesterov: bool = False
+    grouping: str = "dim"
+    norm_weight_decay: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.type not in ("adamw", "adam", "sgd"):
+            raise ValueError(f"unknown optimizer type {self.type!r}")
+        if self.grouping not in ("dim", "norm_bias", "none"):
+            raise ValueError(f"unknown grouping {self.grouping!r}")
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["betas"] = list(self.betas) if self.betas is not None else None
+        return d
+
+
+def _norm_param_ids(model) -> set[int]:
+    """ids of every parameter owned by a normalisation module.
+
+    Class-name suffix rather than an isinstance list, so vendored norms
+    (SAM's ``LayerNorm2d``, ViTMatte's ``GroupNorm`` wrappers) are covered
+    without importing each arm's module here.
+    """
+    out: set[int] = set()
+    for mod in model.modules():
+        name = type(mod).__name__
+        if name.endswith("Norm") or name.endswith("Norm2d") or "BatchNorm" in name:
+            for p in mod.parameters(recurse=False):
+                out.add(id(p))
+    return out
+
+
+def build_optimizer(model, cfg: "AmortTrainConfig",
+                    spec: OptimizerSpec | None = None) -> torch.optim.Optimizer:
+    """The one place an arm's optimizer is constructed.
+
+    ``spec=None`` (and ``spec=OptimizerSpec()``) is bit-identical to the
+    construction this function replaced.
+    """
+    spec = spec or OptimizerSpec()
+    lr = float(cfg.learning_rate if spec.lr is None else spec.lr)
+    wd = float(cfg.weight_decay if spec.weight_decay is None else spec.weight_decay)
+
+    if spec.grouping == "dim":
+        groups = [
+            {"params": [p for n, p in model.named_parameters()
+                        if p.requires_grad and p.dim() > 1],
+             "weight_decay": wd},
+            {"params": [p for n, p in model.named_parameters()
+                        if p.requires_grad and p.dim() <= 1],
+             "weight_decay": 0.0},
+        ]
+    elif spec.grouping == "norm_bias":
+        norm_ids = _norm_param_ids(model)
+        groups = [
+            {"params": [p for _, p in model.named_parameters()
+                        if p.requires_grad and id(p) not in norm_ids],
+             "weight_decay": wd},
+            {"params": [p for _, p in model.named_parameters()
+                        if p.requires_grad and id(p) in norm_ids],
+             "weight_decay": float(spec.norm_weight_decay)},
+        ]
+    else:
+        groups = [{"params": [p for _, p in model.named_parameters()
+                              if p.requires_grad],
+                   "weight_decay": wd}]
+
+    if spec.type == "sgd":
+        return torch.optim.SGD(groups, lr=lr, momentum=float(spec.momentum),
+                               nesterov=bool(spec.nesterov))
+    kw: dict[str, Any] = {}
+    if spec.betas is not None:
+        kw["betas"] = tuple(float(b) for b in spec.betas)
+    if spec.eps is not None:
+        kw["eps"] = float(spec.eps)
+    cls = torch.optim.AdamW if spec.type == "adamw" else torch.optim.Adam
+    return cls(groups, lr=lr, **kw)
 
 
 @dataclass(frozen=True)
@@ -107,7 +225,10 @@ def compute_micro_batch(
             out = model.forward_geo(x.feat, cond, x.phi_dir, sim=x.sim,
                                     center=x.center, geom=x.geom,
                                     guide_hi=x.guide_hi if want_hi else None,
-                                    grid_h=x.grid_h, grid_w=x.grid_w)
+                                    grid_h=x.grid_h, grid_w=x.grid_w,
+                                    h_where=x.cond_h, h_mask=x.cond_mask,
+                                    h_cond=getattr(x, "h_cond", None),
+                                    sample=x)
             head = "geometry"
         m_low = out["m_low"]
         eik_term = None
@@ -120,6 +241,39 @@ def compute_micro_batch(
                 f"{x.sample_id}: m_low is {tuple(m_low.shape)}, grid is "
                 f"{(x.grid_h, x.grid_w)}"
             )
+        if getattr(model, "is_new_arm", False):
+            # EPR-018..023: the arm owns its whole criterion.  It does NOT go
+            # through the seven-term stack -- every one of these six proposals
+            # ports its reference work's loss verbatim, and mixing in a term the
+            # reference does not have would make the port a different recipe.
+            from .arms import arm_hook, load_arm
+
+            sl = load_arm(model.arm).compute_loss(model, out, x, weights)
+            # The early-warning columns are pre-registered stop-and-check
+            # triggers (`area_ratio_median`, `std_ratio_median` -- W01/W02's
+            # over-coverage signature).  They are computed HERE, from `m_low`,
+            # rather than left to each arm's `compute_loss`: a trigger that an
+            # arm author can forget to emit is not a trigger.  An arm may add
+            # its own stats; it may not remove these.
+            with torch.no_grad():
+                _m, _g = m_low.detach().float(), x.gt_low.detach().float()
+                a_p, a_g = float(_m.mean()), float(_g.mean())
+                base = {"is_fake": float(bool(x.is_fake)),
+                        "pred_area": a_p, "gt_area": a_g,
+                        "area_ratio": a_p / max(a_g, 1e-6),
+                        "pred_std": float(_m.std()), "gt_std": float(_g.std()),
+                        "has_partner": float(x.gt_partner_low is not None)}
+            sl.stats = {**base, **dict(sl.stats or {})}
+            losses.append(sl)
+            row = {"sample_id": x.sample_id, "head": head, "family": x.family,
+                   "is_fake": bool(x.is_fake),
+                   "gt_pix_source": getattr(x, "gt_pix_source", ""),
+                   **sl.stats}
+            stats_fn = arm_hook(model.arm, "train_stats")
+            if stats_fn is not None:
+                row.update(stats_fn(out, x))
+            rows.append(row)
+            continue
         phi_sdf = None
         if weights.sdf and not x.is_fake:
             key = f"{x.sample_id}@{x.grid_h}x{x.grid_w}"
@@ -129,12 +283,70 @@ def compute_micro_batch(
                 phi_sdf = signed_distance_field(x.gt_low)
                 if sdf_cache is not None:
                     sdf_cache[key] = phi_sdf
-        sl = amort_sample_loss(
-            m_low, x.gt_low, weights, valid=None, phi_sdf=phi_sdf,
-            gt_partner=x.gt_partner_low, is_fake=x.is_fake,
-            # family-gated: analytic families only
-            structural=x.family in ("radial", "linear", "band"),
-        )
+        if "uniq" in out:
+            # UNIQ: winner-takes-all over the K query fields; m_low above (the
+            # selection query) still feeds the shared shape assertion and rows.
+            from .losses import uniq_wta_loss
+
+            u = out["uniq"]
+            #: EPR-016 one-to-many groups; (0, 1.0) = the single-group baseline
+            grp = {"aux_groups": int(u.get("aux_groups", 0)),
+                   "aux_lambda": float(u.get("aux_lambda", 1.0))}
+            # An arm configured with auxiliary groups whose forward does not
+            # carry them is an arm running the baseline under the experiment's
+            # name: the head emits the extra rows only while `self.training`,
+            # and one stray `eval()` that is never restored deletes the
+            # experiment variable in silence.  Assert it on every training
+            # micro-batch (the first step included) rather than discovering it
+            # from a board that looks like the baseline's.
+            # NOT gated on `model.training`: the leak this catches IS the model
+            # sitting in eval mode, so a check that only runs in train mode
+            # would be blind to exactly the case it exists for.
+            want_aux = int(getattr(getattr(model, "geo", None),
+                                   "aux_groups", 0) or 0)
+            if want_aux and not grp["aux_groups"]:
+                raise AssertionError(
+                    f"{x.sample_id}: head is configured with aux_groups="
+                    f"{want_aux} (EPR-016) but this training forward returned "
+                    "no 'aux_groups' key -- the auxiliary query rows are not in "
+                    "the loss (model.training="
+                    f"{bool(getattr(model, 'training', False))}; the head emits "
+                    "them only in train mode)")
+            sl = uniq_wta_loss(
+                u["s_all"], model.geo.mask_of, x.gt_low, weights, valid=None,
+                phi_sdf=phi_sdf, gt_partner=x.gt_partner_low,
+                is_fake=x.is_fake, family=x.family,
+                structural=x.family in ("radial", "linear", "band"),
+                cls_logits=u["cls_logits"], sel_logits=u["sel_logits"],
+                **grp,
+            )
+            # Deep supervision (EPR-013 refine layers / EPR-014 kernel-update
+            # stages).  Every intermediate field the head chooses to expose
+            # gets the SAME criterion at its own weight: Mask2Former copies the
+            # full weight_dict per aux layer (maskformer_model.py L118-125) and
+            # K-Net's stage_loss_weights is [1]*S.  Each intermediate field
+            # re-runs its own WTA, exactly as M2F re-runs Hungarian matching.
+            for a in u.get("aux_supervision", ()):
+                asl = uniq_wta_loss(
+                    a["s_all"], model.geo.mask_of, x.gt_low, weights,
+                    valid=None, phi_sdf=phi_sdf,
+                    gt_partner=x.gt_partner_low, is_fake=x.is_fake,
+                    family=x.family,
+                    structural=x.family in ("radial", "linear", "band"),
+                    cls_logits=a.get("cls_logits"),
+                    sel_logits=a.get("sel_logits"), **grp,
+                )
+                sl.total = sl.total + float(a.get("weight", 1.0)) * asl.total
+                tag = a.get("tag", "aux")
+                for _name, _v in asl.terms.items():
+                    sl.terms[f"{_name}_{tag}"] = _v
+        else:
+            sl = amort_sample_loss(
+                m_low, x.gt_low, weights, valid=None, phi_sdf=phi_sdf,
+                gt_partner=x.gt_partner_low, is_fake=x.is_fake,
+                # family-gated: analytic families only
+                structural=x.family in ("radial", "linear", "band"),
+            )
         if eik_term is not None:
             sl.total = sl.total + weights.eik * eik_term
             sl.terms["eik"] = eik_term
@@ -175,6 +387,11 @@ class AmortTrainer:
         eval_fn: Callable[[int], dict[str, Any]] | None = None,
         log_every: int = 10,
         want_hi: bool = False,
+        #: EPR-018..023: per-arm optimizer / schedule.  ``None`` on both = the
+        #: historical hard-coded AdamW + `make_scheduler(cfg.scheduler)`, so the
+        #: four live arms construct exactly what they always did.
+        optimizer_spec: "OptimizerSpec | None" = None,
+        scheduler_kwargs: dict[str, Any] | None = None,
     ):
         self.model = model.to(device)
         self.builder = builder
@@ -209,19 +426,12 @@ class AmortTrainer:
         # step-matching is meant to remove.
         if cfg.max_steps:
             self.state.total_steps = min(self.state.total_steps, int(cfg.max_steps))
-        self.optimizer = torch.optim.AdamW(
-            [
-                {"params": [p for n, p in model.named_parameters()
-                            if p.requires_grad and p.dim() > 1],
-                 "weight_decay": cfg.weight_decay},
-                {"params": [p for n, p in model.named_parameters()
-                            if p.requires_grad and p.dim() <= 1],
-                 "weight_decay": 0.0},
-            ],
-            lr=cfg.learning_rate,
-        )
+        self.optimizer_spec = optimizer_spec
+        self.scheduler_kwargs = dict(scheduler_kwargs or {})
+        self.optimizer = build_optimizer(model, cfg, optimizer_spec)
         self.scheduler = make_scheduler(self.optimizer, self.state.total_steps,
-                                        cfg.warmup_ratio, cfg.scheduler)
+                                        cfg.warmup_ratio, cfg.scheduler,
+                                        **self.scheduler_kwargs)
         self.autocast = (
             torch.autocast(device_type="cuda", dtype=torch.bfloat16)
             if cfg.precision == "bf16" and self.device.type == "cuda"
@@ -230,7 +440,7 @@ class AmortTrainer:
 
     # -- setup record -------------------------------------------------------
     def setup(self) -> dict[str, Any]:
-        return {
+        rec = {
             "arm": self.cfg.arm,
             "model": self.model.facts(),
             "train": asdict(self.cfg),
@@ -243,6 +453,15 @@ class AmortTrainer:
             "nan_steps": self.state.nan_steps,
             "train_generated_context": self.gen_mode,
         }
+        # keys added only when an arm actually overrode the defaults, so the
+        # live arms' setup record keeps its exact shape
+        if self.optimizer_spec is not None:
+            rec["optimizer_spec"] = self.optimizer_spec.to_dict()
+        if self.scheduler_kwargs:
+            rec["scheduler_kwargs"] = {
+                k: (list(v) if isinstance(v, (list, tuple)) else v)
+                for k, v in self.scheduler_kwargs.items()}
+        return rec
 
     # -- warnings -----------------------------------------------------------
     def _warn(self, stats: dict[str, Any]) -> None:
@@ -359,13 +578,25 @@ class AmortTrainer:
                 if accum < self.gas:
                     continue
 
+                # EPR-020/021/023: `max_grad_norm <= 0` means "no clipping"
+                # (PointRend/LIIF/CondInst all disable it).  Clipping at inf
+                # leaves the logged `gnorm` column intact and scales nothing;
+                # clipping at 0 would zero every gradient, so the disabled case
+                # has to be spelled out rather than passed straight through.
+                _mgn = float(self.cfg.max_grad_norm)
                 gnorm = float(torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), self.cfg.max_grad_norm))
+                    self.model.parameters(), _mgn if _mgn > 0 else float("inf")))
                 self.optimizer.step()
                 self.scheduler.step()
                 self.optimizer.zero_grad(set_to_none=True)
                 accum = 0
                 self.state.step += 1
+                # EPR-013 EoMT mask annealing: a no-op unless the head both
+                # has refine layers and was built with --uniq4-refine-anneal.
+                _geo = getattr(self.model, "geo", None)
+                if hasattr(_geo, "set_anneal_progress"):
+                    _geo.set_anneal_progress(self.state.step,
+                                             self.state.total_steps)
 
                 row = {"step": self.state.step, "loss": float(total.detach()),
                        "lr": self.optimizer.param_groups[0]["lr"],

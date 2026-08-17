@@ -7,6 +7,7 @@ import gc
 import hashlib
 import json
 import os
+import queue
 import shutil
 import sys
 import threading
@@ -15,7 +16,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Collection, Iterable, Mapping, Protocol
 
 from dataset_build.tools.archive_reader import (
     default_db,
@@ -38,6 +39,7 @@ from .canonical_qa import (
     rank_candidates,
 )
 from .config import (
+    DEFAULT_MAX_SOURCE_USES,
     DEFAULT_QA_SCORER_INSTANCES,
     DEFAULT_QA_WINNER_MARGIN_ABSTAIN,
     DEFAULT_QA_WINNER_MARGIN_LOW,
@@ -69,7 +71,14 @@ from .sources import (
     build_inventory,
     refresh_source_record,
 )
-from .state import ASSETS_LOST_CODE, ArtifactStore, StateError, file_digest, stable_id
+from .state import (
+    ASSETS_LOST_CODE,
+    ArtifactStore,
+    StateError,
+    file_digest,
+    stable_id,
+    write_json_atomic,
+)
 from .visibility import (
     VisibilityError,
     hint_support,
@@ -104,17 +113,118 @@ from .visibility import (
 # groups/h.  The mark must clear the unreclaimable base with room for one real
 # batch; 8 GiB restores batching (peak ~13 GiB per build) and the tmpfs monitor
 # alarms below 3 GiB free if two builds ever land in lockstep.
+#
+# The level it is compared against counts *only what landing can reclaim* — the
+# staged assets.  Folding the prefetch buffer in (which ``_asset_directories``
+# still does, deliberately, for the orphan sweep's benefit) made the mark a level
+# with no lever: prod-l8 sat at 8.5 GiB of buffer with 0 bytes of assets, so both
+# readers of this constant fired forever — checkpoints every group, and a source
+# window pinned at 1 because ``_fill_initial_mode`` drains its whole queue on the
+# same comparison.  The buffer has its own ceiling (``PREFETCH_BUFFER_BYTES``).
 LAND_WATERMARK_BYTES = 8 * 1024**3
+# Minimum spacing between two *unforced* checkpoints.  The water mark alone is
+# not a rate limit: it is a level, and once the level sits above the mark (on
+# prod-l8 the 8.5 GiB prefetch buffer alone does that, because
+# ``_asset_directories`` counts the buffer) every single call passes it and the
+# build lands one group per batch and re-mirrors the whole ledger each time —
+# prod-l8 measured 910 checkpoints of a 391 MB ``groups.jsonl`` over 391 GB of
+# NFS writes, starving the prefetch it shares the link with.  Both conditions
+# must hold, because either one alone still degenerates: time alone lets a fast
+# stretch land single groups, count alone lets a slow stretch land every 25
+# groups no matter how long that took.  ``force=True`` (phase boundaries) is
+# never throttled, and the free-space valve below overrides both.
+LAND_MIN_INTERVAL_SECONDS = 300.0
+LAND_MIN_GROUPS = 25
+# Throttle override: landing is also the only path that reclaims staged bytes,
+# so it must not be rate limited into a full tmpfs.  Measured against the mount
+# holding the output root, not against the staged counter, because that counter
+# includes the rebuildable prefetch buffer and is exactly what mis-fires above.
+LAND_FREE_BYTES_FLOOR = 4 * 1024**3
+# Incremental mirror.  ``MIRROR_VERIFY_WINDOW`` is the tail compared between the
+# source and its mirror before every append: the ledgers are append-only, so an
+# equal tail at the committed offset is the evidence that the mirror really is a
+# byte prefix of the source and the delta may be appended behind it.
+MIRROR_STATE_NAME = ".mirror_state.json"
+MIRROR_VERIFY_WINDOW = 64 * 1024
+MIRROR_COPY_CHUNK = 8 * 1024**2
+# Periodic scrub.  The window above is a *tail*: damage anywhere before it is
+# neither detected nor ever repaired, whereas the whole-file copy this replaced
+# healed the mirror at every checkpoint.  Measured by the review (N-M1): flip
+# byte 100 of a 320 KB mirror and five consecutive checkpoints report no event,
+# the mirror stays diverged forever, and ``restore_mirror`` faithfully restores
+# the bad byte into the ledger — silently wrong data if it lands inside a value,
+# a mid-file ``StateError`` if it lands on a structural character.  So every
+# K-th checkpoint copies the ledgers whole regardless of what the tail says.
+# K=25 puts one 400 MB copy every 625 groups ≈ 0.64 MB/group, against the 405
+# MB/group the incremental mirror replaced — 1/630 of the old cost, and the
+# upper bound on how long a mid-file corruption can survive is now 25
+# checkpoints instead of forever.
+MIRROR_SCRUB_EVERY = 25
 # Sources per prefetch buffer.  ponytail: a module constant for the same reason
 # as the water mark — one chunk is ~1 GiB of a 24 GiB tmpfs, the buffer is
 # rebuildable, and the only requirement is that a chunk take long enough to
 # render that the next one finishes reading behind it.
 PREFETCH_CHUNK = 256
+# Ceiling on the buffer, which is *not* the water mark: landing cannot reclaim a
+# single byte of it, so the two budgets are separate or the landing gate reads a
+# level it has no lever over (prod-l8: 8.5 GiB of buffer permanently above an
+# 8 GiB mark, source window pinned at 1).
+#
+# The buffer needs an explicit ceiling because nothing else bounds it.  A copy is
+# dropped by ``_discard_prefetched`` when its source commits or goes terminal,
+# but a source parked on the SAM3 queue keeps its copy so the drain can re-render
+# it locally — and those never come back inside the rendering phase.  prod-l8
+# measured 5,003 queued sources against 4,984 buffered files / 8.7 GiB: the
+# buffer's real bound is "the whole local pool", i.e. unbounded for our purposes.
+# ``_SourcePrefetch.close`` (rmtree at the end of rendering) is the only other
+# reclaim and comes far too late.
+#
+# 3 GiB.  The floor is the working set that must never be evicted — the chunk
+# being rendered plus the one read behind it, 512 files, measured on prod-l8 at
+# 0.90 GiB (1.79 MB mean) and 2.38 GiB if every one of them sat at the p95 of
+# 4.77 MB.  The ceiling is the 24 GiB tmpfs it shares with the staged assets (8
+# GiB mark, ~13 GiB while a checkpoint stages winners) and the ledgers, which at
+# the 400k target reach 7.4 GiB: 3 + 13 + 7.4 = 23.4 GiB.  Anything past ~1,700
+# copies is parked SAM3 sources the drain may or may not reach, so the band
+# between the two is theirs.  Evicting is never wrong — a miss is exactly the
+# archive read the buffer existed to avoid — so this trades hit rate, never
+# correctness.  It is a post-delivery trim rather than admission control, so one
+# chunk may transiently overshoot before it is enforced.
+PREFETCH_BUFFER_BYTES = 3 * 1024**3
 # NFS roots.  Only ``default_dependencies`` wires them in, so any caller that
 # builds ``PipelineDependencies`` by hand (every test) lands nothing, mirrors
 # nothing and never touches NFS.
 ARCHIVE_ROOT = Path("/mnt/nfs/bc/data/datasets")
 MIRROR_ROOT = Path("/mnt/nfs/bc/data/builds")
+# Stop-fill marker.  A file (or directory — the content is never read) at
+# ``<output_root>/STOP_FILL`` retires the *rendering* half of a build while
+# leaving the rest of the lifecycle exactly as it is: the annotation backlog is
+# still drained, the shortfall is still journalled, and the projection still
+# runs.  It exists because L8 has to stop at the groups it has and give both
+# cards back to training, with ~50k winners still unannotated.
+#
+# **A marker file rather than a config key, deliberately.**  ``run`` compares the
+# resumed manifest's ``effective_config`` against the current one path by path
+# and refuses any difference (``_resume_config_differences``); a new key would
+# make every live build unresumable the moment it was set, which is the exact
+# opposite of what "stop rendering now" needs.  The marker is also reversible
+# without touching a durable artifact: delete it, restart, and the build fills
+# again, because nothing about it is written into the manifest's config.
+STOP_FILL_MARKER = "STOP_FILL"
+
+
+def _stop_fill_marker(output_root: Path) -> Path:
+    return Path(output_root) / STOP_FILL_MARKER
+
+
+def _stop_fill_requested(output_root: Path) -> bool:
+    """Is the build being told to stop opening new render work?
+
+    ``exists`` rather than ``is_file`` so ``touch``, ``echo >`` and ``mkdir`` are
+    all valid ways to set it — an operator reaching for this is stopping a
+    production build, and the answer must not depend on which one they typed.
+    """
+    return _stop_fill_marker(output_root).exists()
 
 
 class PipelineError(RuntimeError):
@@ -189,12 +299,23 @@ def _write_cgt_once(mask: Any, path: Path) -> Path:
     """Encode one physical C_GT, or adopt the copy an earlier attempt fsynced.
 
     The reuse is keyed by ``mask_id``, which names a plan slot rather than the
-    pixels behind it, so an existing file is only the right answer while nothing
-    can re-plan a mask whose C_GT is already on disk.  Today that holds because
-    SAM3 relabel only ever runs after ``build_mask_plan`` raised — that is,
-    before ``_start_cgt_writes`` submitted anything for that source.  Any change
-    that lets an already rendered source be re-planned has to invalidate (delete)
-    the affected C_GT files first, or this returns a stale mask.
+    pixels behind it, so an existing file is only the right answer while every
+    re-plan of that slot produces the same pixels.  Two paths re-plan a source,
+    and each is safe for its own reason:
+
+    * **SAM3 relabel** only ever runs after ``build_mask_plan`` raised — that is,
+      before ``_start_cgt_writes`` submitted anything for that source, so there
+      is no file to go stale.
+    * **Source reuse** (``[sources] max_source_uses`` above 1) re-plans a source
+      that has already rendered, once per pass.  It is safe because the mask
+      seeds in ``canonical_masks`` are derived from ``source_id`` alone and never
+      from the pass index, so pass *k* rasterises the identical seven masks under
+      the identical ``mask_id``s.  A pass whose files were already landed and
+      unlinked simply re-encodes them.
+
+    **Giving the mask plan any per-pass entropy breaks both claims at once** and
+    would require invalidating (deleting) the affected C_GT files first, or this
+    returns pixels that belong to another plan.
     """
     if path.is_file():
         return path
@@ -261,7 +382,106 @@ class Scorer(Protocol):
 
 
 class QueueDrainer(Protocol):
-    def drain(self, *, max_workers: int | None = None) -> dict[str, int]: ...
+    def drain(
+        self,
+        *,
+        max_workers: int | None = None,
+        only: Collection[str] | None = None,
+    ) -> dict[str, int]: ...
+
+
+class _AnnotationDriver:
+    """One background thread that annotates finished render passes.
+
+    The renderer owns the GPUs and the annotator owns a relay socket, so making
+    them take turns wasted whichever resource was idle: a build spent its whole
+    render phase with the relay untouched and then sat on two idle cards for the
+    length of the annotation phase.  This runs the annotation queue beside the
+    render loop instead — one thread, one batch at a time, in the order the
+    render passes finished.
+
+    **Batches, not tasks.**  ``submit`` takes the whole of a finished pass, which
+    is what keeps the relay's own batching intact (a task-at-a-time feed would
+    hand ``ResponsesAnnotator.drain`` a pool of one and lose the concurrency the
+    endpoint is configured for) and what makes the safety argument simple: the
+    caller has already landed and re-indexed everything in the batch, so nothing
+    in flight here can have its bytes moved by a later land checkpoint.
+
+    **One thread, strictly serial.**  Two drains running at once could both pick
+    up the same task and write two different SFT rows under one ``sft_id``, which
+    the store rejects outright — after paying the relay twice.  The queue is
+    therefore drained by a single thread and the closing drain is only started
+    after this one has been joined.
+
+    **Errors do not disappear.**  ``drain`` handles transport failure itself, so
+    anything that escapes it is structural (a store conflict, an interrupt).  The
+    first one is kept and re-raised on the *main* thread at the next ``submit``
+    or at ``close``, which fails the build where a failure can still be seen,
+    rather than leaving a dead thread and a build that renders on regardless.
+    """
+
+    def __init__(self, drainer: QueueDrainer) -> None:
+        self._drainer = drainer
+        self._queue: "queue.Queue[frozenset[str] | None]" = queue.Queue()
+        self._lock = threading.Lock()
+        self._inflight = 0
+        self._batches = 0
+        self._error: BaseException | None = None
+        self._closed = False
+        self._thread = threading.Thread(
+            target=self._loop, name="databuild-annotate", daemon=False
+        )
+        self._thread.start()
+
+    @property
+    def inflight(self) -> int:
+        """Tasks handed over and not yet resolved; the manifest's pipeline gauge."""
+        with self._lock:
+            return self._inflight
+
+    @property
+    def batches(self) -> int:
+        with self._lock:
+            return self._batches
+
+    @property
+    def error(self) -> BaseException | None:
+        with self._lock:
+            return self._error
+
+    def submit(self, batch: frozenset[str]) -> None:
+        error = self.error
+        if error is not None:
+            raise error
+        if self._closed:
+            raise PipelineError("annotation driver is closed")
+        with self._lock:
+            self._inflight += len(batch)
+            self._batches += 1
+        self._queue.put(batch)
+
+    def close(self) -> None:
+        """Stop accepting work and wait for the thread; safe to call twice."""
+        if not self._closed:
+            self._closed = True
+            self._queue.put(None)
+        self._thread.join()
+
+    def _loop(self) -> None:
+        while True:
+            batch = self._queue.get()
+            if batch is None:
+                return
+            try:
+                if self.error is None:
+                    self._drainer.drain(only=batch)
+            except BaseException as exc:  # surfaced on the main thread; see class doc
+                with self._lock:
+                    if self._error is None:
+                        self._error = exc
+            finally:
+                with self._lock:
+                    self._inflight -= len(batch)
 
 
 @dataclass(slots=True)
@@ -325,14 +545,34 @@ def default_dependencies() -> PipelineDependencies:
     )
 
 
-def _atomic_copy(source: Path, target: Path) -> None:
-    """Replace one small file in place: same-directory temp, fsync, rename."""
+def _copy_stream(reader: Any, writer: Any, *, limit: int | None = None) -> int:
+    """Copy up to ``limit`` bytes between two open handles; return what was written."""
+    written = 0
+    while limit is None or written < limit:
+        want = MIRROR_COPY_CHUNK if limit is None else min(MIRROR_COPY_CHUNK, limit - written)
+        chunk = reader.read(want)
+        if not chunk:
+            break
+        writer.write(chunk)
+        written += len(chunk)
+    return written
+
+
+def _atomic_copy(source: Path, target: Path, *, limit: int | None = None) -> int:
+    """Replace one file in place: same-directory temp, fsync, rename.
+
+    Returns the byte count actually copied, which is what the caller must record
+    as the mirrored prefix: an append-only source can grow during the read, so
+    the size it had before the copy is not a fact about the copy.
+    """
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_name(target.name + ".tmp")
-    shutil.copyfile(source, tmp)
-    with tmp.open("rb") as handle:
-        os.fsync(handle.fileno())
+    with Path(source).open("rb") as reader, tmp.open("wb") as writer:
+        written = _copy_stream(reader, writer, limit=limit)
+        writer.flush()
+        os.fsync(writer.fileno())
     os.replace(tmp, target)
+    return written
 
 
 def _write_jsonl_atomic(path: Path, rows: list[Mapping[str, Any]]) -> None:
@@ -353,12 +593,275 @@ def _artifact_names(root: Path) -> list[str]:
     return names
 
 
-def mirror_artifacts(output_root: Path, mirror_dir: Path) -> list[str]:
-    """Copy the authoritative ledgers off the tmpfs so a reboot cannot take them."""
-    names = _artifact_names(Path(output_root))
+def _read_mirror_state(mirror_dir: Path) -> tuple[dict[str, dict[str, Any]], int | None]:
+    """The per-artifact ``(offset, tail digest)`` this mirror last committed,
+    and the checkpoint sequence number that drives the scrub cadence.
+
+    Unreadable, foreign or malformed state is *not* an error: it only costs one
+    whole-file copy, whereas trusting it would be the one way to append behind
+    an offset nobody verified.  The sequence number is ``None`` in exactly that
+    case, which the caller reads as "scrub now" — a mirror whose position in the
+    cadence is unknown is also a mirror nobody has verified past its tail.
+    """
+    try:
+        payload = json.loads((mirror_dir / MIRROR_STATE_NAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}, None
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        return {}, None
+    files = payload.get("files")
+    if not isinstance(files, dict):
+        return {}, None
+    # Same ``bool``-is-an-``int`` trap as the offsets below, same treatment.
+    seq = payload.get("checkpoints")
+    if not isinstance(seq, int) or isinstance(seq, bool) or seq < 0:
+        seq = None
+    return {
+        str(name): entry for name, entry in files.items() if isinstance(entry, dict)
+    }, seq
+
+
+def _mirror_state_entry(source: Path, size: int) -> dict[str, Any]:
+    """Describe a mirrored prefix by its length and the digest of its tail.
+
+    The tail is read from the *source*, which is the same bytes by construction
+    (the mirror is a verified prefix) and lives on the tmpfs rather than behind
+    NFS.
+    """
+    window = min(MIRROR_VERIFY_WINDOW, size)
+    tail = b""
+    if window:
+        with source.open("rb") as handle:
+            handle.seek(size - window)
+            tail = handle.read(window)
+    return {
+        "bytes": size,
+        "tail_bytes": window,
+        "tail_sha256": hashlib.sha256(tail).hexdigest(),
+    }
+
+
+def _mirror_ledger(
+    source: Path, target: Path, recorded: Mapping[str, Any] | None, *, scrub: bool = False
+) -> tuple[dict[str, Any], dict[str, Any] | None, int]:
+    """Extend one append-only ledger's mirror by its new suffix.
+
+    Returns the new state entry, an event if this was not a plain append, and
+    the bytes physically pushed to the mirror — which is the number worth
+    watching, and is *not* derivable from the offsets when the previous state is
+    missing (an unrecorded mirror can still be extended by its delta).
+
+    The invariant every branch here restores is a single sentence: **the mirror
+    is a byte-exact prefix of the source, and the recorded offset is its
+    length**.  That is what makes ``restore_mirror`` produce a ledger the
+    ordinary resume accepts, and it is strictly what the old whole-file copy
+    also guaranteed — a copy of a file that is still being appended to is a
+    prefix, not a snapshot of the end.
+
+    Four ways the invariant can be found broken, each of which falls back to the
+    whole-file copy rather than appending behind an unverified offset:
+
+    * the source is *shorter* than what we mirrored (a resumed build writing a
+      different file into the same name, or a truncated source);
+    * the mirror is shorter than the recorded offset (truncated by something
+      else, or an offset that never belonged to this file);
+    * the tails disagree at the recorded offset (the prefix is not this
+      source's), including the recorded digest disagreeing with the mirror;
+    * the mirror is longer than its own recorded length *and* the surplus cannot
+      be explained — see below, where it can.
+
+    The one case that is repaired instead of re-copied is a mirror longer than
+    the recorded offset: an append that was interrupted between the write and
+    the state file leaves exactly that, and the surplus is by definition bytes
+    nobody has claimed are durable, so it is truncated away and re-appended.
+
+    ``scrub`` is the fifth way, and the only one that is not a symptom: the
+    caller's cadence (``MIRROR_SCRUB_EVERY``) asks for the whole-file copy so
+    that damage the tail window cannot see is healed anyway.  It is checked last
+    so that a checkpoint which is *both* a scrub and an anomaly still journals
+    the anomaly — the reason column is what tells the two apart afterwards.
+    """
+    source_size = source.stat().st_size
+    target_size = target.stat().st_size if target.is_file() else -1
+    recorded_bytes = recorded.get("bytes") if recorded is not None else None
+    # ``bool`` is an ``int``: a state file carrying ``true`` would otherwise read
+    # as the offset 1, and a one-byte window is a tail comparison that passes on
+    # almost anything.  Anything that is not a plain non-negative integer costs a
+    # whole-file copy instead.
+    usable = isinstance(recorded_bytes, int) and not isinstance(recorded_bytes, bool) \
+        and recorded_bytes >= 0
+    committed = int(recorded_bytes) if usable else target_size  # type: ignore[arg-type]
+    reason: str | None = None
+    if target_size < 0:
+        reason = "mirror_missing"
+    elif recorded is not None and not usable:
+        reason = "mirror_state_unusable"
+    elif committed > source_size:
+        reason = "source_shorter_than_mirror"
+    elif committed > target_size:
+        reason = "mirror_truncated"
+    if reason is None and committed > 0:
+        window = committed
+        if recorded is not None and isinstance(recorded.get("tail_bytes"), int):
+            window = min(int(recorded["tail_bytes"]), committed)
+        window = max(1, min(window or MIRROR_VERIFY_WINDOW, MIRROR_VERIFY_WINDOW, committed))
+        with target.open("rb") as handle:
+            handle.seek(committed - window)
+            mirrored_tail = handle.read(window)
+        with source.open("rb") as handle:
+            handle.seek(committed - window)
+            source_tail = handle.read(window)
+        if mirrored_tail != source_tail:
+            reason = "prefix_diverged"
+        elif recorded is not None and recorded.get("tail_sha256") not in (
+            None, hashlib.sha256(mirrored_tail).hexdigest()
+        ):
+            reason = "mirror_tail_changed"
+    if reason is None and scrub:
+        reason = "scrub"
+
+    event = {
+        "artifact": target.name,
+        "reason": reason,
+        "action": "full_copy",
+        # A mirror that does not exist yet *and* was never recorded is the first
+        # checkpoint of a build, not an anomaly: copying it is the only thing
+        # that could have happened, so it is accounted for but not journalled.
+        "journal": not (reason == "mirror_missing" and recorded is None),
+        "committed": committed,
+        "mirror_bytes": target_size,
+        "source_bytes": source_size,
+    }
+    if reason is not None:
+        written = _atomic_copy(source, target)
+        event["copied"] = written
+        return _mirror_state_entry(source, written), event, written
+
+    rolled_back = target_size > committed
+    if rolled_back:
+        with target.open("r+b") as handle:
+            handle.truncate(committed)
+            handle.flush()
+            os.fsync(handle.fileno())
+    written = 0
+    if source_size > committed:
+        with source.open("rb") as reader, target.open("r+b") as writer:
+            reader.seek(committed)
+            writer.seek(committed)
+            written = _copy_stream(reader, writer)
+            writer.flush()
+            os.fsync(writer.fileno())
+    landed = target.stat().st_size
+    if landed != committed + written:
+        # The mirror is not the length its own append says it is: nothing about
+        # the offset is trustworthy any more, so stop reasoning and re-copy.
+        event["reason"] = "mirror_size_after_append"
+        event["mirror_bytes"] = landed
+        copied = _atomic_copy(source, target)
+        event["copied"] = copied
+        return _mirror_state_entry(source, copied), event, written + copied
+    state = _mirror_state_entry(source, landed)
+    if rolled_back:
+        event["reason"] = "interrupted_append"
+        event["action"] = "rollback"
+        event["appended"] = written
+        return state, event, written
+    return state, None, written
+
+
+@dataclass(frozen=True, slots=True)
+class MirrorReport:
+    names: tuple[str, ...]
+    # Bytes actually pushed to the mirror this pass, split by how they got
+    # there.  ``copied_bytes`` staying near the ledger size checkpoint after
+    # checkpoint is the signature of an incremental mirror that is not.
+    appended_bytes: int
+    copied_bytes: int
+    # One entry per artifact that could not simply be extended.  Empty is the
+    # healthy case; ``_land_checkpoint`` journals whatever is in here.
+    events: tuple[dict[str, Any], ...]
+
+
+def mirror_artifacts(output_root: Path, mirror_dir: Path) -> MirrorReport:
+    """Carry the authoritative ledgers off the tmpfs so a reboot cannot take them.
+
+    JSONL ledgers are append-only and grow without bound (391 MB on prod-l8 at
+    a third of target), so they are extended by their new suffix rather than
+    re-copied whole; ``manifest.json`` is rewritten in place and stays a normal
+    atomic copy.  The cost of a checkpoint is therefore the bytes rendered since
+    the last one, not the size of the build so far.
+
+    Every ``MIRROR_SCRUB_EVERY``-th checkpoint the ledgers are copied whole
+    anyway: appending behind a 64 KiB tail check leaves damage further back both
+    undetected and unrepaired, so the cadence bounds how long such damage can
+    survive.  The counter is the ``checkpoints`` sequence number in the state
+    file, which is where a restart picks it back up; a state file that is
+    missing or unusable has no position in the cadence and scrubs.
+    """
+    output_root, mirror_dir = Path(output_root), Path(mirror_dir)
+    names = _artifact_names(output_root)
+    mirror_dir.mkdir(parents=True, exist_ok=True)
+    state, checkpoints = _read_mirror_state(mirror_dir)
+    sequence = (checkpoints or 0) + 1
+    scrub = checkpoints is None or sequence % MIRROR_SCRUB_EVERY == 0
+    events: list[dict[str, Any]] = []
+    appended = copied = 0
     for name in names:
-        _atomic_copy(Path(output_root) / name, Path(mirror_dir) / name)
-    return names
+        source, target = output_root / name, mirror_dir / name
+        if not name.endswith(".jsonl"):
+            copied += _atomic_copy(source, target)
+            continue
+        entry, event, written = _mirror_ledger(source, target, state.get(name), scrub=scrub)
+        if event is not None and event["action"] == "full_copy":
+            copied += written
+        else:
+            appended += written
+        state[name] = entry
+        if event is not None and event["journal"]:
+            events.append(event)
+    # Written last: a state file naming an offset the mirror has not reached
+    # would send the next checkpoint appending into a hole.  The reverse (a
+    # committed append the state file has not caught up with) is the repairable
+    # ``interrupted_append`` case above.
+    write_json_atomic(
+        mirror_dir / MIRROR_STATE_NAME,
+        {"version": 1, "checkpoints": sequence, "files": state},
+    )
+    return MirrorReport(
+        names=tuple(names),
+        appended_bytes=appended,
+        copied_bytes=copied,
+        events=tuple(events),
+    )
+
+
+def _whole_records_limit(path: Path) -> int | None:
+    """Length of ``path`` up to its last newline, or ``None`` if it ends on one.
+
+    An append to NFS is not atomic, so a mirror can end mid-record.  ``scan_jsonl``
+    already tolerates a torn *unparseable* tail, but not the one cut that stays
+    parseable: a record whose trailing newline is missing reads back as a whole
+    record, and the journal's next append then glues the following record onto it
+    — a corruption that only surfaces one resume later, in the middle of the file
+    where nothing tolerates it.  Restoring on a record boundary removes the case.
+    """
+    size = path.stat().st_size
+    if size == 0:
+        return None
+    with path.open("rb") as handle:
+        handle.seek(size - 1)
+        if handle.read(1) == b"\n":
+            return None
+        end = size
+        while end > 0:
+            start = max(0, end - MIRROR_COPY_CHUNK)
+            handle.seek(start)
+            block = handle.read(end - start)
+            index = block.rfind(b"\n")
+            if index >= 0:
+                return start + index + 1
+            end = start
+    return 0
 
 
 def restore_mirror(mirror_dir: Path, output_root: Path) -> list[str]:
@@ -373,7 +876,9 @@ def restore_mirror(mirror_dir: Path, output_root: Path) -> list[str]:
         return []
     names = _artifact_names(mirror_dir)
     for name in names:
-        _atomic_copy(mirror_dir / name, Path(output_root) / name)
+        source = mirror_dir / name
+        limit = _whole_records_limit(source) if name.endswith(".jsonl") else None
+        _atomic_copy(source, Path(output_root) / name, limit=limit)
     return names
 
 
@@ -410,11 +915,21 @@ def _add_manifest_self_artifact(manifest: dict[str, Any]) -> None:
 
 
 def _empty_cuda_cache() -> None:
-    """Hand the allocator's spare blocks back so a co-resident model can have them."""
+    """Hand the allocator's spare blocks back so a co-resident model can have them.
+
+    Nothing in here may *create* a CUDA context.  A stop-fill run loads no
+    renderer and no scorer precisely so that ``nvidia-smi`` shows the build
+    nowhere, and a call that initialised the driver just to find it had no blocks
+    to release would put the process back on the card it was told to vacate.
+    ``torch.cuda.is_initialized()`` is a Python-side flag on the lazy-init state
+    — it calls nothing in the driver — so a process that never loaded a model
+    returns here having touched no GPU at all.
+    """
     try:
         import torch
 
-        torch.cuda.empty_cache()
+        if torch.cuda.is_initialized():
+            torch.cuda.empty_cache()
     except Exception:  # noqa: BLE001 - a CPU-only run has nothing to give back
         pass
 
@@ -470,6 +985,14 @@ _RESUME_NEUTRAL_DEFAULTS: dict[tuple[str, str], Any] = {
     # excusing a manifest whose values differ.
     ("render", "qa_winner_margin_abstain"): DEFAULT_QA_WINNER_MARGIN_ABSTAIN,
     ("render", "qa_winner_margin_low"): DEFAULT_QA_WINNER_MARGIN_LOW,
+    # ``sources.max_source_uses`` at its default of 1 is the pre-key pipeline
+    # exactly: ``allocate_sources`` takes the same branch it always took, the
+    # pool is walked once, and every derived ID drops the use suffix, so a
+    # manifest that predates the key describes the same run this default
+    # produces.  Only the missing-key case is excused — a manifest that already
+    # says 1 and a config that now says 3 is a real difference, and the entry
+    # above deliberately does not hide it.
+    ("sources", "max_source_uses"): DEFAULT_MAX_SOURCE_USES,
 }
 
 
@@ -633,6 +1156,106 @@ class _SourcePrefetch:
         shutil.rmtree(self.directory, ignore_errors=True)
 
 
+def _sam3_ready_verdict(maxima: tuple[int | None, int | None] | None) -> bool:
+    """``_unconsumed_sam3_ready``'s test, read off a (ready, invalid) maximum.
+
+    Term for term the same comparison: a source with no ready event is not ready
+    (``ready is None``), and an absent invalid event floors the comparison at
+    zero exactly like the original ``max(invalid or [0])``.
+    """
+    if maxima is None:
+        return False
+    ready, invalid = maxima
+    return ready is not None and ready > (0 if invalid is None else invalid)
+
+
+class _Sam3Ledger:
+    """SAM3 attempt counts and ready/invalid maxima, folded off the journal once.
+
+    Both readings used to be answered per source with a full scan of
+    ``failures`` — ``_sam3_attempts`` counting, ``_unconsumed_sam3_ready``
+    maximising — and both are asked of *every* pending source inside
+    ``_drain_sam3_and_replacements``'s loop.  At L8 shape (5,003 queued sources
+    against 17,656 journal rows) the four comprehensions there measured 84.2 s
+    per ``while`` iteration, on the main loop, and the journal only grows as the
+    drain works.  This folds the same two quantities in one pass.
+
+    **Why a prebuilt index is not enough.**  The drain *appends* to the journal
+    while it iterates: ``_record_sam3_attempt`` writes ``sam3_attempt`` /
+    ``sam3_ready``, ``_try_ready_relabel`` writes ``sam3_ready_invalid``, and a
+    verdict can flip inside one loop body — the batch loop records ``sam3_ready``
+    at attempt *n* and, three lines later, ``sam3_ready_invalid`` at the same *n*,
+    which takes the source from ready back to consumed.  An index built once per
+    round would answer with the state before those rows and be silently wrong.
+
+    So this is incremental rather than prebuilt: ``refresh`` consumes exactly the
+    rows appended since the last call, and every read point in the drain calls it
+    first.  Because ``ArtifactStore.failures`` is append-only — rows are added at
+    the end by ``append_failure`` and never reordered, rewritten or removed — a
+    cursor into it is stable, each row is folded exactly once, and after any
+    ``refresh`` the counts equal the full-scan answer over the whole journal.
+    The identity/shrink guard rebuilds from scratch should a caller ever hand
+    over a different or truncated list.
+
+    Not thread safe, and deliberately not shared: the drain keeps its own
+    instance on the main thread, while ``_sam3_ready_maxima`` builds a throwaway
+    one per manifest.  Concurrent appends by other threads are harmless — the
+    slice below is taken against a length captured first, so a row that lands
+    mid-refresh is simply picked up by the next one.
+    """
+
+    __slots__ = ("_rows", "_pos", "attempts", "maxima")
+
+    def __init__(self) -> None:
+        self._rows: list[dict[str, Any]] | None = None
+        self._pos = 0
+        self.attempts: dict[str, int] = {}
+        self.maxima: dict[str, tuple[int | None, int | None]] = {}
+
+    def refresh(self, failures: list[dict[str, Any]]) -> "_Sam3Ledger":
+        if failures is not self._rows or len(failures) < self._pos:
+            self._rows = failures
+            self._pos = 0
+            self.attempts = {}
+            self.maxima = {}
+        end = len(failures)
+        if end == self._pos:
+            return self
+        for row in failures[self._pos:end]:
+            event = row.get("event_type")
+            if event != "sam3_attempt" and event != "sam3_ready" \
+                    and event != "sam3_ready_invalid":
+                continue
+            source_id = row.get("source_id")
+            if not source_id:
+                # Unreachable from the callers this feeds — they only ask about
+                # source ids that came off a ``SourceRecord`` — and dropped
+                # rather than keyed so a blank id cannot collide with a real one.
+                continue
+            key = str(source_id)
+            if event == "sam3_attempt":
+                # ``_sam3_attempts`` also required the stage, and only this
+                # counter did: the maxima below are keyed on event type alone.
+                if row.get("stage") == "sam3_relabel":
+                    self.attempts[key] = self.attempts.get(key, 0) + 1
+                continue
+            attempt = int(row.get("attempt") or 0)
+            ready, invalid = self.maxima.get(key, (None, None))
+            if event == "sam3_ready":
+                ready = attempt if ready is None else max(ready, attempt)
+            else:
+                invalid = attempt if invalid is None else max(invalid, attempt)
+            self.maxima[key] = (ready, invalid)
+        self._pos = end
+        return self
+
+    def attempts_of(self, source_id: str) -> int:
+        return self.attempts.get(source_id, 0)
+
+    def unconsumed_ready(self, source_id: str) -> bool:
+        return _sam3_ready_verdict(self.maxima.get(source_id))
+
+
 class CanonicalPipeline:
     def __init__(
         self,
@@ -640,15 +1263,21 @@ class CanonicalPipeline:
         dependencies: PipelineDependencies,
         inventory: SourceInventoryResult,
         catalog: PresetCatalog,
-        renderer: Renderer,
-        scorer: Scorer,
+        renderer: Renderer | None,
+        scorer: Scorer | None,
         store: ArtifactStore,
         existing_manifest: Mapping[str, Any] | None,
+        *,
+        stop_fill: bool | None = None,
     ) -> None:
         self.config = config
         self.dependencies = dependencies
         self.inventory = inventory
         self.catalog = catalog
+        # ``None`` from the start is the stop-fill build: ``run`` skipped both
+        # factories rather than loading a model it would never call.  Mid-run the
+        # same two fields go to ``None`` in ``_release_heavy_resources``, which is
+        # why they were already optional.
         self.renderer: Renderer | None = renderer
         self.scorer: Scorer | None = scorer
         self.store = store
@@ -682,6 +1311,44 @@ class CanonicalPipeline:
         )
         self._phase = "preflight"
         self._annotation_sync: dict[str, int] = {}
+        # Stop-fill.  ``run`` decides it once, before the GPU factories, and hands
+        # the same answer down here: it must not be re-derived, or a marker
+        # dropped in the seconds between the two would give a pipeline that
+        # believes it may render and a process that never loaded a renderer.
+        # Callers that build the pipeline directly (every test) may leave it
+        # ``None`` and get the marker's current answer.
+        self._stop_fill_latched = (
+            _stop_fill_requested(config.output_root) if stop_fill is None else stop_fill
+        )
+        self._stop_fill_at_start = self._stop_fill_latched
+        self._stop_fill_recorded = False
+        # What this process actually put on a card.  Journalled into the manifest
+        # because "the build gave the GPUs back" is a claim about the process, not
+        # about the marker, and the two are only the same if nothing loaded.
+        self._gpu_resources_loaded = renderer is not None or scorer is not None
+        # The pipelined annotation pass.  One annotator instance is shared by the
+        # background driver and the closing drain: it caches SDK clients and
+        # rebuilds the relay pool's removal state from the journal, and a second
+        # instance would repeat both for no gain.  Both are created on first use,
+        # so a build that renders nothing never opens a relay client at all.
+        self._annotator: QueueDrainer | None = None
+        self._driver: _AnnotationDriver | None = None
+        # Task IDs already handed to the driver.  A task stays pending until its
+        # SFT row or its terminal event exists, so without this a second pass
+        # boundary would re-submit whatever the first one has not finished yet —
+        # and two drains over one task is the duplicate-billing case the driver's
+        # serial queue exists to prevent.
+        self._annotation_submitted: set[str] = set()
+        # Archive batches this process has already taught the catalog about.  See
+        # ``_refresh_catalog``: the full re-registration is O(everything this
+        # build ever landed), which is fine once per build and quadratic once per
+        # render pass.
+        self._registered_datasets: set[str] = set()
+        # Land cadence marks.  Seeded from the resumed ledger rather than zero,
+        # so a restart owes the same 25 *new* groups as an uninterrupted run
+        # instead of checkpointing on its first committed group.
+        self._last_land_at = self.dependencies.now()
+        self._last_land_groups = len(store.groups)
         # No archive root means nothing was ever landed there and nothing can be
         # prefetched from it, which is also what every hand-built dependency set
         # (that is, every test) gets.
@@ -689,6 +1356,14 @@ class CanonicalPipeline:
             _SourcePrefetch(store.root / "prefetch", dependencies.catalog_db)
             if dependencies.archive_root is not None else None
         )
+        # Every staged path is classified against this once, in three places that
+        # used to spell the test out (or, in the water mark's case, not make it at
+        # all).  A trailing separator so a sibling directory sharing the prefix
+        # cannot be mistaken for the buffer.
+        self._buffer_prefix = (
+            str(self._prefetch.directory) + os.sep if self._prefetch is not None else None
+        )
+        self._buffer_evicted = 0
         self._recalibrate_staged()
         self.allocation = allocate_sources(
             inventory.eligible,
@@ -696,6 +1371,7 @@ class CanonicalPipeline:
             seed=config.seed,
             target_groups=config.target_groups,
             mix=config.mix,
+            max_source_uses=config.sources.max_source_uses,
         )
         historical = tuple(store.groups.values())
         self.selectors = {
@@ -765,6 +1441,112 @@ class CanonicalPipeline:
             return True
         return self.store.append_failure(row, durable=durable)
 
+    def _journal_once(self, *, task_id: str, **fields: Any) -> None:
+        """Append a phase-level event unless this exact task already has one.
+
+        ``ArtifactStore.append_failure`` deduplicates *byte-identical* rows only,
+        and every row carries a timestamp, so re-recording an event on a restart
+        is a hard ``conflicting durable failure event`` rather than the no-op it
+        reads as.  Nothing needed this before because every other durable event
+        is written from a path a resume does not re-walk: a terminal source is
+        refused before it renders, a lost group is skipped via ``lost_group_ids``,
+        a queued SAM3 source is already on ``_pending_sam3_ids``.  The two events
+        ``_run_phases`` writes for itself are the first that a restart genuinely
+        reaches a second time.
+
+        Measured on pristine HEAD, with no stop-fill anywhere in it: a build that
+        journals a target shortfall and is then restarted dies **here**, before
+        it does any work at all.  The frozen clock in the test fixtures hid it,
+        and no production build had ever reached ``_record_shortfalls`` twice —
+        L8 never finished its rendering phase, so it never reached it once.
+        Stop-fill is what makes that reachable, because a stopped build records
+        its shortfall and then restarts to keep draining ~50k annotations.
+
+        Callers fold whatever legitimately varies into ``task_id`` — the group
+        count for a shortfall, the shape of the stop for a stop-fill event — so
+        this asks "have we already said exactly this", not "have we said
+        anything".  A restart that changed nothing is silent; one that did
+        journals the new number instead of being refused for disagreeing with
+        the old one.
+        """
+        if any(row.get("task_id") == task_id for row in self.store.failures):
+            return
+        self._failure(task_id=task_id, **fields)
+
+    def _source_reuse_counts(self) -> dict[str, Any]:
+        """How many groups each source produced, and how much they repeat.
+
+        Counted off the same ledger the orchestrator skips on (every durable
+        group, lost ones included), so the histogram is the cursor state rather
+        than a second opinion about it: with the switch at its default every
+        bucket is ``"1"``.
+
+        The preset columns exist because the diversity of a reused source is
+        **not** guaranteed by anything in the selector — it is an emergent
+        property of the bank being much larger than ``8 x max_source_uses``, and
+        the real bank is not large enough for it to hold outright.  The selector
+        only ever guarantees that the eight candidates *within one group* are
+        distinct (``GroupReservation.commit``); across a source's groups it
+        merely prefers least-used presets, and once every preset in a major has
+        been used equally often it will hand out one the source already has.
+        These two numbers are what makes that visible instead of assumed:
+
+        ``duplicate_source_preset_pairs``
+            draws of a ``(source, preset)`` pair the source had already drawn.
+            In global mode such a draw is a bit-identical ``I_tar`` under a new
+            ``candidate_id``, which nothing downstream de-duplicates
+            (``sft_pack``/``q3vl.data.scan`` both key on IDs, not content).
+        ``max_pair_overlap``
+            largest preset intersection between any two groups of one source,
+            out of 8.  ``8`` would mean a whole group was re-drawn.
+        """
+        used: dict[str, int] = {}
+        drawn: dict[str, list[list[str]]] = {}
+        for row in self.store.groups.values():
+            source_id = str(row["source_id"])
+            used[source_id] = used.get(source_id, 0) + 1
+            drawn.setdefault(source_id, []).append([
+                str(candidate.get("preset_id") or "")
+                for candidate in (row.get("candidates") or ())
+            ])
+        histogram: dict[int, int] = {}
+        draws = duplicate_pairs = max_overlap = 0
+        for source_id, count in used.items():
+            histogram[count] = histogram.get(count, 0) + 1
+            groups = drawn[source_id]
+            draws += sum(len(item) for item in groups)
+            if count < 2:
+                continue
+            seen: dict[str, int] = {}
+            for item in groups:
+                for preset_id in item:
+                    seen[preset_id] = seen.get(preset_id, 0) + 1
+            duplicate_pairs += sum(n - 1 for n in seen.values() if n > 1)
+            # A whole group re-drawn is the ceiling; once seen, no later source
+            # can raise the maximum, so the quadratic part stops there.
+            if max_overlap < 8:
+                sets = [set(item) for item in groups]
+                for first in range(len(sets)):
+                    for second in range(first + 1, len(sets)):
+                        max_overlap = max(max_overlap, len(sets[first] & sets[second]))
+        budget = self.config.sources.max_source_uses
+        observed = max(used.values(), default=0)
+        return {
+            "max_source_uses": budget,
+            "distinct_sources": len(used),
+            "groups": sum(used.values()),
+            "max_observed": observed,
+            # The cursor invariant, stated where it can be grepped instead of
+            # only asserted in a docstring: a source cannot outrun its budget.
+            "budget_exceeded": bool(budget) and observed > budget,
+            "uses_histogram": {str(key): histogram[key] for key in sorted(histogram)},
+            "duplicate_source_preset_pairs": duplicate_pairs,
+            "duplicate_source_preset_rate": (
+                round(duplicate_pairs / draws, 6) if draws else 0.0
+            ),
+            "max_pair_overlap": max_overlap,
+        }
+
     def _live_groups(self) -> list[dict[str, Any]]:
         """Durable groups whose assets still exist; the rest are accounted, not used."""
         lost = self.store.lost_group_ids()
@@ -795,6 +1577,12 @@ class CanonicalPipeline:
         )
 
     def _sam3_attempts(self, source_id: str) -> int:
+        """One source's attempt count, by scan.  See ``_Sam3Ledger.attempts_of``.
+
+        Kept as the reference definition the equivalence tests measure the
+        ledger against; the drain reads the ledger instead, because asking this
+        of every pending source is what made that loop quadratic.
+        """
         return sum(
             1 for row in self.store.failures
             if row.get("source_id") == source_id
@@ -803,6 +1591,11 @@ class CanonicalPipeline:
         )
 
     def _unconsumed_sam3_ready(self, source_id: str) -> bool:
+        """One source's verdict, by scan.  See ``_Sam3Ledger.unconsumed_ready``.
+
+        Kept for the same reason as ``_sam3_attempts``: it is the oracle the
+        ledger's equivalence tests compare against.
+        """
         ready = [
             int(row.get("attempt") or 0) for row in self.store.failures
             if row.get("source_id") == source_id and row.get("event_type") == "sam3_ready"
@@ -813,6 +1606,32 @@ class CanonicalPipeline:
             and row.get("event_type") == "sam3_ready_invalid"
         ]
         return bool(ready) and max(ready) > max(invalid or [0])
+
+    def _sam3_ready_maxima(self) -> dict[str, tuple[int | None, int | None]]:
+        """Per source, the highest ``sam3_ready`` / ``sam3_ready_invalid`` attempt.
+
+        The manifest asks ``_unconsumed_sam3_ready`` the same question of every
+        queued source, and that helper answers each one with two full scans of
+        ``failures``.  At L8 shape — 5.0k queued sources against 17.7k failure
+        rows — the product is 1.7e8 dict reads *per land checkpoint*, on the
+        main loop, with the render threads idling behind it.  This is the same
+        bookkeeping in one pass over the journal.
+
+        ``None`` means "no such event for this source", which is what keeps
+        "ready at attempt 0" apart from "never ready"; the verdict itself lives
+        in ``_sam3_ready_beats_invalid`` so both readings stay one expression.
+
+        The fold is ``_Sam3Ledger``'s, over a throwaway instance: the manifest
+        wants a whole-journal answer and holds no state between checkpoints, so
+        it pays one pass here rather than sharing the drain's cursor across
+        threads.
+        """
+        return _Sam3Ledger().refresh(self.store.failures).maxima
+
+    @staticmethod
+    def _sam3_ready_beats_invalid(maxima: tuple[int | None, int | None] | None) -> bool:
+        """``_unconsumed_sam3_ready``'s verdict, read off ``_sam3_ready_maxima``."""
+        return _sam3_ready_verdict(maxima)
 
     def _manifest(self, phase: str, status: str = "running") -> dict[str, Any]:
         local_groups = self._mode_groups("local")
@@ -852,9 +1671,12 @@ class CanonicalPipeline:
             for row in self.store.failures
             if row.get("error_code") == "sam3_relabel_queued" and row.get("source_id")
         }
+        # One journal pass for the whole set instead of two per queued source;
+        # the verdict per source is unchanged.  See ``_sam3_ready_maxima``.
+        sam3_ready_maxima = self._sam3_ready_maxima()
         sam3_completed_ids = {
             source_id for source_id in sam3_expected_ids
-            if self._unconsumed_sam3_ready(source_id)
+            if self._sam3_ready_beats_invalid(sam3_ready_maxima.get(source_id))
         }
         candidate_failures: dict[str, int] = {}
         for row in self.store.failures:
@@ -894,12 +1716,24 @@ class CanonicalPipeline:
                                         for row in live_groups),
                 "sft": sum(
                     str(row.get("group_id")) not in lost_groups
-                    for row in self.store.sft.values()
+                    for row in self.store.sft_records()
                 ),
                 "groups_assets_lost": len(lost_groups),
             },
             "landing": self._landing_counts(),
             "prefetch": self._prefetch_counts(),
+            # Why this build stopped where it did, and whether it was ever on a
+            # card.  Reads the latch rather than calling ``_stop_fill``: writing a
+            # manifest must not be the thing that appends the journal row.
+            "stop_fill": {
+                "requested": self._stop_fill_latched,
+                # True is the no-GPU build; a marker that appeared mid-run leaves
+                # this False and ``gpu_resources_loaded`` True, which is the
+                # honest description of a process that did load the models.
+                "at_start": self._stop_fill_at_start,
+                "gpu_resources_loaded": self._gpu_resources_loaded,
+                "marker": str(_stop_fill_marker(self.config.output_root)),
+            },
             "sources": {
                 "inventory": self.inventory.counts,
                 "scene_metadata_status": self.inventory.scene_metadata_status,
@@ -909,6 +1743,14 @@ class CanonicalPipeline:
                     "global": max(0, len(self.allocation.global_) - self.allocation.global_target),
                 },
                 "replacement_used": replacement_used,
+                # Read the two keys above together with ``source_reuse`` below.
+                # They still mean exactly what they always meant — sources held
+                # back beyond a mode's initial quota, and groups that had to draw
+                # on them — but with reuse on they stop being the whole story:
+                # spare capacity now mostly lives in extra passes over the same
+                # pool, and a pool smaller than its target reports capacity 0 and
+                # used 0 while still meeting that target.
+                "source_reuse": self._source_reuse_counts(),
                 "exhaustion": {
                     "local_shortfall": max(0, self.allocation.local_target - len(local_groups)),
                     "global_shortfall": max(0, self.allocation.global_target - len(global_groups)),
@@ -944,8 +1786,19 @@ class CanonicalPipeline:
                 ),
             },
             "annotation": {
+                # Unchanged: the whole unresolved queue, whoever owns it.  A
+                # manifest written mid-render now normally reports a non-zero
+                # ``pending`` — that is the pipeline working, not a build with
+                # annotation left undone, and ``inflight`` is what tells the two
+                # apart.  The completion gate still reads ``pending`` after the
+                # closing drain, where nothing is in flight and the two agree.
                 "pending": len(self.store.pending_annotation_tasks()),
                 "terminal_failures": len(annotation_failures),
+                # Tasks handed to the background driver and not yet resolved, and
+                # how many whole render passes have been handed over.  Both are
+                # 0 in a build that never reached a pass boundary.
+                "inflight": self._driver.inflight if self._driver is not None else 0,
+                "batches": self._driver.batches if self._driver is not None else 0,
                 "backends": self._annotation_counts(),
             },
             "failures": {
@@ -973,13 +1826,18 @@ class CanonicalPipeline:
 
     def _prefetch_counts(self) -> dict[str, Any]:
         if self._prefetch is None:
-            return {"enabled": False, "buffered": 0, "errors": 0}
+            return {"enabled": False, "buffered": 0, "errors": 0, "bytes": 0, "evicted": 0}
         return {
             "enabled": True,
             "buffered": self._prefetch.buffered,
             # Non-zero means the round fell back to random archive reads, which
             # costs throughput and nothing else — worth seeing, never fatal.
             "errors": self._prefetch.errors,
+            # The buffer's own budget, reported next to the water mark's so the
+            # two are never read as one number again: ``bytes`` is what the
+            # ceiling governs, ``evicted`` is how often it bit.
+            "bytes": self._buffer_size(),
+            "evicted": self._buffer_evicted,
         }
 
     def _failure_counts(self) -> dict[str, int]:
@@ -993,7 +1851,7 @@ class CanonicalPipeline:
         sources: dict[str, int] = {}
         models: dict[str, int] = {}
         usage: dict[str, int] = {}
-        for row in self.store.sft.values():
+        for row in self.store.sft_records():
             source = str(row.get("annot_src") or "unknown")
             sources[source] = sources.get(source, 0) + 1
             meta = (row.get("qa") or {}).get("annotation") or {}
@@ -1030,10 +1888,16 @@ class CanonicalPipeline:
             self.store.assets_root / "masks",
         ]
         if self._prefetch is not None:
-            # The buffer competes for the same tmpfs, so the water mark has to
-            # count it; it is not an asset, so the orphan sweep must not reap it.
+            # The buffer shares the tmpfs, so its files are tracked here; it is
+            # neither an asset (the orphan sweep must not reap it) nor reclaimable
+            # by landing (the water mark must not count it), so ``_buffer_bytes``
+            # carries it separately from ``_staged_bytes``.
             directories.append(self._prefetch.directory)
         return tuple(directories)
+
+    def _is_buffer(self, path: str) -> bool:
+        """Is this tracked file a rebuildable prefetch copy rather than an asset?"""
+        return self._buffer_prefix is not None and path.startswith(self._buffer_prefix)
 
     def _recalibrate_staged(self) -> None:
         """Re-measure the staging tree; the water mark's only full scan.
@@ -1043,33 +1907,57 @@ class CanonicalPipeline:
         this runs only where a scan is already being paid for: once at startup,
         so a resume inherits the assets a previous run left behind, and inside
         the orphan sweep, which walks the same directories anyway.
+
+        Two totals come out of the one walk, split by directory rather than by
+        re-testing each path: landing reclaims the assets and nothing else, so
+        the two budgets can never be compared against the same threshold.
         """
         sizes: dict[str, int] = {}
+        staged = buffered = 0
         for directory in self._asset_directories():
             if not directory.is_dir():
                 continue
+            is_buffer = self._is_buffer(str(directory) + os.sep)
             with os.scandir(directory) as scan:
                 for entry in scan:
                     if entry.is_file():
-                        sizes[entry.path] = entry.stat().st_size
+                        size = entry.stat().st_size
+                        sizes[entry.path] = size
+                        if is_buffer:
+                            buffered += size
+                        else:
+                            staged += size
         with self._staged_lock:
             self._staged = sizes
-            self._staged_bytes = sum(sizes.values())
+            self._staged_bytes = staged
+            self._buffer_bytes = buffered
 
     def _account_asset(self, path: Path) -> None:
         """Fold one freshly written asset in, replacing any size it overwrote.
 
         A refilled slot rewrites the same candidate JPEG and every group attempt
         rewrites the same C_GT, so a plain addition would drift upward forever.
+        Prefetched copies arrive here too (``_account_prefetched``) and are booked
+        against the buffer budget instead of the landable one.
         """
         size = path.stat().st_size
+        key = str(path)
         with self._staged_lock:
-            self._staged_bytes += size - self._staged.get(str(path), 0)
-            self._staged[str(path)] = size
+            delta = size - self._staged.get(key, 0)
+            if self._is_buffer(key):
+                self._buffer_bytes += delta
+            else:
+                self._staged_bytes += delta
+            self._staged[key] = size
 
     def _staged_size(self) -> int:
+        """Bytes a checkpoint can actually hand back to the tmpfs."""
         with self._staged_lock:
             return self._staged_bytes
+
+    def _buffer_size(self) -> int:
+        with self._staged_lock:
+            return self._buffer_bytes
 
     def _landed_datasets(self, root: Path) -> list[str]:
         """Every batch this build has published, read off the archive itself.
@@ -1090,8 +1978,21 @@ class CanonicalPipeline:
                 names.append(manifest.parent.relative_to(root).as_posix())
         return names
 
-    def _refresh_catalog(self) -> None:
-        """Re-index this build's landed batches so their assets answer to staging paths."""
+    def _refresh_catalog(self, *, incremental: bool = False) -> None:
+        """Re-index this build's landed batches so their assets answer to staging paths.
+
+        ``incremental`` names only the batches this process has not registered
+        yet.  The pipelined build refreshes once per render pass rather than once
+        per build, and the full list is every batch the build ever published: by
+        the twelfth pass of an L8 that is re-reading the whole build's index to
+        learn about the last pass's worth of it, which is the ~390 s full rebuild
+        this call was written to avoid, once per pass.  A landed batch is
+        immutable apart from the ``metadata.jsonl`` rewrite in
+        ``_sync_annotation_status``, which runs after the last refresh, so
+        skipping one already registered cannot lose anything.  The closing
+        refresh before the annotation phase stays full, which is also what
+        re-registers everything a previous run of a resumed build landed.
+        """
         root = self.dependencies.archive_root
         if root is None or not Path(root).is_dir():
             return
@@ -1099,11 +2000,17 @@ class CanonicalPipeline:
         # groups in an archive of hundreds; the full rebuild re-read all 5.5 M
         # members for them (~390 s of silence before annotation).  Anything else
         # in the archive was indexed by whoever published it.
+        names = self._landed_datasets(Path(root))
+        if incremental:
+            names = [name for name in names if name not in self._registered_datasets]
+            if not names:
+                return
         upsert_catalog(
             Path(root),
             self.dependencies.catalog_db or default_db(),
-            self._landed_datasets(Path(root)),
+            names,
         )
+        self._registered_datasets.update(names)
         # immutable=1 pins the pre-refresh snapshot; cached readers must reopen
         # or every landed path stays invisible to this process (eval100 全灭根因).
         invalidate_shared()
@@ -1322,7 +2229,7 @@ class CanonicalPipeline:
                 }
         # An SFT row is the definitive outcome: a task that produced one was not
         # abandoned, whatever earlier attempts recorded.
-        for row in self.store.sft.values():
+        for row in self.store.sft_records():
             candidate_id = row.get("candidate_id")
             if candidate_id:
                 status[str(candidate_id)] = {
@@ -1382,6 +2289,86 @@ class CanonicalPipeline:
                 rewritten += 1
         return {"datasets": rewritten, "samples": samples, "winners": len(status)}
 
+    def _annotation_drainer(self) -> QueueDrainer:
+        if self._annotator is None:
+            self._annotator = self.dependencies.annotator_factory(self.config, self.store)
+        return self._annotator
+
+    def _annotation_bytes_settled(self, task: Mapping[str, Any]) -> bool:
+        """Is this task's ``I_tar`` past the point where landing can move it?
+
+        The one thing the render loop does that annotation cannot survive is the
+        unlink at the end of ``_land_groups``: a checkpoint publishes a group's
+        candidates into the archive and then deletes the staged copies, and a
+        task encoding those bytes at that moment finds no local file and — until
+        the next catalog refresh — no archive entry either, which
+        ``_encode_image`` reports as ``annotation_image_invalid``, a *terminal*
+        code.  One badly timed checkpoint would abandon a whole batch of winners.
+
+        The test is the exact converse of what landing acts on.  ``_land_groups``
+        only ever unlinks assets it can still see (its ``pending`` list requires
+        every file of the group to exist), so an ``after_path`` that is already
+        gone is an ``after_path`` no future checkpoint will touch: the bytes live
+        in the archive, which is append-only, and the catalog refresh below makes
+        them addressable.  A file still on the tmpfs is the opposite case and its
+        task waits for a later boundary, by which time the ordinary land cadence
+        will have retired it (measured on prod-l8: 1,789 checkpoints over 57,234
+        groups, so the unlanded tail at a pass boundary is bounded by the 8 GiB
+        staging water mark rather than by the pass).
+
+        A build with no archive root never lands and never unlinks, so nothing
+        can move and every task qualifies from the moment it exists.
+        """
+        if self.dependencies.archive_root is None:
+            return True
+        after = (task.get("candidate") or {}).get("after_path")
+        return bool(after) and not Path(str(after)).is_file()
+
+    def _flush_annotation_batch(self) -> None:
+        """Hand the render pass that just finished to the background annotator.
+
+        Called on the pass boundary inside ``_fill_mode``, which is the only
+        place in the build where the render loop is quiet: every source future
+        has been committed, so the queue this measures is a whole number of
+        passes and nothing is being appended while it is measured.
+
+        Two steps, in this order, and the order is the safety argument:
+
+        1. ``_refresh_catalog`` teaches the reverse map about every batch landed
+           since the last boundary.  Until it runs, ``read_bytes`` on a landed
+           candidate resolves to nothing at all.
+        2. Only then is the batch handed over — and only tasks whose bytes have
+           settled (see ``_annotation_bytes_settled``) and that no earlier
+           boundary already owns.
+
+        Whole passes rather than single tasks: the relay is configured for 16
+        concurrent requests and ``drain`` sizes its pool from the queue it is
+        given, so a task-at-a-time feed would quietly run the annotation at
+        concurrency one.  The measurement comes first and returns early when
+        there is nothing new, so a pass whose groups are all still staged costs
+        one queue walk and no catalog copy.
+        """
+        batch = frozenset(
+            str(task["task_id"])
+            for task in self.store.pending_annotation_tasks()
+            if str(task["task_id"]) not in self._annotation_submitted
+            and self._annotation_bytes_settled(task)
+        )
+        if not batch:
+            return
+        self._refresh_catalog(incremental=True)
+        if self._driver is None:
+            self._driver = _AnnotationDriver(self._annotation_drainer())
+        self._annotation_submitted |= batch
+        self._driver.submit(batch)
+
+    def _close_annotation_driver(self) -> BaseException | None:
+        """Join the background annotator and report what killed it, if anything."""
+        if self._driver is None:
+            return None
+        self._driver.close()
+        return self._driver.error
+
     def _clean_orphan_assets(self) -> int:
         """Reclaim assets of abandoned group attempts: nothing durable names them.
 
@@ -1394,24 +2381,125 @@ class CanonicalPipeline:
             for path in self._group_assets(group)
         }
         self._recalibrate_staged()
-        buffer = (
-            str(self._prefetch.directory) + os.sep if self._prefetch is not None else None
-        )
         orphans = [
             path for path in self._staged
-            if path not in referenced and not (buffer and path.startswith(buffer))
+            if path not in referenced and not self._is_buffer(path)
         ]
         for path in orphans:
             os.unlink(path)
             self._staged_bytes -= self._staged.pop(path)
         return len(orphans)
 
+    def _trim_prefetch_buffer(self, keep: Iterable[str] = ()) -> int:
+        """Evict the coldest buffered copies until the buffer is back under budget.
+
+        The buffer has no other bound: a copy is released when its source commits
+        or goes terminal, but a source parked on the SAM3 queue keeps its copy for
+        the drain, and prod-l8 accumulated 8.7 GiB of exactly those.  Landing
+        cannot touch any of it, so the ceiling has to be enforced here.
+
+        Eviction is by mtime, which ``tools.prefetch`` maintains as a use stamp:
+        it writes a fresh copy at fetch time and ``os.utime``s one it finds still
+        valid, so the coldest entries are the parked ones the renderer walked past
+        chunks ago — and the chunk about to render is protected outright.  Dropping
+        a copy is never an error: ``read_bytes`` falls back to the archive, which
+        is the read the buffer existed to save.
+
+        Called with no prefetch in flight (``_rotate_prefetch`` has just taken
+        delivery and not yet submitted), so nothing is writing into the directory
+        while this runs.
+        """
+        if self._prefetch is None:
+            return 0
+        over = self._buffer_size() - PREFETCH_BUFFER_BYTES
+        if over <= 0:
+            return 0
+        protected = {str(self._prefetch.path_for(path)) for path in keep}
+        with self._staged_lock:
+            candidates = [
+                path for path in self._staged
+                if self._is_buffer(path) and path not in protected
+            ]
+
+        def stamp(path: str) -> float:
+            try:
+                return os.stat(path).st_mtime
+            except OSError:
+                # Already gone: evict it first, it costs nothing and the counter
+                # still has to come down by whatever it was booked at.
+                return 0.0
+
+        evicted = 0
+        for path in sorted(candidates, key=stamp):
+            if over <= 0:
+                break
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+            with self._staged_lock:
+                size = self._staged.pop(path, 0)
+                self._buffer_bytes -= size
+            over -= size
+            evicted += 1
+        self._buffer_evicted += evicted
+        return evicted
+
+    def _tmpfs_under_pressure(self) -> bool:
+        """Is the mount holding the output root close enough to full to land now?
+
+        Deliberately a question about free space rather than about the staged
+        level: the level answers "how much could landing reclaim", which says
+        nothing about how much room is left once the buffer and the ledgers have
+        taken their share — and the ledgers, on a 400k build, outgrow the mark.
+        """
+        try:
+            return shutil.disk_usage(self.store.root).free < LAND_FREE_BYTES_FLOOR
+        except OSError:
+            # An unreadable mount is not evidence of pressure, and this is only a
+            # valve: the ordinary cadence still lands.
+            return False
+
+    def _land_cadence_ready(self) -> bool:
+        """Enough time *and* enough new groups since the last checkpoint.
+
+        Both, because each alone degenerates into the storm this exists to stop:
+        during a fast stretch the group count is reached in seconds, during a
+        slow one the clock runs out with a single group to land.  The free-space
+        valve overrides both — landing is the only thing that reclaims the
+        tmpfs, so it must never be throttled into an out-of-space.
+        """
+        groups = len(self.store.groups) - self._last_land_groups
+        elapsed = (self.dependencies.now() - self._last_land_at).total_seconds()
+        if groups >= LAND_MIN_GROUPS and elapsed >= LAND_MIN_INTERVAL_SECONDS:
+            return True
+        return self._tmpfs_under_pressure()
+
+    def _staging_full(self) -> bool:
+        """Is there a batch worth landing — or so little room that it cannot wait?
+
+        The mark is a level of *reclaimable* bytes, so it can now sit below
+        threshold while the mount fills with things landing does not own (the
+        buffer, and a 400k build's ~7.6 GiB of ledgers).  The valve therefore has
+        to be reachable from below the mark as well, or it would only ever be
+        consulted in the one case that no longer needs it.  It stays second, so a
+        healthy build answers this from a counter and never stats the mount.
+        """
+        return self._staged_size() >= LAND_WATERMARK_BYTES or self._tmpfs_under_pressure()
+
     def _land_checkpoint(self, *, force: bool = False) -> dict[str, Any] | None:
         """Publish, mirror and reclaim — the whole durability step, in one place."""
         if self.dependencies.archive_root is None and self.dependencies.mirror_root is None:
             return None
-        if not force and self._staged_bytes < LAND_WATERMARK_BYTES:
+        if not force and (
+            not self._staging_full() or not self._land_cadence_ready()
+        ):
             return None
+        # Marked before the work, not after: a checkpoint that takes minutes has
+        # still *started* now, and the next one is owed a full interval from
+        # here rather than from whenever this one happened to finish.
+        self._last_land_at = self.dependencies.now()
+        self._last_land_groups = len(self.store.groups)
         result = None
         if self.dependencies.archive_root is not None:
             result = self._land_groups()
@@ -1419,10 +2507,38 @@ class CanonicalPipeline:
         if self.dependencies.mirror_root is not None:
             self.store.checkpoint()
             self.store.write_manifest(self._manifest(self._phase))
-            mirror_artifacts(
+            self._record_mirror_events(mirror_artifacts(
                 self.store.root, Path(self.dependencies.mirror_root) / self.config.build_id
-            )
+            ))
         return result
+
+    def _record_mirror_events(self, report: MirrorReport) -> None:
+        """Journal every artifact the incremental mirror could not simply extend.
+
+        A mirror that silently fell back to a whole-file copy on every
+        checkpoint is indistinguishable, from the outside, from one that is
+        working — same bytes on NFS, just the old cost back.  These rows are the
+        difference.  Non-terminal and non-retryable: the fallback already
+        repaired the mirror, the record exists so the repair is visible.
+        """
+        for event in report.events:
+            payload = json.dumps(event, sort_keys=True)
+            self._failure(
+                event_type="mirror",
+                stage="mirror",
+                # The payload and the timestamp are both inside the task id, so
+                # two fallbacks can never collide on one event id while carrying
+                # different messages (which the store rejects outright).
+                task_id=stable_id(
+                    "mirror", self.config.build_id, payload,
+                    _timestamp(self.dependencies.now()),
+                ),
+                error_code=f"mirror_{event['action']}",
+                message=payload,
+                retryable=False,
+                terminal=False,
+                durable=True,
+            )
 
     def _queue_sam3(self, source: SourceRecord, error: MaskPlanError) -> None:
         task_id = stable_id("sam3", self.config.build_id, source.source_id)
@@ -1797,6 +2913,7 @@ class CanonicalPipeline:
         source: SourceRecord,
         mode: str,
         *,
+        use_index: int = 0,
         queue_mask_failure: bool = True,
         defer_commit: bool = False,
         selector_turn: _SelectorTurn | None = None,
@@ -1854,14 +2971,20 @@ class CanonicalPipeline:
         excluded_majors: list[str] = []
         cgt_error: Exception | None = None
         for group_attempt in range(len(selector.majors)):
+            # The use index is appended only when a source is on its second or
+            # later pass, so the first pass keeps the group IDs — and therefore
+            # the candidate IDs and asset filenames derived from them — that every
+            # build before source reuse wrote.
             group_id = stable_id(
-                "group", self.config.build_id, source.source_id, mode, group_attempt
+                "group", self.config.build_id, source.source_id, mode, group_attempt,
+                *(() if not use_index else (use_index,)),
             )
             reservation = None
             group_persisted = False
             try:
                 reservation = selector.begin_group(
-                    source.source_id, group_attempt, exclude_majors=excluded_majors
+                    source.source_id, group_attempt, exclude_majors=excluded_majors,
+                    use_index=use_index,
                 )
                 if cgt_error is not None:
                     # The C_GT futures are submitted once for the whole source, so
@@ -1980,6 +3103,11 @@ class CanonicalPipeline:
                     "render_mode": mode,
                     "preset_filter": self.config.preset_filter,
                     "group_attempt": group_attempt,
+                    # Which pass over the source pool produced this group.  Only
+                    # written when it is not the first, so a build without source
+                    # reuse journals the record shape it always journalled and a
+                    # reader can treat "absent" as 0.
+                    **({} if not use_index else {"source_use_index": use_index}),
                     **coverage,
                     "candidates": list(ranked.candidates),
                     "winner_ids": list(ranked.winner_ids),
@@ -2053,6 +3181,7 @@ class CanonicalPipeline:
         source: SourceRecord,
         mode: str,
         *,
+        use_index: int = 0,
         selector_turn: _SelectorTurn | None = None,
     ) -> _DeferredSourceResult:
         """Render one source off-thread without mutating the durable journals."""
@@ -2061,14 +3190,16 @@ class CanonicalPipeline:
         try:
             try:
                 result = self._render_source(
-                    source, mode, defer_commit=True, selector_turn=selector_turn
+                    source, mode, use_index=use_index,
+                    defer_commit=True, selector_turn=selector_turn,
                 )
             except Exception as exc:  # flushed in source order before the error escapes
                 self._failure(
                     event_type="source_worker",
                     stage="rendering",
                     task_id=stable_id(
-                        "render-source", self.config.build_id, source.source_id, mode
+                        "render-source", self.config.build_id, source.source_id, mode,
+                        *(() if not use_index else (use_index,)),
                     ),
                     error_code="source_worker_failed",
                     message=f"{type(exc).__name__}: {exc}",
@@ -2126,15 +3257,29 @@ class CanonicalPipeline:
         start: int,
         skip: set[str],
         limit: int = PREFETCH_CHUNK,
+        *,
+        use_index: int = 0,
+        used: Mapping[str, int] | None = None,
     ) -> list[str]:
-        """The source images one chunk of the allocation still has to read."""
+        """The source images one chunk of the allocation still has to read.
+
+        The done test has to be the same one ``_fill_initial_mode`` applies, or a
+        reuse pass would prefetch nothing at all: every source already owns a
+        group by then, and a membership test would call the whole pool finished
+        while the renderer went on reading each image from the archive.  ``used``
+        is that caller's per-pass snapshot; a chunk only ever looks at sources at
+        or ahead of the current position, so the snapshot is as current for them
+        as a fresh scan would be.
+        """
         if limit <= 0:
             return []
-        done = self.store.completed_sources() | skip
+        if used is None:
+            used = self.store.completed_source_uses()
         return [
             str(source.source_path)
             for source in sources[start:start + PREFETCH_CHUNK]
-            if source.source_id not in done
+            if source.source_id not in skip
+            and used.get(source.source_id, 0) <= use_index
         ][:limit]
 
     def _account_prefetched(self) -> None:
@@ -2149,6 +3294,9 @@ class CanonicalPipeline:
         start: int,
         skip: set[str],
         remaining: int | None = None,
+        *,
+        use_index: int = 0,
+        used: Mapping[str, int] | None = None,
     ) -> None:
         """Take delivery of the chunk about to render and queue the one behind it.
 
@@ -2162,7 +3310,8 @@ class CanonicalPipeline:
             return
         budget = PREFETCH_CHUNK * 2 if remaining is None else max(0, remaining)
         current = self._chunk_paths(
-            sources, start, skip, limit=min(PREFETCH_CHUNK, budget)
+            sources, start, skip, limit=min(PREFETCH_CHUNK, budget),
+            use_index=use_index, used=used,
         )
         # Outstanding here is chunk k, or — at the start of a mode — whatever the
         # previous mode's last look-ahead read.
@@ -2170,6 +3319,10 @@ class CanonicalPipeline:
         if start == 0:
             self._prefetch.submit(current)
             self._account_prefetched()
+        # Between taking delivery and queueing the next chunk is the one moment
+        # in a round with nothing writing into the buffer, so it is where the
+        # ceiling is enforced; the chunk about to render is held back from it.
+        self._trim_prefetch_buffer(current)
         # Keep one replacement source warm even when the current chunk can fill
         # the target. A terminal source then preserves the double-buffer contract
         # without restoring the old 256-source overfetch on small builds.
@@ -2182,6 +3335,7 @@ class CanonicalPipeline:
             start + PREFETCH_CHUNK,
             skip,
             limit=min(PREFETCH_CHUNK, lookahead),
+            use_index=use_index, used=used,
         ))
 
     def _discard_prefetched(self, source: SourceRecord) -> None:
@@ -2191,11 +3345,145 @@ class CanonicalPipeline:
         path = self._prefetch.path_for(source.source_path)
         path.unlink(missing_ok=True)
         with self._staged_lock:
-            self._staged_bytes -= self._staged.pop(str(path), 0)
+            self._buffer_bytes -= self._staged.pop(str(path), 0)
 
-    def _fill_initial_mode(self, mode: str, sources: tuple[SourceRecord, ...], target: int) -> None:
+    def _fill_mode(
+        self,
+        mode: str,
+        sources: tuple[SourceRecord, ...],
+        target: int,
+        *,
+        annotate_passes: bool = False,
+    ) -> None:
+        """Walk the mode's source pool until its target is met or it stops paying.
+
+        One pass is the whole of the pre-reuse behaviour, so ``max_source_uses =
+        1`` calls ``_fill_initial_mode`` exactly once, measures nothing around it
+        and nothing downstream can tell the wrapper is there.  Above one, the
+        extra passes are what turns a pool smaller than the target into a build
+        that still reaches it: the pool is re-walked in its original
+        scene-stratified order rather than a source being repeated in place, so
+        consecutive groups keep coming from different images and the coverage
+        selector keeps handing each pass a different preset set.
+
+        **The pass counter is not a fresh 0 on every call.**  It cannot be: this
+        method is entered again on resume, and again after ``_drain_sam3_and_
+        replacements`` rescues a source, and in both cases the early passes are
+        already spent.  Two things keep it honest:
+
+        * the walk *starts* at the least-used source's count, so passes in which
+          every single source would be skipped are never walked at all;
+        * the "this pass produced nothing, stop" guard only fires when the pass
+          also skipped nobody **on the cursor** — a pass that produced nothing
+          because its groups already exist is not an exhausted pool, and stopping
+          there is what silently threw away every remaining pass of a resumed
+          build.
+
+        ``annotate_passes`` makes each completed pass the trigger for a batch of
+        annotation (see ``_flush_annotation_batch``).  It is off by default, and
+        the caller that leaves it off is ``_drain_sam3_and_replacements``: that
+        loop re-enters here once per rescued source, so its "passes" are a
+        trickle of replacements rather than a lap of the pool, and each one would
+        buy a forced landing and a catalog copy for a handful of groups.  Those
+        groups are annotated by the closing drain instead.
+        """
+        # Before the two ledger scans below, which are O(groups) each and pure
+        # waste for a mode that will not open a single pass.  This is also the
+        # whole of "a stop-fill build does not enter the fill": ``_run_phases``
+        # keeps calling both modes so that its phase sequence — and therefore
+        # what a resume has to redo — is byte for byte the one every other build
+        # writes, and each call retires here.
+        if self._stop_fill():
+            return
+        budget = self.config.sources.max_source_uses
+        # Passes below this one are provably empty: every source already owns a
+        # group for them.  Skipping them is an optimisation only — the cursor
+        # test inside ``_fill_initial_mode`` would skip the same sources one at a
+        # time — but without it a resumed L8 build re-walks the whole pool once
+        # per spent pass before it renders anything.
+        used = self.store.completed_source_uses()
+        # Terminal sources are excluded or the minimum is pinned at 0 forever:
+        # they never render, so they never leave zero, and L7 finished with 898
+        # of them (all ``sam3_relabel_failed``, i.e. ``build_mask_plan`` raised
+        # before anything was drawn).  With them in, a resume at pass 6 re-walks
+        # six spent passes, and each idle step still pays a full ``_mode_groups``
+        # scan — measured at 129.9 ms on 317,520 groups, so ~5.7 h before the
+        # first image renders.  Dropping them cannot skip a pass that was owed:
+        # a terminal source is refused inside the walk anyway.
+        terminal = self._terminal_source_ids()
+        use_index = min(
+            (
+                used.get(row.source_id, 0)
+                for row in sources if row.source_id not in terminal
+            ),
+            default=0,
+        )
+        if budget:
+            # A source whose groups were journalled and then *lost* still spends
+            # its uses (the group_ids are taken), so the cursor can already sit
+            # at the budget while the live count is short of target.  Opening a
+            # pass the budget does not own would hand that source another group
+            # — and at ``max_source_uses = 1`` that is the switch turning itself
+            # on.  Clamping keeps the last permitted pass the last one.
+            use_index = min(use_index, budget - 1)
+        while True:
+            # Nothing after the fill is read on the final permitted pass, so the
+            # default path does not pay for a measurement it cannot use.
+            final = bool(budget) and use_index + 1 >= budget
+            before = None if final else len(self._mode_groups(mode))
+            cursor_skips = self._fill_initial_mode(
+                mode, sources, target, use_index=use_index
+            )
+            use_index += 1
+            # Before every exit below, so the last pass of a mode is pipelined
+            # exactly like the ones before it instead of falling to the closing
+            # drain: at ``max_source_uses = 1`` the last pass is the only pass.
+            if annotate_passes:
+                self._flush_annotation_batch()
+            # After the flush and before every other exit: a pass cut short by the
+            # marker still owes its winners to the pipeline, and the tail of that
+            # pass is the last batch this build will ever hand over.  Opening
+            # another pass instead would render for hours on a card the operator
+            # has already promised to training.
+            if self._stop_fill():
+                return
+            if final:
+                return
+            if len(self._mode_groups(mode)) >= target:
+                return
+            if len(self._mode_groups(mode)) <= before and not cursor_skips:
+                # Nothing rendered *and* nothing was held back for a later pass:
+                # the pool is terminal, SAM3-blocked or out of presets, and
+                # another lap would only re-walk the same refusals.
+                return
+
+    def _fill_initial_mode(
+        self,
+        mode: str,
+        sources: tuple[SourceRecord, ...],
+        target: int,
+        *,
+        use_index: int = 0,
+    ) -> int:
+        """Render one pass over ``sources``; return how many the cursor skipped.
+
+        The return value is what lets ``_fill_mode`` tell "this pool is finished"
+        apart from "this pass is finished": a source skipped because it already
+        owns a group for *this* pass still owes the build a group on a later one.
+        Sources skipped as terminal or SAM3-pending are deliberately not counted
+        — those are refusals, not deferrals.
+        """
         terminal = self._terminal_source_ids()
         pending = self._pending_sam3_ids() if mode == "local" else set()
+        # One snapshot per pass, not one scan per source.  It stays exact for the
+        # whole pass because ``sources`` holds each source_id once
+        # (``_require_unique_source_ids`` guarantees it), so a source's count can
+        # only change after its own single turn here — never before the test that
+        # reads it.  The pre-reuse code re-derived ``completed_sources()`` on
+        # every iteration and reached the same answer for the same reason; this
+        # just stops paying O(groups) for it 26k times a pass.
+        used = self.store.completed_source_uses()
+        cursor_skips = 0
         inflight: deque[tuple[SourceRecord, Future[_DeferredSourceResult]]] = deque()
         selector_tail = threading.Event()
         selector_tail.set()
@@ -2219,10 +3507,26 @@ class CanonicalPipeline:
                 self._land_checkpoint()
 
         for index, source in enumerate(sources):
+            # The in-pass safe boundary.  Breaking *before* a new source is
+            # submitted, rather than abandoning one that is already rendering, is
+            # what makes this graceful: the window still holds up to
+            # ``_source_window`` sources, and the ``while inflight`` drain below
+            # commits every one of them and takes the closing land checkpoint,
+            # exactly as the end of an ordinary pass does.  Nothing is cancelled,
+            # no group is half-journalled, and the marker costs at most one
+            # window's worth of renders before the cards are free.
+            if self._stop_fill():
+                break
             while inflight and (
                 len(inflight) >= self._source_window
                 or len(self._mode_groups(mode)) + len(pending) + len(inflight) >= target
-                or self._staged_size() >= LAND_WATERMARK_BYTES
+                # Draining to empty is the only thing that reaches the
+                # ``not inflight`` checkpoint below, so this clause is how a
+                # mid-pass land ever happens — and why it must ask about
+                # reclaimable bytes only.  Counting the prefetch buffer here held
+                # it true forever and collapsed the window to one source in
+                # flight, which is what took prod-l8 to 15 groups/h.
+                or self._staging_full()
             ):
                 finish_oldest()
             completed = len(self._mode_groups(mode))
@@ -2238,9 +3542,18 @@ class CanonicalPipeline:
                     index,
                     terminal | pending,
                     remaining=target - completed - reserved,
+                    use_index=use_index,
+                    used=used,
                 )
-            if source.source_id in self.store.completed_sources() \
-                    or source.source_id in terminal or source.source_id in pending:
+            # "This source already gave pass ``use_index`` its group."  At
+            # ``use_index = 0`` that is the membership test this replaced, since
+            # a count above zero is exactly membership.  Counted separately from
+            # the terminal/pending refusals below: this one means "come back next
+            # pass", and ``_fill_mode`` has to be able to tell the two apart.
+            if used.get(source.source_id, 0) > use_index:
+                cursor_skips += 1
+                continue
+            if source.source_id in terminal or source.source_id in pending:
                 continue
             following = threading.Event()
             turn = _SelectorTurn(ready=selector_tail, following=following)
@@ -2248,14 +3561,73 @@ class CanonicalPipeline:
             inflight.append((
                 source,
                 self._source_executor.submit(
-                    self._render_source_buffered, source, mode, selector_turn=turn
+                    self._render_source_buffered, source, mode,
+                    use_index=use_index, selector_turn=turn,
                 ),
             ))
         while inflight:
             finish_oldest()
+        return cursor_skips
+
+    def _stop_fill(self) -> bool:
+        """Has this build been told to stop opening new render work?
+
+        **Latched**, for two independent reasons.  It is polled once per source
+        inside ``_fill_initial_mode`` — a pass over the L8 pool is 26k sources and
+        many hours, so a per-pass check would not stop anything today — and a
+        latch keeps that a single ``stat`` rather than one per source for the rest
+        of the run.  More importantly it makes the answer monotone within a
+        process: half a pass that believed the marker was set followed by half a
+        pass that believed it was gone is a build in neither state.  Clearing the
+        marker therefore takes effect at the next *start*, which is exactly the
+        documented switch back (the GPUs cannot be un-released mid-run either).
+
+        The one side effect is the journal row on the transition, written here
+        because this is the moment the build learned, and written at most once per
+        process: it is what puts "why did this build stop 338k groups short" in
+        the same durable ledger as the shortfall it causes.  It is deliberately
+        **not terminal** — the shortfall row is the terminal one, so
+        ``complete_with_failures`` is reached by the rule that always reached it.
+        """
+        if not self._stop_fill_latched:
+            if not _stop_fill_requested(self.config.output_root):
+                return False
+            self._stop_fill_latched = True
+        if not self._stop_fill_recorded:
+            self._stop_fill_recorded = True
+            local, global_ = len(self._mode_groups("local")), len(self._mode_groups("global"))
+            self._journal_once(
+                # What varies between two stops of one build is where it was when
+                # it learned, so that is the identity: the restart that only
+                # drains adds nothing, and a build stopped again after filling
+                # further records the new position.
+                task_id=stable_id(
+                    "stop-fill", self.config.build_id,
+                    self._stop_fill_at_start, local, global_,
+                ),
+                event_type="stop_fill",
+                stage="rendering",
+                error_code="stop_fill_requested",
+                message=json.dumps({
+                    "marker": str(_stop_fill_marker(self.config.output_root)),
+                    "at_start": self._stop_fill_at_start,
+                    "phase": self._phase,
+                    "local": local,
+                    "global": global_,
+                }, sort_keys=True),
+                retryable=False,
+                terminal=False,
+                durable=True,
+            )
+        return True
 
     def _release_heavy_resources(self) -> None:
         """Give the render GPUs back, for a phase that needs the cards elsewhere."""
+        if self.renderer is None and self.scorer is None:
+            # A stop-fill build never loaded either, so there is no allocator to
+            # drain — and no reason to import torch into a process whose whole
+            # contract with the training queue is that it stays off the cards.
+            return
         self.renderer = None
         self.scorer = None
         gc.collect()
@@ -2295,7 +3667,14 @@ class CanonicalPipeline:
                 event_type="sam3_ready_invalid",
             )
             return "retry"
-        result = self._render_source(refreshed, "local", queue_mask_failure=False)
+        # A relabel candidate comes off ``_pending_sam3_ids``, which subtracts
+        # every source that already owns a group, so this is 0 today.  Deriving
+        # it rather than assuming it keeps the ID namespace right if that filter
+        # ever loosens under source reuse.
+        result = self._render_source(
+            refreshed, "local", queue_mask_failure=False,
+            use_index=self.store.completed_source_uses().get(source.source_id, 0),
+        )
         if result == "completed":
             return "completed"
         if result.startswith("mask_failed:"):
@@ -2310,15 +3689,36 @@ class CanonicalPipeline:
         by_id = {source.source_id: source for source in self.allocation.local}
         target = self.allocation.local_target
         max_attempts = self.config.masks.sam3_relabel_attempts
+        # Both readings below used to scan the whole journal per pending source.
+        # The ledger folds them incrementally, and every read re-refreshes it
+        # first, so rows this loop appends to the journal — including a
+        # ``sam3_ready`` consumed by a ``sam3_ready_invalid`` further down the
+        # same loop body — are in the answer exactly as they were before.
+        ledger = _Sam3Ledger()
+
+        def attempts_of(source_id: str) -> int:
+            return ledger.refresh(self.store.failures).attempts_of(source_id)
+
+        def unconsumed_ready(source_id: str) -> bool:
+            return ledger.refresh(self.store.failures).unconsumed_ready(source_id)
+
         while len(self._mode_groups("local")) < target:
+            # A marker dropped *during* this phase, which on a real build is
+            # hours long.  Retiring between rounds is the safe boundary here for
+            # the same reason it is inside a fill pass: every source is either
+            # still queued or already resolved, nothing is half-attempted, and no
+            # attempt has been charged against a budget it did not spend.
+            if self._stop_fill():
+                return
+
             pending_ids = self._pending_sam3_ids()
             pending = [by_id[source_id] for source_id in sorted(pending_ids) if source_id in by_id]
 
             made_progress = False
             for source in list(pending):
-                if not self._unconsumed_sam3_ready(source.source_id):
+                if not unconsumed_ready(source.source_id):
                     continue
-                attempt = self._sam3_attempts(source.source_id)
+                attempt = attempts_of(source.source_id)
                 status = self._try_ready_relabel(source, attempt)
                 made_progress = True
                 if status == "retry" and attempt >= max_attempts:
@@ -2328,8 +3728,8 @@ class CanonicalPipeline:
             pending = [by_id[source_id] for source_id in sorted(pending_ids) if source_id in by_id]
             exhausted = [
                 source for source in pending
-                if self._sam3_attempts(source.source_id) >= max_attempts
-                and not self._unconsumed_sam3_ready(source.source_id)
+                if attempts_of(source.source_id) >= max_attempts
+                and not unconsumed_ready(source.source_id)
             ]
             for source in exhausted:
                 self._terminal_sam3(source, "SAM3 relabel attempt budget exhausted")
@@ -2339,14 +3739,14 @@ class CanonicalPipeline:
             pending = [by_id[source_id] for source_id in sorted(pending_ids) if source_id in by_id]
             candidates = [
                 source for source in pending
-                if self._sam3_attempts(source.source_id) < max_attempts
-                and not self._unconsumed_sam3_ready(source.source_id)
+                if attempts_of(source.source_id) < max_attempts
+                and not unconsumed_ready(source.source_id)
             ]
             if candidates:
-                next_attempt = min(self._sam3_attempts(row.source_id) + 1 for row in candidates)
+                next_attempt = min(attempts_of(row.source_id) + 1 for row in candidates)
                 batch = [
                     row for row in candidates
-                    if self._sam3_attempts(row.source_id) + 1 == next_attempt
+                    if attempts_of(row.source_id) + 1 == next_attempt
                 ]
                 # SAM3 loads next to the two OneAlign copies on cuda:0 (33.0 GB of
                 # 95.6 GB) while the renderer keeps cuda:1, so a batch fits without
@@ -2384,13 +3784,19 @@ class CanonicalPipeline:
             pending_count = len(self._pending_sam3_ids())
             before = len(self._mode_groups("local"))
             if before + pending_count < target:
-                self._fill_initial_mode("local", self.allocation.local, target)
+                self._fill_mode("local", self.allocation.local, target)
                 made_progress = made_progress or len(self._mode_groups("local")) > before \
                     or len(self._pending_sam3_ids()) > pending_count
             if not made_progress:
                 break
 
-        if self._pending_sam3_ids():
+        # Not under stop-fill: this error means "the drain ran and could not
+        # finish", and a queue the drain was told not to touch is neither
+        # unresolved nor this build's problem — it is a backlog handed to
+        # whichever build starts without the marker.  Guarded rather than left to
+        # the ``return`` above so a marker that appears after the last round's
+        # check still lands a ``complete_with_failures`` instead of a crash.
+        if self._pending_sam3_ids() and not self._stop_fill():
             raise PipelineError("SAM3 relabel queue remains unresolved")
 
     def _record_shortfalls(self) -> None:
@@ -2401,11 +3807,14 @@ class CanonicalPipeline:
             completed = len(self._mode_groups(mode))
             if completed >= target:
                 continue
-            task_id = stable_id("target", self.config.build_id, mode)
-            self._failure(
+            # The count is part of the event's identity, not just its message: a
+            # build stopped at 61,500 and restarted at 61,500 says it once, while
+            # one that filled further before stopping again journals the new
+            # number rather than being refused for disagreeing with the old row.
+            self._journal_once(
+                task_id=stable_id("target", self.config.build_id, mode, completed),
                 event_type="terminal",
                 stage="rendering",
-                task_id=task_id,
                 error_code=f"{mode}_target_shortfall",
                 message=f"requested {target} {mode} groups, completed {completed}",
                 retryable=False,
@@ -2420,6 +3829,15 @@ class CanonicalPipeline:
         try:
             return self._run_phases()
         finally:
+            # Before the executors and, more importantly, before ``run`` closes
+            # the store: the driver's threads write to it, and a store closed
+            # under them turns a build that merely failed into one that also
+            # loses whatever the annotator was holding.  The error it may be
+            # carrying is deliberately not re-raised here — a failure inside a
+            # ``finally`` would replace the exception that is actually being
+            # reported.  ``_run_phases`` raises it on the way out of the happy
+            # path, and ``submit`` raises it at the next pass boundary.
+            self._close_annotation_driver()
             self._source_executor.shutdown(wait=True, cancel_futures=True)
             self._render_executor.shutdown(wait=True, cancel_futures=True)
             self._postprocess_executor.shutdown(wait=True, cancel_futures=True)
@@ -2431,24 +3849,61 @@ class CanonicalPipeline:
         # Resume boundary: a restarted build may have lost unlanded assets.
         self._verify_group_assets()
         self._write_phase("rendering")
-        self._fill_initial_mode(
-            "global", self.allocation.global_, self.allocation.global_target
+        # ``phase`` stays "rendering" for the whole of both calls even though
+        # annotation is running underneath them: the phase names what owns the
+        # GPUs and what a resume has to redo, and neither changes because a relay
+        # socket is busy.  ``annotation.inflight`` in the manifest is where the
+        # background work shows up.
+        self._fill_mode(
+            "global", self.allocation.global_, self.allocation.global_target,
+            annotate_passes=True,
         )
-        self._fill_initial_mode(
-            "local", self.allocation.local, self.allocation.local_target
+        self._fill_mode(
+            "local", self.allocation.local, self.allocation.local_target,
+            annotate_passes=True,
         )
 
         self._write_phase("sam3_relabel")
-        self._drain_sam3_and_replacements()
+        # The relabel drain is the *other* renderer, and under stop-fill it is
+        # skipped whole rather than allowed to spin.  Both halves of it need a
+        # card: ``dependencies.relabeler`` puts the 860 M-parameter SAM3 detector
+        # on cuda:0, and every source it rescues is then re-rendered through
+        # ``_try_ready_relabel`` -> ``_render_source``, which is precisely the
+        # work the marker retired (and which would now raise "render/QA resources
+        # are not loaded" against a build that deliberately loaded neither).
+        #
+        # The pending queue is therefore left exactly as it stands: those sources
+        # keep their ``sam3_relabel_queued`` rows and no attempt is charged
+        # against their budget, so a later build with the marker removed picks
+        # them up unchanged.  The ``PipelineError`` an unresolved queue normally
+        # raises does not apply — it means "the drain ran and could not finish",
+        # and here the drain never ran.  ``sam3_relabel.pending`` in the manifest
+        # keeps reporting the backlog, and the stop-fill event says why.
+        if not self._stop_fill():
+            self._drain_sam3_and_replacements()
+        # Unchanged, and the point of leaving it here: the shortfall is measured
+        # against the configured target whatever stopped the fill, so a build
+        # retired at 61.5k of 400k journals one terminal ``local_target_shortfall``
+        # saying so, and that row is what makes the final status
+        # ``complete_with_failures`` by the rule that always made it so.
         self._record_shortfalls()
         self._land_checkpoint(force=True)
 
         self._release_heavy_resources()
         self._write_phase("annotation")
+        # The cards are already back before this waits, so a batch still on the
+        # relay costs nothing but wall clock.  Joining first also means the
+        # closing drain is the only annotator running, which is what keeps two
+        # drains from picking up one task and paying for it twice.
+        driver_error = self._close_annotation_driver()
+        if driver_error is not None:
+            raise driver_error
         # Annotation reads winner bytes by their staging path, which now lives in
         # the archive; the reverse map must know about this build's batches first.
+        # Full rather than incremental: this is also the refresh that adopts
+        # everything a previous run of a resumed build landed.
         self._refresh_catalog()
-        annotation = self.dependencies.annotator_factory(self.config, self.store).drain()
+        annotation = self._annotation_drainer().drain()
         if annotation.get("pending") or self.store.pending_annotation_tasks():
             self._write_phase("annotation")
             raise PipelineError("annotation queue remains unresolved")
@@ -2473,6 +3928,12 @@ class CanonicalPipeline:
         self.store.write_manifest(final_manifest)
         self.store.checkpoint()
         if self.dependencies.mirror_root is not None:
+            # The one mirror whose events are *not* journalled: the manifest just
+            # above froze the digests of these three files, so appending a
+            # failure row here would leave the mirror one record behind the
+            # digest it is published under.  A fallback at the last checkpoint of
+            # a build is also the least interesting one — the mirror it produces
+            # is a whole-file copy, which is correct by construction.
             mirror_artifacts(
                 self.store.root, Path(self.dependencies.mirror_root) / self.config.build_id
             )
@@ -2764,14 +4225,40 @@ def run(
 
     catalog = dependencies.catalog_loader(config)
     inventory = dependencies.inventory_loader(config)
-    renderer = dependencies.renderer_factory(config)
-    renderer.bind_catalog(catalog)
-    renderer.assert_ready()
-    scorer = _load_scorer(config, dependencies, inventory)
+    # Decided once, here, and handed to the pipeline rather than re-derived by
+    # it: this is the branch that must not load a model, and a second reading of
+    # the marker could disagree with the first.
+    #
+    # **Every GPU load point in a canonical build is inside the else arm.**
+    # ``renderer_factory`` is ``LocalGpuOnlyRenderer.create``, whose preflight
+    # allocates a probe tensor on cuda:1 (that allocation *is* the context);
+    # ``assert_ready`` re-reads ``torch.cuda.is_available``; ``_load_scorer``
+    # instantiates one or two OneAlign copies on cuda:0 and, unless the config
+    # waives it, runs a real forward through one.  The only two others in the
+    # whole lifecycle are reached from the rendering and relabel phases, which
+    # the marker retires: ``dependencies.relabeler`` (SAM3 on cuda:0, called only
+    # from ``_drain_sam3_and_replacements``) and the torch helpers in
+    # ``visibility``/``rendering``, called only from ``_render_source``.
+    #
+    # What is left running is relay and CPU work: the annotation drain reads
+    # ``I_tar``/``I_in`` through ``archive_reader`` (tar + sqlite + PIL) and posts
+    # them to an HTTP endpoint, landing hardlinks and packs, projection writes
+    # Postgres.  Nothing on that path imports torch — ``_empty_cuda_cache`` is the
+    # single call that could, and it is gated on ``torch.cuda.is_initialized()``
+    # and skipped outright by ``_release_heavy_resources``.
+    stop_fill = _stop_fill_requested(config.output_root)
+    renderer: Renderer | None = None
+    scorer: Scorer | None = None
+    if not stop_fill:
+        renderer = dependencies.renderer_factory(config)
+        renderer.bind_catalog(catalog)
+        renderer.assert_ready()
+        scorer = _load_scorer(config, dependencies, inventory)
 
     with ArtifactStore(config.output_root, config.build_id) as store:
         pipeline = CanonicalPipeline(
-            config, dependencies, inventory, catalog, renderer, scorer, store, existing
+            config, dependencies, inventory, catalog, renderer, scorer, store,
+            existing, stop_fill=stop_fill,
         )
         # CanonicalPipeline owns the heavy resources from here. Keeping these
         # aliases alive would defeat its release before the annotation phase.

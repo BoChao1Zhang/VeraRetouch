@@ -150,9 +150,12 @@ class SourceWindowPipelineTests(WindowFixture):
         observed: dict[str, int] = {}
         base = agent.CanonicalPipeline._fill_initial_mode
 
-        def spy(pipeline, mode, sources, target):
+        # Signature-transparent: the spy only reads the window, so it must not
+        # pin the orchestrator's keyword list (``use_index`` arrived with source
+        # reuse and more may follow).
+        def spy(pipeline, mode, sources, target, **kwargs):
             observed["window"] = pipeline._source_window
-            return base(pipeline, mode, sources, target)
+            return base(pipeline, mode, sources, target, **kwargs)
 
         for window, pooled, expected in ((5, True, 5), (7, True, 7), (5, False, 2)):
             with self.subTest(window=window, pooled=pooled):
@@ -239,7 +242,9 @@ class SourceWindowPipelineTests(WindowFixture):
         leaders: set[str] = set()
         base = agent.CanonicalPipeline._render_source_buffered
 
-        def wrapper(pipeline, source, mode, *, selector_turn=None):
+        # Signature-transparent for the same reason as the ``_fill_initial_mode``
+        # spy above: it measures concurrency, not the argument list.
+        def wrapper(pipeline, source, mode, *, selector_turn=None, **kwargs):
             nonlocal peak
             with lock:
                 active.add(source.source_id)
@@ -251,7 +256,9 @@ class SourceWindowPipelineTests(WindowFixture):
             try:
                 if leader:
                     filled.wait(timeout=30)
-                return base(pipeline, source, mode, selector_turn=selector_turn)
+                return base(
+                    pipeline, source, mode, selector_turn=selector_turn, **kwargs
+                )
             finally:
                 with lock:
                     active.discard(source.source_id)

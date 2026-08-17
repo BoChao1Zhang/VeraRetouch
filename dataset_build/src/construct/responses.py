@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, Mapping, Protocol
+from typing import Any, Callable, Collection, Iterable, Iterator, Mapping, Protocol
 
 from PIL import Image
 
@@ -2091,6 +2091,51 @@ class ResponsesAnnotator:
                 return round_number
         return None
 
+    def _next_rounds(self, task_ids: Collection[str]) -> dict[str, int | None]:
+        """``_next_round`` for a whole queue, folded off the journal in one pass.
+
+        Same answer, different cost.  ``_next_round`` asks the journal two
+        questions per task and each is a full scan of ``failures``: at L8 shape
+        (a pass hands over ~60k tasks against a journal already past 300k rows)
+        that is four scans x 60k tasks, hours of pure scanning per drain, and it
+        is on the thread that now runs beside the renderer.  This folds the same
+        two predicates — "has a terminal event" and "has a round_exhausted event
+        for round *r*" — in a single walk, so a drain pays one pass per round
+        instead of four per task.
+
+        ``_next_round`` stays as the reference definition the equivalence test
+        measures this against, and stays the entry point for anything asking
+        about one task.  The pass is taken per round rather than per drain
+        because ``drain`` journals ``round_exhausted`` between rounds and the
+        next round's queue has to see them.
+        """
+        wanted = {str(task_id) for task_id in task_ids}
+        terminal: set[str] = set()
+        exhausted: set[tuple[str, int]] = set()
+        for row in self.store.failures:
+            task_id = row.get("task_id")
+            if not task_id or str(task_id) not in wanted:
+                continue
+            key = str(task_id)
+            if row.get("terminal"):
+                terminal.add(key)
+            if row.get("event_type") == "round_exhausted":
+                exhausted.add((key, int(row.get("round") or 0)))
+        answer: dict[str, int | None] = {}
+        for key in wanted:
+            if key in terminal:
+                answer[key] = None
+                continue
+            answer[key] = next(
+                (
+                    round_number
+                    for round_number in range(1, self.config.queue_rounds + 1)
+                    if (key, round_number) not in exhausted
+                ),
+                None,
+            )
+        return answer
+
     def run_round(self, task: Mapping[str, Any], round_number: int) -> str:
         task_id = str(task["task_id"])
         attempt = self._attempt_count(task_id, round_number)
@@ -2217,15 +2262,36 @@ class ResponsesAnnotator:
             self._append_sft(task, result)
             return "completed"
 
-    def drain(self, *, max_workers: int | None = None) -> dict[str, int]:
+    def drain(
+        self,
+        *,
+        max_workers: int | None = None,
+        only: Collection[str] | None = None,
+    ) -> dict[str, int]:
+        """Run the durable rounds over the pending queue, or over ``only`` of it.
+
+        ``only`` is what makes a drain safe to run while the renderer is still
+        working: the pipelined build hands over one whole render pass at a time,
+        after that pass's assets have been landed and re-indexed, and a task
+        outside the batch is left alone because its bytes may still be moving.
+        ``None`` is the closing drain, which owns whatever is left.
+
+        The membership test is applied before ``_next_rounds`` so a batch pays
+        the round fold for its own tasks rather than for the whole backlog.
+        """
         workers = max_workers or max(
             1, sum(endpoint.concurrency for endpoint in self.config.external_endpoints)
         )
         counts = {"completed": 0, "terminal": 0, "transport_failed": 0}
         for round_number in range(1, self.config.queue_rounds + 1):
-            tasks = [
+            queued = [
                 task for task in self.store.pending_annotation_tasks()
-                if self._next_round(str(task["task_id"])) == round_number
+                if only is None or str(task["task_id"]) in only
+            ]
+            rounds = self._next_rounds([str(task["task_id"]) for task in queued])
+            tasks = [
+                task for task in queued
+                if rounds.get(str(task["task_id"])) == round_number
             ]
             if not tasks:
                 continue

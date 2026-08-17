@@ -45,7 +45,8 @@ from q3vl.whereb.metrics import (center_prior_field, grid_boundary_f1, gt_area_k
                                  topk_mask)
 
 __all__ = ["random_floor", "field_corr", "center_prior_unit", "evaluate_context",
-           "evaluate_arm", "AREA_BINS", "summarise_rows"]
+           "evaluate_arm", "AREA_BINS", "summarise_rows",
+           "deep_supervision_tags", "assert_criteria_ran"]
 
 #: E1 review R5 / E5 §3.4.  The last bin is reported but flagged: its random
 #: floor is already 0.527 and it holds ~47% of V_where.
@@ -129,7 +130,10 @@ def evaluate_context(
                 out = model.forward_geo(x.feat, cond, x.phi_dir, sim=x.sim,
                                         center=x.center, geom=x.geom,
                                         guide_hi=x.guide_hi if want_hi else None,
-                                        grid_h=x.grid_h, grid_w=x.grid_w)
+                                        grid_h=x.grid_h, grid_w=x.grid_w,
+                                        h_where=x.cond_h, h_mask=x.cond_mask,
+                                        h_cond=getattr(x, "h_cond", None),
+                                        sample=x)
                 head = "geometry"
             m = out["m_low"].float()
             gt = x.gt_low.float()
@@ -167,10 +171,66 @@ def evaluate_context(
                 # control that makes the number readable (it is ~0 by
                 # construction), so both are computed or neither is.
                 **_shape_residual_row(m, gt, x.family, k),
+                # UNIQ's pre-registered diagnostics (empty dict for other arms)
+                **_uniq_row(model, out, gt_k, k, x.family),
+                # EPR-018..023: the arm's own per-sample diagnostic columns.
+                # Empty dict for every live arm and for any new arm that does
+                # not define the hook.
+                **_arm_row(model, out, x),
             })
         if progress and (start // max(1, batch_size)) % 10 == 0:
             print(f"  [{mode}] {start + len(chunk)}/{len(idx)}", flush=True)
     return rows
+
+
+def _arm_row(model, out: dict[str, Any], x: Any) -> dict[str, Any]:
+    """The EPR-018..023 arm's own per-sample columns; ``{}`` for the live four.
+
+    An arm's pre-registered criterion column is aggregated from these rows by
+    its ``criteria_columns`` hook, and :func:`assert_criteria_ran` refuses a
+    board whose column carries ``n = 0`` -- so a head that forgets to emit its
+    diagnostics cannot publish.
+    """
+    if not getattr(model, "is_new_arm", False):
+        return {}
+    from .arms import arm_hook
+
+    fn = arm_hook(model.arm, "per_sample_row")
+    return dict(fn(model, out, x)) if fn is not None else {}
+
+
+def _uniq_row(model, out: dict[str, Any], gt_k: torch.Tensor, k: int,
+              family: str) -> dict[str, Any]:
+    """Per-query diagnostics for the UNIQ arm; ``{}`` for every other arm.
+
+    ``uniq_best_iou`` (best-of-K, matched-area top-k) is the ambiguity
+    diagnostic: the gap between it and the selected query's IoU is what the
+    selection head leaves on the table.  ``uniq_cls_correct`` measures the
+    learned family routing against the construction-side label -- the column
+    that would let the class head replace the type-word rule, or forbid it.
+    """
+    if "uniq" not in out:
+        return {}
+    from .uniq import UNIQ_FAMILIES
+
+    u = out["uniq"]
+    ious = []
+    for kq in range(int(u["s_all"].shape[0])):
+        mq = model.geo.mask_of(u["s_all"][kq]).float()
+        ious.append(hard_iou(topk_mask(mq, k), gt_k))
+    sel = int(out.get("uniq_selected", 0))
+    best = int(np.argmax(ious))
+    cls_pred = UNIQ_FAMILIES[int(u["cls_logits"][sel].argmax())]
+    return {
+        "uniq_query_ious": [float(v) for v in ious],
+        "uniq_best_iou": float(ious[best]),
+        "uniq_best_query": best,
+        "uniq_selected_query": sel,
+        "uniq_sel_is_best": bool(best == sel),
+        "uniq_cls_pred": cls_pred,
+        "uniq_cls_correct": (bool(cls_pred == family)
+                             if family in UNIQ_FAMILIES else None),
+    }
 
 
 #: families `best_fit_analytic` can fit; `semantic` has no analytic member, so
@@ -202,7 +262,79 @@ def _shape_residual_row(m, gt, family: str, k: int) -> dict[str, Any]:
                 "shape_residual_error": repr(exc)}
 
 
-def assert_criteria_ran(board: dict[str, Any], arm: str) -> dict[str, Any]:
+def _family_shape_block(shp: list[dict[str, Any]], fam: str) -> dict[str, Any]:
+    rows = [r for r in shp if r["family"] == fam]
+    if not rows:
+        return {"n": 0, "readable": None}
+    pred = _agg(r["shape_residual"] for r in rows)
+    gt = _agg(r["shape_residual_gt"] for r in rows)
+    # Readable only if the GT actually fits its own family better than the
+    # prediction does.  Where it does not, the "best-fit analytic member" is a
+    # worse description of the truth than of the model, and a comparison of
+    # residuals says nothing about which field has the better shape.
+    readable = bool(gt.get("median") is not None
+                    and pred.get("median") is not None
+                    and gt["median"] < pred["median"])
+    return {**pred, "gt_control_median": gt.get("median"), "readable": readable}
+
+
+def _shape_readability(shp: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-family readability of the shape column (WHERE_STATE S22).
+
+    The pooled guard passes while a third of the data is unreadable: measured
+    2026-08-12, the pooled GT self-fit is 0.0677 -- comfortably "≈0" -- but the
+    radial family's own GT self-fit is 0.2415, *worse* than the prediction it is
+    supposed to be the control for.  A guard that can pass on the average while
+    failing on 31% of the samples is a criterion wired to the wrong scope, which
+    is a distinct failure from not wiring it at all.
+    """
+    out: dict[str, Any] = {"by_family": {}, "unreadable_families": []}
+    for fam in _SHAPE_FAMILIES:
+        blk = _family_shape_block(shp, fam)
+        out["by_family"][fam] = {"n": blk.get("n", 0),
+                                 "gt_control_median": blk.get("gt_control_median"),
+                                 "pred_median": blk.get("median"),
+                                 "readable": blk.get("readable")}
+        if blk.get("n") and not blk.get("readable"):
+            out["unreadable_families"].append(fam)
+    n_all = len(shp)
+    n_bad = sum(b["n"] for f, b in out["by_family"].items()
+                if f in out["unreadable_families"])
+    out["frac_unreadable"] = (n_bad / n_all) if n_all else None
+    out["note"] = ("a family is readable only if its GT self-fit residual is "
+                   "BELOW the prediction's; pooled readability is not "
+                   "sufficient -- report per family (S22)")
+    return out
+
+
+def deep_supervision_tags(head_facts: Any) -> list[str]:
+    """The per-branch loss-column suffixes an arm's head *promises* to emit.
+
+    EPR-013 (``ref{i}``), EPR-014 (``st{i}``) and EPR-016 (``aux{g}``) are all
+    "extra supervision branches" whose only visible trace is a suffixed ``L_*``
+    column in ``steps.jsonl``.  The experiment variable can therefore vanish
+    without a single error -- a head built with the flag, a trainer that never
+    saw the branch, and a board that looks exactly like the baseline's.  The
+    suffixes are derived from the head's own ``facts()`` so the check cannot
+    drift from the configuration that was actually constructed.
+
+    The two supervision switches are honoured: ``--uniq4-refine-no-aux-loss``
+    and ``stage_supervision=False`` are *pre-registered ablations* that legally
+    emit no intermediate columns, so demanding them would fail a valid arm.
+    """
+    f = dict(head_facts or {})
+    tags: list[str] = []
+    if f.get("stage_supervision", True):
+        tags += [f"st{i}" for i in range(int(f.get("n_stages", 0) or 0))]
+    if f.get("refine_aux_loss", True):
+        tags += [f"ref{i}" for i in range(int(f.get("n_refine_layers", 0) or 0))]
+    tags += [f"aux{g}" for g in range(int(f.get("aux_groups", 0) or 0))]
+    return tags
+
+
+def assert_criteria_ran(board: dict[str, Any], arm: str, *,
+                        head_facts: Any = None,
+                        steps_row: Any = None) -> dict[str, Any]:
     """Fail loudly when an arm's pre-registered criterion was never computed.
 
     Third occurrence of the same class of error in this campaign ("defined,
@@ -210,9 +342,24 @@ def assert_criteria_ran(board: dict[str, Any], arm: str) -> dict[str, Any]:
     and nothing calls it -- so the board looks complete and the arm is judged on
     whatever column *did* get computed.  A criterion that is not asserted at
     runtime is a criterion that can quietly not exist.
+
+    ``head_facts`` + ``steps_row`` extend the same runtime assertion to the
+    EPR-013/014/016 deep-supervision branches (pre-registered in EPR-014's
+    proposal): ``steps_row`` is the FIRST row of ``steps.jsonl``, and every
+    suffix the head configuration promises must already carry an ``L_*`` column
+    there.  First row, not last: a branch that is missing is missing from step
+    one, and waiting until the end of an arm to discover it costs the arm.
     """
-    required = {"SHAPE3": ["shape_residual"]}.get(arm, [])
-    report = {"arm": arm, "required": required, "computed": {}}
+    # EPR-018..023: the six new arms register their column here.  Adding the
+    # `--arm` choice WITHOUT this line makes the runtime assertion an empty
+    # requirement for the new arm, i.e. exactly the "defined but not wired"
+    # failure this function exists to stop; the table is therefore built from
+    # `arms.ARM_CRITERIA` so the two cannot drift.
+    from .arms import ARM_CRITERIA
+
+    required = {"SHAPE3": ["shape_residual"], "UNIQ": ["uniq_best"],
+                **{a: list(c) for a, c in ARM_CRITERIA.items()}}.get(arm, [])
+    report: dict[str, Any] = {"arm": arm, "required": required, "computed": {}}
     for name in required:
         col = board.get("criteria_columns", {}).get(name, {})
         n = int(col.get("n", 0))
@@ -222,6 +369,32 @@ def assert_criteria_ran(board: dict[str, Any], arm: str) -> dict[str, Any]:
                 f"arm {arm} pre-registers '{name}' and the board carries 0 "
                 "values for it; refusing to publish a board that cannot "
                 "adjudicate its own experiment")
+
+    tags = deep_supervision_tags(head_facts)
+    ds: dict[str, Any] = {"tags": tags, "columns": {}, "checked": bool(tags)}
+    report["deep_supervision"] = ds
+    if not tags:
+        return report
+    if steps_row is None:
+        raise AssertionError(
+            f"arm {arm} configures the deep-supervision branches {tags} but no "
+            "steps.jsonl row was supplied to check their loss columns against; "
+            "refusing to publish a board that cannot show the branches ran")
+    row = dict(steps_row)
+    missing = []
+    for tag in tags:
+        cols = sorted(k for k in row
+                      if k.startswith("L_") and k.endswith(f"_{tag}"))
+        ds["columns"][tag] = cols
+        if not cols:
+            missing.append(tag)
+    if missing:
+        raise AssertionError(
+            f"arm {arm} configures deep-supervision branches {tags} but the "
+            f"first steps.jsonl row carries no 'L_*_{{tag}}' column for "
+            f"{missing}; the configured experiment variable never reached the "
+            "loss (columns present: "
+            f"{sorted(k for k in row if k.startswith('L_'))})")
     return report
 
 
@@ -230,8 +403,12 @@ def _agg(xs: Iterable[float]) -> dict[str, Any]:
     if not v:
         return {"n": 0}
     return {"n": len(v), "mean": float(np.mean(v)), "median": float(np.median(v)),
-            "p10": percentile(v, 10), "p25": percentile(v, 25),
-            "p75": percentile(v, 75), "p90": percentile(v, 90),
+            # FRACTIONS, not percentages: `whereb.metrics.percentile` takes
+            # p in [0,1].  Passing 10/25/75/90 made every one of these return
+            # s[-1] == max, silently, on every amort board ever published
+            # (median/mean were unaffected).  The function now refuses p>1.
+            "p10": percentile(v, 0.10), "p25": percentile(v, 0.25),
+            "p75": percentile(v, 0.75), "p90": percentile(v, 0.90),
             "min": float(np.min(v)), "max": float(np.max(v))}
 
 
@@ -399,14 +576,9 @@ def evaluate_arm(
         "shape_residual": {
             **_agg(r["shape_residual"] for r in shp),
             "gt_control": _agg(r["shape_residual_gt"] for r in shp),
-            "by_family": {
-                fam: {**_agg(r["shape_residual"] for r in shp
-                             if r["family"] == fam),
-                      "gt_control_median": (
-                          float(np.median([r["shape_residual_gt"] for r in shp
-                                           if r["family"] == fam]))
-                          if any(r["family"] == fam for r in shp) else None)}
-                for fam in _SHAPE_FAMILIES},
+            "by_family": {fam: _family_shape_block(shp, fam)
+                          for fam in _SHAPE_FAMILIES},
+            "readability": _shape_readability(shp),
             "n_errors": sum(1 for r in live_ref
                             if r.get("shape_residual_error")),
             "note": ("1 - IoU(pred, best-fit member of the sample's own "
@@ -414,6 +586,32 @@ def evaluate_arm(
                      "member exists to fit)"),
         },
     }
+    # UNIQ's pre-registered column (EPR-011); `assert_criteria_ran` refuses a
+    # UNIQ board without it -- the "defined, measured, not wired" class of
+    # failure has recurred three times and does not get a fourth.
+    uq = [r for r in live_ref if r.get("uniq_best_iou") is not None]
+    if uq:
+        cls_vals = [r["uniq_cls_correct"] for r in uq
+                    if r.get("uniq_cls_correct") is not None]
+        board["criteria_columns"]["uniq_best"] = {
+            **_agg(r["uniq_best_iou"] for r in uq),
+            "selected_iou_median": float(np.median([r["hard_iou"] for r in uq])),
+            "sel_is_best_frac": float(np.mean([r["uniq_sel_is_best"] for r in uq])),
+            "cls_accuracy": (float(np.mean(cls_vals)) if cls_vals else None),
+            "note": ("best-of-K matched-area top-k IoU vs the deployed "
+                     "(selection-head) query; the gap is the ambiguity the "
+                     "selection leaves on the table (EPR-011)"),
+        }
+
+    # EPR-018..023: the arm's own pre-registered column.  Built from the SAME
+    # per-sample rows the headline is built from, so it cannot be computed on a
+    # different subset than the board it is asserted against.
+    if getattr(model, "is_new_arm", False):
+        from .arms import arm_hook
+
+        _cc = arm_hook(model.arm, "criteria_columns")
+        if _cc is not None:
+            board["criteria_columns"].update(_cc(live_ref))
 
     # routing confusion, measured not assumed
     board["routing"] = {

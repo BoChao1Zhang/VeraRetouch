@@ -15,6 +15,7 @@ from dataset_build.responses_events import is_official_response_event
 class ResponsesText:
     text: str
     attempt: int
+    model: str | None = None
 
 
 class ResponsesVlmError(RuntimeError):
@@ -24,6 +25,10 @@ class ResponsesVlmError(RuntimeError):
         super().__init__(error_type)
         self.error_type = error_type
         self.attempts = attempts
+
+
+class ModelSubstituted(RuntimeError):
+    """The relay answered as a model other than the one that was requested."""
 
 
 _LOCAL = threading.local()
@@ -44,6 +49,26 @@ def encode_image_data_url(
         output = io.BytesIO()
         image.save(output, "JPEG", quality=quality)
     return "data:image/jpeg;base64," + base64.b64encode(output.getvalue()).decode("ascii")
+
+
+# Hosted strict structured-output implements a narrower JSON Schema subset than
+# local guided decoding.  ``uniqueItems`` is the keyword this campaign hit: with
+# it, gpt-5.6-terra answers every request with a Cloudflare 502 (origin error,
+# not a 400 naming the field) — bisected 2026-08-12 on the sam3_subject_selection
+# schema, where dropping that one keyword turns a 100% failure into a 100% pass.
+# No guarantee is lost: every caller re-validates the parsed object anyway.
+_HOSTED_UNSUPPORTED_SCHEMA_KEYWORDS = frozenset({"uniqueItems"})
+
+
+def _hosted_schema(node: Any) -> Any:
+    if isinstance(node, Mapping):
+        return {
+            key: _hosted_schema(value) for key, value in node.items()
+            if key not in _HOSTED_UNSUPPORTED_SCHEMA_KEYWORDS
+        }
+    if isinstance(node, list):
+        return [_hosted_schema(item) for item in node]
+    return node
 
 
 def _client(base_url: str, api_key: str, timeout: float, vgate_class: str) -> Any:
@@ -67,6 +92,16 @@ def _client(base_url: str, api_key: str, timeout: float, vgate_class: str) -> An
 
 def consume_text(stream: Any) -> str:
     """Consume only official typed streaming events through response.completed."""
+    return consume_response(stream)[0]
+
+
+def consume_response(stream: Any) -> tuple[str, str | None]:
+    """As ``consume_text``, but also return the model id the relay answered as.
+
+    External relays have substituted models before, so the caller needs the
+    echoed id to police it; local vLLM answers with whatever name it was served
+    under and its callers simply ignore the second element.
+    """
     from openai.types.responses import (
         ResponseCompletedEvent,
         ResponseErrorEvent,
@@ -97,7 +132,7 @@ def consume_text(stream: Any) -> str:
     raw = "".join(chunks) or str(getattr(completed, "output_text", "") or "")
     if not raw:
         raise RuntimeError("responses_output_empty")
-    return raw
+    return raw, str(getattr(completed, "model", "") or "") or None
 
 
 def request_text(
@@ -114,35 +149,51 @@ def request_text(
     attempts: int = 3,
     vgate_class: str = "qa-judge",
     client_factory: Callable[[str, str, float, str], Any] | None = None,
+    reasoning_effort: str | None = None,
+    expect_model: str | None = None,
 ) -> ResponsesText:
-    """Issue one strict local Responses request with bounded transport retries."""
+    """Issue one strict Responses request with bounded transport retries.
+
+    ``reasoning_effort`` switches the payload from the local-vLLM shape to the
+    external-relay shape: the thinking switch is a vLLM chat-template kwarg that
+    a hosted reasoning model rejects, and the effort knob is the reverse.
+    ``expect_model`` makes a substituted model a retryable failure instead of a
+    silently mislabelled row.
+    """
     payload = {
         "model": model,
         "input": [{"role": "user", "content": [dict(item) for item in content]}],
         "stream": True,
         "max_output_tokens": int(max_output_tokens),
         "temperature": float(temperature),
-        "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         "text": {"format": {
             "type": "json_schema",
             "name": schema_name,
             "strict": True,
-            "schema": dict(schema),
+            "schema": dict(schema) if reasoning_effort is None else _hosted_schema(schema),
         }},
     }
+    if reasoning_effort is None:
+        payload["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+    else:
+        payload["reasoning"] = {"effort": str(reasoning_effort)}
     factory = client_factory or _client
     attempts = max(1, int(attempts))
     last_error = "transport_error"
     for attempt in range(1, attempts + 1):
         try:
             client = factory(base_url, api_key, timeout, vgate_class)
-            return ResponsesText(consume_text(client.responses.create(**payload)), attempt)
+            text, returned = consume_response(client.responses.create(**payload))
+            if expect_model is not None and returned != expect_model:
+                raise ModelSubstituted(
+                    f"requested {expect_model!r} but the relay answered as {returned!r}")
+            return ResponsesText(text, attempt, returned)
         except Exception as exc:  # noqa: BLE001 - retry boundary is deliberately broad
             last_error = type(exc).__name__
     raise ResponsesVlmError(last_error, attempts)
 
 
 __all__ = [
-    "ResponsesText", "ResponsesVlmError", "consume_text", "encode_image_data_url",
-    "request_text",
+    "ModelSubstituted", "ResponsesText", "ResponsesVlmError", "consume_response",
+    "consume_text", "encode_image_data_url", "request_text",
 ]

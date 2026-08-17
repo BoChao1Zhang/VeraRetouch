@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Iterable, Sequence
 
 import numpy as np
 import torch
@@ -63,7 +63,9 @@ from .wc import W_VECTOR_DIM, WhereSignals
 
 __all__ = ["META_KEYS", "WhatSample", "WhatDataset", "open_dataset", "Batch",
            "WhatBatchBuilder", "WhereRunner", "split_index_path",
-           "NATURAL_MASK_SOURCES", "ORACLE_MISSING_POLICIES"]
+           "NATURAL_MASK_SOURCES", "ORACLE_MISSING_POLICIES",
+           "ORACLE_UNCOVERED_POLICIES", "oracle_uncovered",
+           "resolve_oracle_coverage"]
 
 # ===========================================================================
 # deviation D-EXEC4 (2026-08-10, main-agent ruling on task card EXEC-4)
@@ -98,6 +100,43 @@ NATURAL_MASK_SOURCES = (NATURAL_MASK_FROZEN, NATURAL_MASK_ORACLE_GT,
 ORACLE_MISSING_REJECT = "reject"
 ORACLE_MISSING_NULL_GLOBAL = "null_global"
 ORACLE_MISSING_POLICIES = (ORACLE_MISSING_REJECT, ORACLE_MISSING_NULL_GLOBAL)
+
+# ---------------------------------------------------------------------------
+# oracle coverage, checked before step 0        (added 2026-08-11 after C04)
+# ---------------------------------------------------------------------------
+# The 2026-08-10 verification quoted above checked *presence* (``store.has``)
+# and stopped there.  Presence is not coverage: a record can exist and still
+# carry no usable fit for the readout the arm asked for.  Re-verified
+# 2026-08-11 by reading every payload:
+#
+#   train   159,215 samples = 75,544 local + 83,671 global; the store's members
+#           are exactly the local set; 75,543/75,544 carry an ``ok`` cband12
+#           fit and ONE does not -- ``sft_ef61ee381c35f9dc5fd29e611402686b``
+#           (build l1) publishes a ``band`` fit only.
+#   V_what  897 = 408 local + 489 global; 408/408 ``ok``.  Clean.
+#
+# That one sample killed C04 (D-EXEC4, gpu1) after 3h42m and 3,440 steps, in
+# ``_oracle_latent``, with no checkpoint written.  ``run_what`` already asserts
+# the generated-<color> context covers the split before the first step, on the
+# stated grounds that "a coverage hole discovered mid-run has no legal repair";
+# the oracle store simply had no equivalent.  These two policies give it one:
+#
+#   ``fail``  (default, and the conservative reading of protocol 10.2's "an
+#             oracle ceiling arm must reject the sample, not fabricate a
+#             latent")  -- raise at startup, naming the samples.  Costs ~40s
+#             instead of ~4h.
+#   ``drop``  -- exclude them from this arm's population, record every id in
+#             ``run_setup.json``, and refuse if they are more than
+#             ``ORACLE_UNCOVERED_MAX_FRAC`` of the split, so a data hole can
+#             never quietly become a population change.
+ORACLE_UNCOVERED_FAIL = "fail"
+ORACLE_UNCOVERED_DROP = "drop"
+ORACLE_UNCOVERED_POLICIES = (ORACLE_UNCOVERED_FAIL, ORACLE_UNCOVERED_DROP)
+
+#: ``drop`` refuses above this fraction of the split.  1e-4 is ~16 samples of
+#: train and ~0 of V_what: comfortably above the one known hole and far below
+#: anything that could move a metric or be mistaken for a re-split.
+ORACLE_UNCOVERED_MAX_FRAC = 1e-4
 
 #: the only record fields a sample object keeps.  ``image`` is deliberately
 #: absent -- nothing about the pixels belongs in a training batch's metadata.
@@ -188,6 +227,31 @@ class WhatDataset:
 
     def __len__(self) -> int:
         return len(self.refs)
+
+    def exclude(self, sample_ids: Iterable[str], reason: str) -> int:
+        """Drop named samples, recording each one in :attr:`rejections`.
+
+        The class docstring's "no ad-hoc filtering" stands: this is not a
+        filter a caller can express as a predicate over the data, it is the
+        removal of an explicitly enumerated id list, and every removed id is
+        recorded -- here in ``rejections``, and by
+        :func:`resolve_oracle_coverage` in the facts that reach
+        ``run_setup.json``.  A silent ``continue`` inside ``__getitem__`` would
+        be the ad-hoc version.
+        """
+        drop = set(sample_ids)
+        if not drop:
+            return 0
+        keep = []
+        for ref in self.refs:
+            if ref.sample_id in drop:
+                self.rejections.append({"sample_id": ref.sample_id,
+                                        "reason": reason})
+            else:
+                keep.append(ref)
+        n = len(self.refs) - len(keep)
+        self.refs = keep
+        return n
 
     def record(self, i: int) -> dict[str, Any]:
         return json.loads(self.store.read(self.refs[i].members["record"]).decode("utf-8"))
@@ -323,6 +387,69 @@ def open_dataset(split: str, *, need_mask: bool = False,
                      need_mask=need_mask, limit=limit, verify=verify, **kwargs)
     info["n_samples"] = len(ds)
     return ds, info
+
+
+def oracle_uncovered(dataset: "WhatDataset", oracle_store, readout: str) -> list[str]:
+    """Samples an oracle arm's ``_oracle_latent`` would raise on.
+
+    A raise happens for a sample that is **not** global and has no ``ok`` fit
+    for ``readout`` -- either no record at all, or a record whose ``fits`` has
+    no usable entry for this readout.  Globality is read from the build code
+    rather than from the per-sample record so this costs one index scan instead
+    of 159k record reads; the two agree by construction and were checked
+    against each other on 2026-08-11 (on both ``train`` and ``V_what`` the
+    store's member set is *exactly* the set of LOCAL_BUILDS samples).
+    """
+    out = []
+    for ref in dataset.refs:
+        if ref.meta.get("build") not in LOCAL_BUILDS:
+            continue                      # global: the null_global policy's job
+        try:
+            ok = oracle_store.latent(ref.sample_id, readout) is not None
+        except (KeyError, FileNotFoundError):
+            ok = False
+        if not ok:
+            out.append(ref.sample_id)
+    return out
+
+
+def resolve_oracle_coverage(dataset: "WhatDataset", oracle_store, readout: str,
+                            policy: str) -> dict[str, Any]:
+    """Check oracle coverage before step 0 and apply ``policy``.
+
+    Mirrors ``ColorGenContextStore.assert_covers``: the point is that a hole
+    discovered mid-run has no legal repair, so it has to be found while failing
+    is still cheap.  Returns the facts to record; raises on ``fail``.
+    """
+    if policy not in ORACLE_UNCOVERED_POLICIES:
+        raise ValueError(f"unknown oracle_uncovered policy {policy!r}; "
+                         f"have {ORACLE_UNCOVERED_POLICIES}")
+    n_before = len(dataset)
+    bad = oracle_uncovered(dataset, oracle_store, readout)
+    facts = {"policy": policy, "readout": readout, "n_samples": n_before,
+             "n_uncovered": len(bad), "uncovered_ids": bad[:64],
+             "frac": (len(bad) / n_before) if n_before else 0.0,
+             "max_frac": ORACLE_UNCOVERED_MAX_FRAC, "n_dropped": 0}
+    if not bad:
+        return facts
+    if policy == ORACLE_UNCOVERED_FAIL:
+        raise RuntimeError(
+            f"{len(bad)}/{n_before} samples are local but have no usable "
+            f"Where-A oracle fit for readout {readout!r}; first few: "
+            f"{bad[:5]}.  An oracle ceiling arm must reject such a sample "
+            "rather than fabricate a latent, so it cannot simply be trained "
+            "through -- re-run with --oracle-uncovered drop to exclude them "
+            "(they are recorded in run_setup.json), or publish the missing "
+            "fits.  Found here, before step 0, rather than hours in.")
+    if facts["frac"] > ORACLE_UNCOVERED_MAX_FRAC:
+        raise RuntimeError(
+            f"--oracle-uncovered drop refuses: {len(bad)}/{n_before} "
+            f"({facts['frac']:.2%}) exceeds the {ORACLE_UNCOVERED_MAX_FRAC:.2%} "
+            "cap.  A hole this size is a population change, not a data blemish; "
+            "it needs a ruling and a re-published oracle, not a flag.")
+    facts["n_dropped"] = dataset.exclude(bad, f"oracle_uncovered_{readout}")
+    facts["n_samples_after"] = len(dataset)
+    return facts
 
 
 # --- the frozen Where checkpoint -------------------------------------------

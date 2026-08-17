@@ -338,6 +338,14 @@ def main() -> int:
             # <oracle>/<split> resolved to nothing -- fixed 2026-08-10.
             oracle_store = OracleStore(
                 Path(WHERE_A_ORACLE_DIR) / BASIS_ARM / ORACLE_NAMESPACE / args.split)
+            # Same pre-step-0 coverage check the trainer does, but the policy is
+            # hard-wired to `fail`: dropping a sample here would score the
+            # oracle arms on a different V_what than C01/C02, which is exactly
+            # the comparison the board exists to make.  A hole in an evaluation
+            # split needs a ruling, not a flag.  (Verified 2026-08-11: V_what is
+            # 408/408 local samples covered for cband12.)
+            ds_info["oracle_coverage"] = resolve_oracle_coverage(
+                dataset, oracle_store, cfg.where_readout, ORACLE_UNCOVERED_FAIL)
         builder = WhatBatchBuilder(
             collator, vlm, cfg, build_bank(Path(args.gtluts), dataset),
             center, d_func_scale, where_runner=where_runner,

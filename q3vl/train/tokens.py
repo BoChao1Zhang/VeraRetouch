@@ -3,17 +3,19 @@
 Verified facts about ``/home/bc/data/models/Qwen3-VL-4B-Instruct`` (see
 ``NOTES.md`` for the probe transcript):
 
-* ``len(tokenizer) == 151669`` before registration, ``151673`` after;
+* ``len(tokenizer) == 151669`` before registration, ``151673`` after the four
+  original tokens and ``151675`` after the two v2seg readout tokens
+  (2026-08-14) are appended;
 * the input embedding matrix has ``151936`` rows (``config.text_config.vocab_size``),
   i.e. the checkpoint ships **263 unused padded rows**;
 * ``tie_word_embeddings == True`` -- ``lm_head.weight`` *is* ``embed_tokens.weight``;
 * the padded rows are near-degenerate (every row above 151668 has L2 ~= 0.358 and
-  several are bit-identical), so the four new tokens would start out
+  several are bit-identical), so the new tokens would start out
   indistinguishable from one another. We therefore always re-initialise them.
 
-Resize policy: **never shrink**. ``resize_token_embeddings(151673)`` would drop
-the padded rows and leave a non-aligned vocab; since ``151673 <= 151936`` the
-new ids already have rows, so we keep the matrix and only re-init the 4 rows.
+Resize policy: **never shrink**. ``resize_token_embeddings(151675)`` would drop
+the padded rows and leave a non-aligned vocab; since ``151675 <= 151936`` the
+new ids already have rows, so we keep the matrix and only re-init those rows.
 A resize is still performed if a future tokenizer grows past the matrix.
 """
 
@@ -56,7 +58,11 @@ def gathered(params, modifier_rank: int | None = 0):
 
 
 def register_special_tokens(tokenizer) -> dict[str, int]:
-    """Append the four tokens as ``additional_special_tokens`` (idempotent)."""
+    """Append ``SPECIAL_TOKENS`` as ``additional_special_tokens`` (idempotent).
+
+    Order matters: the tuple is append-only, so ids already assigned to earlier
+    tokens never move (v2seg keeps <where>=151669 .. </color>=151672).
+    """
     existing = list(tokenizer.additional_special_tokens or [])
     missing = [t for t in SPECIAL_TOKENS if t not in existing]
     if missing:
@@ -119,7 +125,7 @@ def _mean_init_rows(
         }
         for rid in row_ids:
             # The generator is a CPU generator on purpose: the drawn values must
-            # not depend on device or world size, so the four rows are
+            # not depend on device or world size, so the new rows are
             # bit-identical to the ones the single-GPU preflight validated.
             noise = torch.randn(mean.shape, generator=generator, dtype=torch.float32)
             noise = noise.to(mean.device) * std * noise_scale
@@ -134,11 +140,11 @@ def prepare_embeddings(
     seed: int = 0,
     reinit_new_rows: bool = True,
 ) -> dict[str, Any]:
-    """Resize (never shrink) and initialise the rows of the four new tokens."""
+    """Resize (never shrink) and initialise the rows of the new special tokens."""
     emb = model.get_input_embeddings()
     # NEVER read `emb.weight.shape[0]` directly: under ZeRO-3 it is 0 (the
     # parameter is partitioned and freed), which would make `need > rows_before`
-    # true and trigger a resize_token_embeddings(151673, pad_to_multiple_of=64)
+    # true and trigger a resize_token_embeddings(len(tokenizer), pad_to_multiple_of=64)
     # -> a matrix of 151680 rows, i.e. silently *shrinking* the vendor's 151936
     # and violating the never-shrink policy this function exists to enforce.
     rows_before = int(full_shape(emb.weight)[0])
@@ -154,7 +160,7 @@ def prepare_embeddings(
         model.resize_token_embeddings(need, pad_to_multiple_of=64, mean_resizing=True)
         info["resize_action"] = "grown"
     else:
-        # 151673 <= 151936: the ids already have rows. Shrinking would delete
+        # 151675 <= 151936: the ids already have rows. Shrinking would delete
         # the vendor's vocab padding and de-align the matrix, so we do not.
         info["resize_action"] = "kept"
 

@@ -5,7 +5,8 @@
 Refuses to start unless:
   * the weight shards pass the integrity check (spec 2.1 / 9.1);
   * the frozen/trainable boundary matches Arm B (spec 2.2 / 9.2);
-  * the four special tokens are single tokens with distinct ids (spec 4.3 / 9.4);
+  * the special tokens are single tokens with distinct ids (spec 4.3 / 9.4) --
+    six of them since the v2seg re-train (2026-08-14);
   * the spec-frozen hyperparameters are unchanged and global batch == 32 (spec 7);
   * a terminal manifest supplies ``N_effective`` (spec 8.1) -- 2645/5290 are
     estimates and are never used as checkpoint authority.
@@ -27,7 +28,9 @@ from transformers import HfArgumentParser, set_seed
 
 from .args import DataArguments, ModelArguments, SFTTrainingArguments, validate_frozen_hyperparameters
 from .collator import Sft2SegCollator
-from .constants import GLOBAL_BATCH_SIZE
+from .constants import (
+    GLOBAL_BATCH_SIZE, SEG_COLOR, SEG_COLOR_TOK, SEG_SEGCOLOR, SEG_SEGWHERE, SEG_WHERE_TOK,
+)
 from .dataset import Sft2SegDataset
 from .freeze import format_freeze_table
 from .modeling import load_processor, model_architecture_facts, setup_model, verify_model_shards
@@ -128,6 +131,38 @@ def build_dataset(index_path: str, data_args: DataArguments, split: str | None, 
     return ds
 
 
+def assert_v2seg_template(collator, sample, special_ids: dict[str, int]) -> dict[str, Any]:
+    """Fail at startup if the v2seg readout tokens are not in the real batch.
+
+    CLAUDE.md: a pre-registered criterion needs a *runtime* assertion -- a
+    template that lives in collator.py but never reaches the tensors is the
+    "defined but not wired" failure this project has already paid for. Costs one
+    sample encode on every rank; every rank computes the same answer, so a
+    failure cannot leave one rank hanging on a collective.
+    """
+    enc = collator.encode_one(sample)
+    ids, labels, segs = enc["input_ids"], enc["labels"], enc["segment_ids"]
+    sw = [i for i, s in enumerate(segs) if s == SEG_SEGWHERE]
+    sc = [i for i, s in enumerate(segs) if s == SEG_SEGCOLOR]
+    last_color = max((i for i, s in enumerate(segs) if s == SEG_COLOR), default=-1)
+    ok = (
+        len(sw) == 1 and len(sc) == 1 and last_color >= 0 and last_color < sw[0] < sc[0]
+        and ids[sw[0]] == labels[sw[0]] == special_ids[SEG_WHERE_TOK]
+        and ids[sc[0]] == labels[sc[0]] == special_ids[SEG_COLOR_TOK]
+    )
+    info = {
+        "sample_id": sample.sample_id,
+        "seg_where_pos": sw,
+        "seg_color_pos": sc,
+        "last_color_pos": last_color,
+        "seq_len": len(ids),
+        "tail_ids": ids[-4:],
+    }
+    if not ok:
+        raise SystemExit(f"v2seg template assertion FAILED: {info}")
+    return info
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -215,6 +250,9 @@ def main(argv: list[str] | None = None) -> int:
         system_prompt=data_args.system_prompt,
         supervise_eos=data_args.supervise_eos,
     )
+    v2seg_probe = assert_v2seg_template(collator, train_ds[0], special_ids)
+    if is_main:
+        logger.info("v2seg template assertion PASSED: %s", v2seg_probe)
 
     trainer = Qwen3VLSFTTrainer(
         model=model,
@@ -238,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "batch_plan": batch_info,
+                    "v2seg_template": v2seg_probe,
                     "special_token_ids": special_ids,
                     "embeddings": emb_info,
                     "freeze": freeze_report.to_dict(),

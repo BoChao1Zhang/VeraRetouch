@@ -382,7 +382,19 @@ class CoverageSelector:
             raise PresetError(f"{render_mode} inventory has no major with eight distinct presets")
 
     def begin_group(self, source_id: str, group_attempt: int,
-                    exclude_majors: Iterable[str] = ()) -> "GroupReservation":
+                    exclude_majors: Iterable[str] = (),
+                    *, use_index: int = 0) -> "GroupReservation":
+        """Reserve one group's major.
+
+        ``use_index`` is which pass over the source pool this group belongs to;
+        it only widens the reservation ID namespace so a source rendered twice
+        cannot collide with itself.  It is appended rather than always present so
+        that the first pass keeps the IDs every build before source reuse wrote.
+        Note what it deliberately does *not* touch: the major/minor/preset draws
+        below are ordered by the selector's live coverage counters, not by
+        ``source_id``, so the repeat pass of a source is handed a different
+        preset set by construction rather than by seeding.
+        """
         with self._lock:
             excluded = set(exclude_majors)
             pool = [major for major in self.majors if major not in excluded]
@@ -400,7 +412,8 @@ class CoverageSelector:
             )
             major = next(item for item in full_bag if item in pool and usage[item] == minimum)
             reservation_id = stable_id(
-                "reservation", *self.namespace, source_id, group_attempt, major
+                "reservation", *self.namespace, source_id, group_attempt, major,
+                *(() if not use_index else (use_index,)),
             )
             if reservation_id in self._reservations:
                 raise PresetError(f"duplicate active reservation: {reservation_id}")

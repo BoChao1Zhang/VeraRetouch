@@ -1,0 +1,94 @@
+# v2seg TWO-GPU re-train (2026-08-14): original 2-card spec (micro 4 x GAS 4 x world_size 2 = 32, ZeRO-3, nproc 2); the two trailing readout tokens come from the code-level v2seg template, so every hyperparameter below is verbatim sft_base.yaml and only output_dir differs. No single_card_variant.
+# Qwen3-VL-4B-Instruct base SFT, official Arm B.
+# Every value below is quoted from docs/QWEN3_VL_BASE_SFT_SPEC_2026-08-04.md.
+# q3vl/train/args.py::validate_frozen_hyperparameters refuses to start if the
+# spec-frozen entries drift; the only permitted change is the micro-batch /GAS
+# combination 4x4 -> 2x8 (spec 7.2), which keeps global batch at 32.
+
+model:
+  model_name_or_path: /home/bc/data/models/Qwen3-VL-4B-Instruct
+  attn_implementation: flash_attention_2   # spec 7.2
+  dtype: bfloat16                          # spec 7.1
+  reinit_special_token_rows: true          # padded rows are degenerate, see tokens.py
+  special_token_init_seed: 0
+  verify_shards: true                      # spec 2.1 / 9.1
+
+data:
+  # Produced by the parallel S0-DATA task (q3vl.data.pipeline::stage_manifest).
+  # Index rows are nested-`members` with ABSOLUTE shard paths, so `shard_root`
+  # is unused for that producer and only matters for relocatable indexes.
+  # The entrypoint exits if terminal_manifest is missing (spec 8.1) -- the
+  # 2645/5290 estimates are never used as a fallback.
+  train_index: /mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/train.index.jsonl
+  # NOTE (NOTES.md D-7): the producer emits no split literally named "eval";
+  # the held-out ids are partitioned into V_where / V_what / T_final /
+  # T_lut_unseen. V_where is the conservative default here. T_final and
+  # T_lut_unseen must never be pointed at (METACANVAS 2.2).
+  eval_index: /mnt/nfs/bc/data/datasets/sft2seg-20260804/splits/V_where.index.jsonl
+  shard_root: /mnt/nfs/bc/data/datasets/sft2seg-20260804
+  terminal_manifest: /mnt/nfs/bc/data/datasets/sft2seg-20260804/manifest/terminal_manifest.json
+  verify: checksum                         # METACANVAS 2.3
+  max_length: 2048                         # spec 6
+  supervise_eos: true                      # see collator.py docstring
+  allow_local_assembly: false              # seven->two rewrite belongs to S0-DATA
+  system_prompt: null
+
+training:
+  # MAIN-AGENT RULING 2026-08-05 (joint preflight decision D-J1): checkpoints go
+  # to LOCAL disk, not NFS. Measured basis: the training images (23.68 GB) sit on
+  # the same NFS mount as the output dir, and a ZeRO-3 checkpoint write saturates
+  # that mount for ~9.3 min (an `ls`/`du` on it blocked >60 s during Phase B), so
+  # every save would stall the dataloader. Local free space 1.5 TB vs a 339 GiB
+  # peak resident footprint. The 0.5/1.0-epoch protected checkpoints and the
+  # final deliverable are rsync'd to the NFS durable path after training by
+  # experiments/.../s0_base_sft/config/SYNC_PROTECTED_TO_NFS.sh
+  output_dir: /home/bc/data/runs/q3vl_base_sft_v2seg_20260814
+  deepspeed: q3vl/train/configs/ds_zero3.json   # spec 7.2 ZeRO-3
+
+  # spec 7.1 -- official Arm B optimiser (frozen)
+  optim: adamw_torch
+  learning_rate: 1.0e-5
+  weight_decay: 0.0
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-8
+  warmup_ratio: 0.03
+  lr_scheduler_type: cosine
+  max_grad_norm: 1.0
+  bf16: true
+
+  # spec 7.2 -- global batch 32 = 4 per device x GAS 4 x world_size 2
+  per_device_train_batch_size: 4
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 4
+  gradient_checkpointing: true
+
+  # spec 8
+  num_train_epochs: 1.0
+  eval_strategy: steps
+  eval_steps: 500
+  save_strategy: steps
+  save_steps: 500
+  save_total_limit: 3          # 0.5/1.0 epoch checkpoints are exempt (trainer.py)
+  metric_for_best_model: eval_loss   # assistant-only, spec 8.3
+  greater_is_better: false
+  load_best_model_at_end: false
+
+  logging_steps: 10
+  # Without this, transformers' logger stays at WARNING and BOTH
+  # "Saving model checkpoint to ..." and "Deleting older checkpoint ..." are
+  # logger.info -> a 9-hour run writes and deletes 11 checkpoints with no trace
+  # in the log. Silent deletion is exactly the failure S0-TRAIN had to fix by
+  # reading source; do not leave the other half silent. Not a spec-frozen field.
+  log_level: info
+  dataloader_num_workers: 4
+  remove_unused_columns: false
+  save_safetensors: true
+  seed: 42
+  data_seed: 42
+  report_to: []
+
+  # diagnostics only -- never enter the optimised loss (spec 4.4)
+  diag_every_n_steps: 50
+  gen_diag_samples: 0          # see NOTES.md decision D-3 (ZeRO-3 generate unvalidated)
+  gen_diag_max_new_tokens: 512

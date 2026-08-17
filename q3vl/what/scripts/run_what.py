@@ -66,9 +66,12 @@ from q3vl.what.data import (
     NATURAL_MASK_SOURCES,
     ORACLE_MISSING_POLICIES,
     ORACLE_MISSING_REJECT,
+    ORACLE_UNCOVERED_FAIL,
+    ORACLE_UNCOVERED_POLICIES,
     WhatBatchBuilder,
     WhereRunner,
     open_dataset,
+    resolve_oracle_coverage,
 )
 from q3vl.what.evalloop import build_eval_subset, eval_subset_rows, make_eval_fn
 from q3vl.what.hiddens import WhatVLM
@@ -193,6 +196,12 @@ def main() -> int:
                     choices=list(ORACLE_MISSING_POLICIES),
                     help="what an oracle arm does with a sample that has no "
                          "Where-A fit (by construction: the global samples)")
+    ap.add_argument("--oracle-uncovered", default=ORACLE_UNCOVERED_FAIL,
+                    choices=list(ORACLE_UNCOVERED_POLICIES),
+                    help="what to do about a LOCAL sample with no usable "
+                         "oracle fit for --where-readout, checked before step "
+                         "0: 'fail' (default) refuses to start; 'drop' "
+                         "excludes them and records every id in run_setup.json")
     ap.add_argument("--where-readout", default=None,
                     help="Where readout that sizes the rho token / selects the "
                          "oracle fit.  Taken from the checkpoint when there is "
@@ -329,6 +338,23 @@ def main() -> int:
     collator = Sft2SegCollator(processor)
     dataset, ds_info = open_dataset(
         args.split, need_mask=(cfg.where_source == "oracle"), limit=args.limit)
+
+    # The oracle store gets the same treatment the generated <color> context
+    # gets below, and for the same reason.  C04 died 3h42m in on one local
+    # sample whose published record carries a `band` fit but no `cband12` one
+    # (1 of 75,544); the 2026-08-10 coverage check had only asked whether a
+    # record EXISTS.  Runs before the LUT bank and the genctx assertion so both
+    # see the population the sampler will actually see.
+    oracle_coverage = None
+    if oracle_store is not None:
+        oracle_coverage = resolve_oracle_coverage(
+            dataset, oracle_store, cfg.where_readout, args.oracle_uncovered)
+        ds_info["n_samples"] = len(dataset)
+        ds_info["oracle_coverage"] = oracle_coverage
+        where_facts["oracle_coverage"] = oracle_coverage
+        print(f"run_what: oracle coverage -- {json.dumps(oracle_coverage)}",
+              flush=True)
+
     center, d_func_scale = load_center(Path(args.zgt))
 
     # amendment A-4: training is 50/50 teacher/generated, so the published

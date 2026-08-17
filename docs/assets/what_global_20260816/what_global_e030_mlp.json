@@ -1,0 +1,70 @@
+{
+  "checkpoint": "/home/bc/data/runs/what_b/whatb_QDEC_P4_MLP/best.pt",
+  "scope": "Global-boundary style samples only; alpha=1 everywhere.",
+  "records": [
+    {
+      "sample_id": "sft_002170cf2d81b95329b29ac1a3ef284f",
+      "lut_id": "rcp_72f3e97f17a91d3f",
+      "task_type": "style",
+      "alpha": "1.0 everywhere (global boundary)",
+      "mean_delta_e00": 5.795262813568115,
+      "group": 1
+    },
+    {
+      "sample_id": "sft_0158b54ffc201a88efe73277ef399557",
+      "lut_id": "rcp_5fb188afb877456f",
+      "task_type": "style",
+      "alpha": "1.0 everywhere (global boundary)",
+      "mean_delta_e00": 4.463265419006348,
+      "group": 1
+    },
+    {
+      "sample_id": "sft_01a7fa8028998c1527f419c368c4082a",
+      "lut_id": "rcp_63b8d245953dd100",
+      "task_type": "style",
+      "alpha": "1.0 everywhere (global boundary)",
+      "mean_delta_e00": 5.760618686676025,
+      "group": 2
+    },
+    {
+      "sample_id": "sft_02ed4ee5562f824e91beac3b1ac2830f",
+      "lut_id": "rcp_4e3c50faf084cf61",
+      "task_type": "style",
+      "alpha": "1.0 everywhere (global boundary)",
+      "mean_delta_e00": 2.360635757446289,
+      "group": 2
+    },
+    {
+      "sample_id": "sft_0395765b96fcf1de051a6386d7aa2934",
+      "lut_id": "rcp_fea4d599cf210f37",
+      "task_type": "style",
+      "alpha": "1.0 everywhere (global boundary)",
+      "mean_delta_e00": 4.2976603507995605,
+      "group": 3
+    },
+    {
+      "sample_id": "sft_03cda3fdf949e7a890f7a13004dbf348",
+      "lut_id": "rcp_ce6fe8730a034dee",
+      "task_type": "style",
+      "alpha": "1.0 everywhere (global boundary)",
+      "mean_delta_e00": 1.3841654062271118,
+      "group": 3
+    },
+    {
+      "sample_id": "sft_04260b07f1bb5473737b70843dcee2f0",
+      "lut_id": "rcp_d30dd44ded803932",
+      "task_type": "style",
+      "alpha": "1.0 everywhere (global boundary)",
+      "mean_delta_e00": 2.1671173572540283,
+      "group": 4
+    },
+    {
+      "sample_id": "sft_042e9e4def70924a6f3e28c421466536",
+      "lut_id": "rcp_07c34ac5079d21da",
+      "task_type": "style",
+      "alpha": "1.0 everywhere (global boundary)",
+      "mean_delta_e00": 2.078131914138794,
+      "group": 4
+    }
+  ]
+}

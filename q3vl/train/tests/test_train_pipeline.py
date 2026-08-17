@@ -217,7 +217,8 @@ def processor():
 class TestSpecialTokens:
     def test_single_token_and_distinct(self, processor):
         ids = verify_single_token(processor.tokenizer)
-        assert len(set(ids.values())) == 4
+        # v2seg: 6 tokens (the original 4 + <seg_where>/<seg_color>)
+        assert len(set(ids.values())) == len(SPECIAL_TOKENS)
         assert list(ids) == list(SPECIAL_TOKENS)
 
     def test_registration_is_idempotent(self, processor):
@@ -818,10 +819,11 @@ class TestS0DataInterop:
     def test_producer_target_string_matches_collator(self, processor):
         # producer NOTES: "<where>" + where + "</where>" + "<color>" + color +
         # "</color>", no newline between tag and body.
+        # v2seg (2026-08-14) appends "<seg_where><seg_color>" after "</color>".
         from q3vl.train.collator import Sft2SegCollator
 
         where, color = "the standing subject", "line a\nline b"
         assert (
             Sft2SegCollator.build_target_text(where, color)
-            == f"<where>{where}</where><color>{color}</color>"
+            == f"<where>{where}</where><color>{color}</color><seg_where><seg_color>"
         )

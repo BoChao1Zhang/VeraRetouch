@@ -1,0 +1,198 @@
+{
+  "generated": "2026-08-17",
+  "split": "V_where",
+  "selection": {
+    "population": "local, winner_confidence=normal",
+    "rule": "source-unique across all eight images; radial/linear/semantic use descending historical mean IoU over ST_LANG, SEGSAM and MATTE; band includes the historical ST_LANG minimum counterexample plus the best remaining mean-IoU positive example",
+    "historical_score_context": "generated"
+  },
+  "inference": {
+    "context": "fresh inference using v2seg generated context cache",
+    "genctx": "/home/bc/data/runs/where_b/genwhere_v2seg/V_where",
+    "displayed_arms": {
+      "ST_LANG": {
+        "run": "/home/bc/data/runs/where_b/amort_UNIQ_stlang_20260813",
+        "weights": "amort_final.pt"
+      },
+      "SEGSAM": {
+        "run": "/home/bc/data/runs/where_b/amort_SEGSAM_20260814",
+        "weights": "amort_final.pt"
+      },
+      "MATTE": {
+        "run": "/home/bc/data/runs/where_b/amort_MATTE_20260814",
+        "weights": "amort_final.pt"
+      }
+    },
+    "metric": "matched-area top-k IoU; k is GT alpha area at the low grid",
+    "note": "Fresh displayed IoUs need not equal the historic board because ST_LANG is replayed with the newer v2seg generated context."
+  },
+  "layout": {
+    "one_sample_per_png": true,
+    "left_text_box": "verbatim instruction plus generated <where> reasoning",
+    "visual_columns": [
+      "Input",
+      "GT alpha",
+      "ST_LANG",
+      "SEGSAM",
+      "MATTE"
+    ],
+    "field_scale": [
+      0.0,
+      1.0
+    ]
+  },
+  "samples": [
+    {
+      "sample_id": "sft_81be64ef3168993b10800111c1f2ff0f",
+      "source_image_id": "src_b3d0fd3f37e6a27d",
+      "family": "radial",
+      "role": "positive",
+      "instruction": "Please strongly brighten and cool the fluffy cat, the circular opening, and the nearby background, while muting the cat\u2019s yellow fur. Give the central subject area a calmer, more subdued color treatment and improve its visibility without changing the surrounding frame more than needed for a natural blend.",
+      "generated_where": "<where>subject: the fluffy cat, circular opening, and nearby background; edit scope: a moderate oval falloff centered on the cat, strongest on the cat and fading outward past its outline into the surrounding scene, with the far corners unchanged</where>",
+      "historical_generated_topk_iou_for_selection": {
+        "ST_LANG": 0.9605911330049262,
+        "SEGSAM": 0.8729411764705882,
+        "MATTE": 0.9088729016786571
+      },
+      "fresh_v2seg_context_topk_iou": {
+        "ST_LANG": 0.9605911330049262,
+        "SEGSAM": 0.8685446009389671,
+        "MATTE": 0.9043062200956937
+      },
+      "figure": "where_radial_positive_0111c1f2ff0f.png"
+    },
+    {
+      "sample_id": "sft_d331f590653c1bae4d5208ee43843a61",
+      "source_image_id": "src_7532cc62fe825c9a",
+      "family": "radial",
+      "role": "positive",
+      "instruction": "Please brighten the seated couple and the nearby meadow and trees, add stronger contrast to define their forms, cool the warm sunlight, and strongly subdue the brown and green tones while keeping those colours visible and natural.",
+      "generated_where": "<where>subject: the seated couple with the nearby meadow and trees; edit scope: a moderate oval falloff centered on the couple, strongest on them and fading outward past their outline into the surrounding scene, with the far corners unchanged</where>",
+      "historical_generated_topk_iou_for_selection": {
+        "ST_LANG": 0.8798798798798799,
+        "SEGSAM": 0.874251497005988,
+        "MATTE": 0.8855421686746988
+      },
+      "fresh_v2seg_context_topk_iou": {
+        "ST_LANG": 0.8798798798798799,
+        "SEGSAM": 0.874251497005988,
+        "MATTE": 0.8912386706948641
+      },
+      "figure": "where_radial_positive_08ee43843a61.png"
+    },
+    {
+      "sample_id": "sft_ed1f4f33a65fb21a5e91fb79ad8ee9ab",
+      "source_image_id": "raise_r73069306t",
+      "family": "linear",
+      "role": "positive",
+      "instruction": "Please brighten the dense reeds and grasses with the nearby pond water, add stronger contrast, subdue the vivid green tones, cool the overall color, and shift the plant area toward a restrained magenta-red cast while keeping the scene natural.",
+      "generated_where": "<where>subject: the dense reeds and grasses with the nearby pond water; edit scope: a large oval falloff centered on the subject, extending beyond it into the surrounding scene while leaving the far corners unchanged</where>",
+      "historical_generated_topk_iou_for_selection": {
+        "ST_LANG": 0.935042735042735,
+        "SEGSAM": 0.8788381742738589,
+        "MATTE": 0.7469135802469136
+      },
+      "fresh_v2seg_context_topk_iou": {
+        "ST_LANG": 0.935042735042735,
+        "SEGSAM": 0.8819617622610141,
+        "MATTE": 0.7469135802469136
+      },
+      "figure": "where_linear_positive_fb79ad8ee9ab.png"
+    },
+    {
+      "sample_id": "sft_de41250f227f301559384535cbd74909",
+      "source_image_id": "src_dd1466e720968a75",
+      "family": "linear",
+      "role": "positive",
+      "instruction": "Please brighten the woman, her skin, dark hair, white sleeveless top, and the surrounding pale background, while cooling the overall color, muting the skin and warm tones, and keeping the portrait balanced and natural without changing the subject or scene content.",
+      "generated_where": "<where>subject: the woman, her skin, dark hair, white sleeveless top, and surrounding pale background; edit scope: a vertical band through the subject, extending beyond the subject into the background and running off both edges of the frame</where>",
+      "historical_generated_topk_iou_for_selection": {
+        "ST_LANG": 0.8647887323943662,
+        "SEGSAM": 0.8986615678776291,
+        "MATTE": 0.7940379403794038
+      },
+      "fresh_v2seg_context_topk_iou": {
+        "ST_LANG": 0.8647887323943662,
+        "SEGSAM": 0.8986615678776291,
+        "MATTE": 0.7924187725631769
+      },
+      "figure": "where_linear_positive_4535cbd74909.png"
+    },
+    {
+      "sample_id": "sft_85c4bbc5d63cdbf99c86160ff1f79956",
+      "source_image_id": "src_3c474ba54ee5b546",
+      "family": "semantic",
+      "role": "positive",
+      "instruction": "Please make the bison brighter, more contrasty, richer in color, and noticeably warmer. Bring out the brown fur with fuller color and lighter detail, strengthen the black areas so they carry more presence, and improve the animal\u2019s definition without changing anything outside the bison.",
+      "generated_where": "<where>subject: the bison in the center; edit scope: stays within the bison</where>",
+      "historical_generated_topk_iou_for_selection": {
+        "ST_LANG": 0.910377358490566,
+        "SEGSAM": 0.9058823529411765,
+        "MATTE": 0.8969555035128806
+      },
+      "fresh_v2seg_context_topk_iou": {
+        "ST_LANG": 0.8493150684931506,
+        "SEGSAM": 0.9058823529411765,
+        "MATTE": 0.8969555035128806
+      },
+      "figure": "where_semantic_positive_160ff1f79956.png"
+    },
+    {
+      "sample_id": "sft_a76708904b22c88d08ae28cc4b720c67",
+      "source_image_id": "src_9d38c969031a5b13",
+      "family": "semantic",
+      "role": "positive",
+      "instruction": "Please brighten the woman and cool the overall rendering while strongly subduing the vivid color in her skin and athletic top. Keep the tonal treatment restrained enough that the garment remains identifiable, but make her appear more luminous and less intensely colored without changing the surrounding background.",
+      "generated_where": "<where>subject: the woman in the center; edit scope: stays within the woman</where>",
+      "historical_generated_topk_iou_for_selection": {
+        "ST_LANG": 0.9162011173184358,
+        "SEGSAM": 0.8950276243093923,
+        "MATTE": 0.8100263852242744
+      },
+      "fresh_v2seg_context_topk_iou": {
+        "ST_LANG": 0.7411167512690355,
+        "SEGSAM": 0.8950276243093923,
+        "MATTE": 0.8100263852242744
+      },
+      "figure": "where_semantic_positive_28cc4b720c67.png"
+    },
+    {
+      "sample_id": "sft_f039de9b4493102b16f8b15f0d1e99fa",
+      "source_image_id": "src_b11ebd20823cbd5d",
+      "family": "band",
+      "role": "counterexample",
+      "instruction": "Please warm the coastal view around the central windswept tree, mute the blue in the ocean and sky, and refine the nearby rocks, mountain, and surrounding scenery so the colors feel more cohesive while preserving the photographic character of the seascape.",
+      "generated_where": "<where>subject: the central windswept tree with the nearby ocean, sky, rocks, mountain, and surrounding coastal scenery; edit scope: a horizontal band spanning the entire frame, strongest toward the right edge and fading toward the left edge</where>",
+      "historical_generated_topk_iou_for_selection": {
+        "ST_LANG": 0.267741935483871,
+        "SEGSAM": 0.29489291598023065,
+        "MATTE": 0.36695652173913046
+      },
+      "fresh_v2seg_context_topk_iou": {
+        "ST_LANG": 0.267741935483871,
+        "SEGSAM": 0.29489291598023065,
+        "MATTE": 0.36695652173913046
+      },
+      "figure": "where_band_counterexample_b15f0d1e99fa.png"
+    },
+    {
+      "sample_id": "sft_09bbce5c9dc58601661add657c8358cd",
+      "source_image_id": "src_4a738829eb48d39d",
+      "family": "band",
+      "role": "positive",
+      "instruction": "Please brighten the central region containing the woman, nearby tree and sky, rock formation, ground, and surrounding vegetation. Give these scene elements stronger contrast and a warmer overall feel, while making the grey sky and other grey areas visibly richer. Apply the changes only to this group of visible content and stop there.",
+      "generated_where": "<where>subject: the woman in the desert landscape; edit scope: a vertical band through the subject, extending beyond the subject into the background and running off both edges of the frame</where>",
+      "historical_generated_topk_iou_for_selection": {
+        "ST_LANG": 0.9219712525667351,
+        "SEGSAM": 0.8553022794846382,
+        "MATTE": 0.7879656160458453
+      },
+      "fresh_v2seg_context_topk_iou": {
+        "ST_LANG": 0.9219712525667351,
+        "SEGSAM": 0.8553022794846382,
+        "MATTE": 0.7879656160458453
+      },
+      "figure": "where_band_positive_dd657c8358cd.png"
+    }
+  ]
+}

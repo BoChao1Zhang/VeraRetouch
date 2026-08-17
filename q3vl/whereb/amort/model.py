@@ -25,9 +25,21 @@ from q3vl.whereb.fields import no_autocast, predict_fields
 
 from .heads import CondEncoder, P1Head, P3PrimeHead, SemanticHead, ShapeDistHead
 
-__all__ = ["AmortModel", "ARMS"]
+__all__ = ["AmortModel", "ARMS", "ALL_ARMS"]
 
-ARMS = ("P1", "P3prime", "SHAPE3")
+ARMS = ("P1", "P3prime", "SHAPE3", "UNIQ")
+
+
+def _new_arms() -> tuple[str, ...]:
+    from .arms import NEW_ARMS
+
+    return NEW_ARMS
+
+
+#: ``ARMS`` stays frozen -- it is the live four, and several call sites use it as
+#: "the arms whose boards are published".  ``ALL_ARMS`` is what ``--arm``
+#: accepts: the live four plus the EPR-018..023 registry (see ``arms.py``).
+ALL_ARMS = ARMS + _new_arms()
 
 
 class AmortModel(nn.Module):
@@ -52,13 +64,41 @@ class AmortModel(nn.Module):
         geom_inject: bool = False,
         geom_mode: str = "broadcast",
         pch_size: str = "full",
+        pch_impl: str = "v0",
+        pch_cont_norm=None,
         seed: int = 0,
         upsample: UpsampleConfig | None = None,
         gate_upsample: bool = True,
+        uniq_k: int = 4,
+        uniq_fourier_bands: int = 0,
+        uniq_fourier_scale: float = 1.0,
+        #: EPR-012 (default off = the pre-registered linear selection head)
+        uniq_iou_head: bool = False,
+        uniq_sel_stability: float = 0.0,
+        #: EPR-018..023.  ``True`` + a registry arm = the batch's B-4 default:
+        #: all four families go through the new head, so ``SemanticHead`` is not
+        #: built, the similarity/FiLM channels are off and ``CondEncoder`` is
+        #: constructed (``cond_of`` is called unconditionally by the trainer and
+        #: the evaluator) but frozen and never entered by the head.  Setting it
+        #: False is the pre-registered alternative row "keep the old semantic
+        #: routing" (EPR-019 NOTES 5 and the same NOTE in the other five).
+        new_arm_defaults: bool = True,
+        #: forwarded verbatim to the arm module's ``build_head``
+        arm_kwargs: dict[str, Any] | None = None,
+        arm_args: Any = None,
     ):
         super().__init__()
-        if arm not in ARMS:
-            raise ValueError(f"unknown arm {arm!r}; expected one of {ARMS}")
+        from .arms import is_new_arm
+
+        self.is_new_arm = is_new_arm(arm)
+        if not self.is_new_arm and arm not in ARMS:
+            raise ValueError(f"unknown arm {arm!r}; expected one of {ALL_ARMS}")
+        #: recorded in facts(): whether the B-4 口径 was applied or overridden
+        self.new_arm_defaults = bool(new_arm_defaults) and self.is_new_arm
+        if self.new_arm_defaults:
+            with_semantic = False
+            use_sim_field = False
+            use_film = False
         self.arm = arm
         self.readout = readout
         self.use_sim_field = use_sim_field
@@ -107,15 +147,45 @@ class AmortModel(nn.Module):
         # published as an ablation.  `film_dim=None` removes every FiLM layer.
         self.use_film = use_film
         film_dim = cond_dim if use_film else None
-        if arm == "P1":
+        if self.is_new_arm:
+            from .arms import load_arm
+
+            mod = load_arm(arm)
+            kw = dict(arm_kwargs or {})
+            from_args = getattr(mod, "head_kwargs_from_args", None)
+            if callable(from_args) and arm_args is not None:
+                kw = {**from_args(arm_args), **kw}
+            self.geo = mod.build_head(in_dim=in_dim, text_dim=cond_text_dim,
+                                      args=arm_args, **kw)
+        elif arm == "P1":
             self.geo = P1Head(readout, ch, in_dim, extra_ch, n_blocks, film_dim,
                               seed, pooled_w=pooled_w)
         elif arm == "SHAPE3":
             self.geo = ShapeDistHead(ch, in_dim, extra_ch, n_blocks, film_dim)
+        elif arm == "UNIQ":
+            from .uniq import UniQHead
+
+            self.geo = UniQHead(ch, in_dim, extra_ch, n_blocks, film_dim,
+                                text_dim=cond_text_dim, n_queries=uniq_k,
+                                fourier_bands=uniq_fourier_bands,
+                                fourier_scale=uniq_fourier_scale, seed=seed,
+                                iou_head=uniq_iou_head,
+                                sel_stability=uniq_sel_stability)
         else:
             self.geo = P3PrimeHead(ch, in_dim, extra_ch, n_blocks, film_dim)
         self.sem = (SemanticHead(in_dim, extra_ch, sem_ch, film_dim)
                     if with_semantic else None)
+        #: B-4 (all six proposals, identical wording): the new heads do not
+        #: consume the pooled CondEncoder -- their conditioning is `h_cond`.
+        #: `cond_of` is still called unconditionally by the trainer and the
+        #: evaluator, so the module is CONSTRUCTED and then frozen rather than
+        #: removed; freezing keeps it out of `build_optimizer`'s groups, which
+        #: is what "not trained" has to mean for the parameter-count audit.
+        self.cond_frozen = False
+        if self.new_arm_defaults:
+            for p in self.cond.parameters():
+                p.requires_grad_(False)
+            self.cond_frozen = True
 
         # The injector lives on the GEOMETRY head only.  The semantic head is
         # supervised directly from `.cgt` and already sits at 0.820, and the
@@ -126,14 +196,58 @@ class AmortModel(nn.Module):
         # is a *dilution-conservative* reading of the mechanism -- the boards
         # therefore carry the geometric-family subset alongside it.
         self.pch = None
+        self.pch_impl = pch_impl if (geom_inject and self.geom_mode == "pch") else ""
         if geom_inject and self.geom_mode == "pch":
-            from .pch import PCH, PCHConfig
-
             if pch_size not in ("full", "lite"):
                 raise ValueError(f"unknown pch_size {pch_size!r}")
-            maker = PCHConfig.full if pch_size == "full" else PCHConfig.lite
+            if pch_impl not in ("v0", "spec"):
+                raise ValueError(
+                    f"unknown pch_impl {pch_impl!r}; 'v0' is the simplified "
+                    "module EPR-001/002/003/007/008 ran on (AMD-2: kept frozen "
+                    "because those arms are its control series), 'spec' is the "
+                    "proposal §2.2 module (AMD-4: what the M series must use)")
             self.pch_size = pch_size
-            self.pch = PCH(maker(code_dim=GEOM_DIM, feat_dim=ch))
+            if pch_impl == "v0":
+                from .pch import PCH, PCHConfig
+
+                maker = PCHConfig.full if pch_size == "full" else PCHConfig.lite
+                self.pch = PCH(maker(code_dim=GEOM_DIM, feat_dim=ch))
+            else:
+                from .pch_full import PCHFull, PCHFullConfig
+
+                maker = (PCHFullConfig.full if pch_size == "full"
+                         else PCHFullConfig.lite)
+                self.pch = PCHFull(maker(feat_dim=ch), cont_norm=pch_cont_norm)
+
+    # -- readout VLM (EPR-018..023 `--cond-readout qtok`) -------------------
+    def attach_readout_vlm(self, vlm) -> dict[str, Any]:
+        """Register a ``QueryTokVLM``'s trainable query embeddings on this model.
+
+        The query tokens are the experiment variable of the ``qtok`` readout
+        row, and they live on the VLM wrapper, not on the head.  Without this
+        they never reach ``build_optimizer``'s parameter groups and the ablation
+        trains nothing while producing a perfectly normal-looking board -- the
+        same failure ``AmortModelV4`` guards against at ``uniq4.py:413-419``.
+
+        ``FrozenVLM`` is a plain object, not an ``nn.Module``, so holding the
+        reference registers nothing else.
+        """
+        self._readout_vlm = vlm
+        ps = [p for p in (getattr(vlm, "q_embed", None),
+                          getattr(vlm, "aux_embed", None)) if p is not None]
+        ps += [p for n, p in vlm.model.named_parameters() if "lora_" in n]
+        if ps:
+            self.readout_extra = nn.ParameterList(ps)
+        return {"n_readout_tensors": len(ps),
+                "n_readout_params": int(sum(p.numel() for p in ps))}
+
+    def train(self, mode: bool = True):
+        # the query embeddings only get a gradient while the wrapper's
+        # `_grad_on` gate is open (uniq4.py:135-152)
+        vlm = getattr(self, "_readout_vlm", None)
+        if vlm is not None and hasattr(vlm, "_grad_on"):
+            vlm._grad_on = bool(mode)
+        return super().train(mode)
 
     # -- conditioning -------------------------------------------------------
     def cond_of(self, h_where, h_mask, word_ids, word_offsets) -> torch.Tensor:
@@ -153,21 +267,40 @@ class AmortModel(nn.Module):
         if self.geom_dim:
             if geom is None:
                 raise ValueError("geom_inject=True but no geometry code supplied")
+            if not isinstance(geom, torch.Tensor):
+                raise TypeError(
+                    "broadcast mode takes a bare multi-hot tensor; a GeoCode "
+                    "carries conf/valid that the broadcast form has no way to "
+                    "honour, so accepting one here would silently drop the "
+                    "confidence gate")
             ref = chans[0] if chans else None
             h, w = (ref.shape[-2:] if ref is not None else (1, 1))
             chans.append(geom.reshape(1, self.geom_dim, 1, 1).expand(1, -1, h, w))
         return torch.cat(chans, dim=1) if chans else None
 
     def _inject_of(self, geom: torch.Tensor | None):
-        """Injection hook for the geometry head, or None.
+        """Tap-B injection hook for the geometry head, or None.
 
         Returns None -- i.e. an exact no-op, not a zero tensor added -- whenever
         the arm is not in PCH mode or the sample carried no code at all, so the
         "no geometry named" fallback is structural rather than numerical.
         """
+        return self._pch_hooks(geom)[0]
+
+    def _pch_hooks(self, geom, valid_grid: torch.Tensor | None = None):
+        """``(tap_b, tap_a)`` callables, or ``(None, None)``.
+
+        PCH-v0 has one tap and returns ``(residual_fn, None)``.  The §2.2 module
+        has both, and they share one transformer pass through a
+        :class:`~q3vl.whereb.amort.pch_full.PCHSession` -- computing it twice
+        would double the module's cost to produce the same two tensors.
+        """
         if self.pch is None or geom is None:
-            return None
-        return lambda codes: self.pch(codes, geom)
+            return None, None
+        if self.pch_impl == "v0":
+            return (lambda codes: self.pch(codes, geom)), None
+        sess = self.pch.session(geom, valid_grid)
+        return sess.residual, (sess.logit if self.pch.cfg.tap_a else None)
 
     # -- one sample ---------------------------------------------------------
     def forward_geo(
@@ -179,12 +312,41 @@ class AmortModel(nn.Module):
         sim: torch.Tensor | None = None,
         center: torch.Tensor | None = None,
         geom: torch.Tensor | None = None,
+        valid_grid: torch.Tensor | None = None,
         guide_hi: torch.Tensor | None = None,
         grid_h: int = 0,
         grid_w: int = 0,
+        h_where: torch.Tensor | None = None,
+        h_mask: torch.Tensor | None = None,
+        h_cond: torch.Tensor | None = None,
+        sample: Any = None,
     ) -> dict[str, Any]:
+        if self.is_new_arm:
+            # EPR-018..023: the whole head lives in its own module (arms.py).
+            # No `elif` chain here -- six agents editing one dispatch chain is
+            # how arm A's loss ends up running under arm B's name.
+            from .arms import ArmContext, load_arm
+
+            ctx = ArmContext(
+                feat=feat, grid_h=grid_h, grid_w=grid_w, h_cond=h_cond,
+                cond=cond, extra=self._extra(sim, center, geom),
+                phi_dir=phi_dir, sim=sim, center=center, geom=geom,
+                guide_hi=guide_hi, h_where=h_where, h_mask=h_mask, sample=sample)
+            out = load_arm(self.arm).forward(self, self.geo, ctx)
+            if "m_low" not in out:
+                raise AssertionError(
+                    f"arm {self.arm} returned no 'm_low'; the criterion path "
+                    "reads that key and nothing else")
+            return out
         extra = self._extra(sim, center, geom)
-        inject = self._inject_of(geom)
+        inject, inject_logit = self._pch_hooks(geom, valid_grid)
+        if inject_logit is not None and self.arm != "P3prime":
+            raise NotImplementedError(
+                f"tap A (the rank-1 logit residual of §2.2(4)) is wired for the "
+                f"P3' field head only; arm {self.arm!r} would need its own "
+                "definition of 'the logits' (P1 produces w(71), SHAPE3 a "
+                "distance field), and guessing one would make the M series "
+                "measure a different quantity per arm")
         if self.arm == "P1":
             params = self.geo(feat, extra, cond, phi_dir, inject)
             # Everything from phi_dir onward is float32 with autocast disabled --
@@ -216,6 +378,34 @@ class AmortModel(nn.Module):
                 out["s_hi"] = s_bl
             return out
 
+        if self.arm == "UNIQ":
+            # K query fields; inference path = the argmax-selection query.  The
+            # selection head sees no GT, so this is deployable, and the WTA
+            # training loss lives in losses.uniq_wta_loss (trainer branch).
+            if h_where is None:
+                raise ValueError(
+                    "UNIQ reads the <where> TOKEN SEQUENCE (h_where); the "
+                    "pooled cond alone is the pathway S13 measured losing the "
+                    "geometry, so running without the sequence would silently "
+                    "reproduce the pooled arm under a new name")
+            with no_autocast(feat.device.type):
+                u = self.geo(feat.float(),
+                             None if extra is None else extra.float(),
+                             cond.float(), h_where, h_mask)
+                sel = self.geo.select_index(u)
+                s_low = u["s_all"][sel]
+                out = {"m_low": self.geo.mask_of(s_low), "s_low": s_low,
+                       "params": {}, "uniq": u, "uniq_selected": sel}
+                if guide_hi is not None:
+                    # geometry path keeps the adopted low-pass gate (S7)
+                    s_hi = F.interpolate(
+                        s_low.reshape(1, 1, *s_low.shape[-2:]),
+                        size=guide_hi.shape[-2:], mode="bilinear",
+                        align_corners=False)
+                    out["s_hi"] = s_hi
+                    out["m_hi"] = self.geo.mask_of(s_hi)
+            return out
+
         if self.arm == "SHAPE3":
             # distance-field reparameterisation: the field is free, the mask is
             # a thresholded profile of it, so iso-contour regularity is a
@@ -237,7 +427,8 @@ class AmortModel(nn.Module):
         # P3': no Phi anywhere on this path.
         with no_autocast(feat.device.type):
             s_low = self.geo(feat.float(), None if extra is None else extra.float(),
-                             cond.float(), inject)              # (1,1,gh,gw) in (-3,3)
+                             cond.float(), inject,
+                             inject_logit)                      # (1,1,gh,gw) in (-3,3)
             out = {"m_low": self.geo.mask_of(s_low)[0, 0],
                    "s_low": s_low[0, 0], "params": {}}
             if guide_hi is not None:
@@ -290,11 +481,22 @@ class AmortModel(nn.Module):
             "geom_mode": self.geom_mode,
             "geom_dim": self.geom_dim,
             "geom_code_dim": self.geom_code_dim,
+            "pch_impl": self.pch_impl,
+            "pch_size": getattr(self, "pch_size", None),
             "pch": (self.pch.facts() if self.pch is not None else None),
+            "uniq": (self.geo.facts() if self.arm == "UNIQ" else None),
             "pooled_w": bool(getattr(self.geo, "pooled_w", False)),
             "use_center_prior_channel": self.use_center_prior_channel,
             "has_semantic_head": self.sem is not None,
             "cond_dim": self.cond.out_dim,
+            # EPR-018..023 B-4 audit columns; None/False for the live four
+            "is_new_arm": self.is_new_arm,
+            "new_arm_defaults": self.new_arm_defaults,
+            "cond_encoder_frozen": self.cond_frozen,
+            "cond_encoder_unused": self.new_arm_defaults,
+            "arm_head": (self.geo.facts() if (self.is_new_arm
+                                              and hasattr(self.geo, "facts"))
+                         else None),
             "upsample": {"radius_low": self.upsample.radius_low,
                          "eps": self.upsample.eps,
                          "domain": list(self.upsample.domain)},

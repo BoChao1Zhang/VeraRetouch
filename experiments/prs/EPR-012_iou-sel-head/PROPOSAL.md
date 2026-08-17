@@ -102,7 +102,7 @@ baseline（ST_LANG mb16 对照臂）：top-k IoU = 0.73737
 消融行：
 
 - L1 vs MSE 回归：___
-- supervise_all_iou（8 张全监督）vs 仅赢家监督（SAM v1 口径）：___
+- supervise_all_iou（8 张全监督）vs 仅赢家监督（SAM v1 口径）：仅赢家 0.74359；vs 全监督主臂 Δ均值 −0.0004（p=0.7772）；vs mb16 对照 +0.0062（p=0.0109）；sel_is_best_frac 0.107
 - loss 权重 0.05 vs 1.0（相对 BCE=1.0）：___
 - +stability score 兜底 vs 纯 argmax：___
 - 保留原 CE(sel) 蒸馏与 IoU 回归并联 vs 完全替换：___

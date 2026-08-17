@@ -313,6 +313,12 @@ GENCTX_DIR = WHERE_B_READ_ROOT / "genwhere"        # READ: arms stream from this
 GENCTX_WRITE_DIR = WHERE_B_ROOT / "genwhere"       # WRITE: make_generated_context
 GENCTX_SHARD_BYTES = 1 * 1024**3
 RUN_ROOT = Path("/home/bc/data/runs/where_b")
+# AMD-8: the construction-side geometry parameters, materialised on local disk.
+# They live in the databuild projection (``canonical_candidates.payload``), which
+# is Postgres -- unreachable from the training environment and unopenable per
+# sample -- and NOT in the published ``.vrmeta.json``.  Rebuild with
+# ``scripts/export_construct_geometry.py``.
+CONSTRUCT_GEOM_DB = RUN_ROOT / "construct_geometry.sqlite3"
 REPORT_DIR = Path(
     "/home/bc/VeraRetouch/experiments/Q3VL_metacanvas_where_what_20260804/where_b"
 )

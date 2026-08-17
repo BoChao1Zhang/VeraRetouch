@@ -63,9 +63,20 @@ def percentile(xs: Sequence[float], p: float) -> float | None:
     """**nearest-rank** order statistic (amendment A-6), i.e. the equivalent of
     ``numpy.quantile(..., method="nearest")`` -- NOT an interpolated quantile.
     n=400 median is the 201st sorted element; the two differ by ~4e-4 here, which
-    matters only because the gates are hard thresholds."""
+    matters only because the gates are hard thresholds.
+
+    ``p`` is a **fraction in [0, 1]**, not a percentage.  Passing 90 used to
+    fall through to ``s[-1]`` and return the maximum, which is indistinguishable
+    from a legitimate answer in a published board -- every amort board carried
+    ``p10 == p25 == p75 == p90 == max`` for weeks before an analysis caught it.
+    A percentage-shaped argument is therefore an error, not a clamp.
+    """
     if not xs:
         return None
+    if p > 1:
+        raise ValueError(
+            f"percentile() takes a fraction in [0,1], got {p}; pass "
+            f"{p / 100:g} for the {p:g}th percentile")
     s = sorted(xs)
     if p <= 0:
         return s[0]
