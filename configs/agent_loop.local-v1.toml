@@ -1,0 +1,74 @@
+[agent_loop]
+campaign_id = "local-v2-pilot"
+prompt_revision = "local-agent-v1"
+databuild_config = "../databuild.prod-l8-local400k-20260812.toml"
+terra_concurrency_target = 16
+renderer_concurrency = 3
+validator_concurrency = 1
+max_global_proposals = 6
+max_local_proposals = 3
+max_local_repairs = 1
+min_committed_leaves = 2
+max_committed_leaves = 6
+rejected_asset_ttl_days = 30
+request_lease_seconds = 180
+
+[checkpoint]
+backend = "postgres"
+dsn_env = "VERARETOUCH_AGENT_POSTGRES_DSN"
+required_tablespace = "agent_loop_local"
+minimum_free_bytes = 483183820800
+
+[artifacts]
+root = "/mnt/ramstage/agent_loop/local-v2-pilot"
+landing_enabled = true
+archive_root = "/mnt/nfs/bc/data/datasets"
+archive_group = "artifacts/local-v2-pilot"
+plan_root = "/home/bc/data/agent_loop/local-v2-pilot/plans"
+meta_staging = "/home/bc/data/agent_loop/local-v2-pilot/meta"
+catalog_db = "/var/cache/veradata/global.sqlite3"
+land_watermark_bytes = 8589934592
+land_min_interval_seconds = 300
+land_min_groups = 25
+land_free_bytes_floor = 4294967296
+
+[catalog]
+annotations = "/home/bc/data/scratch/lut_reannotate/out/annotations.closed-v1.jsonl"
+# B11 item 1 (R7.1): the online local retrieval reads this table; graph build
+# asserts it is mounted.
+segment_fingerprints = "/home/bc/data/scratch/lut_reannotate/out/segment_fingerprints.v1.jsonl"
+global_major_limit = 3
+global_per_major_limit = 7
+local_limit = 9
+reach_limit = 300
+
+[source_annotation]
+reasoning_effort = "high"
+
+[terra]
+endpoint = "provider-c-lane-1"
+model = "gpt-5.6-terra"
+allow_uncached_provider = true
+reasoning_effort = "low"
+temperature = 0.1
+max_output_tokens = 2048
+timeout_seconds = 180.0
+attempts = 3
+
+[validator]
+enabled = false
+endpoint = "local"
+temperature = 0.1
+max_output_tokens = 1024
+timeout_seconds = 90.0
+attempts = 3
+
+[render]
+backend = "cpu_lut"
+renderer_revision = "agent-cpu-lut-strength-v2"
+search_steps = 5
+clip_fraction_max = 0.01
+
+[retention]
+keep_audit_forever = true
+rejected_image_days = 30
