@@ -464,10 +464,16 @@ def test_the_flag_surface_is_the_task_card_s():
 
 
 def test_the_frozen_block_survives_the_subclass():
+    import math as _math
+
+    from q3vl.whatb import splits as _S
+
+    n = _S.active_dataset_version().train_normal_n
     cfg = E.Epr030Config(loss_level=1)
-    assert cfg.train_n == 93934
+    assert cfg.train_n == n
     assert (cfg.batch_samples, cfg.queries_per_sample) == (32, 256)
-    assert cfg.steps_per_epoch == 2936 and cfg.total_steps == 117440
+    assert cfg.steps_per_epoch == _math.ceil(n / 32)
+    assert cfg.total_steps == cfg.steps_per_epoch * 40
     assert cfg.clamp == "two" and cfg.hc_eps == 1e-3
     with pytest.raises(ValueError, match="ladder at level 1"):
         E.Epr030Config(loss_level=3)
@@ -550,7 +556,7 @@ def test_the_run_record_freezes_the_new_sources_and_the_step0_witness():
     assert rec["epr030"]["step0"]["step0_identity_asserted"] == 1.0
     assert rec["epr030"]["weights"]["pure_l1"] is True
     assert rec["epr030"]["clamp_grad"] == "st"
-    assert rec["frozen_block"]["train_normal_only_n"] == 93934
+    assert rec["frozen_block"]["train_normal_only_n"] == cfg.train_n
     groups = {g["name"]: g for g in rec["epr030"]["optimizer_groups"]}
     assert groups["qdec_query_prior"]["lr"] == pytest.approx(cfg.base_lr * 0.1)
     # the output head sits in the 0.1x group too: its bias IS the shared geometry

@@ -13,11 +13,13 @@ Two things are pinned here:
 
 from __future__ import annotations
 
+import argparse
 import math
 
 import pytest
 
 from q3vl.whatb import caliber as K
+from q3vl.whatb import splits as S
 from q3vl.whatb.arms import affonly as AFF
 from q3vl.whatb.arms import carrier as CAR
 from q3vl.whatb.arms import idgate as IG
@@ -147,8 +149,11 @@ def test_frozen_pair_is_unchanged_on_every_arm(split: str, b: int, q: int) -> No
     """The arithmetic half of "32x256 / 64x128 behave exactly as before"."""
     assert K.parse_batch_split(split) == (b, q)
     assert b * q == 8192
-    spe = K.steps_per_epoch_of(93934, b)
-    assert (spe, spe * 40) == ((2936, 117440) if b == 32 else (1468, 58720))
+    # the EPR-024 board's own口径 (v20260804) still gives its published numbers
+    spe024 = K.steps_per_epoch_of(K.FROZEN_TRAIN_NORMAL_N, b)
+    assert (spe024, spe024 * 40) == ((2936, 117440) if b == 32 else (1468, 58720))
+    # the arms' defaults follow the ACTIVE index口径
+    spe = K.steps_per_epoch_of(K.default_train_normal_n(), b)
 
     aff = AFF.AffineOnlyConfig(batch_samples=b, queries=q)
     assert (aff.colors_per_step, aff.batch_split) == (8192, split)
@@ -227,3 +232,142 @@ def test_every_arm_reaches_469_and_18760_on_the_epr030_caliber() -> None:
     assert (aq.batch_samples, aq.queries) == (256, 8192)
     assert math.ceil(n / aq.batch_samples) * aq.epochs == 18760
     assert aq.lr == 1e-3
+
+
+# --------------------------------------------------------------------------- #
+# 5. the口径 gate: ``apply_dataset_version`` (DATA-P45)
+# --------------------------------------------------------------------------- #
+OLD_ROOT = str(S.DATASET_VERSIONS["v20260804"].root)
+NEW_ROOT = str(S.DATASET_VERSIONS["cut-p45"].root)
+
+
+@pytest.fixture(autouse=True)
+def _restore_active_dataset_version():
+    """Every test in this file leaves the process on the default口径."""
+    before = S.active_dataset_version()
+    try:
+        yield
+    finally:
+        S.use_dataset_version(before, force=True)
+
+
+def _parser(*, root: bool = False) -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser()
+    K.add_caliber_arguments(ap, data=False, batch_split=False, base_lr=False)
+    if root:
+        ap.add_argument("--dataset-root", default=None)
+    return ap
+
+
+def test_apply_dataset_version_defaults_to_the_registered_default() -> None:
+    args = _parser().parse_args([])
+    assert args.dataset_version == S.DEFAULT_DATASET_VERSION
+    assert K.dataset_version_given(args) is False
+    ver = K.apply_dataset_version(args)
+    assert ver.name == S.DEFAULT_DATASET_VERSION == "cut-p45"
+    assert S.active_dataset_version().name == "cut-p45"
+    assert args.dataset_version == "cut-p45"
+
+
+def test_apply_dataset_version_switches_explicitly() -> None:
+    args = _parser().parse_args(["--dataset-version", "v20260804"])
+    assert K.dataset_version_given(args) is True
+    ver = K.apply_dataset_version(args)
+    assert (ver.name, str(ver.root)) == ("v20260804", OLD_ROOT)
+    assert S.active_dataset_version().name == "v20260804"
+    assert ver.train_normal_n == 93934
+    assert K.default_train_normal_n() == 93934
+
+
+def test_switching_after_an_index_has_been_read_is_refused() -> None:
+    """Not a "switch twice is fine" test: the refusal is what stops a mixed run."""
+    S.use_dataset_version("v20260804", force=True)
+    S._INDEX_READ = True                       # what load_index sets
+    with pytest.raises(AssertionError, match="mid-process"):
+        K.apply_dataset_version(_parser().parse_args(
+            ["--dataset-version", "cut-p45"]))
+    # the same口径 again is a no-op, not a refusal
+    assert K.apply_dataset_version(_parser().parse_args(
+        ["--dataset-version", "v20260804"])).name == "v20260804"
+
+
+def test_an_unregistered_dataset_root_is_refused(tmp_path) -> None:
+    args = _parser(root=True).parse_args(["--dataset-root", str(tmp_path)])
+    with pytest.raises(AssertionError, match="not a registered dataset version"):
+        K.apply_dataset_version(args)
+
+
+def test_an_unregistered_dataset_version_name_is_refused() -> None:
+    with pytest.raises(SystemExit):            # argparse choices
+        _parser().parse_args(["--dataset-version", "p50"])
+    with pytest.raises(ValueError, match="unknown dataset version"):
+        S.dataset_version("p50")
+
+
+def test_dataset_root_alone_resolves_the_version_from_the_root() -> None:
+    """The default of --dataset-version is a string, never None, so a lone
+    --dataset-root used to be reported as a conflict with a flag nobody typed."""
+    args = _parser(root=True).parse_args(["--dataset-root", OLD_ROOT])
+    assert args.dataset_version == S.DEFAULT_DATASET_VERSION  # the default
+    assert K.dataset_version_given(args) is False
+    ver = K.apply_dataset_version(args)
+    assert ver.name == "v20260804"
+    assert args.dataset_version == "v20260804"     # filled in from the root
+    assert args.dataset_root == OLD_ROOT
+    assert S.active_dataset_version().name == "v20260804"
+
+
+def test_root_and_version_agreeing_is_accepted_disagreeing_is_refused() -> None:
+    args = _parser(root=True).parse_args(
+        ["--dataset-root", OLD_ROOT, "--dataset-version", "v20260804"])
+    assert K.apply_dataset_version(args).name == "v20260804"
+
+    bad = _parser(root=True).parse_args(
+        ["--dataset-root", OLD_ROOT, "--dataset-version", "cut-p45"])
+    with pytest.raises(SystemExit, match="pass one of the two"):
+        K.apply_dataset_version(bad)
+
+
+def test_the_flag_is_spelled_and_defaulted_the_same_on_every_consumer() -> None:
+    """Eight runners + the two producers answer to the same three facts."""
+    from q3vl.whatb.scripts import build_eval_bundle as BE
+    from q3vl.whatb.scripts import build_zcache as BZ
+    from q3vl.whatb.scripts import run_carrier_arm as RC
+    from q3vl.whatb.scripts import run_idgate_arm as RI
+
+    parsers = {
+        "build_zcache": BZ.build_parser(),
+        "build_eval_bundle": BE.build_parser(),
+        "run_carrier_arm": RC.build_parser(),
+        "run_idgate_arm": RI.build_parser(),
+    }
+    for name, ap in parsers.items():
+        action = next(a for a in ap._actions
+                      if "--dataset-version" in (a.option_strings or []))
+        assert action.default == S.DEFAULT_DATASET_VERSION, name
+        assert tuple(action.choices) == S.DATASET_VERSION_CHOICES, name
+
+
+# --------------------------------------------------------------------------- #
+# 6. total_steps can no longer disagree with train_n (affonly)
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("n", [93934, 80269, 119828])
+def test_affonly_total_steps_is_derived_from_this_configs_train_n(n: int) -> None:
+    cfg = AFF.AffineOnlyConfig(train_n=n)
+    assert cfg.steps_per_epoch == math.ceil(n / cfg.batch_samples)
+    assert cfg.total_steps == cfg.steps_per_epoch * cfg.epochs
+    b = 256
+    cfg2 = AFF.AffineOnlyConfig(train_n=n, batch_samples=b, queries=8192)
+    assert cfg2.total_steps == math.ceil(n / b) * 40
+    # an explicit horizon (the --total-steps smoke path) is still honoured
+    assert AFF.AffineOnlyConfig(train_n=n, total_steps=500).total_steps == 500
+    with pytest.raises(ValueError):
+        AFF.AffineOnlyConfig(train_n=n, total_steps=-1)
+
+
+def test_affonly_defaults_follow_the_active_dataset_version() -> None:
+    for name, want in (("v20260804", 93934), ("cut-p45", 80269)):
+        S.use_dataset_version(name, force=True)
+        cfg = AFF.AffineOnlyConfig()
+        assert cfg.train_n == want
+        assert cfg.total_steps == math.ceil(want / 32) * 40

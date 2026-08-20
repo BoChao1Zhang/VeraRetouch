@@ -24,6 +24,7 @@ Groups, in the order the proposal states them:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
 from pathlib import Path
@@ -32,6 +33,7 @@ import numpy as np
 import pytest
 import torch
 
+from q3vl.whatb import splits as _S
 from q3vl.whatb.arms import affonly as A
 from q3vl.whatb.colorimetry import srgb_to_lab
 from q3vl.whatb.criteria import CriterionNotComputed, PREREGISTERED_KEYS
@@ -198,17 +200,39 @@ def test_proposition_1_holds_for_the_arm() -> None:
     assert out["passed"] and out["value"] < A.LINEARITY_TOL
     assert out["clamp"].startswith("none")
     assert set(out["per_alpha"]) == {f"alpha_{a}" for a in (0.1, 0.3, 0.5, 0.7, 0.9)}
+    assert out["binding"] is True and "waiver" not in out
+
+
+def test_assertion_2_still_raises_on_the_main_arm_when_the_sharing_is_not_wired() -> None:
+    """The 档 narrowing must leave ``geo_opacity``'s raise intact.
+
+    The real failure it is written for: ``chol_diag`` is back on the condition path
+    (1e-3 per condition) and the carrier is no longer handed the shared tuple, so
+    ``w_i`` moves with theta and ``f^par`` stops being linear in it.
+    """
+    head = _leak_geometry(perturb(make_head()), "chol_diag")
+    head.geometry_terms = lambda: None                    # type: ignore[method-assign]
+    with pytest.raises(AssertionError, match="assertion 2 FAILED"):
+        A.assert_affine_linearity(head, some_z(8), n_pairs=4, grid_n=9)
 
 
 def test_proposition_1_fails_under_full_generation() -> None:
-    """Negative control: with mu/Sigma/o generated, ``w_i`` moves with theta."""
+    """Negative control: with mu/Sigma/o generated, ``w_i`` moves with theta.
+
+    ``--share none`` is EPR-024's own row, where proposition 1 has no premise, so the
+    deviation is **measured and recorded** and the tolerance is not enforced
+    (``SHARE_ASSERTION_WAIVERS['none']['affine_linearity_maxdev']``).
+    """
     head = perturb(make_head(share="none"))
     out = A.assert_affine_linearity(head, some_z(8), n_pairs=4, grid_n=9,
                                     raise_on_fail=False)
     assert not out["passed"]
     assert out["value"] > 1e-3
-    with pytest.raises(AssertionError, match="assertion 2 FAILED"):
-        A.assert_affine_linearity(head, some_z(8), n_pairs=4, grid_n=9)
+    # waived: the same call with raise_on_fail=True must NOT raise on this 档 ...
+    same = A.assert_affine_linearity(head, some_z(8), n_pairs=4, grid_n=9)
+    assert same["binding"] is False and not same["passed"]
+    assert same["value"] > 1e-3                    # ... and the number is still there
+    assert "affine_linearity_maxdev" in A.assertion_waivers(head.cfg)
 
 
 def test_proposition_1_fails_under_glut_shared_geometry() -> None:
@@ -218,6 +242,9 @@ def test_proposition_1_fails_under_glut_shared_geometry() -> None:
     out = A.assert_affine_linearity(head, some_z(8), n_pairs=4, grid_n=9,
                                     raise_on_fail=False)
     assert not out["passed"]
+    # and it is waived rather than fatal on this 档, with the number kept
+    same = A.assert_affine_linearity(head, some_z(8), n_pairs=4, grid_n=9)
+    assert same["binding"] is False and same["value"] == out["value"]
 
 
 def test_linearity_assertion_needs_fp32() -> None:
@@ -234,15 +261,86 @@ def test_assertion_1_geometry_is_bit_identical() -> None:
     head = perturb(make_head())
     out = A.assert_shared_geometry_identical(head, some_z(8), n_probe=8)
     assert out["identical"] and out["value"] == 1.0 and out["n"] == 8
+    # the main arm binds on all three tensors and waives nothing
+    assert out["binding"] is True and out["identical_binding"] is True
+    assert out["compared"] == ["precision", "logdet", "opacity"]
+    assert "waiver" not in out
+    assert A.assertion_waivers(head.cfg) == {}
 
 
-@pytest.mark.parametrize("share", ["none", "geo"])
-def test_assertion_1_fails_when_the_geometry_is_conditional(share: str) -> None:
-    head = perturb(make_head(share=share))
+def test_assertion_1_binds_on_precision_logdet_only_under_share_geo() -> None:
+    """``--share geo`` is GLUT's Shared Geometry: mu/Sigma shared, ``o`` generated.
+
+    PROPOSAL 3.4-(12).  Assertion 1 is a statement about (precision, logdet) there;
+    the cross-condition dispersion of ``o`` is a recorded column, not an assertion.
+    """
+    head = perturb(make_head(share="geo"))
+    out = A.assert_shared_geometry_identical(head, some_z(8), n_probe=8)   # must not raise
+    assert out["binding"] is True
+    assert out["compared"] == ["precision", "logdet"]
+    assert out["identical_binding"] is True
+    assert out["n_conditions_differing_binding"] == 0
+    # ``o`` really is condition-dependent here, and that is measured, not asserted
+    assert out["identical"] is False
+    assert out["opacity_max_abs_dev"] > 0.0
+    assert out["per_tensor_max_abs_dev"]["precision"] == 0.0
+    assert out["per_tensor_max_abs_dev"]["logdet"] == 0.0
+    assert "shared_geom_identical.opacity" in out["waiver"]
+
+
+def test_assertion_1_is_waived_whole_under_share_none() -> None:
+    """``--share none`` is Full Generation (= EPR-024): nothing is shared."""
+    head = perturb(make_head(share="none"))
+    out = A.assert_shared_geometry_identical(head, some_z(8), n_probe=8)   # must not raise
+    assert out["binding"] is False
+    assert out["compared"] == []
+    assert out["identical_binding"] is None
+    # still measured and written down
+    assert out["identical"] is False and out["n_conditions_differing"] > 0
+    assert out["max_abs_dev"] > 0.0
+    assert "shared_geom_identical" in out["waiver"]
+    assert set(A.assertion_waivers(head.cfg)) == {
+        "shared_geom_identical", "affine_linearity_maxdev", "ip_a_assertion3"}
+
+
+def _leak_geometry(head: A.AffineOnlyHead, field: str, *, delta: float = 1e-3):
+    """Put ONE geometry tensor back on the condition path, by ``delta`` per call.
+
+    This is the wiring bug assertion 1 exists to catch: the shared table is declared
+    but the forward still reads a per-condition value.
+    """
+    real = head.theta
+
+    def leaky(z):
+        leaky.i += 1
+        p = real(z)
+        return dataclasses.replace(p, **{field: getattr(p, field) + delta * leaky.i})
+
+    leaky.i = 0
+    head.theta = leaky                       # type: ignore[method-assign]
+    return head
+
+
+@pytest.mark.parametrize("share", ["geo_opacity", "geo"])
+def test_assertion_1_still_raises_when_a_shared_tensor_moves_by_1e_3(share: str) -> None:
+    """Narrowing the compared set must not make the real failure survivable.
+
+    ``chol_diag`` drives both ``precision`` and ``logdet``, which BOTH 档 assert.
+    """
+    head = _leak_geometry(perturb(make_head(share=share)), "chol_diag")
     with pytest.raises(AssertionError, match="assertion 1 FAILED"):
         A.assert_shared_geometry_identical(head, some_z(8), n_probe=8)
-    out = A.assert_shared_geometry_identical(head, some_z(8), n_probe=8, raise_on_fail=False)
-    assert not out["identical"] and out["n_conditions_differing"] > 0
+
+
+def test_assertion_1_still_raises_when_the_shared_opacity_moves_on_the_main_arm() -> None:
+    """``o`` is in the compared set under ``geo_opacity`` and only there."""
+    head = _leak_geometry(perturb(make_head(share="geo_opacity")), "opacity_logit")
+    with pytest.raises(AssertionError, match="assertion 1 FAILED"):
+        A.assert_shared_geometry_identical(head, some_z(8), n_probe=8)
+    # the same leak under --share geo is the 档's own definition, so it is recorded
+    g = _leak_geometry(perturb(make_head(share="geo")), "opacity_logit")
+    out = A.assert_shared_geometry_identical(g, some_z(8), n_probe=8)
+    assert out["opacity_max_abs_dev"] > 0.0 and out["identical_binding"] is True
 
 
 def test_assertion_3_ip_a_par_column_equals_the_output_blend() -> None:
@@ -251,6 +349,7 @@ def test_assertion_3_ip_a_par_column_equals_the_output_blend() -> None:
     pairs = [(z[0], "warm", z[1], "cool"), (z[2], "cool", z[3], "warm")]
     out = A.interp_ip_a(head, pairs, FakeBank(), grid_n=9)
     assert out["assertion3_passed"], out["assertion3_maxdev"]
+    assert out["assertion3_binding"] is True and out["assertion3_waiver"] is None
     assert out["n"] == 2
     assert set(out["per_alpha"]) == {"f_cond", "f_par", "out_mix"}
     assert len(out["per_alpha"]["f_cond"]) == 6            # the six App B.3 alphas
@@ -262,6 +361,9 @@ def test_assertion_3_fails_under_full_generation() -> None:
     z = some_z(2)
     out = A.interp_ip_a(head, [(z[0], "warm", z[1], "cool")], FakeBank(), grid_n=9)
     assert not out["assertion3_passed"]
+    # not a claim on this 档: reported with its waiver, never raised (it never was)
+    assert out["assertion3_binding"] is False
+    assert "Full Generation" in out["assertion3_waiver"]
 
 
 def test_ip_b_reports_every_path_quantity_with_its_floor() -> None:
@@ -647,14 +749,20 @@ def test_runner_flags_carry_the_proposal_defaults() -> None:
     assert (args.clamp, args.mu_init, args.zero_init_heads) == ("two", "grid", True)
     assert (args.shared_lr_scale, args.base_lr) == (0.1, 1e-3)
     assert (args.lambda_hc, args.lambda_sparse) == (10.0, 0.001)
-    # --total-steps 0 = "the horizon the measured population implies"; on the
-    # frozen sft2seg split that is still 40 * ceil(93934 / 32) = 117,440.
+    # --total-steps 0 = "the horizon the measured population implies": on the
+    # ACTIVE index口径 that is 40 * ceil(n / 32).
     assert args.total_steps == 0 and args.eval_split == "V_what"
     assert (args.data, args.batch_split) == ("v2seg", "32x256")
     assert args.readout == "seg_color"
+    assert args.dataset_version == _S.DEFAULT_DATASET_VERSION
+    n = _S.active_dataset_version().train_normal_n
     cfg = R.config_from_args(args)
-    assert cfg == A.AffineOnlyConfig()
-    assert cfg.total_steps == 117440 and cfg.steps_per_epoch == 2936
+    assert cfg == A.AffineOnlyConfig(train_n=n,
+                                     total_steps=math.ceil(n / 32) * 40)
+    assert cfg.steps_per_epoch == math.ceil(n / 32)
+    assert cfg.total_steps == cfg.steps_per_epoch * 40
+    # the口径 the published boards ran on
+    assert A.FROZEN["train_n"] == 93934 and A.FROZEN["total_steps"] == 117440
 
 
 def test_runner_resolves_the_epr030_caliber() -> None:

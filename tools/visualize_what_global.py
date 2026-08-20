@@ -21,7 +21,14 @@ from q3vl.whatb.colorimetry import delta_e00_srgb
 from q3vl.whatb.evaldata import SampleStore
 from q3vl.whatb.lutdata import LutBank
 from q3vl.whatb.scripts.run_epr030_arm import Epr030Config, Epr030Model
-from q3vl.whatb.splits import load_index, normal_only
+from q3vl.whatb.splits import (
+    DATASET_VERSION_CHOICES,
+    DEFAULT_DATASET_VERSION,
+    active_dataset_version,
+    load_index,
+    normal_only,
+    use_dataset_version,
+)
 from q3vl.whatb.zcache import ZCache
 
 
@@ -50,7 +57,13 @@ def _model(checkpoint: Path) -> Epr030Model:
     return model
 
 
-def render(checkpoint: Path, out_dir: Path, metadata: Path) -> None:
+def render(checkpoint: Path, out_dir: Path, metadata: Path,
+           dataset_version: str | None = None) -> None:
+    # the index口径 is selected before the index is read; ``None`` = the
+    # process-wide default (q3vl.whatb.splits.DEFAULT_DATASET_VERSION), which is
+    # the same default the arm runners carry.
+    ver = (use_dataset_version(dataset_version) if dataset_version
+           else active_dataset_version())
     rows = {row.sample_id: row for row in normal_only(load_index("V_what"))}
     selected = [rows[sample_id] for sample_id in SAMPLE_IDS]
     if any(row.task_type != "style" for row in selected):
@@ -121,6 +134,10 @@ def render(checkpoint: Path, out_dir: Path, metadata: Path) -> None:
     metadata.write_text(json.dumps({
         "checkpoint": str(checkpoint),
         "scope": "Global-boundary style samples only; alpha=1 everywhere.",
+        "dataset_version": ver.name,
+        "dataset_root": str(ver.root),
+        "dataset_version_facts": ver.facts(),
+        "n_pool": len(rows),
         "records": records,
     }, indent=2), encoding="utf-8")
 
@@ -133,8 +150,15 @@ def main() -> None:
                         default=Path("docs/assets/what_global_20260816"))
     parser.add_argument("--metadata", type=Path,
                         default=Path("docs/assets/what_global_20260816/what_global_e030_mlp.json"))
+    parser.add_argument("--dataset-version", default=DEFAULT_DATASET_VERSION,
+                        choices=list(DATASET_VERSION_CHOICES),
+                        help="sft2seg index口径 the V_what pool is read from "
+                             "(q3vl.whatb.splits.DATASET_VERSIONS); same "
+                             "spelling and default as the arm runners.  "
+                             "Recorded in the metadata JSON")
     args = parser.parse_args()
-    render(args.checkpoint, args.out_dir, args.metadata)
+    render(args.checkpoint, args.out_dir, args.metadata,
+           dataset_version=args.dataset_version)
 
 
 if __name__ == "__main__":

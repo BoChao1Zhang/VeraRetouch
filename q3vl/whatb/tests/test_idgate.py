@@ -28,6 +28,7 @@ import pytest
 import torch
 
 from q3vl.whatb import criteria as _criteria
+from q3vl.whatb import splits as _splits_mod
 from q3vl.whatb import guards as _guards
 from q3vl.whatb import queries as _queries
 from q3vl.whatb.arms import idgate as ig
@@ -98,14 +99,19 @@ def test_defaults_are_the_proposals_main_arm():
 
 
 def test_frozen_batch_organisation():
+    n = _splits_mod.active_dataset_version().train_normal_n
     c = ig.IdGateConfig()
     assert c.colors_per_step == 8192 == 32 * 256
-    assert c.steps_per_epoch == 2936 == math.ceil(93934 / 32)
-    assert c.total_steps == 117_440 == 2936 * 40
+    assert c.train_n == n
+    assert c.steps_per_epoch == math.ceil(n / 32)
+    assert c.total_steps == c.steps_per_epoch * 40
     assert c.n_pairs_per_step == 8192 * 4     # NOTES 12: pairs enter the batch...
-    assert ig.assert_frozen_organisation(c)["total_steps"] == 117_440
+    assert ig.assert_frozen_organisation(c)["total_steps"] == c.total_steps
     # ... and the step count stays EPR-024's
     assert c.total_steps == ig.IdGateConfig(gate=False).total_steps
+    # the EPR-024 board's own口径 (v20260804) is still what the record compares to
+    assert ig.FROZEN_TRAIN_N == 93934 and ig.FROZEN_STEPS_PER_EPOCH == 2936
+    assert ig.IdGateConfig(train_n=93934).total_steps == 117_440
 
 
 def test_frozen_organisation_records_a_capacity_row_instead_of_refusing():
@@ -116,12 +122,19 @@ def test_frozen_organisation_records_a_capacity_row_instead_of_refusing():
     not, and the record says exactly which numbers differ.
     """
     matched = ig.assert_frozen_organisation(
-        ig.IdGateConfig(batch_samples=64, queries=128))
+        ig.IdGateConfig(batch_samples=64, queries=128, train_n=93934))
     assert matched["colours_per_step"] == 8192
     assert matched["batch_split_step_matched_to_epr024"] is True
     assert matched["differs_from_epr024"] == {
         "batch_samples": [64, 32], "queries": [128, 256],
         "steps_per_epoch": [1468, 2936], "total_steps": [58720, 117440]}
+    # on the default (cut-p45)口径 the same split differs in train_n too
+    n = _splits_mod.active_dataset_version().train_normal_n
+    cut = ig.assert_frozen_organisation(
+        ig.IdGateConfig(batch_samples=64, queries=128))
+    assert cut["differs_from_epr024"]["train_n"] == [n, 93934]
+    assert cut["differs_from_epr024"]["steps_per_epoch"] == \
+        [math.ceil(n / 64), 2936]
 
     big = ig.assert_frozen_organisation(
         ig.IdGateConfig(batch_samples=256, queries=8192, train_n=119828,
@@ -615,6 +628,63 @@ def test_publication_gate_refuses_a_board_with_a_missing_column():
                              steps_row={c: 0 for c in ig.step_columns(cfg)})
 
 
+def _drop_field_columns(board):
+    """What ``--no-gate`` actually produces: no field columns at all."""
+    for key in ("field_gt", "field_const", "field_shuffle"):
+        board["criteria_columns"].pop(key, None)
+    return board
+
+
+def test_no_gate_waives_exactly_the_three_field_columns():
+    """The waiver list is by name, and it is empty on every gated 档."""
+    assert runner.waived_criteria(tiny_cfg(gate=False)) == (
+        "field_gt", "field_const", "field_shuffle")
+    assert runner.waived_criteria(tiny_cfg()) == ()
+    # nothing else in the pre-registered table is touched
+    kept = set(ig.REQUIRED_CRITERIA) - set(runner.NO_GATE_WAIVED_CRITERIA)
+    assert {"gate_identity_check", "gate_u_hist", "strength_dE_u", "dlib_u",
+            "headline_normal_only", "interp_grid"} <= kept
+
+
+def test_no_gate_board_publishes_without_the_three_field_columns():
+    """Row 1 (= EPR-024) has no u consumer, so the field columns have no quantity."""
+    cfg = tiny_cfg(gate=False)
+    board = _drop_field_columns(_fake_board(cfg))
+    rep = ig.publish_arm_board(board, cfg=cfg,
+                               steps_row={c: 0 for c in ig.step_columns(cfg)},
+                               waived=runner.waived_criteria(cfg))
+    assert set(rep["criteria"]["required"]) == (
+        set(ig.REQUIRED_CRITERIA) - set(runner.NO_GATE_WAIVED_CRITERIA))
+
+
+def test_a_gated_row_still_refuses_a_board_missing_field_const():
+    """The waiver must not leak onto the main arm: with the gate on, field_const binds."""
+    cfg = tiny_cfg()
+    assert cfg.gate
+    board = _fake_board(cfg)
+    del board["criteria_columns"]["field_const"]
+    with pytest.raises(_criteria.CriterionNotComputed, match="field_const"):
+        ig.publish_arm_board(board, cfg=cfg,
+                             steps_row={c: 0 for c in ig.step_columns(cfg)},
+                             waived=runner.waived_criteria(cfg))
+    # ... and the default (no `waived` argument at all) is the verbatim table
+    with pytest.raises(_criteria.CriterionNotComputed, match="field_const"):
+        ig.publish_arm_board(board, cfg=cfg,
+                             steps_row={c: 0 for c in ig.step_columns(cfg)})
+
+
+@pytest.mark.parametrize("key", ["gate_identity_check", "strength_dE_u", "dlib_u",
+                                 "gate_u_hist", "interp_grid"])
+def test_the_no_gate_waiver_covers_nothing_but_the_field_columns(key: str):
+    cfg = tiny_cfg(gate=False)
+    board = _drop_field_columns(_fake_board(cfg))
+    del board["criteria_columns"][key]
+    with pytest.raises(_criteria.CriterionNotComputed, match=key):
+        ig.publish_arm_board(board, cfg=cfg,
+                             steps_row={c: 0 for c in ig.step_columns(cfg)},
+                             waived=runner.waived_criteria(cfg))
+
+
 def test_probe_run_adds_L_gate_to_the_required_step_columns():
     cfg = tiny_cfg(gate_zhead="linear")
     assert "L_gate" in ig.step_columns(cfg)
@@ -886,15 +956,20 @@ def test_runner_parser_defaults_match_the_proposal():
     assert args.lut_resample == "none" and args.colorspan_samples == 256
     cfg = runner.config_from_args(args)
     assert (cfg.batch_samples, cfg.queries) == (32, 256)
-    assert cfg.total_steps == 117_440
+    # the horizon is ceil(n / B) * epochs on the ACTIVE index口径
+    _n = _splits_mod.active_dataset_version().train_normal_n
+    assert cfg.train_n == _n
+    assert cfg.total_steps == math.ceil(_n / 32) * 40
     assert cfg.gate_u_eval == ig.DEFAULT_U_EVAL
 
 
 def test_runner_no_gate_flag_gives_the_epr024_shape():
     args = runner.build_parser().parse_args(["--run-dir", "/tmp/x", "--no-gate"])
     cfg = runner.config_from_args(args)
+    cfg_gate = runner.config_from_args(runner.build_parser().parse_args(
+        ["--run-dir", "/tmp/x"]))
     assert cfg.gate is False and cfg.k_u == 1
-    assert cfg.total_steps == ig.IdGateConfig().total_steps      # step-matched (U4)
+    assert cfg.total_steps == cfg_gate.total_steps               # step-matched (U4)
 
 
 def test_runner_ablation_flags_reach_the_config():

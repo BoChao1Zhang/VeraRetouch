@@ -530,3 +530,103 @@ $PY -u -m q3vl.whatb.scripts.run_qdual_arm \
   （wave 头注释里那条「INTERPC 退化守卫固定在第 49 步」已经过期：
   `run_interpc_arm.py:767` 现在是 `if not guard_done and (due or step + 1 == total)`，
   已经挂在首次 quick eval 上，与其余五臂同口径。）
+
+---
+
+## DATA-P45-ENABLE（2026-08-18）：数据集口径化（p45 过滤后索引接线）
+
+### 落点
+
+`q3vl/whatb/splits.py` 引入 `DatasetVersion` / `DATASET_VERSIONS`，两个口径：
+`v20260804`（原始发布索引，train normal 93,934）与 `cut-p45`（默认，80,269）。
+两者指向**同一批 shard**（`SFT2SEG_SHARD_ROOT = /mnt/nfs-ro/bc/data/datasets/sft2seg-20260804`），
+索引行的 `members` 路径是绝对路径，所以过滤后的目录只有 `splits/`。
+sha1 切分规则族未动，无一行换 split。
+
+- `TRAIN_NORMAL_N` 不再是断言值，改为 `DATASET_VERSIONS["v20260804"].train_normal_n`
+  （冻结块第 1 条的历史记录，供各 runner 的 `frozen_block` 记录使用）。
+- `train_normal_rows()` 的断言改为按 `root` 解析口径、对该口径 `normal_n[split]` 断言；
+  **未注册的 root 直接 raise**（没有实测 n 就没有可断言的对象）。
+- 旗标：`--dataset-version {v20260804,cut-p45}`，默认 `cut-p45`，在
+  `caliber.add_caliber_arguments()` 注册，八个 runner 同一拼法；
+  `caliber.apply_dataset_version(args)` 在每个 `main()` 最开头调用（早于任何索引读取）。
+- `run_setup.json`：`caliber.horizon_record()` 加 `dataset_version`（口径名 / root /
+  每 split 的 n 与 normal n / 排除清单 sha256 / 规则文字）+ `l8_manifest`。
+
+### 待决策（保守默认继续，未擅自拍板）
+
+1. **只注册了两个口径**。盘上还有 `-bandcut60` / `-maskcut` / `-cut-p50` / `-cut-p75`，
+   没有实测 n，因此没有注册；`--dataset-root` 指向它们会以
+   `not a registered dataset version` 报错而不是静默跑。要用哪一个，把实测 n
+   填进 `DATASET_VERSIONS` 即可。**未改动这些目录**。
+2. **口径是进程级全局**（`use_dataset_version`），读过索引之后再切会 raise
+   （测试可以 `force=True`）。选择理由：把 root 显式穿到 ~15 个 `load_index` 调用点
+   会把改动面放大数倍；代价是它是可变全局态，靠 "读过就锁死" + run_setup 落盘挡住漂移。
+3. **`MultiZCache.mean()` 按各 member 的缓存长度加权**，缓存仍是旧的 93,934 条全量。
+   `--cond-trainmean` 这一路的均值因此仍是旧全量的均值，不是 p45 子集的均值。
+   本轮**没有改**（不在任务范围），若要用 `--cond-trainmean` 出板需先决定。
+4. **各 runner 的 `frozen_block` / `FROZEN` 记录仍钉在 `v20260804`**（93,934 / 2,936 /
+   117,440），因为已出的板都是那个口径；`measured.train_matches_frozen` 在 p45 下为
+   `false`，是如实记录不是失败。`run_g4d_arm.DEGENERACY_BINDING_MIN_STEPS`
+   （= `FROZEN["steps_per_epoch"]` = 2936）因此行为不变。
+5. **L8 不在剔除范围**：`l8_train.manifest.jsonl` 无任何 sft2seg 口径参与，两个口径下
+   L8 normal 均为 25,894（dry-run 实测）。
+
+### 本轮发现的两条必须由人决定的事
+
+6. **`q3vl/whatb/jetlut/run.py` 的 LUT 池会跟着默认口径变**：它调用
+   `train_lut_ids()` / `eval_only_lut_ids()` 且不传 `root`，默认口径切到 `cut-p45`
+   后，`train_full` 由 **3,149 → 3,103** 个 `lut_id`，`t_lut_unseen` 池由
+   **259 → 232**，`held_out`（bank 减 train）随之变大。**本轮没有改 jetlut**
+   （EPR-032 的两个 sweep 作业正在跑，"进程启动后禁改源码"）。若 EPR-032 要继续用
+   原池，需要在 `jetlut/run.py` 显式传 `root=DATASET_VERSIONS["v20260804"].root`。
+7. **本轮改源码时队列并非空的**：任务卡写"两卡空闲、队列为空"，动手前 `pueue status`
+   实测 279 条全 Done；随后 11:16:38 另有 agent 提交了 `JET_SWEEP_P1` / `JET_SWEEP_P2`
+   （EPR-032 jetlut，GPU 0/1）。本轮对 `q3vl/whatb/**` 的写入发生在 11:49-11:51。
+   已核实：这两个作业是单进程 `exec python -m q3vl.whatb.jetlut.run`，它依赖的
+   `codec/lutcode.py` / `splits.py` 在 11:16 启动时就已 import 进内存，源码改动不影响
+   在跑的进程；但这仍然是一次违反"进程启动后禁改源码"的时序，如实记录。
+
+---
+
+## DATA-P45-FIX（2026-08-18，清独立审阅 BLOCKED 的四个消费点）
+
+### 改了什么
+
+| 文件 | 改动 |
+|---|---|
+| `q3vl/whatb/caliber.py` | `--dataset-version` 改用 `_RecordExplicit` action，记录"用户是否真的敲了这个旗标"；`apply_dataset_version` 只在**显式给了 version 且与 root 不一致**时才判冲突 |
+| `q3vl/whatb/scripts/build_zcache.py` | 注册 `--dataset-version`（走 `K.add_caliber_arguments`，同拼法/同 choices/同默认）；`apply_dataset_version` 在第一次 `load_index` 之前；`setup` 记 `dataset_version` / `dataset_root` / `dataset_version_facts` / `n_index_rows`；同样三个字段写进缓存 `meta.json` |
+| `q3vl/whatb/scripts/run_carrier_arm.py` | 新增 `assert_zcache_dataset_version()`；`open_z_caches` 对每个 sft2seg split 的缓存（含 `MultiZCache` 每个 member）执行，结果落进 `run_setup.json.z_caches.*.dataset_version_check` |
+| `q3vl/whatb/scripts/build_eval_bundle.py` | 注册 `--dataset-version` 并在 `load_index` 前 apply；口径三字段进 `plan`（因此 `--dry-run` 也打印）→ 经 `**plan` 进 `meta.json` |
+| `tools/visualize_what_global.py` | 注册 `--dataset-version`，`render()` 先 `use_dataset_version` 再读索引；metadata 记口径 + `n_pool` |
+| `tools/visualize_joint_where_what.py` | 同上；`manifest.json` 加 `dataset_version` / `dataset_root` / `dataset_version_facts` |
+| `q3vl/whatb/arms/affonly.py` | `total_steps` 默认改为哨兵 `0`，`__post_init__` 由**本 config 自己的** `train_n`/`batch_samples`/`epochs` 派生；显式非零值（`--total-steps N` 冒烟路径）照旧生效 |
+| `q3vl/whatb/tests/test_caliber.py` | 新增 12 条：默认口径、显式切换、读后切换拒绝、未注册 root/未注册名拒绝、`--dataset-root` 单独给、root+version 一致/冲突、四个入口旗标拼法一致、affonly 派生 |
+| `q3vl/whatb/tests/test_zcache.py` | 新增 2 条：口径不匹配 `SystemExit`、无口径字段 `unknown` + stderr 告警、非 sft2seg split 不检 |
+
+### 待决策 / 未做（不静默拍板）
+
+8. **B1（`q3vl/whatb/jetlut/run.py`）本轮仍未修**。任务卡的条件是"若 `JET_SWEEP_P2`
+   已结束再改"。实测：动手前 `JET_SWEEP_P2`（pueue 309, pid 3555801）在跑；收尾时它
+   已 `Success`，但 **12:50:50 又起了两个新的 jetlut 作业**——pueue 311 `JET_SYNTH`
+   （pid 3799490）与 pueue 312 `JET_SWEEP_P1_M7`（pid 3799630），二者都在跑
+   `python -m q3vl.whatb.jetlut.run`，其中 `JET_SWEEP_P1_M7` 正是 `sweep --pool held_out`
+   （即 B1 所述池定义 902/948 的那条路）。按"进程启动后禁改源码"，本轮不改该文件。
+   NOTES 第 6 条的结论不变：要继续用原池必须显式传 `v20260804`。
+9. **两个 visualize 工具的默认口径保持不变（`cut-p45`，与八个 runner 同）**。核实：
+   `docs/assets/joint_*` 九个目录的 `manifest.generated_at` 全部 ≤ 2026-08-18 10:22:23，
+   而默认口径翻转（`splits.py` mtime）是 11:49:27 —— 因此**已有的所有 joint 板都是在
+   `v20260804` 下出的**，其 manifest 里没有口径字段（本轮新加的三个字段是空的）。
+   现在要重画它们必须显式 `--dataset-version v20260804`。
+   本轮**没有改这两个工具的默认值**（不改变默认行为），是否应把 viz 工具的默认钉回
+   `v20260804` 以让旧板"零参数可复现"——留给人决定。**未改动 `docs/assets/**`。**
+10. **老 z 缓存（`/home/bc/data/runs/whatb/zcache_v2seg/*.zcache.pt`）没有口径字段**，
+    新的消费侧闸门把它们判为 `unknown` 并向 stderr 响亮告警、不当成匹配、不阻断。
+    要变成硬失败需要先重建缓存（`build_zcache.py --dataset-version <口径>`），
+    或人工确认这批 `.pt` 是哪个口径 —— 留给人决定。
+11. **`assert_zcache_dataset_version` 只检 `split in splits.SPLITS` 的缓存**；
+    `l8_train` 等非 sft2seg split 不检（它们的行来自自己的 manifest，无 sft2seg 口径）。
+12. NOTES 第 3 条（`MultiZCache.mean()` 仍是旧全量均值）、审阅 NOTE 3
+    （`excluded_sha256` 是常量、运行时不核盘）、NOTE 6（`test_g4d.py:52` 的挂载门）
+    本轮**未动**，不在任务卡范围。

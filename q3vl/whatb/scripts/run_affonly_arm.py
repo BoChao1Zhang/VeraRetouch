@@ -682,7 +682,8 @@ def build_argparser() -> argparse.ArgumentParser:
     ap.add_argument("--quick-n", type=int, default=32)
 
     # --- data ---------------------------------------------------------------
-    ap.add_argument("--dataset-root", default=str(DATASET_ROOT))
+    ap.add_argument("--dataset-root", default=None,
+                    help="index root; default = the --dataset-version口径's root")
     ap.add_argument("--bank-dir", default=str(BANK_DIR))
     ap.add_argument("--maskview-root", default=MASKVIEW_ROOT)
     ap.add_argument("--base-checkpoint", default=V2SEG_CHECKPOINT)
@@ -749,7 +750,7 @@ def config_from_args(args: argparse.Namespace, *, train_n: int | None = None
     q = int(args.queries) if args.queries else q
     # --train-n is a CAP on the rows, not the population size: the population is
     # measured by the caller and handed in.
-    n = int(train_n if train_n is not None else A.FROZEN["train_n"])
+    n = int(train_n if train_n is not None else K.default_train_normal_n())
     spe = K.steps_per_epoch_of(n, b)
     return A.AffineOnlyConfig(
         data=args.data,
@@ -816,6 +817,7 @@ def _bucket_pools(args: argparse.Namespace, train_rows: Sequence[IndexRow], run_
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_argparser().parse_args(list(argv) if argv is not None else None)
+    dataset_ver = K.apply_dataset_version(args)   # fills in --dataset-root
     run_dir = Path(args.run_dir)
     if str(run_dir).startswith("/mnt/nfs"):
         raise SystemExit(
@@ -943,6 +945,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "z_source": args.z_source,
         "caliber": caliber,
         "z_caches": {t: s.facts() for t, s in controls.items()} | {"train": z_train.facts()},
+        "dataset_version": dataset_ver.facts(),
         "splits": {"train": split_facts(train_index_all),
                    args.eval_split: split_facts(eval_rows_all),
                    "n_train_used": len(train_rows), "n_eval_used": len(eval_rows)},
@@ -996,6 +999,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         board = A.build_arm_board(rows, split=args.eval_split, extra_columns=extra,
                                   seed=args.seed, published=False)
         board["quick"] = True
+        # a waived assertion is a visible line on the row, never a silent skip
+        board["assertion_waivers"] = A.assertion_waivers(head.cfg)
+        board["shared_geom_compared"] = list(A.SHARED_GEOM_COMPARED[head.cfg.share])
         if full:
             # A truncated eval set (--eval-n / --quick-n on a smoke) has no
             # same-source pair, so the P1 interpolation columns are empty for a
@@ -1027,7 +1033,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     board = A.build_arm_board(rows, split=args.eval_split, extra_columns=extra, seed=args.seed,
                               published=not (args.smoke or synthetic),
                               z_source=args.z_source, train=train_report,
-                              alpha=alphas.facts())
+                              alpha=alphas.facts(),
+                              assertion_waivers=A.assertion_waivers(head.cfg),
+                              shared_geom_compared=list(
+                                  A.SHARED_GEOM_COMPARED[head.cfg.share]))
     _write_json(run_dir / "metrics.json", board)          # result before any optional stage
     report = A.publish_board(board, steps_row=train_report.get("first_step_row"),
                              steps_path=run_dir / "steps.jsonl",

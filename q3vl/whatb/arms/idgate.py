@@ -70,7 +70,9 @@ from q3vl.whatb import queries as _queries
 from q3vl.whatb.caliber import (
     DATA_CHOICES,
     FROZEN_BATCH_SPLITS,
+    FROZEN_TRAIN_NORMAL_N,
     assert_steps_per_epoch,
+    default_train_normal_n as _active_train_normal_n,
     effective_lambda_hc,
     effective_lambda_sparse,
     pure_l1_record,
@@ -193,8 +195,10 @@ INTERP_ALPHAS: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
 #: section 4.2 reports ``d_lib`` at these u (EPR-027:700 header).
 DLIB_U: tuple[float, ...] = (-0.5, 0.0, 1.0, 2.0)
 
-#: frozen block items 1-3: the numbers a published run must show.
-FROZEN_TRAIN_N = 93934
+#: frozen block items 1-3: the numbers a published run must show.  These are
+#: the ORIGINAL index口径 (v20260804); the active口径 may differ and the run
+#: records its own measured n next to them.
+FROZEN_TRAIN_N = FROZEN_TRAIN_NORMAL_N
 FROZEN_BATCH_SAMPLES = 32
 FROZEN_QUERIES = 256
 FROZEN_COLORS_PER_STEP = 8192
@@ -270,7 +274,9 @@ class IdGateConfig:
     batch_samples: int = FROZEN_BATCH_SAMPLES
     queries: int = FROZEN_QUERIES
     #: MEASURED from ``--data`` by the runner (never a literal on a real run)
-    train_n: int = FROZEN_TRAIN_N
+    #: the active index口径's declared train normal-only n; a runner overrides
+    #: it with the measured population
+    train_n: int = field(default_factory=_active_train_normal_n)
     #: which training corpora the population is drawn from (``--data``)
     data: str = "v2seg"
     seed: int = 20260810
@@ -1832,18 +1838,24 @@ def build_arm_board(rows: Sequence[Mapping[str, Any]], *, split: str,
 
 def publish_arm_board(board: Mapping[str, Any], *, cfg: IdGateConfig,
                       steps_row: Mapping[str, Any] | None = None,
-                      steps_path: Any = None, eval_only: bool = False
-                      ) -> dict[str, Any]:
+                      steps_path: Any = None, eval_only: bool = False,
+                      waived: Sequence[str] = ()) -> dict[str, Any]:
     """The single publication gate: training ran, criteria ran, headline exists.
 
     Fetches its own first-step row three tiers deep, so a caller that does not pass one
     is not mistaken for a loss that never ran (the SEGSAM / PRND failure).
+
+    ``waived`` drops named keys from the required table.  It is empty for every gated
+    row -- the main arm's required table is :data:`REQUIRED_CRITERIA` verbatim -- and
+    the caller (``scripts/run_idgate_arm.py``) is the one that decides which keys a 档
+    structurally cannot compute, records them on the board as ``criteria_waived``, and
+    is answerable for each name.
     """
     extra = [c for c in step_columns(cfg) if c not in _publish.FIRST_STEP_COLUMNS]
     return _publish.assert_publishable(
         board, EPR, steps_row=steps_row, steps_path=steps_path, eval_only=eval_only,
         loss_level=cfg.loss_level, extra_step_columns=extra, axes=AXES,
-        required=list(REQUIRED_CRITERIA))
+        required=[k for k in REQUIRED_CRITERIA if k not in set(waived)])
 
 
 # --------------------------------------------------------------------------- #

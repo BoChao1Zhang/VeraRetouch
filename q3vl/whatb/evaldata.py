@@ -26,7 +26,7 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from .splits import DATASET_ROOT, IndexRow, ro_path
+from .splits import SFT2SEG_SHARD_ROOT, IndexRow, ro_path
 
 __all__ = ["SHORT_SIDE", "SampleStore", "read_member", "resize_short_side"]
 
@@ -66,7 +66,7 @@ class SampleStore:
     dataset's own convention, not an imputation.
     """
 
-    def __init__(self, split: str, *, root: str | Path = DATASET_ROOT,
+    def __init__(self, split: str, *, root: str | Path = SFT2SEG_SHARD_ROOT,
                  mask_root: str | Path = "/mnt/nfs-ro/bc/data/datasets/where_a-20260805/maskviews",
                  short_side: int = SHORT_SIDE) -> None:
         self.split = split

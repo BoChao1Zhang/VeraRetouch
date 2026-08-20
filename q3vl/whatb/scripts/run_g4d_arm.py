@@ -82,7 +82,10 @@ from q3vl.where.upsample import area_resize   # frozen block's resampling operat
 BASE_CKPT = "/home/bc/data/runs/q3vl_base_sft_v2seg_20260814/checkpoint-4976"
 MASKVIEW_ROOT = Path("/mnt/nfs-ro/bc/data/datasets/where_a-20260805/maskviews")
 #: frozen block: 93934 train normal-only, 32x256 = 8192 colours, 2936 steps per
-#: epoch, 40 epochs, 117,440 steps.
+#: epoch, 40 epochs, 117,440 steps.  This is a *record* of the口径 the published
+#: boards were run on (``splits.TRAIN_NORMAL_N`` = the v20260804 version's n),
+#: not the horizon: the run's own horizon is measured from the active口径 and
+#: ``measured.train_matches_frozen`` says whether the two agree.
 FROZEN = {
     "train_normal_only_n": splits.TRAIN_NORMAL_N,
     "batch_samples": queries.BATCH_SAMPLES,
@@ -1486,6 +1489,8 @@ def gate_grid_metrics(arm: g4d.G4DArm, cond: OracleConditionStore,
 # --------------------------------------------------------------------------- #
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    # the index口径 first: every n / steps_per_epoch below is counted in it
+    dataset_ver = K.apply_dataset_version(args)
     if args.carrier == "glut3d":
         # R1 §3: the plain 3D GLUT arm is A0 (A1 is the same carrier with the
         # explicit s gate on top, which is a 4D-target arm).
@@ -1595,6 +1600,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "argv": list(sys.argv[1:] if argv is None else argv),
         "flags": vars(args),
         "frozen_block": FROZEN,
+        "dataset_version": dataset_ver.facts(),
         "gate_stage": gate_record,
         "measured": {
             "train_split": args.train_split,

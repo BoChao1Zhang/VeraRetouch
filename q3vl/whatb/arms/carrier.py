@@ -111,7 +111,13 @@ from q3vl.whatb.evaldata import (   # the ONE image / GT-alpha loader
     read_member as _read_member,
     resize_short_side as _resize_short_side,
 )
-from q3vl.whatb.splits import DATA_CHOICES, DATASET_ROOT, IndexRow, ro_path
+from q3vl.whatb.splits import (
+    DATA_CHOICES,
+    DATASET_ROOT,
+    IndexRow,
+    active_dataset_version,
+    ro_path,
+)
 from q3vl.whatb.zcache import (            # the ONE z cache (HANDOFF 步骤 0-7)
     CONTROL_TAGS,
     ZCACHE_FIELDS,
@@ -284,7 +290,12 @@ class CarrierConfig:
     #: default is the frozen sft2seg split alone; an arm that unions a second
     #: source re-declares the field's default and passes ``train_n`` measured.
     data: str = "v2seg"
-    train_n: int = 93934
+    #: the active index口径's declared sft2seg train normal-only n
+    #: (``q3vl.whatb.splits.DATASET_VERSIONS``); a runner overrides it with the
+    #: population it measured.  Not a literal: the number is口径-dependent
+    #: (v20260804 = 93934, cut-p45 = 80269).
+    train_n: int = field(
+        default_factory=lambda: active_dataset_version().train_normal_n)
     max_steps: int | None = None
     # -- evaluation --
     lib_size: int = 1137

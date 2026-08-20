@@ -24,7 +24,8 @@ from q3vl.whatb.scripts import run_epr030_arm as E
 SEG_COLOR = 151674
 SEG_WHERE = 151673
 
-MOUNTED = (S.DATASET_ROOT / "splits" / "train.index.jsonl").exists()
+MOUNTED = S.dataset_available() and S.dataset_available(
+    S.dataset_version("v20260804").root)
 L8_PRESENT = S.L8_MANIFEST.is_file()
 
 
@@ -238,16 +239,30 @@ def test_run_setup_record_carries_the_measured_horizon():
 # --------------------------------------------------------------------------- #
 # 5. the mounted numbers the proposal quotes
 # --------------------------------------------------------------------------- #
+#: (口径 -> its v2seg n, the merged n with L8, ceil(merged/32), *40), measured
+#: 2026-08-18.  L8 contributes the same 25,894 normal rows to both: no sft2seg
+#: 口径 touches ``l8_train.manifest.jsonl``.
+MERGED = {"v20260804": (93934, 119828, 3745, 149800),
+          "cut-p45": (80269, 106163, 3318, 132720)}
+
+
 @pytest.mark.skipif(not (MOUNTED and L8_PRESENT), reason="dataset not mounted")
-def test_measured_population_and_horizon():
-    v2seg = S.train_normal_n("v2seg")
-    merged = S.train_normal_n("v2seg+l8")
-    facts = S.train_source_facts("v2seg+l8")
-    assert v2seg == S.TRAIN_NORMAL_N == 93934
+@pytest.mark.parametrize("version", sorted(MERGED))
+def test_measured_population_and_horizon(version):
+    root = S.dataset_version(version).root
+    want_v2seg, want_merged, want_spe, want_total = MERGED[version]
+    v2seg = S.train_normal_n("v2seg", root=root)
+    merged = S.train_normal_n("v2seg+l8", root=root)
+    facts = S.train_source_facts("v2seg+l8", root=root)
+    assert v2seg == S.dataset_version(version).train_normal_n == want_v2seg
     assert facts["sources"]["l8"]["n_normal"] == 25894
-    assert merged == 119828 == facts["n_normal_total"]
+    assert merged == want_merged == facts["n_normal_total"]
     cfg = E.Epr030Config(loss_level=1, train_n=merged)
-    assert cfg.steps_per_epoch == 3745 and cfg.total_steps == 149800
+    assert (cfg.steps_per_epoch, cfg.total_steps) == (want_spe, want_total)
+
+
+def test_the_frozen_block_number_is_the_original_version():
+    assert S.TRAIN_NORMAL_N == S.dataset_version("v20260804").train_normal_n == 93934
 
 
 @pytest.mark.skipif(not L8_PRESENT, reason="L8 manifest not present")

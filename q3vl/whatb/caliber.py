@@ -16,7 +16,11 @@ and the five runners call in, instead of each growing its own copy:
    including ``256x8192`` (2,097,152 colours/step).  No arm keeps a second one.
 3. **the base lr**: :data:`q3vl.whatb.arms.carrier.BASE_LR` (1e-3, GLUT App
    A.1); the flag is spelled ``--base-lr`` on every arm.
-4. **the training corpora**: ``--data {v2seg, v2seg+l8}``.  The population is
+4. **the training corpora**: ``--dataset-version {v20260804, cut-p45}`` (which
+   sft2seg index口径 the v2seg rows are read from -- see
+   :data:`q3vl.whatb.splits.DATASET_VERSIONS`) and ``--data {v2seg, v2seg+l8}``.
+   The口径 travels into ``run_setup.json`` via :func:`horizon_record`.  The
+   population is
    *measured* by :func:`q3vl.whatb.splits.train_normal_rows` (each source
    counted against its own on-disk declaration) and the z of the union comes
    from :class:`q3vl.whatb.zcache.MultiZCache` through
@@ -32,6 +36,7 @@ experimental variable is.
 
 from __future__ import annotations
 
+import argparse
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,14 +59,21 @@ __all__ = [
     "BATCH_SPLITS",
     "BATCH_SPLIT_COLORS",
     "DATA_CHOICES",
+    "DATASET_VERSION_CHOICES",
+    "DATASET_VERSION_EXPLICIT_ATTR",
     "DEFAULT_BATCH_SPLIT",
     "DEFAULT_DATA",
+    "DEFAULT_DATASET_VERSION",
     "EPOCHS",
     "EPR030_BATCH_SPLIT",
     "FROZEN_TRAIN_NORMAL_N",
     "FROZEN_BATCH_SPLITS",
     "PURE_L1_LOSS_LEVEL",
     "add_caliber_arguments",
+    "apply_dataset_version",
+    "dataset_version_given",
+    "dataset_version_record",
+    "default_train_normal_n",
     "assert_steps_per_epoch",
     "batch_split_choices",
     "effective_lambda_hc",
@@ -77,6 +89,10 @@ __all__ = [
 
 #: ``--data`` values, from the one table in :mod:`q3vl.whatb.splits`
 DATA_CHOICES: tuple[str, ...] = S.DATA_CHOICES
+#: ``--dataset-version`` values -- the index口径 table in :mod:`q3vl.whatb.splits`
+DATASET_VERSION_CHOICES: tuple[str, ...] = S.DATASET_VERSION_CHOICES
+#: the口径 every arm runs on unless ``--dataset-version`` says otherwise
+DEFAULT_DATASET_VERSION = S.DEFAULT_DATASET_VERSION
 #: every arm's default stays the frozen sft2seg split alone; ``v2seg+l8`` is asked for
 DEFAULT_DATA = "v2seg"
 #: the frozen colour batch stays every arm's default
@@ -85,10 +101,82 @@ DEFAULT_BATCH_SPLIT = "32x256"
 EPR030_BATCH_SPLIT = "256x8192"
 #: ``--loss-level`` value that means "the single L1 term"
 PURE_L1_LOSS_LEVEL = 1
-#: the frozen sft2seg normal-only count.  A *fallback* for a code path that has
-#: not read an index yet (``--stage setup``, a parser unit test); a real run
-#: measures its population -- see :func:`train_normal_rows`.
+#: the **original**口径's sft2seg normal-only count (``v20260804``).  It is what
+#: the published boards were run on and what the runners' "frozen block" records
+#: compare against; it is NOT a fallback for the active口径 -- use
+#: :func:`default_train_normal_n` for that.
 FROZEN_TRAIN_NORMAL_N: int = S.TRAIN_NORMAL_N
+
+
+def default_train_normal_n() -> int:
+    """The active口径's declared sft2seg train normal-only n.
+
+    The *fallback* for a code path that has not read an index yet (``--stage
+    setup``, a parser unit test); a real run measures its population -- see
+    :func:`train_normal_rows`.
+    """
+    return S.active_dataset_version().train_normal_n
+
+
+def dataset_version_record(root: str | Path | None = None) -> dict[str, Any]:
+    """The口径 block ``run_setup.json`` carries (name / root / n / exclusion sha)."""
+    return S.dataset_version_facts(root)
+
+
+#: ``args`` attribute :class:`_RecordExplicit` sets when ``--dataset-version``
+#: was actually typed on the command line.  argparse cannot tell a default apart
+#: from a value that happens to equal it, and the two mean different things here:
+#: ``--dataset-root <old root>`` alone is a complete, unambiguous request, while
+#: ``--dataset-root <old root> --dataset-version cut-p45`` is a contradiction.
+DATASET_VERSION_EXPLICIT_ATTR = "dataset_version_explicit"
+
+
+class _RecordExplicit(argparse.Action):
+    """Store the value and record that the user typed the flag."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, DATASET_VERSION_EXPLICIT_ATTR, True)
+
+
+def dataset_version_given(args) -> bool:
+    """True when ``--dataset-version`` was typed (not merely defaulted)."""
+    return bool(getattr(args, DATASET_VERSION_EXPLICIT_ATTR, False))
+
+
+def apply_dataset_version(args) -> Any:
+    """Resolve ``--dataset-version`` / ``--dataset-root`` into the process口径.
+
+    Called once, at the top of a runner's ``main`` and **before** any index is
+    read, so ``n`` / ``steps_per_epoch`` / ``total_steps`` are all derived from
+    the same口径.  A runner that also owns a ``--dataset-root`` gets it filled in
+    with the resolved root (an explicitly given root wins and must itself be a
+    registered口径).
+
+    ``--dataset-root`` **alone** resolves the口径 from the root: the
+    ``--dataset-version`` default is a string, never ``None``, so comparing
+    against it would reject a command line that named exactly one of the two.
+    Naming **both** and disagreeing is still a refusal -- that is a real
+    contradiction and stays loud (:func:`dataset_version_given`).
+    """
+    root = getattr(args, "dataset_root", None)
+    if root:
+        ver = S.version_for_root(root)
+        named = getattr(args, "dataset_version", None)
+        if (dataset_version_given(args) and named is not None
+                and str(named) != ver.name):
+            raise SystemExit(
+                f"--dataset-root {root} is dataset version {ver.name!r} but "
+                f"--dataset-version says {named!r}; pass one of the two")
+    else:
+        ver = S.dataset_version(getattr(args, "dataset_version",
+                                        S.DEFAULT_DATASET_VERSION))
+    S.use_dataset_version(ver)
+    if hasattr(args, "dataset_root"):
+        args.dataset_root = str(ver.root)
+    if hasattr(args, "dataset_version"):
+        args.dataset_version = ver.name
+    return ver
 
 
 # --------------------------------------------------------------------------- #
@@ -188,7 +276,7 @@ def pure_l1_record(*, loss_level: int, lambda_hc: float, lambda_sparse: float,
 # 4. the training corpora
 # --------------------------------------------------------------------------- #
 def train_normal_rows(data: str, *, split: str = "train",
-                      root: str | Path = S.DATASET_ROOT) -> list[S.IndexRow]:
+                      root: str | Path | None = None) -> list[S.IndexRow]:
     """The measured training population of ``--data`` (never a literal n)."""
     return S.train_normal_rows(data, split=split, root=root)
 
@@ -262,6 +350,10 @@ def horizon_record(*, data: str, n_train: int, batch_split: str,
     rec: dict[str, Any] = {
         "data": data,
         "data_sources": ["v2seg", *S.DATA_SOURCES[data]],
+        # which sft2seg index口径 the v2seg rows came from.  L8 has no口径: its
+        # rows come from l8_train.manifest.jsonl, which no sft2seg filter touches.
+        "dataset_version": S.active_dataset_version().facts(),
+        "l8_manifest": str(S.L8_MANIFEST),
         "train_normal_n_measured": int(n_train),
         "batch_split": str(batch_split),
         "batch_samples": int(batch_samples),
@@ -296,14 +388,28 @@ def add_caliber_arguments(ap, *, group: str = "EPR-030 caliber (shared)",
                           default_base_lr: float | None = BASE_LR,
                           batch_split_extra: Sequence[str] = (),
                           data: bool = True, batch_split: bool = True,
-                          base_lr: bool = True) -> Any:
-    """Register ``--data`` / ``--zcache-root-l8`` / ``--batch-split`` / ``--base-lr``.
+                          base_lr: bool = True,
+                          dataset_version: bool = True,
+                          default_dataset_version: str = DEFAULT_DATASET_VERSION,
+                          ) -> Any:
+    """Register ``--dataset-version`` / ``--data`` / ``--zcache-root-l8`` /
+    ``--batch-split`` / ``--base-lr``.
 
-    One spelling on all five arms.  A runner that already owns one of the flags
+    One spelling on all arms.  A runner that already owns one of the flags
     (its own ``--batch-split`` choices, say) turns that one off and keeps the
     rest, so no flag is ever declared twice.
     """
     g = ap.add_argument_group(group)
+    if dataset_version:
+        g.add_argument("--dataset-version", default=default_dataset_version,
+                       action=_RecordExplicit,
+                       choices=list(DATASET_VERSION_CHOICES),
+                       help="sft2seg index口径 (q3vl.whatb.splits.DATASET_VERSIONS).  "
+                            "v20260804 = the published index (train normal "
+                            "93934); cut-p45 = that index with the small-area "
+                            "band/radial/semantic masks dropped (80269).  Both "
+                            "index the same shards and keep the same sha1 split "
+                            "assignment.  Recorded in run_setup.json")
     if data:
         g.add_argument("--data", default=default_data, choices=list(DATA_CHOICES),
                        help="training sources.  v2seg = the frozen sft2seg train "

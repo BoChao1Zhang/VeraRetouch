@@ -363,3 +363,70 @@ def test_all_six_arm_seams_resolve_the_same_cache(tmp_path):
                   readout=WhatReadoutSpec(), tags=Z.CONTROL_TAGS,
                   required=Z.CONTROL_TAGS).preload(
                       Z.CONTROL_TAGS)["controls"]["none"]["n"] == 2
+
+
+# --------------------------------------------------------------------------- #
+# the index口径 gate on the consumer side (DATA-P45 B3)
+# --------------------------------------------------------------------------- #
+def _write_versioned(root, version, *, split="V_what", tag="none",
+                     ids=("a", "b"), checkpoint="ckpt"):
+    """A cache directory that carries the口径 build_zcache.py writes."""
+    z = np.zeros((len(ids), Z.Z_DIM), dtype=np.float32)
+    return Z.write_z_cache(
+        Z.leaf_dir(root, split, tag), _rows(ids), z, checkpoint=checkpoint,
+        readout_kind="seg_color", context_source="generated", control_tag=tag,
+        split=split,
+        extra_meta=None if version is None else {"dataset_version": version})
+
+
+def test_a_zcache_from_another_dataset_version_is_refused(tmp_path):
+    from q3vl.whatb import splits as S
+    from q3vl.whatb.arms import carrier as A
+    from q3vl.whatb.scripts import run_carrier_arm as RC
+
+    _write_versioned(tmp_path, "v20260804")
+    cache = Z.ZCache(Z.leaf_dir(tmp_path, "V_what", "none"))
+
+    # matching口径 -> recorded, no noise
+    rec = RC.assert_zcache_dataset_version(cache, split="V_what",
+                                           dataset_version="v20260804")
+    assert rec == {"checked": True, "status": "match",
+                   "cache_dataset_version": "v20260804",
+                   "run_dataset_version": "v20260804"}
+
+    # a different口径 -> non-zero exit, naming both sides
+    with pytest.raises(SystemExit) as e:
+        RC.assert_zcache_dataset_version(cache, split="V_what",
+                                         dataset_version="cut-p45")
+    assert "v20260804" in str(e.value) and "cut-p45" in str(e.value)
+
+    # and through the seam the runners actually call
+    with pytest.raises(SystemExit):
+        RC.open_z_caches(tmp_path, "V_what", A.CarrierConfig(), checkpoint="ckpt",
+                         tags=("none",), dataset_version="cut-p45")
+    caches, record = RC.open_z_caches(tmp_path, "V_what", A.CarrierConfig(),
+                                      checkpoint="ckpt", tags=("none",),
+                                      dataset_version="v20260804")
+    assert record["none"]["dataset_version_check"]["status"] == "match"
+    assert set(caches) == {"none"}
+    # the default is the process口径, not "whatever the cache says"
+    S.use_dataset_version("cut-p45", force=True)
+    with pytest.raises(SystemExit):
+        RC.assert_zcache_dataset_version(cache, split="V_what")
+
+
+def test_a_zcache_without_a_dataset_version_is_warned_about_not_assumed(tmp_path,
+                                                                        capsys):
+    from q3vl.whatb.scripts import run_carrier_arm as RC
+
+    _write_versioned(tmp_path, None)
+    cache = Z.ZCache(Z.leaf_dir(tmp_path, "V_what", "none"))
+    rec = RC.assert_zcache_dataset_version(cache, split="V_what",
+                                           dataset_version="cut-p45")
+    assert rec["status"] == "unknown"
+    assert rec["cache_dataset_version"] is None
+    assert "UNKNOWN" in capsys.readouterr().err
+
+    # a non-sft2seg split (the L8 union) has no口径 and is not checked
+    assert RC.assert_zcache_dataset_version(
+        cache, split="l8_train", dataset_version="cut-p45")["checked"] is False

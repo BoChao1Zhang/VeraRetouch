@@ -89,6 +89,7 @@ from q3vl.whatb.zcache import ZCacheDir
 from q3vl.whatb.splits import (
     DATASET_ROOT,
     IndexRow,
+    dataset_version,
     bucket_pools,
     iter_records,
     load_index,
@@ -102,7 +103,9 @@ from q3vl.where.upsample import area_resize
 # --------------------------------------------------------------------------- #
 # frozen numbers (the run asserts against these rather than trusting the flags)
 # --------------------------------------------------------------------------- #
-TRAIN_NORMAL_N = 93934
+#: the ORIGINAL口径 (v20260804) -- what the published boards were run on.
+#: The active口径 may differ; ``frozen_block_record`` reports both.
+TRAIN_NORMAL_N = dataset_version("v20260804").train_normal_n
 STEPS_PER_EPOCH = 2936
 TOTAL_STEPS = 117_440
 EPOCHS = 40
@@ -553,7 +556,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tokenizer", default=None,
                    help="tokenizer for the colour-span start-up assertion "
                         "(default: --base-checkpoint)")
-    p.add_argument("--dataset-root", default=str(DATASET_ROOT))
+    p.add_argument("--dataset-root", default=None,
+                   help="index root; default = the --dataset-version口径's root")
     p.add_argument("--bank-dir", default=str(BANK_DIR))
     p.add_argument("--train-split", default="train")
     p.add_argument("--eval-split", default="V_what")
@@ -1243,6 +1247,7 @@ def _pred_field(pred_dir: Path | None, sample: Sample, cfg: qd.QDualConfig,
 # --------------------------------------------------------------------------- #
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(list(argv) if argv is not None else None)
+    dataset_ver = K.apply_dataset_version(args)   # fills in --dataset-root
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -1381,7 +1386,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             **{n: sha256_file(Path(qd.__file__).resolve().parents[1] / n)
                for n in ("zcache.py", "colorimetry.py")},
         },
-        "data": {"train_split": args.train_split, "eval_split": args.eval_split,
+        "data": {"dataset_version": args.dataset_version,
+                 "dataset_version_facts": dataset_ver.facts(),
+                 "dataset_root": args.dataset_root,
+                 "train_split": args.train_split, "eval_split": args.eval_split,
                  "train_facts": split_facts(train_rows),
                  "n_train_used": len(train_samples),
                  "n_eval_used": len(eval_samples),

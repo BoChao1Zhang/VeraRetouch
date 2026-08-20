@@ -222,19 +222,30 @@ def test_pair_draw_always_returns_two_different_luts_and_is_reproducible():
     assert idx.facts()["n_pairs"] == 2
 
 
+#: measured 2026-08-18 per index口径: split -> (n_sources_with_pairs, n_pairs,
+#: group_size_max, group_size_median).  v20260804 is EPR-026 section 1.1 / 3.6.
+_PAIR_FACTS = {
+    "v20260804": {"V_what": (120, 1311, 12, 4.0),
+                  "T_lut_unseen": (67, 137, 6, 2.0)},
+    "cut-p45": {"V_what": (112, 1029, 11, 4.0),
+                "T_lut_unseen": (56, 120, 6, 2.0)},
+}
+
+
 @pytest.mark.skipif(not Path("/mnt/nfs-ro/bc/data/datasets/sft2seg-20260804/"
                              "splits/V_what.index.jsonl").is_file(),
                     reason="dataset split index not mounted")
-def test_pair_counts_on_the_real_splits_match_the_proposal():
-    """EPR-026 section 1.1 / 3.6: V_what normal-only = 120 sources / 1311 pairs."""
+@pytest.mark.parametrize("version", sorted(_PAIR_FACTS))
+def test_pair_counts_on_the_real_splits_match_the_proposal(version):
+    from q3vl.whatb import splits as _S
     from q3vl.whatb.splits import load_index
 
-    idx = ic.PairIndex.build(load_index("V_what"), split="V_what")
-    facts = idx.facts()
-    assert (facts["n_sources_with_pairs"], facts["n_pairs"]) == (120, 1311)
-    assert facts["group_size_max"] == 12 and facts["group_size_median"] == 4.0
-    t = ic.PairIndex.build(load_index("T_lut_unseen"), split="T_lut_unseen").facts()
-    assert (t["n_sources_with_pairs"], t["n_pairs"]) == (67, 137)
+    root = _S.dataset_version(version).root
+    for split, want in _PAIR_FACTS[version].items():
+        f = ic.PairIndex.build(load_index(split, root), split=split).facts()
+        got = (f["n_sources_with_pairs"], f["n_pairs"],
+               f["group_size_max"], f["group_size_median"])
+        assert got == want, (version, split)
 
 
 # --------------------------------------------------------------------------- #
@@ -665,6 +676,29 @@ def test_baseline_row_carrying_L_interp_is_rejected():
         ic.assert_interp_step_columns(cfg, steps_row=row)
 
 
+def test_a_w0_row_whose_loss_contains_L_interp_is_rejected():
+    """The exact row shape of ``whatb_INTERPC_abl_w0`` (measured 2026-08-19).
+
+    That run dir was created by ``--interp-weight 0`` but every one of its 100,360
+    step rows carries ``lambda_interp = 1.0`` and satisfies
+    ``loss == L_glut + 1.0 * L_interp``: ``L_interp`` was IN the objective, not beside
+    it as a diagnostic.  (Cause: ``waves/whatb_epr024_029_arm.sh:443-444`` appends the
+    caller's extra flags to the ``--stage setup`` and ``--stage eval`` argv but not to
+    ``--stage train``, so the training stage kept the hard-coded ``--interp-weight
+    1.0``.)  This is the failure the assertion exists for; it must keep raising, and
+    the assertion must never be relaxed into accepting an ``L_interp`` column on a
+    ``lambda_int == 0`` row.
+    """
+    cfg = tiny_cfg()                                   # lambda_int = 0
+    row = {c: 0.0 for c in cfg.step_columns()}
+    row.update({"L_glut": 0.5655336380004883, "L_interp": 0.547886848449707,
+                "lambda_interp": 1.0, "loss": 1.1134204864501953})
+    assert row["loss"] == pytest.approx(
+        row["L_glut"] + row["lambda_interp"] * row["L_interp"])
+    with pytest.raises(ic.BaselineRowNotClean, match="L_interp"):
+        ic.assert_interp_step_columns(cfg, steps_row=row)
+
+
 def test_degeneracy_guard_catches_the_three_degenerate_solutions():
     cfg = tiny_cfg()
     torch.manual_seed(0)
@@ -858,9 +892,11 @@ def test_run_setup_block_carries_the_frozen_numbers():
     block = ic.run_setup_block(cfg, ic.InterpcArm(tiny_cfg()),
                                alpha_sampler=ic.AlphaSampler(cfg))
     frozen = block["frozen"]
-    assert frozen["train_normal_n"] == 93934
+    assert frozen["train_normal_n"] == cfg.train_n
+    assert frozen["train_normal_n_frozen_v2seg"] == 93934      # 口径 v20260804
     assert frozen["batch"] == "32x256" and frozen["colors_per_step"] == 8192
-    assert (frozen["steps_per_epoch"], frozen["total_steps"]) == (2936, 117440)
+    assert (frozen["steps_per_epoch"], frozen["total_steps"]) == \
+        (cfg.steps_per_epoch, cfg.total_steps)
     assert frozen["clamp"] == "two"
     assert frozen["headline_formation"] == "I_hat = (1-a) * I + a * f_hat(I)"
     assert block["degeneracy_thresholds"]["point_std"] == 1e-3
@@ -869,16 +905,23 @@ def test_run_setup_block_carries_the_frozen_numbers():
 
 
 def test_runner_config_reproduces_the_frozen_step_budget():
+    import math as _math
+
+    from q3vl.whatb import splits as _S
+
+    n = _S.active_dataset_version().train_normal_n
     a = runner.build_parser().parse_args([])
     cfg = runner.config_from_args(a)
-    assert (cfg.steps_per_epoch, cfg.total_steps) == (2936, 117440)
+    assert (cfg.steps_per_epoch, cfg.total_steps) == \
+        (_math.ceil(n / 32), _math.ceil(n / 32) * 40)
     assert cfg.interp_weight == 0.0 and cfg.clamp == "two"
     a2 = runner.build_parser().parse_args(
         ["--interp-weight", "1", "--interp-alpha", "uniform", "--batch-split",
          "64x128", "--n-gauss", "32"])
     cfg2 = runner.config_from_args(a2)
     assert cfg2.beta == 1.0 and cfg2.n_gauss == 32
-    assert (cfg2.steps_per_epoch, cfg2.total_steps) == (1468, 58720)
+    assert (cfg2.steps_per_epoch, cfg2.total_steps) == \
+        (_math.ceil(n / 64), _math.ceil(n / 64) * 40)
 
 
 def test_runner_train_stage_refuses_without_the_z_cache(tmp_path):

@@ -60,7 +60,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -70,6 +70,8 @@ from torch import Tensor, nn
 from q3vl.whatb.caliber import (
     DATA_CHOICES,
     FROZEN_BATCH_SPLITS,
+    FROZEN_TRAIN_NORMAL_N,
+    default_train_normal_n,
     effective_lambda_hc,
     effective_lambda_sparse,
 )
@@ -185,7 +187,9 @@ IPB_K = 20
 
 _TOTAL_STEPS = 117_440
 _STEPS_PER_EPOCH = 2936
-_TRAIN_NORMAL_N = 93_934
+#: the ORIGINAL口径's (v20260804) train normal-only n -- the "frozen v2seg"
+#: number this arm records next to whatever the run actually measured.
+_TRAIN_NORMAL_N = FROZEN_TRAIN_NORMAL_N
 
 
 # --------------------------------------------------------------------------- #
@@ -215,7 +219,9 @@ class InterpcConfig:
     queries_per_sample: int = QUERIES_PER_SAMPLE
     #: training corpora (``--data``) and the population MEASURED from them
     data: str = "v2seg"
-    train_n: int = _TRAIN_NORMAL_N
+    #: the active index口径's declared train normal-only n (v20260804 = 93934,
+    #: cut-p45 = 80269); a runner overrides it with the measured population
+    train_n: int = field(default_factory=default_train_normal_n)
     hc_eps: float = 1e-3
     hc_mask: bool = True
     lambda_hc: float = 10.0

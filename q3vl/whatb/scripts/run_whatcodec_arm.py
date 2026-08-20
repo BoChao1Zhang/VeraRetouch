@@ -45,6 +45,7 @@ from typing import Any, Mapping, Sequence
 
 import torch
 
+from q3vl.whatb import caliber as K
 from q3vl.whatb import queries, splits
 from q3vl.whatb.arms import g4d
 from q3vl.whatb.codec import tables as T
@@ -122,6 +123,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     # -- plumbing ------------------------------------------------------------ #
     ap.add_argument("--lut-bank", default=str(BANK_DIR))
     ap.add_argument("--train-split", default="train")
+    K.add_caliber_arguments(ap, group="dataset口径 (shared)", data=False,
+                            batch_split=False, base_lr=False)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available()
                     else "cpu")
     ap.add_argument("--out", required=True)
@@ -398,6 +401,7 @@ def train(args, carrier: g4d.Glut4DCarrier, table: T.DirectCarrierTable,
 # --------------------------------------------------------------------------- #
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    dataset_ver = K.apply_dataset_version(args)
     if args.level != "O0":                                # pragma: no cover
         raise SystemExit(f"--level {args.level} is not implemented by C1")
     torch.manual_seed(int(args.seed))
@@ -423,6 +427,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                   "n_params_total": len(pool) * theta_dim,
                   "lut_id_head": pool[:8]},
         "data": {"train_split": args.train_split,
+                 "dataset_version": dataset_ver.facts(),
                  "n_train_lut_id_measured": len(all_ids),
                  "lut_bank": str(args.lut_bank),
                  "needs_zcache": False, "needs_images": False,

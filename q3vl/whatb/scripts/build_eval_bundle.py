@@ -65,6 +65,7 @@ from typing import Any, Sequence
 import numpy as np
 import torch
 
+from q3vl.whatb import caliber as _caliber
 from q3vl.whatb import splits as _splits
 from q3vl.whatb.evaldata import SHORT_SIDE, SampleStore
 from q3vl.whatb.zcache import CONTROL_TAGS, ZCacheDir
@@ -133,6 +134,12 @@ def build_parser() -> argparse.ArgumentParser:
         prog="build_eval_bundle",
         description="Write the index.jsonl + <sample_id>.npz bundle EPR-027 "
                     "consumes, from the split index, the maskviews and the z cache.")
+    # the index口径, spelled / defaulted exactly as on the eight arm runners:
+    # the bundle's row set IS the split index of one口径, so a bundle that does
+    # not say which one cannot be re-made.
+    _caliber.add_caliber_arguments(
+        ap, group="index口径 (shared with the arm runners)",
+        data=False, batch_split=False, base_lr=False)
     ap.add_argument("--split", default="V_what", choices=_splits.SPLITS)
     ap.add_argument("--out", type=Path, required=True,
                     help="destination directory (LOCAL disk; /mnt/nfs is refused)")
@@ -247,6 +254,9 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "open at start-up belongs on local disk.")
 
     t0 = time.time()
+    # the口径 is resolved BEFORE the first load_index: the bundle's rows are the
+    #口径's rows, so the选择 has to happen before anything is read.
+    ver = _caliber.apply_dataset_version(args)
     all_rows = _splits.load_index(args.split)
     normal_rows = _splits.normal_only(all_rows)
     rows = normal_rows[: int(args.limit)] if args.limit else normal_rows
@@ -284,6 +294,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "n_in_z_cache": len(kept), "n_dropped_no_z": len(dropped),
         "out": str(out), "z_cache": caches.facts(),
         "shuffle_pool": args.shuffle_pool,
+        # which index口径 those n_index / n_normal were counted in
+        "dataset_version": ver.name,
+        "dataset_root": str(ver.root),
+        "dataset_version_facts": ver.facts(),
     }
     if args.dry_run:
         return {"dry_run": True, **plan}
@@ -397,7 +411,9 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
                 "field_shuffle would silently measure nothing.  --shuffle-pool "
                 "all reproduces the literal 'another sample's field'."),
         },
-        "image_source": str(_splits.DATASET_ROOT),
+        "image_source": str(_splits.SFT2SEG_SHARD_ROOT),
+        # ``dataset_version`` / ``dataset_root`` / ``dataset_version_facts``
+        # arrive through ``**plan`` above, so --dry-run prints them too
         "alpha_source": str(store.mask_dir),
         "provenance": provenance(),
         "elapsed_s": round(time.time() - t0, 1),

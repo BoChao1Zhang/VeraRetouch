@@ -434,11 +434,11 @@ def config_from_args(a: argparse.Namespace, *, train_n: int | None = None
     ``train_n`` is the population MEASURED from ``--data``
     (:func:`q3vl.whatb.caliber.train_normal_rows`); the horizon follows from it
     (``steps_per_epoch = ceil(n / B)``) instead of from a literal.  It defaults
-    to the frozen sft2seg count so ``--stage setup`` / ``self-test`` need no
-    index read.
+    to the active index口径's declared count so ``--stage setup`` / ``self-test``
+    need no index read.
     """
     b, q = K.parse_batch_split(a.batch_split)
-    n = int(train_n if train_n is not None else K.FROZEN_TRAIN_NORMAL_N)
+    n = int(train_n if train_n is not None else K.default_train_normal_n())
     steps_per_epoch = K.steps_per_epoch_of(n, b)
     return InterpcConfig(
         data=a.data, train_n=n,
@@ -492,6 +492,7 @@ def load_pair_index(split: str) -> PairIndex:
 
 
 def stage_setup(a: argparse.Namespace, cfg: InterpcConfig, out: Path) -> int:
+    from q3vl.whatb.splits import dataset_version_facts as S_dataset_version_facts
     from q3vl.whatb.splits import load_index, split_facts
 
     rows = load_index(a.train_split)
@@ -512,6 +513,7 @@ def stage_setup(a: argparse.Namespace, cfg: InterpcConfig, out: Path) -> int:
             "stage": "setup",
             "checkpoint": a.checkpoint,
             "provenance": provenance(),
+            "dataset_version": S_dataset_version_facts(),
             "splits": {a.train_split: split_facts(rows),
                        a.eval_split: split_facts(eval_rows)},
             "eval_pair_index": eval_pairs.facts(),
@@ -1258,6 +1260,7 @@ def stage_self_test(a: argparse.Namespace, cfg: InterpcConfig, out: Path) -> int
 # --------------------------------------------------------------------------- #
 def main(argv: Sequence[str] | None = None) -> int:
     a = build_parser().parse_args(argv)
+    K.apply_dataset_version(a)          # the index口径, before anything counts n
     cfg = config_from_args(a)
     name = a.run_name or f"interpc_l{a.interp_weight:g}_{a.interp_alpha}"
     out = Path(a.out_root) / "runs" / name

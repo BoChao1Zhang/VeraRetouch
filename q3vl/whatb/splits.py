@@ -4,9 +4,18 @@ Read-only access to ``sft2seg-20260804``.  Two levels:
 
 * the **index** (``splits/<split>.index.jsonl``) carries ``sample_id``,
   ``lut_id``, ``source_image_id``, ``task_type``, ``winner_confidence`` and the
-  tar coordinates of the image and the record.  Everything the frozen training
-  set is defined by (``split == "train" and winner_confidence == "normal"``,
-  n = 93934) is in the index, so an epoch can be planned without opening a shard.
+  tar coordinates of the image and the record.  Everything the training set is
+  defined by (``split == "train" and winner_confidence == "normal"``) is in the
+  index, so an epoch can be planned without opening a shard.
+
+  There is more than one index口径 (:class:`DatasetVersion`,
+  :data:`DATASET_VERSIONS`): ``v20260804`` is the published index (train normal
+  n = 93,934) and ``cut-p45`` is that index with the small-area band / radial /
+  semantic masks dropped (n = 80,269).  Both point at the *same* shards and keep
+  the same ``sha1`` split assignment; they differ only in which index lines
+  survive.  ``cut-p45`` is the default (:data:`DEFAULT_DATASET_VERSION`) and a
+  runner selects the other with ``--dataset-version v20260804``.  Every
+  ``root=`` parameter below defaults to the active口径.
 * the **record** (``<sample_id>.rec.json`` inside ``records/shards``) carries
   ``instruction`` / ``where`` / ``color`` / ``major`` / ``minor`` /
   ``preset_path`` / ``mask_id``.  ``minor`` is what the ``B3_bucket_retrieval``
@@ -31,10 +40,12 @@ an L8 row (see :attr:`IndexRow.color_text`).
 
 **The training population is measured, never written down.**
 :func:`train_normal_rows` counts each source at start-up and asserts it against
-that source's *own* on-disk declaration -- the sft2seg part against the frozen
-block's :data:`TRAIN_NORMAL_N`, the L8 part against
+that source's *own* on-disk declaration -- the sft2seg part against the active
+口径's :attr:`DatasetVersion.normal_n`, the L8 part against
 ``l8_train.manifest.report.json``.  Adding a third source therefore adds a
-source, not a new literal to keep in sync.
+source, not a new literal to keep in sync.  L8 is **not** filtered by any
+sft2seg口径: its rows are addressed by ``l8_train.manifest.jsonl``, which no
+口径 touches.
 """
 
 from __future__ import annotations
@@ -48,8 +59,20 @@ from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 __all__ = [
     "DATASET_ROOT",
+    "SFT2SEG_SHARD_ROOT",
     "SPLITS",
     "TRAIN_NORMAL_N",
+    "DatasetVersion",
+    "DATASET_VERSIONS",
+    "DATASET_VERSION_CHOICES",
+    "DEFAULT_DATASET_VERSION",
+    "dataset_version",
+    "version_for_root",
+    "active_dataset_version",
+    "active_root",
+    "use_dataset_version",
+    "dataset_version_facts",
+    "dataset_available",
     "L8_MANIFEST",
     "L8_ZCACHE_ROOT",
     "L8_SPLIT",
@@ -74,13 +97,200 @@ __all__ = [
     "train_source_facts",
 ]
 
-#: soft (read-only) mount of the SFT dataset
-DATASET_ROOT = Path("/mnt/nfs-ro/bc/data/datasets/sft2seg-20260804")
-
 SPLITS: tuple[str, ...] = ("train", "V_what", "V_where", "T_final", "T_lut_unseen")
 
-#: frozen block item 1 -- the sft2seg training set is exactly this many rows
-TRAIN_NORMAL_N = 93934
+#: soft (read-only) mount that holds the record / image / mask shards.  Every
+#: index口径 points its rows at these shards (the ``members`` paths are absolute),
+#: so a filtered index directory carries ``splits/`` and nothing else.
+SFT2SEG_SHARD_ROOT = Path("/mnt/nfs-ro/bc/data/datasets/sft2seg-20260804")
+
+
+# --------------------------------------------------------------------------- #
+# the dataset口径 (index version)
+# --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class DatasetVersion:
+    """One index口径: a ``splits/`` directory plus the counts measured in it.
+
+    A口径 is *not* a new dataset.  Every version indexes the same shards
+    (:data:`SFT2SEG_SHARD_ROOT`); they differ only in which rows the index keeps,
+    and the ``sha1`` split rule family is untouched (no row changes split).
+
+    ``n`` / ``normal_n`` are **measured** off the index files and written down
+    here so :func:`train_normal_rows` has something to assert against -- the same
+    role the single ``TRAIN_NORMAL_N`` literal used to play, one per口径.
+    """
+
+    name: str
+    root: Path
+    #: split -> rows in ``<root>/splits/<split>.index.jsonl``
+    n: Mapping[str, int]
+    #: split -> rows with ``winner_confidence == "normal"``
+    normal_n: Mapping[str, int]
+    rule: str
+    measured_on: str
+    parent: str | None = None
+    excluded_ids: Path | None = None
+    excluded_n: int = 0
+    excluded_sha256: str | None = None
+
+    @property
+    def train_normal_n(self) -> int:
+        return int(self.normal_n["train"])
+
+    def facts(self) -> dict[str, Any]:
+        """The block ``run_setup.json`` carries so two boards cannot be confused."""
+        return {
+            "name": self.name,
+            "root": str(self.root),
+            "parent": self.parent,
+            "rule": self.rule,
+            "measured_on": self.measured_on,
+            "shard_root": str(SFT2SEG_SHARD_ROOT),
+            "n": dict(self.n),
+            "normal_n": dict(self.normal_n),
+            "train_normal_n": self.train_normal_n,
+            "excluded_ids": (str(self.excluded_ids) if self.excluded_ids else None),
+            "excluded_n": int(self.excluded_n),
+            "excluded_sha256": self.excluded_sha256,
+        }
+
+
+#: every registered index口径.  Counts measured with ``wc -l`` / ``jq`` on the
+#: index files on 2026-08-18; ``excluded_sha256`` is ``sha256sum`` of that口径's
+#: ``excluded_sample_ids.txt``.
+DATASET_VERSIONS: dict[str, DatasetVersion] = {
+    "v20260804": DatasetVersion(
+        name="v20260804",
+        root=SFT2SEG_SHARD_ROOT,
+        n={"train": 159215, "V_what": 897, "V_where": 896,
+           "T_final": 918, "T_lut_unseen": 433},
+        normal_n={"train": 93934, "V_what": 567, "V_where": 515,
+                  "T_final": 533, "T_lut_unseen": 252},
+        rule="unfiltered -- the index sft2seg-20260804 was published with",
+        measured_on="2026-08-18 (train normal 93934 = the frozen block's item 1)",
+    ),
+    "cut-p45": DatasetVersion(
+        name="cut-p45",
+        root=Path("/home/bc/data/datasets/sft2seg-20260804-cut-p45"),
+        parent="v20260804",
+        n={"train": 135697, "V_what": 777, "V_where": 781,
+           "T_final": 806, "T_lut_unseen": 371},
+        normal_n={"train": 80269, "V_what": 496, "V_where": 430,
+                  "T_final": 483, "T_lut_unseen": 221},
+        rule=("drop family==band & alpha_mean<0.4695485997094125, "
+              "radial<0.26050587805813546, semantic<0.10028177653808375; "
+              "linear unthresholded.  area = GT alpha mean.  Kept lines are "
+              "byte-identical to the parent's and no row changed split."),
+        measured_on="2026-08-18 (index built 2026-08-18 10:19)",
+        excluded_ids=Path("/home/bc/data/datasets/sft2seg-20260804-cut-p45/"
+                          "excluded_sample_ids.txt"),
+        excluded_n=23927,
+        excluded_sha256=("28d645dce0ea32e56c4a23773feee74e0b807dcbea4"
+                         "da5b8ae8b7ec250216563"),
+    ),
+}
+
+DATASET_VERSION_CHOICES: tuple[str, ...] = tuple(DATASET_VERSIONS)
+
+#: the口径 every runner uses unless ``--dataset-version`` says otherwise
+DEFAULT_DATASET_VERSION = "cut-p45"
+
+#: the default口径's index root.  Kept under the old name because that is what
+#: ``--dataset-root`` defaults, ``codec/lutcode`` and the test gates read; the
+#:口径 a call actually resolves to is :func:`active_root`.
+DATASET_ROOT = DATASET_VERSIONS[DEFAULT_DATASET_VERSION].root
+
+#: frozen block item 1.  No longer the assertion -- it is the *original*口径's
+#: train count, kept so the "frozen block" records in the runners stay pinned to
+#: the number the published boards were run on.  The assertion is per口径
+#: (:attr:`DatasetVersion.normal_n`).
+TRAIN_NORMAL_N = DATASET_VERSIONS["v20260804"].train_normal_n
+
+_ACTIVE_VERSION: DatasetVersion = DATASET_VERSIONS[DEFAULT_DATASET_VERSION]
+_INDEX_READ = False
+
+
+def dataset_version(name: str) -> DatasetVersion:
+    """The registered口径 called ``name``."""
+    try:
+        return DATASET_VERSIONS[str(name)]
+    except KeyError:
+        raise ValueError(
+            f"unknown dataset version {name!r}; registered: "
+            f"{list(DATASET_VERSION_CHOICES)}") from None
+
+
+def version_for_root(root: str | Path) -> DatasetVersion:
+    """The口径 whose ``root`` is ``root`` -- an unregistered root is a refusal.
+
+    A root nobody measured has no ``n`` to assert against, and an index without
+    an expected count is exactly the data drift the assertion exists to catch.
+    """
+    p = Path(root).resolve()
+    for ver in DATASET_VERSIONS.values():
+        if Path(ver.root).resolve() == p:
+            return ver
+    raise AssertionError(
+        f"{root} is not a registered dataset version.  Registered roots: "
+        + ", ".join(f"{v.name}={v.root}" for v in DATASET_VERSIONS.values())
+        + ".  Register it in q3vl/whatb/splits.py DATASET_VERSIONS with its "
+          "measured per-split n before training or scoring on it.")
+
+
+def active_dataset_version() -> DatasetVersion:
+    """The口径 this process resolves ``root=None`` to."""
+    return _ACTIVE_VERSION
+
+
+def active_root() -> Path:
+    return Path(_ACTIVE_VERSION.root)
+
+
+def use_dataset_version(name: str | DatasetVersion, *, force: bool = False
+                        ) -> DatasetVersion:
+    """Select the process-wide口径.  Called once, before any index is read.
+
+    Switching after an index has already been parsed is refused: the parsed rows
+    are cached per ``(split, root)`` but the *derived* numbers a runner has
+    already computed are not, so a mid-run switch would silently mix two口径.
+    ``force=True`` (tests) drops the parse cache and allows it.
+    """
+    global _ACTIVE_VERSION, _INDEX_READ
+    ver = name if isinstance(name, DatasetVersion) else dataset_version(name)
+    if ver.name == _ACTIVE_VERSION.name:
+        return ver
+    if _INDEX_READ and not force:
+        raise AssertionError(
+            f"the active dataset version is already {_ACTIVE_VERSION.name} and an "
+            f"index has been read from it; refusing to switch to {ver.name} "
+            "mid-process")
+    _ACTIVE_VERSION = ver
+    _INDEX_READ = False
+    _load_index_cached.cache_clear()
+    return ver
+
+
+def _resolve_root(root: str | Path | None) -> Path:
+    return active_root() if root is None else Path(root)
+
+
+def dataset_version_facts(root: str | Path | None = None) -> dict[str, Any]:
+    """:meth:`DatasetVersion.facts` of the口径 ``root`` names (default: active)."""
+    return version_for_root(_resolve_root(root)).facts()
+
+
+def dataset_available(root: str | Path | None = None) -> bool:
+    """True when both the index口径 and the shard mount are readable.
+
+    Test gates need both: a口径 root can be on local disk while the records and
+    images it points at still live on the soft mount.
+    """
+    try:
+        return (split_index_path("train", root).is_file()
+                and SFT2SEG_SHARD_ROOT.is_dir())
+    except (OSError, ValueError):
+        return False
 
 #: the L8 manifest written next to its z cache (one JSON object per usable row)
 L8_MANIFEST = Path("/home/bc/data/runs/whatb/zcache_l8/l8_train.manifest.jsonl")
@@ -108,10 +318,11 @@ def ro_path(path: str | Path) -> Path:
     return Path(s)
 
 
-def split_index_path(split: str, root: str | Path = DATASET_ROOT) -> Path:
+def split_index_path(split: str, root: str | Path | None = None) -> Path:
+    """``root`` defaults to the active口径 (:func:`active_root`)."""
     if split not in SPLITS:
         raise ValueError(f"unknown split {split!r}; expected one of {SPLITS}")
-    return Path(root) / "splits" / f"{split}.index.jsonl"
+    return _resolve_root(root) / "splits" / f"{split}.index.jsonl"
 
 
 @dataclass(frozen=True)
@@ -173,8 +384,9 @@ class IndexRow:
         return str(self.raw.get("_source", "v2seg"))
 
 
-def load_index(split: str, root: str | Path = DATASET_ROOT) -> list[IndexRow]:
-    """All rows of one split's index, in file order."""
+def load_index(split: str, root: str | Path | None = None) -> list[IndexRow]:
+    """All rows of one split's index, in file order (active口径 by default)."""
+    global _INDEX_READ
     path = split_index_path(split, root)
     rows: list[IndexRow] = []
     with path.open("r", encoding="utf-8") as fh:
@@ -182,19 +394,28 @@ def load_index(split: str, root: str | Path = DATASET_ROOT) -> list[IndexRow]:
             line = line.strip()
             if line:
                 rows.append(IndexRow.from_json(json.loads(line)))
+    _INDEX_READ = True
     return rows
 
 
 @lru_cache(maxsize=None)
-def load_index_cached(split: str, root: str | Path = DATASET_ROOT
-                      ) -> tuple[IndexRow, ...]:
-    """:func:`load_index`, parsed once per process.
-
-    ``train.index.jsonl`` is 159,215 lines on the soft mount; the training
-    population, the B3 bucket pool and ``Lib_tr`` all read it, and a run that
-    parses it three times pays for it three times.
-    """
+def _load_index_cached(split: str, root: Path) -> tuple[IndexRow, ...]:
     return tuple(load_index(split, root))
+
+
+def load_index_cached(split: str, root: str | Path | None = None
+                      ) -> tuple[IndexRow, ...]:
+    """:func:`load_index`, parsed once per process, keyed by the resolved root.
+
+    ``train.index.jsonl`` is 159,215 lines (v20260804) / 135,697 (cut-p45); the
+    training population, the B3 bucket pool and ``Lib_tr`` all read it, and a run
+    that parses it three times pays for it three times.
+    """
+    return _load_index_cached(split, _resolve_root(root))
+
+
+load_index_cached.cache_clear = _load_index_cached.cache_clear   # type: ignore[attr-defined]
+load_index_cached.cache_info = _load_index_cached.cache_info     # type: ignore[attr-defined]
 
 
 def normal_only(rows: Iterable[IndexRow]) -> list[IndexRow]:
@@ -332,19 +553,29 @@ def extra_train_rows(data: str) -> list[IndexRow]:
 
 
 def train_normal_rows(data: str = "v2seg", *, split: str = "train",
-                      root: str | Path = DATASET_ROOT) -> list[IndexRow]:
+                      root: str | Path | None = None) -> list[IndexRow]:
     """The training population of ``--data``: measured, then asserted.
 
     Every source is counted here and checked against that source's own on-disk
-    declaration.  The **total** is deliberately not written down anywhere: a
-    literal for the merged n is a number that has to be edited every time a
-    corpus is added, and the edit is exactly what gets forgotten.
+    declaration -- the sft2seg part against the **口径's** own
+    :attr:`DatasetVersion.normal_n` (resolved from ``root``), the L8 part against
+    ``l8_train.manifest.report.json``.  The **total** is deliberately not written
+    down anywhere: a literal for the merged n is a number that has to be edited
+    every time a corpus is added, and the edit is exactly what gets forgotten.
     """
-    rows = list(normal_only(load_index_cached(split, root)))
-    if split == "train" and len(rows) != TRAIN_NORMAL_N:
+    resolved = _resolve_root(root)
+    ver = version_for_root(resolved)
+    rows = list(normal_only(load_index_cached(split, resolved)))
+    want = ver.normal_n.get(split)
+    if want is None:
         raise AssertionError(
-            f"the frozen sft2seg training set is {TRAIN_NORMAL_N} normal rows "
-            f"(frozen block item 1); this index gives {len(rows)}")
+            f"dataset version {ver.name!r} has no measured normal-only count for "
+            f"split {split!r}; measure it and register it in DATASET_VERSIONS "
+            "before training or scoring on it")
+    if len(rows) != want:
+        raise AssertionError(
+            f"dataset version {ver.name!r} declares {want} normal rows for split "
+            f"{split!r} ({ver.root}); this index gives {len(rows)}")
     seen = {r.sample_id for r in rows}
     for row in extra_train_rows(data):
         if row.sample_id in seen:
@@ -358,13 +589,13 @@ def train_normal_rows(data: str = "v2seg", *, split: str = "train",
 
 
 def train_normal_n(data: str = "v2seg", *, split: str = "train",
-                   root: str | Path = DATASET_ROOT) -> int:
+                   root: str | Path | None = None) -> int:
     """``len(train_normal_rows(data))`` -- what ``steps_per_epoch`` is derived from."""
     return len(train_normal_rows(data, split=split, root=root))
 
 
 def train_source_facts(data: str = "v2seg", *, split: str = "train",
-                       root: str | Path = DATASET_ROOT) -> dict[str, Any]:
+                       root: str | Path | None = None) -> dict[str, Any]:
     """Per-source counts for ``run_setup.json`` (no total is hard-coded anywhere)."""
     per: dict[str, Any] = {}
     for row in train_normal_rows(data, split=split, root=root):

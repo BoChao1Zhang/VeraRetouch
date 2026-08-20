@@ -149,6 +149,7 @@ _REPO = Path(__file__).resolve().parents[3]
 if (_REPO / "q3vl").is_dir() and str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
+from q3vl.whatb import caliber as K                           # noqa: E402
 from q3vl.whatb import splits as S                            # noqa: E402
 from q3vl.whatb.readout import (                              # noqa: E402
     WhatReadoutBuilder,
@@ -238,6 +239,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="build_zcache",
         description="build the whatb z cache (one frozen forward per sample)")
+    # the index口径, spelled / defaulted exactly as on the eight arm runners:
+    # which rows this cache covers is a property of the口径, so it is selected
+    # here and written onto the artefact rather than inherited from a default.
+    K.add_caliber_arguments(ap, group="index口径 (shared with the arm runners)",
+                            data=False, batch_split=False, base_lr=False)
     ap.add_argument("--split", required=True, choices=S.SPLITS)
     ap.add_argument("--tag", default="none", choices=CONTROL_TAGS)
     ap.add_argument("--context", default="generated",
@@ -328,6 +334,9 @@ def _batched(xs: Sequence[Any], n: int) -> Iterator[list[Any]]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # the口径 is resolved BEFORE the first load_index: which rows this cache
+    # covers is decided here, so it must be decided before anything is read.
+    ver = K.apply_dataset_version(args)
     t_start = time.time()
     tag = args.tag
     context_source = "generated" if tag != "none" else args.context
@@ -381,6 +390,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     setup: dict[str, Any] = {
         "split": args.split, "tag": tag, "context_source": context_source,
         "rows": args.rows, "n_rows": len(rows), "checkpoint": args.checkpoint,
+        # which index口径 the row set was planned in: name + root + that口径's
+        # measured per-split n / normal_n + the exclusion list's sha256.  A
+        # cache is only usable by a run of the SAME口径, and
+        # run_carrier_arm.open_z_caches asserts exactly this field.
+        "dataset_version": ver.name,
+        "dataset_root": str(ver.root),
+        "dataset_version_facts": ver.facts(),
+        "n_index_rows": len(S.load_index(args.split)),
         "readout": args.readout, "readout_qtok": int(args.readout_qtok),
         "out_dir": str(out_dir), "seed": int(args.seed),
         "span_source": span_source, "regenerate": regenerate,
@@ -555,7 +572,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                   readout_qtok=int(args.readout_qtok),
                   extra_meta={"irrelevant_source": setup["irrelevant_source"],
                               "rows_filter": args.rows, "seed": int(args.seed),
-                              "genctx_root": setup["genctx_root"]})
+                              "genctx_root": setup["genctx_root"],
+                              # the consumer's口径 gate (run_carrier_arm.
+                              # assert_zcache_dataset_version) reads these two
+                              "dataset_version": setup["dataset_version"],
+                              "dataset_root": setup["dataset_root"],
+                              "dataset_version_facts":
+                                  setup["dataset_version_facts"]})
 
     report = {
         "setup": setup, "dataset": ds_info,

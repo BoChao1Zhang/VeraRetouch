@@ -1,8 +1,9 @@
 """Split index / record reading and the B3 bucket pools.
 
-The synthetic half runs anywhere; the mounted half re-measures the frozen data
-facts (n = 93934 normal train rows, 567 normal V_what rows, 0 lut_id overlap
-with T_lut_unseen) and skips when the read-only mount is absent.
+The synthetic half runs anywhere; the mounted half re-measures the data facts of
+**every registered index口径** (``DATASET_VERSIONS``) and skips when the
+read-only mount is absent.  The numbers below were measured on 2026-08-18 and
+are what :func:`train_normal_rows` asserts against at run time.
 """
 
 from __future__ import annotations
@@ -11,7 +12,9 @@ import json
 
 import pytest
 
+from q3vl.whatb import splits as S
 from q3vl.whatb.splits import (
+    DATASET_VERSIONS,
     DATASET_ROOT,
     TRAIN_NORMAL_N,
     IndexRow,
@@ -24,7 +27,24 @@ from q3vl.whatb.splits import (
     split_index_path,
 )
 
-MOUNTED = (DATASET_ROOT / "splits" / "train.index.jsonl").exists()
+MOUNTED = S.dataset_available() and S.dataset_available(
+    DATASET_VERSIONS["v20260804"].root)
+
+#: measured 2026-08-18, per口径: split -> the split_facts keys this file pins
+FACTS = {
+    "v20260804": {
+        "V_what": (897, 567, 321, 246, 531, 163),
+        "T_lut_unseen": (433, 252, 144, 108, 259, 212),
+        "train": (159215, 93934, 51182, 42752, 3149, 27104),
+    },
+    "cut-p45": {
+        "V_what": (777, 496, 321, 175, 475, 161),
+        "T_lut_unseen": (371, 221, 144, 77, 232, 190),
+        "train": (135697, 80269, 51182, 29087, 3103, 26489),
+    },
+}
+_FACT_KEYS = ("n", "n_normal", "n_normal_style", "n_normal_local",
+              "uniq_lut_id", "uniq_source")
 
 
 def _row(i, conf="normal", task="style", lut="rcp_a", src="src_1"):
@@ -71,26 +91,48 @@ def test_record_reader_uses_offset_and_length(tmp_path):
     assert read_record(row)["minor"] == "m"
 
 
+def test_the_version_table_pins_the_frozen_block_number():
+    """``TRAIN_NORMAL_N`` is the ORIGINAL口径's count -- the published boards'."""
+    assert DATASET_VERSIONS["v20260804"].train_normal_n == TRAIN_NORMAL_N == 93934
+    assert DATASET_VERSIONS["cut-p45"].train_normal_n == 80269
+    assert S.DEFAULT_DATASET_VERSION == "cut-p45"
+    assert DATASET_ROOT == DATASET_VERSIONS["cut-p45"].root
+    # cut-p45 drops local-mask rows only: the style rows are identical
+    assert (DATASET_VERSIONS["cut-p45"].excluded_n
+            == DATASET_VERSIONS["v20260804"].n["train"]
+            + sum(DATASET_VERSIONS["v20260804"].n[s_] for s_ in
+                  ("V_what", "V_where", "T_final", "T_lut_unseen"))
+            - DATASET_VERSIONS["cut-p45"].n["train"]
+            - sum(DATASET_VERSIONS["cut-p45"].n[s_] for s_ in
+                  ("V_what", "V_where", "T_final", "T_lut_unseen")))
+
+
+def test_an_unregistered_root_is_refused():
+    with pytest.raises(AssertionError, match="not a registered dataset version"):
+        S.version_for_root("/home/bc/data/datasets/no-such-cut")
+
+
 @pytest.mark.skipif(not MOUNTED, reason="sft2seg splits not mounted")
-def test_frozen_data_facts_hold_on_the_mounted_splits():
-    v = load_index("V_what")
-    assert len(v) == 897
-    assert len(normal_only(v)) == 567
-    f = split_facts(v)
-    assert (f["n_normal_style"], f["n_normal_local"]) == (321, 246)
-    assert f["uniq_lut_id"] == 531 and f["uniq_source"] == 163
+@pytest.mark.parametrize("version", sorted(DATASET_VERSIONS))
+def test_data_facts_hold_on_the_mounted_splits(version):
+    ver = DATASET_VERSIONS[version]
+    for split, want in FACTS[version].items():
+        f = split_facts(load_index(split, ver.root))
+        assert tuple(f[k] for k in _FACT_KEYS) == want, (version, split)
+        assert ver.n[split] == f["n"] and ver.normal_n[split] == f["n_normal"]
 
-    t = load_index("T_lut_unseen")
-    assert len(t) == 433 and len(normal_only(t)) == 252
-    assert split_facts(t)["uniq_lut_id"] == 259
-
-    train = load_index("train")
-    assert len(train) == 159215
-    assert len(normal_only(train)) == TRAIN_NORMAL_N == 93934
-    tf = split_facts(train)
-    assert tf["n_normal_style"] == 51182 and tf["n_normal_local"] == 42752
-    assert tf["uniq_lut_id"] == 3149
+    train = load_index("train", ver.root)
+    t = load_index("T_lut_unseen", ver.root)
     assert not ({r.lut_id for r in train} & {r.lut_id for r in t})
+    # the口径's own declaration is what train_normal_rows asserts against
+    assert S.train_normal_n("v2seg", root=ver.root) == ver.train_normal_n
+
+
+@pytest.mark.skipif(not MOUNTED, reason="sft2seg splits not mounted")
+def test_cut_p45_is_a_strict_subset_of_the_published_index():
+    a = {r.sample_id for r in load_index("train", DATASET_VERSIONS["v20260804"].root)}
+    b = {r.sample_id for r in load_index("train", DATASET_VERSIONS["cut-p45"].root)}
+    assert b < a
 
 
 @pytest.mark.skipif(not MOUNTED, reason="sft2seg splits not mounted")

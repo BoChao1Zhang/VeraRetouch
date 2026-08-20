@@ -77,6 +77,29 @@ DEFAULT_CHECKPOINT = "/home/bc/data/runs/q3vl_base_sft_v2seg_20260814/checkpoint
 #: the shared ``BATCH_SPLITS`` table because nothing publishes on them.
 SMOKE_BATCH_SPLITS: tuple[str, ...] = ("8x64", "2x16")
 
+#: ``--no-gate`` is section 4.1 row 1 (= EPR-024): there is no gate in the graph at
+#: all.  ``IdGateArm.apply_transform`` ignores ``u`` entirely when ``cfg.gate`` is
+#: false (``arms/idgate.py`` -- ``u`` is only consulted behind ``if self.cfg.gate``),
+#: so the three P2 field columns, whose whole content is "hand the gate a per-pixel
+#: ``u`` field and see what changes", have nothing to measure: all three would return
+#: the ungated headline number and differ from it, and from each other, by exactly 0.
+#: ``arms/idgate.py:1496`` already refuses to compute them for that reason
+#: (``if with_fields and cfg.gate``).  They are waived on this 档 only, by name, and
+#: the waiver is written onto the board as ``criteria_waived`` -- the shape
+#: ``scripts/run_g4d_arm.py``'s ``ORACLE_WAIVED_CRITERIA`` uses.
+#:
+#: Nothing else is waived.  In particular ``gate_identity_check``, ``gate_u_hist``,
+#: ``strength_dE_u`` and ``dlib_u`` ARE still computed on this 档 (verified on the
+#: ``--smoke --no-gate`` board: every one carries ``n > 0``), so they stay required.
+NO_GATE_WAIVED_CRITERIA: tuple[str, ...] = (
+    "field_gt", "field_const", "field_shuffle",
+)
+
+
+def waived_criteria(cfg: ig.IdGateConfig) -> tuple[str, ...]:
+    """The pre-registered keys this 档 structurally cannot compute (empty with the gate)."""
+    return () if cfg.gate else NO_GATE_WAIVED_CRITERIA
+
 
 # --------------------------------------------------------------------------- #
 # provenance
@@ -231,7 +254,8 @@ def config_from_args(args: argparse.Namespace, *, train_n: int | None = None
     b, q = K.parse_batch_split(args.batch_split)
     return ig.IdGateConfig(
         data=args.data,
-        train_n=int(train_n) if train_n is not None else K.FROZEN_TRAIN_NORMAL_N,
+        train_n=(int(train_n) if train_n is not None
+                 else K.default_train_normal_n()),
         n_gauss=args.n_gauss, cond_dim=args.cond_dim, gen_width=args.gen_width,
         clamp=args.clamp, residual=args.residual,
         gate=args.gate, gate_u_source=args.gate_u_source, gate_clamp=args.gate_clamp,
@@ -462,6 +486,7 @@ def _same_source_pairs(samples: Sequence[ig.EvalSample], *, limit: int
 # --------------------------------------------------------------------------- #
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    dataset_ver = K.apply_dataset_version(args)
     # -- the population FIRST: the horizon is ceil(n / B) on it, not on a
     # -- literal.  Every source is counted against its own on-disk declaration
     # -- (q3vl/whatb/splits.py train_normal_rows); --smoke has no split to read.
@@ -579,6 +604,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     setup["caliber"]["train_source_facts"] = (
         None if (args.data == "v2seg" or args.smoke) else
         _splits.train_source_facts(args.data, split=args.split))
+    setup["dataset_version"] = dataset_ver.facts()
 
     write_json(run_dir / "config" / "run_setup.json", setup)
     write_json(run_dir / "config" / "loss_preregistration.json",
@@ -738,8 +764,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             # eval asserts the WHOLE pre-registered table, so a column that was
             # defined but never wired fails in epoch 1 rather than after the
             # 117,440-step horizon (the shape run_g4d_arm.py uses).
+            waived = waived_criteria(cfg)
+            qboard["criteria_waived"] = list(waived)
             qboard["first_board_assertion"] = _criteria.assert_criteria_ran(
-                qboard, ig.EPR, required=list(ig.REQUIRED_CRITERIA))
+                qboard, ig.EPR,
+                required=[k for k in ig.REQUIRED_CRITERIA if k not in waived])
             first_board_done = True
         write_json(run_dir / "quick_eval" / f"board_step{step}.json", qboard)
         headline = ((qboard.get("contexts") or {}).get("all") or {}).get(
@@ -757,8 +786,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                      strength_n=args.strength_n)
     board["best_checkpoint"] = best
     board["smoke"] = bool(args.smoke)
+    board["criteria_waived"] = list(waived_criteria(cfg))
+    if not cfg.gate:
+        board["criteria_waived_reason"] = (
+            "--no-gate (section 4.1 row 1 = EPR-024): u is not consumed anywhere in the "
+            "graph, so the three P2 field columns have no quantity to measure; "
+            "arms/idgate.py refuses to compute them under this 档")
     write_json(run_dir / "board_raw.json", board)
-    board["publication"] = ig.publish_arm_board(board, cfg=cfg, steps_path=steps_path)
+    board["publication"] = ig.publish_arm_board(board, cfg=cfg, steps_path=steps_path,
+                                                waived=waived_criteria(cfg))
     write_json(run_dir / "metrics.json", board)
     print(json.dumps({"headline_normal_only":
                       ((board["contexts"]["all"]).get("headline_normal_only") or {}

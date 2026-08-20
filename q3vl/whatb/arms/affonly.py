@@ -51,7 +51,7 @@ Discipline (each item paid for on the where side last week)
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Sequence
 
 import torch
@@ -59,6 +59,8 @@ from torch import Tensor, nn
 
 from q3vl.whatb.caliber import (
     DATA_CHOICES,
+    FROZEN_TRAIN_NORMAL_N,
+    default_train_normal_n as _active_train_normal_n,
     FROZEN_BATCH_SPLITS,
     effective_lambda_hc,
     effective_lambda_sparse,
@@ -105,6 +107,9 @@ __all__ = [
     "ARM_CRITERIA",
     "P1_CRITERIA",
     "SHARE_CHOICES",
+    "SHARED_GEOM_COMPARED",
+    "SHARE_ASSERTION_WAIVERS",
+    "assertion_waivers",
     "GLOBAL_AFFINE_CHOICES",
     "MU_INIT_CHOICES",
     "LINEARITY_TOL",
@@ -153,6 +158,74 @@ SHARE_CHOICES: tuple[str, ...] = ("none", "geo", "geo_opacity")
 GLOBAL_AFFINE_CHOICES: tuple[str, ...] = ("affine", "residual", "none")
 MU_INIT_CHOICES: tuple[str, ...] = ("grid", "random")
 
+#: Which geometry tensors assertion 1 compares **bit-identically** under each
+#: ``--share`` 档.  PROPOSAL section 3.4-(12) defines the three rows:
+#:
+#: ``geo_opacity``  this arm -- ``mu``, ``Sigma`` AND ``o`` shared;
+#: ``geo``          GLUT's own Shared Geometry (paper section 3.2) -- ``mu`` and
+#:                  ``Sigma`` shared, ``o`` **still generated per condition**;
+#: ``none``         Full Generation (= EPR-024) -- all geometry per condition.
+#:
+#: ``precision``/``logdet`` are functions of ``(mu, Sigma)`` only, so they are the
+#: part of assertion 1 that is still a statement under ``geo``.  Under ``none``
+#: nothing is shared and assertion 1 has no premise left to check.
+SHARED_GEOM_COMPARED: dict[str, tuple[str, ...]] = {
+    "geo_opacity": ("precision", "logdet", "opacity"),
+    "geo": ("precision", "logdet"),
+    "none": (),
+}
+
+#: The section-3.6 assertions that are **not binding** under each ``--share`` 档,
+#: each with the reason it is not.  PROPOSAL section 1.4's proposition 1 states its
+#: premise as "mu, Sigma AND o condition-independent"; assertions 2 (parameter-space
+#: linearity) and 3 (IP-A ``f^par`` == the output blend) are numerical forms of that
+#: proposition, so both are statements about ``geo_opacity`` and nothing else.
+#: A waived assertion is still **measured and written to the board** -- the number is
+#: recorded, only the raise is withheld -- and the waiver string travels with it via
+#: :func:`assertion_waivers` so no row can be read as if the assertion had passed.
+SHARE_ASSERTION_WAIVERS: dict[str, dict[str, str]] = {
+    "geo_opacity": {},
+    "geo": {
+        "shared_geom_identical.opacity":
+            "--share geo is GLUT's native Shared Geometry (PROPOSAL 3.4-(12)): mu and "
+            "Sigma are shared, o is generated per condition by head_opacity "
+            "(affonly.py AffineOnlyHead.__init__).  Assertion 1 therefore binds on "
+            "(precision, logdet) only; the cross-condition dispersion of o is recorded "
+            "as opacity_max_abs_dev / opacity_cross_std, not asserted.",
+        "affine_linearity_maxdev":
+            "assertion 2 is proposition 1 in numbers and proposition 1's premise is "
+            "mu/Sigma/o ALL condition-independent (PROPOSAL 1.4).  Under --share geo, o "
+            "is condition-dependent, so the premise does not hold; the deviation is "
+            "measured and recorded, the tolerance is not enforced.",
+        "ip_a_assertion3":
+            "assertion 3 (IP-A f^par == the output blend) is the same proposition on "
+            "the interpolation path; same premise, same waiver.  assertion3_maxdev is "
+            "still reported.",
+    },
+    "none": {
+        "shared_geom_identical":
+            "--share none is Full Generation (= EPR-024, PROPOSAL 3.4-(12)): there is no "
+            "shared geometry table at all, so 'the shared geometry is identical across "
+            "conditions' has no referent.  The measured cross-condition deviation of "
+            "(precision, logdet, opacity) is still recorded.",
+        "affine_linearity_maxdev":
+            "proposition 1's premise is violated by construction under Full Generation; "
+            "the deviation is measured and recorded, the tolerance is not enforced.",
+        "ip_a_assertion3":
+            "same as assertion 2: under Full Generation f^par and the output blend are "
+            "not the same object.  assertion3_maxdev is still reported.",
+    },
+}
+
+
+def assertion_waivers(cfg: "AffineOnlyConfig") -> dict[str, str]:
+    """The section-3.6 assertions this ``--share`` 档 does not bind, with reasons.
+
+    Written onto ``run_setup.json`` and onto the board so a waived assertion is a
+    visible line on the row rather than a silent skip.
+    """
+    return dict(SHARE_ASSERTION_WAIVERS[cfg.share])
+
 #: proposal section 3.6 assertion 2 -- "< 1e-5, and it must run in fp32
 #: (bf16 machine epsilon is ~7.8e-3, so 1e-5 fails there by construction)".
 LINEARITY_TOL: float = 1e-5
@@ -165,7 +238,9 @@ DEGENERATE_WEIGHT_TAU: float = 1e-3
 FROZEN: dict[str, Any] = {
     "train_split": "train",
     "train_winner_confidence": "normal",
-    "train_n": 93934,
+    # the ORIGINAL口径 (v20260804); the active口径 may differ and the
+    # run records its own measured n next to this one
+    "train_n": FROZEN_TRAIN_NORMAL_N,
     "batch_samples": BATCH_SAMPLES,
     "queries_per_sample": QUERIES_PER_SAMPLE,
     "colors_per_step": COLORS_PER_STEP,
@@ -238,9 +313,17 @@ class AffineOnlyConfig:
     #: which training corpora the population is drawn from (``--data``); the
     #: measured n is passed in, never a literal (:mod:`q3vl.whatb.caliber`).
     data: str = "v2seg"
-    train_n: int = 93934
+    #: the active index口径's declared train normal-only n (v20260804 = 93934,
+    #: cut-p45 = 80269); a runner overrides it with the measured population
+    train_n: int = field(default_factory=_active_train_normal_n)
     epochs: int = 40
-    total_steps: int = 117440
+    #: ``epochs * steps_per_epoch``.  ``0`` (the default) means "derive it from
+    #: this config's own ``train_n`` / ``batch_samples`` / ``epochs``" -- two
+    #: independent ``default_factory`` calls could disagree
+    #: (``AffineOnlyConfig(train_n=93934)`` used to give ``total_steps`` off the
+    #: *active*口径's n while ``train_n`` was the one passed in).  A non-zero
+    #: value is honoured verbatim: that is the ``--total-steps N`` smoke path.
+    total_steps: int = 0
     mining_start_epoch: int = 5
     mining_end_epoch: int = 20
     mining_r_start: float = 0.10
@@ -273,6 +356,13 @@ class AffineOnlyConfig:
             raise ValueError(f"--loss-level must be 1..4, got {self.loss_level}")
         if self.data not in DATA_CHOICES:
             raise ValueError(f"--data must be one of {DATA_CHOICES}, got {self.data!r}")
+        if int(self.total_steps) < 0:
+            raise ValueError(f"total_steps must be >= 0, got {self.total_steps}")
+        if int(self.total_steps) == 0:
+            # derived from THIS config's population, so the horizon and the
+            # epoch length can never come from two different口径
+            object.__setattr__(self, "total_steps",
+                               int(self.epochs) * self.steps_per_epoch)
 
     # ---- derived arithmetic (all of it printed into run_setup) ------------
     @property
@@ -766,22 +856,45 @@ def train_step(
 # --------------------------------------------------------------------------- #
 # 6. the arm's three run-time assertions (section 3.6) + the degeneracy guard
 # --------------------------------------------------------------------------- #
+def _population_std(values: Sequence[float]) -> float:
+    """Population std of a short python list (no numpy in this module)."""
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    return math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
+
+
 def assert_shared_geometry_identical(
     head: AffineOnlyHead, z: Tensor, *, n_probe: int | None = None, raise_on_fail: bool = True
 ) -> dict[str, Any]:
-    """Assertion 1: ``(precision, logdet, o)`` are **bit-identical** across conditions.
+    """Assertion 1: the shared geometry tensors are **bit-identical** across conditions.
 
     64 random conditions, one full forward each, ``torch.equal`` (not
     ``allclose``).  A difference means mu / Sigma / o are still on the condition
     path, i.e. the arm is not the arm.
+
+    Which tensors are *asserted* is the ``--share`` 档's own definition
+    (:data:`SHARED_GEOM_COMPARED`): all three under ``geo_opacity`` (this arm),
+    ``(precision, logdet)`` under ``geo`` (GLUT's Shared Geometry generates ``o`` per
+    condition by construction), none under ``none`` (Full Generation shares nothing).
+    All three deviations are **measured and recorded in every 档** either way; the 档
+    only decides whether the mismatch raises.  The waiver string for the non-binding
+    part is in :data:`SHARE_ASSERTION_WAIVERS`.
     """
     n = int(n_probe or head.cfg.shared_geom_probes)
     zz = z[:n]
     if zz.shape[0] < 2:
         raise ValueError("assertion 1 needs at least two conditions")
+    names = ("precision", "logdet", "opacity")
+    compared = SHARED_GEOM_COMPARED[head.cfg.share]
+    binding = bool(compared)
     ref: tuple[Tensor, Tensor, Tensor] | None = None
-    n_diff = 0
+    n_diff = 0                       # any of the three differs (measured, all 档)
     max_dev = 0.0
+    n_diff_binding = 0               # only the asserted subset differs
+    max_dev_binding = 0.0
+    per_tensor: dict[str, float] = {k: 0.0 for k in names}
+    opacity_devs: list[float] = []
     for i in range(zz.shape[0]):
         p = head.theta(zz[i : i + 1])
         prec, logdet, opac, _ = glut_geometry(p.chol_diag, p.chol_off, p.opacity_logit,
@@ -790,10 +903,19 @@ def assert_shared_geometry_identical(
         if ref is None:
             ref = cur
             continue
+        devs = {k: float((a - b).abs().max()) for k, a, b in zip(names, ref, cur)}
+        for k, v in devs.items():
+            per_tensor[k] = max(per_tensor[k], v)
+        opacity_devs.append(devs["opacity"])
         if not all(torch.equal(a, b) for a, b in zip(ref, cur)):
             n_diff += 1
-            max_dev = max(max_dev, *(float((a - b).abs().max()) for a, b in zip(ref, cur)))
+            max_dev = max(max_dev, *devs.values())
+        if compared and not all(torch.equal(ref[names.index(k)], cur[names.index(k)])
+                                for k in compared):
+            n_diff_binding += 1
+            max_dev_binding = max(max_dev_binding, *(devs[k] for k in compared))
     ok = n_diff == 0
+    ok_binding = n_diff_binding == 0
     out = {
         "n": int(zz.shape[0]),
         "value": 1.0 if ok else 0.0,
@@ -802,13 +924,27 @@ def assert_shared_geometry_identical(
         "max_abs_dev": max_dev,
         "share": head.cfg.share,
         "quantity": "torch.equal over (precision, logdet, opacity) across conditions",
+        # ---- what this 档 actually asserts -------------------------------------
+        "compared": list(compared),
+        "binding": binding,
+        "identical_binding": ok_binding if binding else None,
+        "n_conditions_differing_binding": n_diff_binding,
+        "max_abs_dev_binding": max_dev_binding,
+        "per_tensor_max_abs_dev": per_tensor,
+        "opacity_max_abs_dev": per_tensor["opacity"],
+        "opacity_cross_std": _population_std(opacity_devs),
     }
-    if raise_on_fail and not ok:
+    waiver = {k: v for k, v in SHARE_ASSERTION_WAIVERS[head.cfg.share].items()
+              if k.startswith("shared_geom_identical")}
+    if waiver:
+        out["waiver"] = waiver
+    if raise_on_fail and binding and not ok_binding:
         raise AssertionError(
-            f"[{ARM}] assertion 1 FAILED: {n_diff}/{zz.shape[0] - 1} conditions produced a "
-            f"different geometry (max |dev| = {max_dev:.3e}).  mu/Sigma/o are still "
-            f"condition-dependent under --share {head.cfg.share}; proposition 1's premise "
-            "does not hold and the board may not be published.")
+            f"[{ARM}] assertion 1 FAILED: {n_diff_binding}/{zz.shape[0] - 1} conditions "
+            f"produced a different geometry (max |dev| = {max_dev_binding:.3e}) over "
+            f"{list(compared)}.  mu/Sigma/o are still condition-dependent under "
+            f"--share {head.cfg.share}; proposition 1's premise does not hold and the "
+            "board may not be published.")
     return out
 
 
@@ -861,6 +997,8 @@ def assert_affine_linearity(
             worst = max(worst, dev)
 
     ok = worst < tol
+    waiver = SHARE_ASSERTION_WAIVERS[cfg.share].get("affine_linearity_maxdev")
+    binding = waiver is None
     out = {
         "n": int(n_pairs),
         "value": worst,
@@ -872,8 +1010,12 @@ def assert_affine_linearity(
         "clamp": "none (pre-clamp, proposition 1 is stated pre-clamp)",
         "quantity": "max_x |f_{(1-a)th_a + a th_b}(x) - ((1-a) f_a(x) + a f_b(x))|",
         "passed": ok,
+        "share": cfg.share,
+        "binding": binding,
     }
-    if raise_on_fail and not ok:
+    if waiver is not None:
+        out["waiver"] = waiver
+    if raise_on_fail and binding and not ok:
         raise AssertionError(
             f"[{ARM}] assertion 2 FAILED: max |f^par - f^fun| = {worst:.3e} >= {tol:.1e} "
             f"on the {grid_n}^3 grid.  Proposition 1's premise (mu/Sigma/o condition-"
@@ -1062,6 +1204,13 @@ def interp_ip_a(
         "assertion3_maxdev": a3_dev,
         "assertion3_tol": LINEARITY_TOL,
         "assertion3_passed": a3_dev < LINEARITY_TOL,
+        # assertion 3 has never raised (it is a reported column); under --share
+        # geo / none it is not even a claim -- see SHARE_ASSERTION_WAIVERS.
+        "assertion3_binding":
+            "ip_a_assertion3" not in SHARE_ASSERTION_WAIVERS[head.cfg.share],
+        "assertion3_waiver":
+            SHARE_ASSERTION_WAIVERS[head.cfg.share].get("ip_a_assertion3"),
+        "share": head.cfg.share,
         "grid_n": grid_n,
         "metric": "dE00 on the uniform sRGB grid",
         "quantity": "IP-A dE00(f_cond_alpha, (1-a) L_a + a L_b), mean over alphas and pairs",
@@ -1202,6 +1351,8 @@ def run_setup(head: AffineOnlyHead, *, extra: Mapping[str, Any] | None = None) -
             "degenerate_weight_rate": {"tau": cfg.degenerate_weight_tau},
             "degeneracy_guard": cfg.degeneracy.as_dict(),
         },
+        "shared_geom_compared": list(SHARED_GEOM_COMPARED[cfg.share]),
+        "assertion_waivers": assertion_waivers(cfg),
         "loss": {
             "form": "L_rec + lambda_hc * L_hc + lambda_sparse * R_sparse (GLUT Eq.6-8)",
             "lambda_hc": cfg.lambda_hc,

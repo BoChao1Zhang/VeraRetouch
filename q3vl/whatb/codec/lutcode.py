@@ -107,13 +107,13 @@ LEDGER_9CUBED_IDS: int = 1137
 # --------------------------------------------------------------------------- #
 # 1. the LUT pools
 # --------------------------------------------------------------------------- #
-def train_lut_ids(split: str = "train", root: str | Path = S.DATASET_ROOT
+def train_lut_ids(split: str = "train", root: str | Path | None = None
                   ) -> list[str]:
     """Sorted unique ``lut_id`` of the train split index (measured, 3,149)."""
     return sorted({r.lut_id for r in S.load_index_cached(split, root) if r.lut_id})
 
 
-def eval_only_lut_ids(root: str | Path = S.DATASET_ROOT,
+def eval_only_lut_ids(root: str | Path | None = None,
                       splits_: Sequence[str] = ("V_what", "T_final",
                                                 "T_lut_unseen"),
                       ) -> dict[str, list[str]]:
@@ -127,7 +127,7 @@ def eval_only_lut_ids(root: str | Path = S.DATASET_ROOT,
 
 
 def control_lut_ids(rows: int = LEDGER_9CUBED_ROWS, seed: int = DEFAULT_SEED,
-                    split: str = "train", root: str | Path = S.DATASET_ROOT
+                    split: str = "train", root: str | Path | None = None
                     ) -> list[str]:
     """The ledger's ``Lib_tr`` protocol: unique ids of ``rows`` random index rows.
 
@@ -144,7 +144,7 @@ def control_lut_ids(rows: int = LEDGER_9CUBED_ROWS, seed: int = DEFAULT_SEED,
 
 
 def assert_fit_set_clean(fit_ids: Iterable[str], *,
-                         root: str | Path = S.DATASET_ROOT,
+                         root: str | Path | None = None,
                          forbidden: Sequence[str] = ("T_lut_unseen",),
                          ) -> dict[str, Any]:
     """The fit set carries no ``lut_id`` of a LUT-disjoint evaluation split.

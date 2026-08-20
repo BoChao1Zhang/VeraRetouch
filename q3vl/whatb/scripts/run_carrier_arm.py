@@ -58,6 +58,7 @@ from q3vl.whatb.degeneracy import DegeneracyThresholds
 from q3vl.whatb.queries import DEFAULT_SEED, QuerySampler
 from q3vl.whatb.guards import degeneracy_check_ran
 from q3vl.whatb.zcache import MultiZCache, blob_path, leaf_dir, resolve_leaf
+from q3vl.whatb import caliber as K
 from q3vl.whatb import splits as S
 from q3vl.whatb.splits import (
     IndexRow,
@@ -90,6 +91,8 @@ def build_parser(arm: Any = A) -> argparse.ArgumentParser:
         description=getattr(arm, "RUNNER_DESC",
                             "EPR-024 instruction-conditioned CGLUT carrier arm"))
     arm.add_arguments(ap)
+    K.add_caliber_arguments(ap, group="dataset口径 (shared)", data=False,
+                            batch_split=False, base_lr=False)
     g = ap.add_argument_group("run")
     g.add_argument("--run-name", default=f"whatb_{arm.ARM_NAME}")
     g.add_argument("--out-root", default=DEFAULT_OUT_ROOT)
@@ -145,10 +148,57 @@ def run_colorspan_assertion(checkpoint: str, rows: Sequence[IndexRow], *,
                                       tokenizer_path=str(checkpoint))
 
 
+def assert_zcache_dataset_version(cache: Any, *, split: str,
+                                  dataset_version: str | None = None
+                                  ) -> dict[str, Any]:
+    """A cache of an sft2seg split must have been planned in THIS run's口径.
+
+    ``build_zcache.py`` writes the口径 it planned its row set in into
+    ``meta.dataset_version``.  The row *set* is what a口径 changes, so a cache
+    built under one口径 covers a different population than a run under another
+    one -- and the only assertion downstream (``cfg.train_n`` against the index)
+    is counted on the index, not on the cache, so the mismatch would show up as
+    "trained on fewer rows than the horizon says", silently.  This is the loud
+    version: a disagreement is a ``SystemExit``.
+
+    ``l8_train`` and any other non-sft2seg split carry no口径 (their rows come
+    from their own manifest, which no sft2seg filter touches), so they are not
+    checked.  A cache written before this field existed reports ``unknown`` and
+    is **warned about**, never treated as a match.
+    """
+    want = str(dataset_version or S.active_dataset_version().name)
+    path = str(getattr(cache, "path", "<cache>"))
+    if split not in S.SPLITS:
+        return {"checked": False, "run_dataset_version": want,
+                "reason": f"{split!r} is not an sft2seg split; it has no index口径"}
+    got = (getattr(cache, "meta", None) or {}).get("dataset_version")
+    if got is None:
+        note = (f"{path}: this z cache carries no 'dataset_version' in its meta, "
+                f"so the population it covers is UNKNOWN; this run is on口径 "
+                f"{want!r}.  It was written before the口径 was recorded -- "
+                f"rebuild it with q3vl/whatb/scripts/build_zcache.py "
+                f"--dataset-version {want}, or confirm by hand which index it "
+                f"was planned in.  Continuing WITHOUT a口径 match.")
+        print(f"WARNING: {note}", file=sys.stderr, flush=True)
+        return {"checked": True, "status": "unknown", "cache_dataset_version": None,
+                "run_dataset_version": want, "warning": note}
+    if str(got) != want:
+        raise SystemExit(
+            f"{path}: this z cache was planned in dataset version {str(got)!r}, "
+            f"this run is on {want!r}.  The two口径 index different row sets, so "
+            f"the cache covers a different population than the horizon this run "
+            f"asserted -- training on it would silently use whichever rows the "
+            f"two happen to share.  Pass --dataset-version {str(got)} or point "
+            f"--zcache-root at a {want} cache.")
+    return {"checked": True, "status": "match", "cache_dataset_version": str(got),
+            "run_dataset_version": want}
+
+
 def open_z_caches(root: str | Path, split: str, cfg: A.CarrierConfig, *,
                   checkpoint: str, tags: Iterable[str] = A.CONTROL_TAGS,
                   required: Iterable[str] = ("none",), arm: Any = A,
-                  extra_sources: Sequence[tuple[Any, str]] = ()
+                  extra_sources: Sequence[tuple[Any, str]] = (),
+                  dataset_version: str | None = None,
                   ) -> tuple[dict[str, A.ZCache], dict[str, Any]]:
     """Open and assert the caches of one split.  Returns ``(caches, record)``.
 
@@ -182,6 +232,9 @@ def open_z_caches(root: str | Path, split: str, cfg: A.CarrierConfig, *,
                                       readout_kind=cfg.readout,
                                       context_source=ctx, control_tag=tag,
                                       seed=cfg.seed)
+        ver_check = assert_zcache_dataset_version(
+            cache, split=split, dataset_version=dataset_version)
+        rec["dataset_version_check"] = ver_check
         if tag == "none" and extra_sources:
             members = [cache]
             rec = {"members": [rec]}
@@ -195,14 +248,19 @@ def open_z_caches(root: str | Path, split: str, cfg: A.CarrierConfig, *,
                         "--data names that source, and the arm consumes z from "
                         "cache and cannot generate it here")
                 member = arm.ZCache(extra_path)
-                rec["members"].append(member.assert_belongs_to(
+                member_rec = member.assert_belongs_to(
                     checkpoint=checkpoint, readout_kind=cfg.readout,
-                    context_source=ctx, control_tag=tag, seed=cfg.seed))
+                    context_source=ctx, control_tag=tag, seed=cfg.seed)
+                member_rec["dataset_version_check"] = assert_zcache_dataset_version(
+                    member, split=str(extra_split), dataset_version=dataset_version)
+                rec["members"].append(member_rec)
                 members.append(member)
+            member_checks = [m["dataset_version_check"] for m in rec["members"]]
             cache = MultiZCache(members, control_tag=tag)
             rec = cache.assert_belongs_to(
                 checkpoint=checkpoint, readout_kind=cfg.readout,
                 context_source=ctx, control_tag=tag, seed=cfg.seed)
+            rec["dataset_version_check"] = {"members": member_checks}
         rec["present"] = True
         record[tag] = rec
         caches[tag] = cache
@@ -336,6 +394,10 @@ def main(argv: list[str] | None = None, *, arm: Any = A) -> int:
     and loss) instead of forking the runner.
     """
     args = build_parser(arm).parse_args(argv)
+    # the index口径 is resolved BEFORE config_from_args: EPR-030 measures
+    # train_n there, so n / steps_per_epoch / total_steps must already know
+    # which index they are counted in.
+    ver = K.apply_dataset_version(args)
     cfg = arm.config_from_args(args)
     device = torch.device(args.device)
     torch.manual_seed(cfg.seed)
@@ -428,7 +490,9 @@ def main(argv: list[str] | None = None, *, arm: Any = A) -> int:
         extra={"argv": list(argv if argv is not None else sys.argv[1:]),
                "run_dir": str(run_dir), "device": str(device),
                "n_train_with_z": len(trainable),
-               "data": data, "n_train_normal": len(train_rows),
+               "data": data, "dataset_version": ver.facts(),
+               "l8_manifest": str(S.L8_MANIFEST),
+               "n_train_normal": len(train_rows),
                "steps_per_epoch": cfg.steps_per_epoch,
                "total_steps": cfg.total_steps, "eval_every": eval_every})
     (run_dir / "run_setup.json").write_text(json.dumps(setup, indent=2, default=str),

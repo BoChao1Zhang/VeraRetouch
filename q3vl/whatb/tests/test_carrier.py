@@ -25,6 +25,7 @@ import pytest
 import torch
 
 from q3vl.whatb import criteria as C
+from q3vl.whatb import splits as S
 from q3vl.whatb.arms import carrier as A
 from q3vl.whatb.guards import (
     LossColumnsMissing,
@@ -86,20 +87,28 @@ def _z(n: int, seed: int = 0) -> torch.Tensor:
 # 1. the eight frozen items
 # --------------------------------------------------------------------------- #
 def test_frozen_batch_and_horizon():
+    """The horizon is ceil(n / B) on the ACTIVE index口径, not on a literal."""
+    n = S.active_dataset_version().train_normal_n
     cfg = A.CarrierConfig()
-    assert cfg.train_n == 93934
+    assert cfg.train_n == n
     assert (cfg.batch_samples, cfg.queries_per_sample) == (32, 256)
     assert cfg.colors_per_step == 8192
-    assert cfg.steps_per_epoch == 2936 == math.ceil(93934 / 32)
+    assert cfg.steps_per_epoch == math.ceil(n / 32)
     assert cfg.epochs == 40
-    assert cfg.total_steps == 117440
+    assert cfg.total_steps == cfg.steps_per_epoch * 40
     assert cfg.clamp == "two"
+    # the frozen block the published boards ran on (口径 v20260804)
+    v0 = S.dataset_version("v20260804").train_normal_n
+    assert v0 == 93934 and math.ceil(v0 / 32) == 2936 and 2936 * 40 == 117440
+    assert A.CarrierConfig(train_n=v0).total_steps == 117440
 
 
 def test_the_ablation_batch_split_is_not_step_matched():
+    n = S.active_dataset_version().train_normal_n
     cfg = A.CarrierConfig(batch_split="64x128")
     assert cfg.colors_per_step == 8192
-    assert cfg.steps_per_epoch == 1468 and cfg.total_steps == 58720
+    assert cfg.steps_per_epoch == math.ceil(n / 64)
+    assert cfg.total_steps == math.ceil(n / 64) * 40
     assert cfg.total_steps != A.CarrierConfig().total_steps
 
 
@@ -535,7 +544,7 @@ def test_thresholds_travel_into_the_run_record(model):
                                             "cross_std": 1e-4}
     assert rec["source_sha256"]["carrier.py"]
     assert rec["source_sha256"]["run_carrier_arm.py"]
-    assert rec["frozen_block"]["total_steps"] == 117440
+    assert rec["frozen_block"]["total_steps"] == A.CarrierConfig().total_steps
     assert rec["frozen_block"]["preregistered_keys"] == list(C.PREREGISTERED_KEYS)
 
 
