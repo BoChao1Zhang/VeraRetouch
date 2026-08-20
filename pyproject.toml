@@ -15,6 +15,9 @@ dependencies = [
   "numpy==2.4.4; python_version >= '3.11'",
   "opencv-python-headless==4.13.0.92",
   "openai==2.46.0",
+  "langgraph==1.2.11",
+  "langgraph-checkpoint==4.2.0",
+  "langgraph-checkpoint-postgres==3.1.2",
   "Pillow==12.2.0",
   "protobuf==3.20.3",
   "psycopg[binary]==3.2.13",
@@ -38,6 +41,9 @@ viewer = [
   "fastapi==0.136.1",
   "uvicorn==0.46.0",
 ]
+agent-loop-test = [
+  "langgraph-checkpoint-sqlite==3.1.1",
+]
 
 [tool.setuptools]
 include-package-data = false
@@ -46,6 +52,7 @@ packages = [
   "dataset_build",
   "dataset_build.core",
   "dataset_build.core.broker",
+  "dataset_build.agent_loop",
   "dataset_build.source_qa",
   "dataset_build.tools",
   "gpu_render",
