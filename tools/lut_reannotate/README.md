@@ -21,6 +21,28 @@ $P pipeline.py pack --out /home/bc/VeraRetouch/lut_bank_reannot_20260811.zip
 三步都**幂等续跑**：重跑只补没做完的。`render` 靠产物文件是否存在判断，`annotate` 靠
 `annotations.jsonl` 里已有的 `ok` 行判断（append-only，永不重复计费）。
 
+## Agent-loop 闭集迁移
+
+`annotate` 的历史输出保留原始语义证据，但其中自由文本 `style_major`、三级
+`scene_affinity` 与主观 `strength` 不直接进入 agent loop。使用确定性、可续跑的迁移命令：
+
+```bash
+cd /home/bc/VeraRetouch
+/home/bc/miniconda3/bin/python3 -m dataset_build.agent_loop.lut_annotations \
+  --schema-out /home/bc/data/scratch/lut_reannotate/out/annotations.closed-v1.schema.json
+```
+
+默认生成 `out/annotations.closed-v1.jsonl` 和带输入/输出 SHA-256、数量、类目、
+delta-E 统计的 `out/annotations.closed-v1.report.json`。每个 preset 严格校验后追加；
+中断重跑只补缺失 ID。可选 `--scene-overrides JSONL` 只覆盖真正需要额外语义判断的
+十类场景亲和性，且每行必须带 provenance。
+
+闭集合同：`style_major` 是 `mid_gray_b` 色温、`sat_pct_mean` 饱和度、
+`mid_gray_dL` 明度的 3 x 3 x 3 确定性组合；`de_med` 从 bank 的
+`perceptual_de.jsonl` 按 `preset_id` 严格连接，输出不含旧 `strength` 字段；
+`scene_affinity` 与 `SCENE_WEIGHTS` 的十类一致。caption、per-probe、style minor
+沿用缓存 Terra 标注，因此默认迁移不产生新 API 调用。
+
 ## 子命令
 
 | 命令 | 作用 | 关键参数 |

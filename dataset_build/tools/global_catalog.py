@@ -83,6 +83,7 @@ _KIND_COLUMNS = {
     "cgt": ("stage", None, None),
     "cache": ("kind", None, None),
     "renders": ("build_id", None, None),
+    "artifacts": ("campaign", None, None),
     # Published by the databuild land checkpoint, one batch per checkpoint: the
     # full eight-candidate groups and the winner-only SFT view of the same bytes.
     "groups": ("build_id", "batch", None),
