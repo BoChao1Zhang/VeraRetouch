@@ -209,15 +209,28 @@ the depicted subject's own left and right. Never state or infer the image resolu
 dimensions, megapixel count or file size, and never call the picture low-resolution or upscaled.
 Enhancement opportunities must contain two to four useful items. Return only the strict JSON object."""
 
-_GLOBAL_RULES = """Choose one style major from the offered majors, then choose up to six materially
-distinct whole-image edits from that major's rows. Return each pick as the row id (row_index) plus a
-bin. Respect the frozen diagnosis and forbidden directions. Every proposal must use a different
+_GLOBAL_RULES = """You are the whole-image (global) stage of a LUT-retouch chain. The shortlist below
+was recalled deterministically from the frozen diagnosis; your job is the fine ranking: pick the LUTs
+that actually realize the diagnosed directions on this image.
+Read the diagnosis first. correction_needs items and the components of each enhancement_opportunities
+item are fixed retrieval lines '<axis> | <scope> | <observed state> | <move>'; each enhancement item
+is one coherent look, 'style brief => component lines' in the fixed dimension order colour
+temperature, tone, saturation, stylisation; evidence carries the numbers behind every line, and the
+source_histogram line summarizes the untouched photo.
+Choose one style major from the offered majors, then choose up to six materially distinct whole-image
+edits from that major's rows. Serve the diagnosis: corrections first, then the looks - cover
+different diagnosed directions rather than variants of one look. Match a row to a direction through
+its measured columns (dL, shadow_dL, highlight_dL, contrast, cast_hue and cast_mag, dSat, hue_rot,
+and the d_shadow d_mid d_high trio) against the direction's axis, scope and move. Choose the bin from
+that row's achievable_bins by the evidence numbers: a strongly evidenced deviation justifies a
+stronger bin, while an asset named in preserve_intent or forbidden_directions caps the strength.
+Never pick a row whose caption realizes a forbidden direction.
+Return each pick as the row id (row_index) plus a bin. Every proposal must use a different
 row_index; if the chosen major has fewer eligible rows than the requested maximum, return fewer
 proposals and never repeat a row. Include both correction and enhancement capacity when the image
 supports both. Honor task.min_proposals by choosing a major with enough rows, and use at least two
-bins when returning multiple proposals. For each row, choose bin only from that row's
-achievable_bins. Give one to three reason_codes per proposal from the fixed vocabulary. Return only
-the strict JSON object, with no rationale or extra prose."""
+bins when returning multiple proposals. Give one to three reason_codes per proposal from the fixed
+vocabulary. Return only the strict JSON object, with no rationale or extra prose."""
 
 _LOCAL_INTENT_GUIDE = """Local intent vocabulary. Every assigned mask carries a role and the intents
 offered on it, and every offered intent lists the row ids you may pick for it:
