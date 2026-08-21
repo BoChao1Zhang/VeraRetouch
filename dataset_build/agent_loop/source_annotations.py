@@ -10,8 +10,9 @@ from typing import Any, Mapping
 from .artifacts import ArtifactStore
 from .candidates import LutCatalog, palette_summary
 from .config import AgentLoopConfig
+from .histogram_board import BOARD_REVISION, board_png
 from .persistence import AuditStore
-from .prompts import diagnosis_request, semantic_error
+from .prompts import DIAGNOSE_PROMPT_REVISION, diagnosis_request, semantic_error
 from .responses import CachedResponsesClient
 from .scheduler import TerraLimiter, TerraRouter
 from .source_reach import (
@@ -101,6 +102,12 @@ def annotate_source(
     source_sha256 = source_content_hash(source_path)
     subject_sha256 = source_content_hash(subject_path)
     source_artifact = artifacts.normalize_image(source_path, retention="audit")
+    # E4: the second diagnosis image. The board is computed on the original file, not
+    # on the 512px preview, and is stored as-is because the transport sends its bytes
+    # untouched.
+    board_artifact = artifacts.put_bytes(
+        board_png(source_path), media_type="image/png", retention="audit",
+    )
     endpoint = config.terra
     if router is not None:
         lane = router.lane_for(source_sha256)
@@ -109,7 +116,9 @@ def annotate_source(
         endpoint,
         reasoning_effort=config.source_annotation.reasoning_effort,
     )
-    spec = diagnosis_request(diagnosis_endpoint, source_artifact.to_dict())
+    spec = diagnosis_request(
+        diagnosis_endpoint, source_artifact.to_dict(), board_artifact.to_dict()
+    )
     with limiter.slot(source_sha256, "offline_diagnose", spec.prompt_cache_key):
         result = terra.request(spec)
     diagnosis = dict(result.response["parsed"])
@@ -146,6 +155,9 @@ def annotate_source(
             "prompt_revision": config.prompt_revision,
             "reasoning_effort": diagnosis_endpoint.reasoning_effort,
             "endpoint_identity": diagnosis_endpoint.identity,
+            "diagnose_prompt_revision": DIAGNOSE_PROMPT_REVISION,
+            "board_revision": BOARD_REVISION,
+            "board_sha256": board_artifact.sha256,
             "request_hash": result.request_hash,
             "cache_hit": bool(result.cache_hit),
             "usage": dict(result.usage),

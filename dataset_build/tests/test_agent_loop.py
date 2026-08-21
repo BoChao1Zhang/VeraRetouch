@@ -69,8 +69,12 @@ from dataset_build.agent_loop.lut_annotations import file_sha256, migrate_annota
 from dataset_build.agent_loop.persistence import SQLiteAuditStore, _POSTGRES_SCHEMA
 from dataset_build.agent_loop import candidates as candidates_module
 from dataset_build.agent_loop import prompts as prompts_module
+from dataset_build.agent_loop.histogram_board import (
+    BOARD_REVISION, BOARD_SIZE, board_png,
+)
 from dataset_build.agent_loop.prompts import (
-    CANDIDATE_SERIALIZATION_REVISION, GLOBAL_BATCH_SCHEMA, LOCAL_BATCH_SCHEMA,
+    BOARD_IMAGE_ENCODING, CANDIDATE_SERIALIZATION_REVISION, GLOBAL_BATCH_SCHEMA,
+    LOCAL_BATCH_SCHEMA,
     LOCAL_SHORTLIST_NOTE, PROMPT_REGISTRY_KEYS, SHORTLIST_COLUMNS, diagnosis_request,
     global_request, local_request, prompt_registry, prompt_revision_fingerprint,
     semantic_error, shortlist_row_text, shortlist_rows_text, validation_request,
@@ -314,6 +318,18 @@ def _source_files(root: Path, *, area: str = "large") -> tuple[Path, Path]:
     subject = root / "subject.png"
     Image.fromarray(mask, "L").save(subject)
     return source, subject
+
+
+def _png_bytes(size: tuple[int, int]) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", size, (255, 255, 255)).save(buffer, "PNG", optimize=True)
+    return buffer.getvalue()
+
+
+def _board_ref(digest: str = "b" * 64) -> dict[str, Any]:
+    """E4: the second diagnosis image (the histogram board PNG artifact)."""
+    return {"sha256": digest, "media_type": "image/png", "size": 20,
+            "uri": "sha256://" + digest}
 
 
 def _diagnosis() -> dict[str, Any]:
@@ -578,10 +594,10 @@ def test_diagnosis_request_hash_includes_high_reasoning_effort(tmp_path: Path) -
     config = _write_config(tmp_path)
     source = {"sha256": "a" * 64, "media_type": "image/jpeg", "size": 10,
               "uri": "sha256://" + "a" * 64}
-    medium = diagnosis_request(config.terra, source)
+    medium = diagnosis_request(config.terra, source, _board_ref())
     high = diagnosis_request(dataclasses.replace(
         config.terra, reasoning_effort="high"
-    ), source)
+    ), source, _board_ref())
     assert medium.request_hash != high.request_hash
     assert high.canonical["behavior"]["reasoning_effort"] == "high"
 
@@ -1118,10 +1134,10 @@ def test_prompt_registry_key_set_is_the_explicit_frozen_list() -> None:
     below is the contract and this assertion is its runtime guard.
     """
     assert sorted(prompt_registry()) == sorted(PROMPT_REGISTRY_KEYS)
-    # B12 adds three keys: 41 -> 44.
-    assert len(set(PROMPT_REGISTRY_KEYS)) == len(PROMPT_REGISTRY_KEYS) == 44
+    # B12 adds three keys: 41 -> 44. E4 adds two more: 44 -> 46.
+    assert len(set(PROMPT_REGISTRY_KEYS)) == len(PROMPT_REGISTRY_KEYS) == 46
     for key in ("source_histogram", "segment_fingerprint_histogram",
-                "histogram_match_gate"):
+                "histogram_match_gate", "histogram_board", "board_image_encoding"):
         assert key in PROMPT_REGISTRY_KEYS
 
 
@@ -1376,11 +1392,59 @@ def test_local_reach_bins_follow_the_intent_ladder() -> None:
     ] == ["subtle"]
 
 
-def test_diagnose_rules_carry_the_two_prompt_corrections() -> None:
+def test_diagnose_rules_are_the_v34_histogram_board_prompt() -> None:
+    """E4: the production rules are the harness-validated v3.4 text, verbatim."""
+    from dataset_build.tools.test_diagnose_v2 import V2_RULES
+
     rules = prompts_module._DIAGNOSE_RULES
+    assert rules == V2_RULES
     assert "viewer's left and right" in rules
-    assert "resolution" in rules and "upscaled" in rules
-    assert prompts_module.DIAGNOSE_PROMPT_REVISION == "diagnose-v2-viewer-orientation"
+    assert "resolution" in rules
+    assert "You receive two images" in rules
+    assert "<axis> | <scope> | <observed state> | <move>" in rules
+    assert prompts_module.DIAGNOSE_PROMPT_REVISION == "diagnose-v2-histogram-board-v3.4"
+
+
+def test_diagnosis_request_carries_source_then_board(tmp_path: Path) -> None:
+    """E4: image 1 = 512px source JPEG (low), image 2 = board PNG (high, passthrough)."""
+    config = _write_config(tmp_path)
+    source = {"sha256": "a" * 64, "media_type": "image/jpeg", "size": 10,
+              "uri": "sha256://" + "a" * 64}
+    request = diagnosis_request(config.terra, source, _board_ref())
+    assert request.canonical["input"][0]["content"][0]["text"] == \
+        prompts_module._DIAGNOSE_RULES
+    content = request.canonical["input"][1]["content"]
+    images = [item for item in content if item["type"] == "input_image"]
+    assert [item["artifact_sha256"] for item in images] == ["a" * 64, "b" * 64]
+    assert images[0] == {
+        "type": "input_image", "artifact_sha256": "a" * 64,
+        "media_type": "image/jpeg", "detail": "low",
+        "encoding": dict(prompts_module.IMAGE_ENCODING),
+    }
+    assert images[1] == {
+        "type": "input_image", "artifact_sha256": "b" * 64,
+        "media_type": "image/png", "detail": "high",
+        "encoding": dict(BOARD_IMAGE_ENCODING),
+    }
+    assert BOARD_IMAGE_ENCODING == {"format": "png", "passthrough": True}
+    # A different board is a different request.
+    other = diagnosis_request(config.terra, source, _board_ref("c" * 64))
+    assert other.request_hash != request.request_hash
+
+
+@pytest.mark.parametrize("name,probe", [
+    ("BOARD_REVISION", "board-probe"),
+    ("BOARD_SIZE", (10, 10)),
+    ("BOARD_BIN_GEOMETRY", {"l_bins": 3}),
+    ("BOARD_IMAGE_ENCODING", {"format": "png", "passthrough": False}),
+])
+def test_board_constants_enter_the_prompt_revision_chain(
+    monkeypatch, name: str, probe: object
+) -> None:
+    """E4: the board contract and its transport encoding are pre-registered."""
+    before = prompt_revision_fingerprint()
+    monkeypatch.setattr(prompts_module, name, probe)
+    assert prompt_revision_fingerprint() != before
 
 
 def test_background_geometry_pool_has_no_linear_family(tmp_path: Path) -> None:
@@ -2561,6 +2625,16 @@ def test_offline_source_annotation_round_trip_and_hash_validation(tmp_path: Path
     assert terra.stages == ["diagnose"]
     assert annotation["provenance"]["reasoning_effort"] == "high"
     assert annotation["preset_reach"]["preset_count"] == 8
+    # E4: the histogram board is rendered from the original file, stored as a PNG
+    # artifact, and named in the provenance together with its revision.
+    provenance = annotation["provenance"]
+    assert provenance["board_revision"] == BOARD_REVISION
+    assert provenance["diagnose_prompt_revision"] == \
+        prompts_module.DIAGNOSE_PROMPT_REVISION
+    stored = services.artifacts.read_bytes(provenance["board_sha256"])
+    assert stored == board_png(source)
+    with Image.open(io.BytesIO(stored)) as board:
+        assert board.size == BOARD_SIZE and board.format == "PNG"
 
     annotation["source_sha256"] = "0" * 64
     target.write_text(json.dumps(annotation), encoding="utf-8")
@@ -3985,7 +4059,10 @@ def test_responses_adapter_payload_model_and_usage(tmp_path: Path) -> None:
         config.terra, artifacts,
         client_factory=lambda _endpoint: SimpleNamespace(responses=responses),
     )
-    spec = diagnosis_request(config.terra, image.to_dict())
+    board = artifacts.put_bytes(
+        _png_bytes(BOARD_SIZE), media_type="image/png", retention="audit"
+    )
+    spec = diagnosis_request(config.terra, image.to_dict(), board.to_dict())
     result = adapter.send_once(spec, 1)
     assert result["parsed"] == parsed
     assert result["usage"] == {
@@ -4006,6 +4083,15 @@ def test_responses_adapter_payload_model_and_usage(tmp_path: Path) -> None:
     assert image_item["detail"] == "low"
     assert "artifact_sha256" not in image_item
     assert "TOP-SECRET" not in json.dumps(payload)
+    # E4: the board is the second image and leaves the transport untouched - same
+    # bytes, still a PNG, still 640x604, `detail=high`.
+    board_item = payload["input"][1]["content"][1]
+    assert board_item["type"] == "input_image" and board_item["detail"] == "high"
+    assert board_item["image_url"].startswith("data:image/png;base64,")
+    board_bytes = base64.b64decode(board_item["image_url"].split(",", 1)[1])
+    assert board_bytes == artifacts.read_bytes(board.sha256)
+    with Image.open(io.BytesIO(board_bytes)) as rendered:
+        assert rendered.size == BOARD_SIZE and rendered.format == "PNG"
 
 
 def test_responses_adapter_rejects_model_substitution_and_preserves_retry_after(
@@ -4014,7 +4100,10 @@ def test_responses_adapter_rejects_model_substitution_and_preserves_retry_after(
     config = _write_config(tmp_path)
     artifacts = ArtifactStore(config.artifact_root)
     image = artifacts.put_image_array(np.full((8, 8, 3), .5, dtype=np.float32))
-    spec = diagnosis_request(config.terra, image.to_dict())
+    board = artifacts.put_bytes(
+        _png_bytes((16, 16)), media_type="image/png", retention="audit"
+    )
+    spec = diagnosis_request(config.terra, image.to_dict(), board.to_dict())
     responses = _FakeResponses([
         _completed_events({}, "substituted"), _FakeHttpError(429, "rate_limit"),
     ])
@@ -4113,9 +4202,9 @@ def test_lane_identity_is_the_only_request_hash_difference_between_lanes(
     single = _write_config(single_root)
     image = {"sha256": "a" * 64, "media_type": "image/jpeg", "size": 10,
              "uri": "sha256://" + "a" * 64}
-    lane_one = diagnosis_request(config.terra_lanes[0], image)
-    lane_two = diagnosis_request(config.terra_lanes[1], image)
-    legacy = diagnosis_request(single.terra, image)
+    lane_one = diagnosis_request(config.terra_lanes[0], image, _board_ref())
+    lane_two = diagnosis_request(config.terra_lanes[1], image, _board_ref())
+    legacy = diagnosis_request(single.terra, image, _board_ref())
     # Adding lane 2 does not move lane 1's hash.
     assert lane_one.request_hash == legacy.request_hash
     assert lane_one.canonical["endpoint_identity"] == "lane"

@@ -192,6 +192,18 @@ class ResponsesAdapter:
             return dict(item)
         payload = self.artifacts.read_bytes(str(item["artifact_sha256"]))
         encoding = dict(item.get("encoding") or {})
+        if encoding.get("passthrough"):
+            # E4: the histogram board prints digits; re-encoding it to JPEG or
+            # downscaling it would smear them, so its stored bytes go out as they are.
+            rendered = {
+                "type": "input_image",
+                "image_url": f"data:{item.get('media_type') or 'image/png'};base64,"
+                + base64.b64encode(payload).decode("ascii"),
+                "detail": str(item.get("detail") or "high"),
+            }
+            if "prompt_cache_breakpoint" in item:
+                rendered["prompt_cache_breakpoint"] = dict(item["prompt_cache_breakpoint"])
+            return rendered
         longest_edge = int(encoding.get("longest_edge", 512))
         quality = int(encoding.get("quality", 85))
         subsampling = int(encoding.get("subsampling", 2))

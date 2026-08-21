@@ -11,6 +11,7 @@ from .config import EndpointConfig
 from .direction_match import (
     AXIS_SCALES, AXIS_WEIGHTS, KEYWORD_AXES, MEASURE_SAMPLE_PIXELS,
 )
+from .histogram_board import BOARD_BIN_GEOMETRY, BOARD_REVISION, BOARD_SIZE
 from .models import (
     ACTIVE_LOCAL_INTENTS, BAND_GEOMETRY_GATE, FINGERPRINT_FIELDS, FINGERPRINT_FORMATS,
     GLOBAL_DELTA_E_TARGETS, INTENT_BIN_QUOTA, INTENT_DIRECTION_GATE,
@@ -40,12 +41,16 @@ ADAPTER_REVISION = "responses-auto-prefix-cache-v4"
 IMAGE_ENCODING = {
     "format": "jpeg", "longest_edge": 512, "quality": 85, "subsampling": 0,
 }
+# E4: the histogram board prints digits the model has to read. Re-encoding it to JPEG
+# or downscaling it destroys them, so its stored bytes go out untouched; the transport
+# (`ResponsesAdapter._content`) branches on `passthrough` and on nothing else.
+BOARD_IMAGE_ENCODING = {"format": "png", "passthrough": True}
 CANDIDATE_SERIALIZATION_REVISION = "lut-intent-v7.1-optB"
 MASK_SUMMARY_REVISION = "mask-summary-v3-role"
 # The frozen 5k offline diagnosis batch was produced under `diagnose-v1`; it stays
 # valid (its records carry no prompt revision and are validated by schema only).
 # This revision only governs diagnosis batches produced from now on.
-DIAGNOSE_PROMPT_REVISION = "diagnose-v2-viewer-orientation"
+DIAGNOSE_PROMPT_REVISION = "diagnose-v2-histogram-board-v3.4"
 
 # B12 item 3: the last column group of every row, present only when the catalog mounts
 # a v2 fingerprint table. `{:.3f}` keeps the three numbers at ~4 tokens per row.
@@ -201,30 +206,115 @@ VALIDATION_SCHEMA = _object({
 
 PREFLIGHT_SCHEMA = _object({"ok": {"type": "boolean"}, "tail": {"type": "string"}})
 
-_DIAGNOSE_RULES = """You are the source-diagnosis stage of a photo-retouch data system.
-Report only visible facts. Never invent a defect to satisfy a quota. Separate correction needs,
-preservation constraints, enhancement opportunities, forbidden directions, and concrete evidence.
-In evidence, left and right always mean the viewer's left and right in the picture as shown, never
-the depicted subject's own left and right. Never state or infer the image resolution, pixel
-dimensions, megapixel count or file size, and never call the picture low-resolution or upscaled.
-Enhancement opportunities must contain two to four useful items. Return only the strict JSON object."""
+# E4: the v3.4 rules, verbatim from the `diagnose-v3.4-lut-multiaxis-test` harness
+# (`dataset_build/tools/test_diagnose_v2.py::V2_RULES`). The stage now receives two
+# images - the source photograph and the `histogram_board` PNG - and the actionable
+# fields are locked to the closed keyword vocabulary that `direction_match.KEYWORD_AXES`
+# and `LutCatalog._score` actually parse.
+_DIAGNOSE_RULES = """You are the source-diagnosis stage of a photo-retouch data system. Downstream, \
+a deterministic retrieval parses your fixed-form lines verbatim to recall candidate LUTs, an \
+LLM stage re-ranks that shortlist against your evidence, and the editor applies one LUT to \
+the whole frame plus a second LUT inside the subject mask. The whole chain is colour-lookup \
+editing only - write nothing a LUT cannot express.
+
+You receive two images. Image 1 is the source photograph. Image 2 is a histogram board \
+rendered from the full-resolution pixel data, in four panels:
+Panel 1 - L* lightness histogram (x axis 0-100, with the p1 / p99 vertical lines and the \
+clipped share printed at both ends).
+Panel 2 - R/G/B channel histograms drawn on top of each other: the direction in which the \
+three curves are offset from one another IS the direction of the colour cast (blue channel \
+shifted right overall = a blue cast), and the size of the offset is its strength. This is far \
+more reliable colour-cast evidence than the naked eye.
+Panel 3 - C*ab chroma (saturation) histogram: the overall saturation level and the \
+over-saturated tail.
+Panel 4 - hue share bars: the area share of the leading hues; the six bars are always \
+drawn top-to-bottom in the fixed hue order red, yellow, green, cyan, blue, magenta.
+
+PHASE 1 - picture reading (Image 1, always first). Judge the photograph as a professional \
+photographer and colourist: the scene and its mood; the exposure discipline (are highlights \
+blown where detail matters, are shadows blocked where the eye expects depth); what reads as \
+deliberate style versus defect (a warm sunset's cast is a mood, not an error); the memory \
+colours (skin, sky, foliage); the palette harmony and where it clashes; the light and \
+atmosphere assets a grade must not destroy; and, aesthetically, the finished looks this \
+image could genuinely become.
+
+PHASE 2 - histogram reading (Image 2). Read the four panels and keep the numbers:
+2a Panel 1: exposure centre of mass; p1 / p99; blocked-shadow share (left end) and \
+clipped-highlight share (right end); midtone crowding.
+2b Panel 2: channel-offset direction and size = colour-cast direction and strength.
+2c Panel 3: saturation level (median) and the over-saturated tail (p95, share above 60).
+2d Panel 4: the leading hue shares.
+Every histogram figure you cite later must come from this phase with its panel number.
+
+PHASE 3 - write the five fields. Cross-check Phase 1 against Phase 2 before writing: a \
+correction or an enhancement direction stands only when the picture judgement and the \
+histogram reading agree on it (a defect the histogram cannot corroborate, or a reading the \
+picture explains away as style, is not a direction). Defects go to correction_needs, style \
+headroom goes to enhancement_opportunities, the assets go to preserve_intent and \
+forbidden_directions; evidence backs each line with both sides of that cross-check. Every \
+actionable item carries this fixed retrieval line, parsed verbatim downstream:
+<axis> | <scope> | <observed state> | <move>
+axis - exactly one of: exposure, band_lightness, contrast, hue, cast, saturation.
+scope - global, shadows, midtones, highlights, or ONE region word (subject, skin, sky, \
+foliage, background); region lines are served by the masked local pass.
+observed state - verbatim from this closed vocabulary; the retrieval parses these words \
+and nothing else:
+  cast: "warm" / "yellow cast", "cool" / "blue cast", "magenta cast", "green cast"
+  exposure / band_lightness: "underexposed" / "too dark", "overexposed" / "blown"
+  contrast: "low contrast" / "hazy", "harsh" / "too contrasty"
+  saturation: "flat" / "muted" / "dull", "oversaturated"
+  hue: "hue drift toward <red|yellow|green|cyan|blue|rose>"
+move - one of: lift, deepen, compress-highlights, raise-contrast, lower-contrast, \
+raise-saturation, lower-saturation, neutralise, toward-amber, toward-teal, \
+hue-toward-<red|yellow|green|cyan|blue|rose>. Keep state words out of the move slot, and \
+never let one field carry both a state word and its opposite - bare-word parsing cancels \
+them. No numbers in these lines; every number lives in evidence.
+
+correction_needs - the fixed-form lines for states that would be errors if left unfixed. \
+Cover every defect the two phases agree on - in particular, a meaningful clipped-highlight \
+or blocked-shadow share in Panel 1 that the picture confirms as lost detail IS a correction, \
+not a style. If there really is nothing, leave it empty - inventing a defect makes the \
+downstream stages edit against a problem that does not exist.
+preserve_intent - prohibitions protecting the colour and tonal assets of Phase 1 (what \
+colour, cast or tonal quality must survive the grade). LUT-scoped only.
+enhancement_opportunities - 2 to 4 DIFFERENT enhancement directions ordered by payoff, for \
+states that leave headroom rather than errors. Each direction is one coherent finished look \
+a colourist would actually grade towards, built from 2 to 4 component moves - a real look \
+is multi-dimensional, one axis alone is not a look. Item form: one short style brief, then \
+" => ", then its component retrieval lines joined by " ; ", ALWAYS in this fixed dimension \
+order (skip a dimension with nothing to do): 1. colour temperature (cast), 2. tone \
+(exposure / band_lightness / contrast), 3. saturation, 4. stylisation (hue). E.g. \
+"golden-hour garden portrait => cast | global | cool | toward-amber ; band_lightness | \
+subject | too dark | lift ; saturation | foliage | muted | raise-saturation ; hue | foliage \
+| hue drift toward yellow | hue-toward-green". Different means genuinely distinct looks \
+between items - vary the mood, the leading dimension or the scope; never restate one look \
+with the components reshuffled.
+forbidden_directions - the concrete LUT moves that would damage THIS image, using the words \
+"warm", "cool", "dark", "saturation" where they apply (e.g. "do not push warmer", "do not \
+darken the shadows further", "do not lift saturation of skin"); you may quote histogram \
+readings.
+evidence - one entry per actionable line, carrying its numbers: the Phase-2 histogram \
+readings (each citing its panel number) and the Phase-1 picture observation that back the \
+line, in enough detail for the downstream global and local passes to calibrate strength. \
+Left and right always mean the viewer's left and right in the picture as shown. Never state \
+or infer the image resolution, the pixel dimensions or the file size.
+intent_mode - errors dominate = correction_led, enhancement dominates = enhancement_led, \
+comparable = mixed; go by what is actually in the picture.
+
+Return only the strict JSON object."""
 
 _GLOBAL_RULES = """You are the whole-image (global) stage of a LUT-retouch chain. The shortlist below
-was recalled deterministically from the frozen diagnosis; your job is the fine ranking: pick the LUTs
-that actually realize the diagnosed directions on this image.
-Read the diagnosis first. correction_needs items and the components of each enhancement_opportunities
-item are fixed retrieval lines '<axis> | <scope> | <observed state> | <move>'; each enhancement item
-is one coherent look, 'style brief => component lines' in the fixed dimension order colour
-temperature, tone, saturation, stylisation; evidence carries the numbers behind every line, and the
-source_histogram line summarizes the untouched photo.
-Choose one style major from the offered majors, then choose up to six materially distinct whole-image
-edits from that major's rows. Serve the diagnosis: corrections first, then the looks - cover
-different diagnosed directions rather than variants of one look. Match a row to a direction through
-its measured columns (dL, shadow_dL, highlight_dL, contrast, cast_hue and cast_mag, dSat, hue_rot,
-and the d_shadow d_mid d_high trio) against the direction's axis, scope and move. Choose the bin from
-that row's achievable_bins by the evidence numbers: a strongly evidenced deviation justifies a
+was recalled deterministically from the frozen diagnosis; your job is the fine ranking. What only
+this stage sees is the measured LUT fingerprint on every row - dL, shadow_dL, highlight_dL,
+contrast, cast_hue and cast_mag, dSat, hue_rot, and the d_shadow d_mid d_high trio - so read the
+rows through those numbers and pick the LUTs whose measured response actually realizes the
+diagnosed directions on this image.
+Choose one style major from the offered majors, then choose up to six materially distinct
+whole-image edits from that major's rows: corrections first, then the looks - cover different
+diagnosed directions rather than variants of one look. Choose the bin from that row's
+achievable_bins by the diagnosis evidence numbers: a strongly evidenced deviation justifies a
 stronger bin, while an asset named in preserve_intent or forbidden_directions caps the strength.
-Never pick a row whose caption realizes a forbidden direction.
+Never pick a row whose caption or fingerprint realizes a forbidden direction.
 Return each pick as the row id (row_index) plus a bin. Every proposal must use a different
 row_index; if the chosen major has fewer eligible rows than the requested maximum, return fewer
 proposals and never repeat a row. Include both correction and enhancement capacity when the image
@@ -275,12 +365,14 @@ PROMPT_REGISTRY_KEYS: tuple[str, ...] = (
     "background_role_gate",
     "band_geometry_gate",
     "band_segment_lum_threshold",
+    "board_image_encoding",
     "candidate_serialization",
     "diagnose_prompt_revision",
     "fingerprint_fields",
     "fingerprint_formats",
     "global_bin_quota",
     "global_delta_e_targets",
+    "histogram_board",
     "histogram_match_gate",
     "image_encoding",
     "intent_direction_gate",
@@ -330,6 +422,16 @@ def prompt_registry() -> dict[str, Any]:
         "prompt_revision": PROMPT_REVISION,
         "adapter_revision": ADAPTER_REVISION,
         "image_encoding": IMAGE_ENCODING,
+        # E4: the second diagnosis image. `histogram_board` is what the board says
+        # (its revision, its pixel size and the display bins behind its numbers),
+        # `board_image_encoding` is how it is transported - both decide what the
+        # diagnosis model is shown, so both move the prompt revision.
+        "histogram_board": {
+            "revision": BOARD_REVISION,
+            "size": list(BOARD_SIZE),
+            "bins": dict(BOARD_BIN_GEOMETRY),
+        },
+        "board_image_encoding": dict(BOARD_IMAGE_ENCODING),
         "candidate_serialization": CANDIDATE_SERIALIZATION_REVISION,
         "shortlist_header": SHORTLIST_HEADER,
         "fingerprint_fields": list(FINGERPRINT_FIELDS),
@@ -457,12 +559,15 @@ def _text(value: Any) -> dict[str, Any]:
     )}
 
 
-def _image(ref: ArtifactRef | Mapping[str, Any], *, detail: str = "low") -> dict[str, Any]:
+def _image(
+    ref: ArtifactRef | Mapping[str, Any], *, detail: str = "low",
+    encoding: Mapping[str, Any] = IMAGE_ENCODING,
+) -> dict[str, Any]:
     value = ref.to_dict() if isinstance(ref, ArtifactRef) else dict(ref)
     return {
         "type": "input_image", "artifact_sha256": value["sha256"],
         "media_type": value["media_type"], "detail": detail,
-        "encoding": dict(IMAGE_ENCODING),
+        "encoding": dict(encoding),
     }
 
 
@@ -507,11 +612,23 @@ def _request(
     return RequestSpec(canonical=canonical, prompt_cache_key=cache_key)
 
 
-def diagnosis_request(endpoint: EndpointConfig, source: Mapping[str, Any]) -> RequestSpec:
+def diagnosis_request(
+    endpoint: EndpointConfig, source: Mapping[str, Any], board: Mapping[str, Any],
+) -> RequestSpec:
+    """E4: two images, in the order the v3.4 rules name them.
+
+    Image 1 is the source photograph under the frozen 512px JPEG / `detail=low`
+    contract. Image 2 is the `histogram_board` PNG: `detail=high` and `passthrough`,
+    so the transport sends its native bytes and the printed digits survive.
+    """
     return _request(
         endpoint=endpoint, stage="diagnose", schema_name="source_diagnosis_v1",
         schema=DIAGNOSIS_SCHEMA, prefix_content=[_text(_DIAGNOSE_RULES)],
-        tail_content=[_image(source), _text("Diagnose this source image.")],
+        tail_content=[
+            _image(source, detail="low"),
+            _image(board, detail="high", encoding=BOARD_IMAGE_ENCODING),
+            _text("Diagnose this source image."),
+        ],
     )
 
 
@@ -744,8 +861,8 @@ def schema_error(schema: Mapping[str, Any], value: Any, path: str = "$") -> str 
 
 
 __all__ = [
-    "ADAPTER_REVISION", "CANDIDATE_SERIALIZATION_REVISION", "DIAGNOSE_PROMPT_REVISION",
-    "DIAGNOSIS_SCHEMA",
+    "ADAPTER_REVISION", "BOARD_IMAGE_ENCODING", "CANDIDATE_SERIALIZATION_REVISION",
+    "DIAGNOSE_PROMPT_REVISION", "DIAGNOSIS_SCHEMA",
     "GLOBAL_BATCH_SCHEMA", "HISTOGRAM_ROW_FORMAT", "HISTOGRAM_SHORTLIST_NOTE",
     "IMAGE_ENCODING", "MASK_SUMMARY_REVISION",
     "LOCAL_BATCH_SCHEMA", "LOCAL_SHORTLIST_NOTE", "PREFLIGHT_SCHEMA",
