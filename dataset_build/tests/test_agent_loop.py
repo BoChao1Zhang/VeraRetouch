@@ -84,7 +84,7 @@ from dataset_build.agent_loop.render import (
     load_alpha, subject_clip_regression, subject_highlight_headroom,
 )
 from dataset_build.agent_loop.responses import (
-    ModelSubstituted, ResponsesAdapter, TransportError, consume_stream,
+    ModelSubstituted, ResponsesAdapter, TransportError, consume_response, consume_stream,
 )
 from dataset_build.agent_loop.runtime import (
     build_terra_router, create_services, require_frozen_segment_fingerprints,
@@ -3825,6 +3825,147 @@ def test_responses_adapter_payload_model_and_usage(tmp_path: Path) -> None:
     with Image.open(io.BytesIO(encoded)) as rendered:
         assert max(rendered.size) <= 512
     assert image_item["detail"] == "low"
+def test_stream_strips_relay_zero_width_space_prefix() -> None:
+    from openai.types.responses import ResponseCompletedEvent, ResponseTextDeltaEvent
+
+    payload = {"confidence": .8, "intent_mode": "enhancement_led"}
+    clean = json.dumps(payload)
+    usage = SimpleNamespace(
+        input_tokens=1, output_tokens=1,
+        input_tokens_details=SimpleNamespace(cached_tokens=0, cache_write_tokens=0),
+    )
+
+    def _deltas(text: str) -> list[Any]:
+        return [
+            ResponseTextDeltaEvent.model_construct(
+                content_index=0, delta=part, item_id="msg", logprobs=[],
+                output_index=0, sequence_number=index,
+                type="response.output_text.delta",
+            )
+            for index, part in enumerate([text[:2], text[2:]])
+        ]
+
+    completed = SimpleNamespace(
+        status="completed", model="gpt-5.6-terra", id="response-1",
+        usage=usage, output_text=clean,
+    )
+    events = [*_deltas("\u200b" + clean), ResponseCompletedEvent.model_construct(
+        response=completed, sequence_number=9, type="response.completed",
+    )]
+    text = consume_stream(events)["text"]
+    assert text == clean
+    assert json.loads(text) == payload
+
+    class _RaisingOutputText:
+        status = "completed"
+        model = "gpt-5.6-terra"
+        id = "response-1"
+
+        @property
+        def output_text(self) -> str:
+            return "".join([None])  # type: ignore[list-item]
+
+    raising = _RaisingOutputText()
+    raising.usage = usage  # type: ignore[attr-defined]
+    events = [*_deltas("\u200b" + clean), ResponseCompletedEvent.model_construct(
+        response=raising, sequence_number=9, type="response.completed",
+    )]
+    text = consume_stream(events)["text"]
+    assert text == clean
+    assert json.loads(text) == payload
+
+
+class _RaisingOutputTextResponse:
+    """Relay shape whose ``output_text`` property raises instead of returning ""."""
+
+    status = "completed"
+    model = "gpt-5.6-terra"
+    id = "response-1"
+    usage = SimpleNamespace(
+        input_tokens=3, output_tokens=4,
+        input_tokens_details=SimpleNamespace(cached_tokens=2, cache_write_tokens=1),
+    )
+
+    def __init__(self, output: list[Any]) -> None:
+        self.output = output
+
+    @property
+    def output_text(self) -> str:
+        return "".join([None])  # type: ignore[list-item]
+
+
+def test_consume_response_reads_text_usage_and_identity() -> None:
+    payload = {"confidence": .8, "intent_mode": "enhancement_led"}
+    response = SimpleNamespace(
+        status="completed", model="gpt-5.6-terra", id="response-7",
+        output_text=json.dumps(payload),
+        usage=SimpleNamespace(
+            input_tokens=100, output_tokens=20,
+            input_tokens_details=SimpleNamespace(cached_tokens=77, cache_write_tokens=128),
+        ),
+    )
+    result = consume_response(response)
+    assert json.loads(result["text"]) == payload
+    assert result["model"] == "gpt-5.6-terra"
+    assert result["response_id"] == "response-7"
+    assert result["usage"] == {
+        "input_tokens": 100, "output_tokens": 20,
+        "cached_tokens": 77, "cache_write_tokens": 128,
+    }
+    assert result["raw_response"] == {}
+
+
+def test_consume_response_falls_back_to_message_content_parts() -> None:
+    payload = {"confidence": .5, "intent_mode": "enhancement_led"}
+    clean = json.dumps(payload)
+    response = _RaisingOutputTextResponse([
+        SimpleNamespace(type="reasoning", content=None),
+        SimpleNamespace(type="message", content=[
+            SimpleNamespace(type="output_text", text=clean[:4]),
+            SimpleNamespace(type="output_text", text=clean[4:]),
+        ]),
+    ])
+    result = consume_response(response)
+    assert result["text"] == clean
+    assert json.loads(result["text"]) == payload
+    assert result["usage"]["cached_tokens"] == 2
+    mapping_shaped = _RaisingOutputTextResponse([
+        {"type": "message", "content": [{"type": "output_text", "text": clean}]},
+    ])
+    assert consume_response(mapping_shaped)["text"] == clean
+
+
+def test_consume_response_without_any_text_reports_empty_and_stays_retryable() -> None:
+    with pytest.raises(TransportError) as raised:
+        consume_response(_RaisingOutputTextResponse([
+            SimpleNamespace(type="message", content=[]),
+        ]))
+    assert raised.value.code == "responses_output_empty"
+    assert retryable_exception(raised.value)
+
+
+def test_consume_response_rejects_non_completed_status() -> None:
+    response = SimpleNamespace(
+        status="incomplete", model="gpt-5.6-terra", id="response-1",
+        output_text='{"confidence": 0.8}', usage=None,
+    )
+    with pytest.raises(TransportError) as raised:
+        consume_response(response)
+    assert raised.value.code == "responses_not_completed"
+
+
+def test_consume_response_strips_relay_zero_width_space_prefix() -> None:
+    payload = {"confidence": .8, "intent_mode": "enhancement_led"}
+    clean = json.dumps(payload)
+    response = SimpleNamespace(
+        status="completed", model="gpt-5.6-terra", id="response-1",
+        output_text="\u200b" + clean, usage=None,
+    )
+    text = consume_response(response)["text"]
+    assert text == clean
+    assert json.loads(text) == payload
+
+
     assert "artifact_sha256" not in image_item
     assert "TOP-SECRET" not in json.dumps(payload)
 

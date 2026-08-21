@@ -26,7 +26,9 @@ from .segment_fingerprints import (
 
 
 PROMPT_REVISION = "local-agent-v1"
-ADAPTER_REVISION = "responses-auto-prefix-cache-v3"
+# v4 = ZWSP 文本决议(output_text 优先 + 前导零宽剥离);传输为流式——非流式经实测在该
+# 中转站不命中 prompt cache(1/4 vs 流式 4/4),`consume_response` 留作回退路径。
+ADAPTER_REVISION = "responses-auto-prefix-cache-v4"
 IMAGE_ENCODING = {
     "format": "jpeg", "longest_edge": 512, "quality": 85, "subsampling": 0,
 }

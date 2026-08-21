@@ -97,7 +97,12 @@ def consume_stream(stream: Any) -> dict[str, Any]:
         fallback = str(getattr(completed, "output_text", "") or "")
     except (TypeError, ValueError):
         fallback = ""
-    text = "".join(chunks) or fallback
+    # This relay injects a zero-width space (U+200B) at the head of the first
+    # text delta (keep-alive / anti-buffering), so joined deltas are not valid
+    # JSON while completed.output_text is clean. Prefer output_text; fall back
+    # to the deltas only when it is empty, and strip any leading zero-width
+    # marks either way (strict json_schema output must start with "{").
+    text = (fallback or "".join(chunks)).lstrip("\u200b\ufeff")
     if not text:
         raise TransportError("responses_output_empty")
     raw = completed.model_dump(mode="json") if hasattr(completed, "model_dump") else {}
@@ -106,6 +111,50 @@ def consume_stream(stream: Any) -> dict[str, Any]:
         "model": str(getattr(completed, "model", "") or ""),
         "response_id": str(getattr(completed, "id", "") or ""),
         "usage": _usage(completed),
+        "raw_response": raw,
+    }
+
+
+def _message_text(response: Any) -> str:
+    """Collect text parts from ``response.output`` message items."""
+    parts: list[str] = []
+    for item in getattr(response, "output", None) or []:
+        if isinstance(item, Mapping):
+            item_type, content = item.get("type"), item.get("content")
+        else:
+            item_type, content = getattr(item, "type", None), getattr(item, "content", None)
+        if item_type != "message":
+            continue
+        for part in content or []:
+            value = part.get("text") if isinstance(part, Mapping) else getattr(part, "text", None)
+            if isinstance(value, str):
+                parts.append(value)
+    return "".join(parts)
+
+
+def consume_response(response: Any) -> dict[str, Any]:
+    """Non-streaming counterpart of :func:`consume_stream` (same result shape)."""
+    if getattr(response, "status", None) not in (None, "completed"):
+        raise TransportError("responses_not_completed")
+    try:
+        # This relay sometimes completes with a text item whose content is null;
+        # the SDK property then raises instead of returning "". That is an empty
+        # output, i.e. the retryable case below, not a caller-side TypeError.
+        text = str(getattr(response, "output_text", "") or "")
+    except (TypeError, ValueError):
+        text = ""
+    # Some responses carry empty output_text while the message content parts do
+    # hold the text; strip leading zero-width marks either way (same discipline
+    # as the streaming path: strict json_schema output must start with "{").
+    text = (text or _message_text(response)).lstrip("\u200b\ufeff")
+    if not text:
+        raise TransportError("responses_output_empty")
+    raw = response.model_dump(mode="json") if hasattr(response, "model_dump") else {}
+    return {
+        "text": text,
+        "model": str(getattr(response, "model", "") or ""),
+        "response_id": str(getattr(response, "id", "") or ""),
+        "usage": _usage(response),
         "raw_response": raw,
     }
 
@@ -285,5 +334,5 @@ class CachedResponsesClient:
 
 __all__ = [
     "CachedResponsesClient", "ModelSubstituted", "ResponsesAdapter", "TransportError",
-    "consume_stream",
+    "consume_response", "consume_stream",
 ]
