@@ -719,6 +719,13 @@ def train(model: qd.QDualArm, *, args: argparse.Namespace, cfg: qd.QDualConfig,
                 witness = qd.zero_init_witness(
                     model, z, field, uniform_grid(9, device=device))
                 qd.assert_zero_init(witness, enabled=cfg.zero_init_head)
+                # ``zeroinit_step0_maxabs`` is a *training* quantity, so
+                # ``build_board`` can never see it: hand it to the selector here,
+                # strictly before the first ``select_fn`` call below, or the
+                # first selection board fails ``assert_criteria_ran`` on a key
+                # every other tier already carries (QDUAL_LR3E4, 2026-08-20).
+                if select_fn is not None and hasattr(select_fn, "state"):
+                    select_fn.state["zero_init_witness"] = dict(witness)
 
             colors = _color_batch(batch, sampler, cfg, device, images, alphas)
             ratio = qd.mining_ratio_for_step(step, steps_per_epoch)
@@ -937,6 +944,33 @@ def step0_headline_witness(model: qd.QDualArm, *, cfg: qd.QDualConfig,
                      "delta <= ~1.1e-7, so this is small but not exactly 0")}
 
 
+def attach_zeroinit_column(board: dict[str, Any],
+                           witness: Mapping[str, Any] | None, *,
+                           cfg: qd.QDualConfig, source: str) -> dict[str, Any]:
+    """Put the step-0 zero-init witness on ``board`` as its own criteria column.
+
+    ``zeroinit_step0_maxabs`` is pre-registered in :data:`qdual.REQUIRED_QDUAL`
+    but it is measured in the training loop, not in :func:`evaluate`, so
+    ``criteria.build_board`` cannot produce it: **every** board that goes through
+    ``assert_criteria_ran`` has to be handed it through this one function.  The
+    selection board used to skip that step, which is how QDUAL_LR3E4 reached its
+    first selection point after ~2h with the other 24 columns green and died on
+    this one.  ``witness`` is either the step-1 witness dict or the first
+    ``steps.jsonl`` row (both carry the key); ``None`` leaves ``n = 0``, which is
+    exactly what the assertion is there to catch.
+    """
+    step0 = (witness or {}).get("zeroinit_step0_maxabs")
+    col: dict[str, Any] = {
+        "n": 1 if step0 is not None else 0, "value": step0, "source": source,
+        "quantity": "max |dtheta| at step 0; must be exactly 0 with zero-init heads"}
+    if not cfg.zero_init_head:
+        col["note"] = (
+            "--no-zero-init-head: this key is dropped from the required table "
+            "(EPR-029:772-773) and the step-0 identity assertion is off")
+    board.setdefault("criteria_columns", {})["zeroinit_step0_maxabs"] = col
+    return col
+
+
 def make_selector(*, args: argparse.Namespace, cfg: qd.QDualConfig,
                   samples: Sequence[Sample], zstore: ZStore, alphas: AlphaStore,
                   images: ImageStore, bank: LutBank, lib_ids: Sequence[str],
@@ -949,7 +983,8 @@ def make_selector(*, args: argparse.Namespace, cfg: qd.QDualConfig,
     ``--eval-every`` steps (0 = off, one final evaluation only) on the first
     ``--eval-max-samples`` rows and writes ``selection.jsonl`` + ``best.pt``.
     """
-    state = {"best": None, "best_step": None, "first_board": True}
+    state: dict[str, Any] = {"best": None, "best_step": None,
+                             "first_board": True, "zero_init_witness": None}
 
     def _run(model: qd.QDualArm, step: int) -> dict[str, Any]:
         rows, aux = evaluate(model, args=args, cfg=cfg, samples=samples,
@@ -959,10 +994,16 @@ def make_selector(*, args: argparse.Namespace, cfg: qd.QDualConfig,
         board = crit.build_board(rows, arm=qd.ARM, split=args.eval_split,
                                  extra_columns=aux["extra_columns"],
                                  seed=args.seed)
+        # the one pre-registered column build_board cannot produce (training-side)
+        zcol = attach_zeroinit_column(board, state.get("zero_init_witness"),
+                                      cfg=cfg, source="train_step1_witness")
         hn = board["contexts"]["all"]["headline_normal_only"]
         rec = {"step": int(step), "headline_normal_only": hn.get("mean"),
                "n": hn.get("n"), "metric": ".contexts.all.headline_normal_only",
-               "selection_rule": "min headline; val loss is never read"}
+               "selection_rule": "min headline; val loss is never read",
+               # on the artefact so the wiring is visible even on the runs whose
+               # first-board assertion is skipped (synthetic / --smoke)
+               "zeroinit_step0_maxabs": zcol["value"]}
         if state["first_board"]:
             # "定义了没接线" has cost this campaign five times: assert the WHOLE
             # pre-registered table at the FIRST selection point, so a column
@@ -1492,15 +1533,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # gate uses, so an --eval-only board reads it off disk instead of losing it
     first_row, row_source = pub.resolve_first_step_row(
         train_report.get("first_step_row"), steps_path=run_dir / "steps.jsonl")
-    step0 = (first_row or {}).get("zeroinit_step0_maxabs")
-    board["criteria_columns"]["zeroinit_step0_maxabs"] = {
-        "n": 1 if step0 is not None else 0, "value": step0,
-        "source": row_source,
-        "quantity": "max |dtheta| at step 0; must be exactly 0 with zero-init heads"}
-    if not cfg.zero_init_head:
-        board["criteria_columns"]["zeroinit_step0_maxabs"]["note"] = (
-            "--no-zero-init-head: this key is dropped from the required table "
-            "(EPR-029:772-773) and the step-0 identity assertion is off")
+    attach_zeroinit_column(board, first_row, cfg=cfg, source=row_source)
 
     extra_steps = ["L_total", "R_sparse", "ladder_row"]
     if cfg.zero_init_head:

@@ -559,6 +559,113 @@ def test_a_board_missing_one_required_column_cannot_publish():
 
 
 # --------------------------------------------------------------------------- #
+# 12b. the step-0 witness column is a *training* quantity: build_board cannot
+#      produce it, so every board that goes through assert_criteria_ran has to
+#      be handed it (QDUAL_LR3E4 died on exactly this at its first selection
+#      point, ~2h in, with the other 24 columns green).
+# --------------------------------------------------------------------------- #
+def _evaluate_rows(n: int = 4) -> tuple[list[dict], dict[str, dict]]:
+    """Rows + extra columns that carry every REQUIRED_QDUAL key *except* the
+    step-0 witness -- i.e. exactly what ``evaluate`` returns."""
+    rows = []
+    for i in range(n):
+        v = 1.0 + 0.1 * i
+        row = {"sample_id": f"s{i}", "winner_confidence": "normal",
+               "task_type": "local" if i % 2 else "style",
+               "E_arm": v, "E_B0_identity": v + 1.0, "E_B1_libmean": v + 0.5,
+               "E_B4_oracle": v + 0.2,
+               "E_B2_librandom_repeats": [v + 2.0, v + 2.5],
+               "E_B3_bucket_retrieval_repeats": [v + 1.5, v + 1.7],
+               "loc_in": v, "loc_band": v + 0.1, "loc_out": 0.0,
+               "field_gt": v, "field_const": v + 0.3, "field_shuffle": v + 0.4}
+        for e_key, m_key in runner.CONTROL_ROW_KEYS.values():
+            row[e_key], row[m_key] = v + 0.6, 0.7
+        rows.append(row)
+    extra = {k: crit.describe([0.1 * (j + 1) for j in range(n)]) for k in (
+        "query_match_drift_repeat", "query_match_drift_path",
+        "query_match_mu_shift_indexed", "query_match_mu_shift_hungarian",
+        "field_pred")}
+    extra["ladder_row"] = {"n": n, "value": "c"}
+    return rows, extra
+
+
+def _selection_board(rows, extra) -> dict:
+    return crit.build_board(rows, arm=qd.ARM, split="V_what",
+                            extra_columns=extra)
+
+
+def test_board_without_the_zeroinit_column_raises_although_all_else_is_green():
+    rows, extra = _evaluate_rows()
+    board = _selection_board(rows, extra)
+    req = qd.required_criteria_table(qd.QDualConfig())
+    # every other pre-registered key is already on the board ...
+    assert [k for k in req if k not in board["criteria_columns"]] == [
+        "zeroinit_step0_maxabs"]
+    with pytest.raises(crit.CriterionNotComputed, match="zeroinit_step0_maxabs"):
+        crit.assert_criteria_ran(board, qd.ARM, required=req)
+    # ... and wiring the witness in is all it takes
+    runner.attach_zeroinit_column(board, {"zeroinit_step0_maxabs": 0.0},
+                                  cfg=qd.QDualConfig(), source="unit-test")
+    rep = crit.assert_criteria_ran(board, qd.ARM, required=req)
+    assert rep["computed"]["zeroinit_step0_maxabs"] == 1
+    assert board["criteria_columns"]["zeroinit_step0_maxabs"]["value"] == 0.0
+
+
+def test_attach_zeroinit_column_leaves_n_zero_when_there_is_no_witness():
+    board = {"criteria_columns": {}}
+    col = runner.attach_zeroinit_column(board, None, cfg=qd.QDualConfig(),
+                                        source="unit-test")
+    assert col["n"] == 0 and col["value"] is None
+    col2 = runner.attach_zeroinit_column(
+        board, {"zeroinit_step0_maxabs": 0.0},
+        cfg=qd.QDualConfig(zero_init_head=False), source="unit-test")
+    assert "--no-zero-init-head" in col2["note"]
+
+
+class _StubModel:
+    def state_dict(self):
+        return {}
+
+    def train(self):
+        return self
+
+
+def test_selection_board_carries_the_zeroinit_column_the_trainer_hands_it(
+        tmp_path, monkeypatch):
+    """The FIRST selection board asserts the whole table -- so it must be wired."""
+    rows, extra = _evaluate_rows()
+    monkeypatch.setattr(runner, "evaluate",
+                        lambda *a, **k: (rows, {"extra_columns": extra,
+                                                "meta": {}}))
+    args = runner.build_parser().parse_args(["--eval-every", "1"])
+    assert args.z_source != "synthetic" and not args.smoke   # assertion not skipped
+    select = runner.make_selector(
+        args=args, cfg=qd.QDualConfig(), samples=[], zstore=None, alphas=None,
+        images=None, bank=None, lib_ids=[], pools={},
+        device=torch.device("cpu"), run_dir=tmp_path, pred_field_dir=None)
+
+    # before the trainer hands the witness over, the first board cannot publish
+    with pytest.raises(crit.CriterionNotComputed, match="zeroinit_step0_maxabs"):
+        select(_StubModel(), 1)
+
+    # this is the assignment train() makes at step 1, before any select_fn call
+    select.state["zero_init_witness"] = {"zeroinit_step0_maxabs": 0.0}
+    rec = select(_StubModel(), 2)
+    computed = rec["first_board_assertion"]["computed"]
+    assert set(computed) == set(qd.REQUIRED_QDUAL)
+    assert all(n > 0 for n in computed.values())
+    assert computed["zeroinit_step0_maxabs"] == 1
+
+
+def test_the_trainer_hands_the_step1_witness_to_the_selector():
+    """``train`` sets ``select_fn.state`` at step 1 -- greppable, not incidental."""
+    src = RUNNER_SRC.read_text(encoding="utf-8")
+    assert 'select_fn.state["zero_init_witness"] = dict(witness)' in src
+    # and both boards go through the one helper
+    assert src.count("attach_zeroinit_column(") == 3      # def + selector + final
+
+
+# --------------------------------------------------------------------------- #
 # 13. discipline: no constant tensor in a forward, no stray .cpu()
 # --------------------------------------------------------------------------- #
 def _calls(tree: ast.AST) -> list[str]:
