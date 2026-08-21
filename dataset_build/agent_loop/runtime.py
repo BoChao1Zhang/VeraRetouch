@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 from .api_cache import ExactResponseCache
 from .artifact_landing import ArtifactLandingManager
@@ -18,29 +18,38 @@ from .render import (
 )
 from .responses import CachedResponsesClient, ResponsesAdapter
 from .scheduler import TerraLane, TerraLimiter, TerraRouter
-from .segment_fingerprints import SEGMENT_FINGERPRINT_TABLE_SHA256
+from .segment_fingerprints import REGISTERED_SEGMENT_FINGERPRINT_TABLES
 from .validator import ChainValidator
 
 
 def require_frozen_segment_fingerprints(
-    catalog: LutCatalog, *, expected_sha256: str = SEGMENT_FINGERPRINT_TABLE_SHA256,
+    catalog: LutCatalog, *,
+    expected_sha256: str | Sequence[str] = REGISTERED_SEGMENT_FINGERPRINT_TABLES,
 ) -> None:
-    """C1b item 2: fail loud when the mounted table is not the registered one.
+    """C1b item 2: fail loud when the mounted table is not a registered one.
 
-    `prompt_registry()["segment_fingerprint_table_sha256"]` claims a specific table, so
-    every thread revision computed from it is a lie unless the artifact that was really
-    mounted hashes to the same value. Checked once at service assembly, never silently.
+    `prompt_registry()` claims specific tables (`segment_fingerprint_table_sha256` for
+    v1, `segment_fingerprint_histogram.table_sha256_v2` for v2), so every thread
+    revision computed from them is a lie unless the artifact that was really mounted
+    hashes to one of those values. Checked once at service assembly, never silently.
+
+    B12 item 2 widens the check from one digest to the registered set: v1 and v2 are
+    both mountable, and which one a run used is recorded by the catalog itself.
     """
+    expected = (
+        (expected_sha256,) if isinstance(expected_sha256, str)
+        else tuple(str(value) for value in expected_sha256)
+    )
     mounted = catalog.segment_fingerprints_sha256
     if not mounted:
         raise ConfigError(
             "catalog.segment_fingerprints is not mounted, but the prompt registry "
-            f"declares table {expected_sha256}"
+            f"declares table(s) {list(expected)}"
         )
-    if mounted != expected_sha256:
+    if mounted not in expected:
         raise ConfigError(
             "mounted segment-fingerprint table "
-            f"{mounted} != registered {expected_sha256}"
+            f"{mounted} is not one of the registered tables {list(expected)}"
         )
 
 
@@ -89,7 +98,9 @@ def create_services(
     renderer_factory: Callable[[AgentLoopConfig, LutCatalog], FullPresetRenderer] | None = None,
     terra_client_factory: Any | None = None, validator_client_factory: Any | None = None,
     check_preflight: bool = True,
-    expected_segment_fingerprint_sha256: str = SEGMENT_FINGERPRINT_TABLE_SHA256,
+    expected_segment_fingerprint_sha256: "str | Sequence[str]" = (
+        REGISTERED_SEGMENT_FINGERPRINT_TABLES
+    ),
 ) -> AgentServices:
     audit = audit or create_audit(config)
     artifacts = ArtifactStore(

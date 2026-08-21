@@ -22,7 +22,10 @@ from .direction_match import (
     direction_match_scores,
 )
 from .lut_annotations import file_sha256, validate_closed_annotation
-from .segment_fingerprints import load_segment_fingerprints
+from .segment_fingerprints import (
+    HISTOGRAM_AGGREGATES, load_segment_fingerprints, load_segment_histograms,
+)
+from .source_histogram import histogram_match_bonus
 from .models import (
     ACTIVE_LOCAL_INTENTS, BAND_GEOMETRY_GATE, DISABLED_LOCAL_INTENTS,
     FINGERPRINT_FIELDS,
@@ -101,6 +104,10 @@ class LutRecord:
     # from the derived `segment_fingerprints` artifact when the catalog config points at
     # one. `None` means "not mounted"; nothing in the prompt or the shortlist reads it.
     segment_fingerprint: dict[str, dict[str, float]] | None = None
+    # B12 item 2/3: the LUT's L* bin-share response, mounted from a v2 fingerprint
+    # artifact. `None` means "not mounted" (a v1 artifact), and every B12 column and
+    # scoring term degrades to the pre-B12 behaviour when it is missing.
+    histogram_response: dict[str, Any] | None = None
 
     def fingerprint(self) -> dict[str, float]:
         """The frozen eight-number effect fingerprint (decisions doc section 2.1)."""
@@ -126,13 +133,28 @@ class LutRecord:
             _number(summary, "mid_gray_b"), _number(summary, "sat_pct_mean"),
         )
 
-    def prompt_view(self) -> dict[str, Any]:
+    def histogram_aggregates(self) -> dict[str, float] | None:
+        """`d_shadow` / `d_mid` / `d_high`, or `None` when nothing is mounted."""
+        if not self.histogram_response:
+            return None
         return {
+            name: float(self.histogram_response.get(name, 0.0))
+            for name in HISTOGRAM_AGGREGATES
+        }
+
+    def prompt_view(self) -> dict[str, Any]:
+        view = {
             "preset_id": self.preset_id,
             "style_major": self.style_major,
             "fingerprint": self.fingerprint(),
             "caption": self.caption,
         }
+        # B12 item 3: the three histogram aggregates are the only part of the v2 group
+        # that is serialized into the shortlist table.
+        aggregates = self.histogram_aggregates()
+        if aggregates is not None:
+            view["histogram"] = aggregates
+        return view
 
 
 def _format_of(row: Mapping[str, Any]) -> str:
@@ -189,6 +211,11 @@ class LutCatalog:
     def segment_fingerprints_mounted(self) -> bool:
         return all(row.segment_fingerprint is not None for row in self.records)
 
+    @property
+    def histogram_responses_mounted(self) -> bool:
+        """B12 item 3: true only when every record carries a v2 histogram group."""
+        return all(row.histogram_response is not None for row in self.records)
+
     def segment_fingerprint_table(self) -> SegmentFingerprintTable:
         """The (N, 3, 5) fingerprint table of this catalog; built once, then reused."""
         if not self.segment_fingerprints_mounted:
@@ -215,6 +242,11 @@ class LutCatalog:
         fingerprint_path = getattr(config, "segment_fingerprints", None)
         fingerprints = (
             load_segment_fingerprints(fingerprint_path) if fingerprint_path else {}
+        )
+        # B12 item 3: a v2 artifact also carries the histogram response; a v1 artifact
+        # returns `{}` here and the catalog stays exactly as it was before B12.
+        histograms = (
+            load_segment_histograms(fingerprint_path) if fingerprint_path else {}
         )
         records: list[LutRecord] = []
         with config.annotations.open("r", encoding="utf-8") as handle:
@@ -246,6 +278,13 @@ class LutCatalog:
                         segment: dict(values)
                         for segment, values in fingerprints[preset_id].items()
                     }
+                histogram_response: dict[str, Any] | None = None
+                if histograms:
+                    if preset_id not in histograms:
+                        raise CandidateError(
+                            f"histogram fingerprint artifact does not cover {preset_id}"
+                        )
+                    histogram_response = dict(histograms[preset_id])
                 records.append(LutRecord(
                     preset_id=preset_id, path=feature[0], format=feature[1],
                     name=str(row.get("name") or preset_id), style_major=major,
@@ -256,6 +295,7 @@ class LutCatalog:
                     per_probe={str(k): str(v) for k, v in (row.get("per_probe") or {}).items()},
                     hsl_features=dict(row.get("hsl_features") or {}),
                     segment_fingerprint=segment_fingerprint,
+                    histogram_response=histogram_response,
                 ))
         if not records:
             raise CandidateError("no renderable annotated LUT records")
@@ -307,11 +347,12 @@ class LutCatalog:
     def global_shortlist(
         self, diagnosis: Mapping[str, Any], palette: Mapping[str, Any], scene: str,
         config: CatalogConfig, preset_reach: Mapping[str, Any] | None = None,
-        source_sha256: str = "",
+        source_sha256: str = "", source_histogram: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         reach = dict((preset_reach or {}).get("presets") or {})
         scored = [
-            (self._score(row, diagnosis, palette, scene), row) for row in self.records
+            (self._score(row, diagnosis, palette, scene, source_histogram), row)
+            for row in self.records
             if not reach or (row.preset_id in reach and reach[row.preset_id]["achievable_bins"])
         ]
         by_major: dict[str, list[tuple[float, LutRecord]]] = {}
@@ -391,11 +432,14 @@ class LutCatalog:
 
     def reach_candidates(
         self, diagnosis: Mapping[str, Any], palette: Mapping[str, Any], scene: str,
-        limit: int,
+        limit: int, source_histogram: Mapping[str, Any] | None = None,
     ) -> list[LutRecord]:
         ranked = sorted(
             self.records,
-            key=lambda row: (-self._score(row, diagnosis, palette, scene), row.preset_id),
+            key=lambda row: (
+                -self._score(row, diagnosis, palette, scene, source_histogram),
+                row.preset_id,
+            ),
         )
         return ranked[:limit]
 
@@ -406,6 +450,7 @@ class LutCatalog:
         combined_scores: Mapping[str, float], correction_scores: Mapping[str, float],
         source_sha256: str = "",
         global_fingerprint: Mapping[str, float] | None = None,
+        source_histogram: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         """LUT subset of one intent packet, retrieved online over the whole catalog.
 
@@ -453,7 +498,7 @@ class LutCatalog:
                 continue
             reach_of[record.preset_id] = value
         rows = [
-            (self._score(record, diagnosis, palette, scene), record)
+            (self._score(record, diagnosis, palette, scene, source_histogram), record)
             for record in prefiltered if record.preset_id in reach_of
         ]
         rows.sort(key=lambda pair: (-pair[0], pair[1].preset_id))
@@ -507,7 +552,8 @@ class LutCatalog:
 
     @staticmethod
     def _score(
-        row: LutRecord, diagnosis: Mapping[str, Any], palette: Mapping[str, Any], scene: str
+        row: LutRecord, diagnosis: Mapping[str, Any], palette: Mapping[str, Any],
+        scene: str, source_histogram: Mapping[str, Any] | None = None,
     ) -> float:
         summary = row.hsl_features.get("summary") or {}
         mid_a = float(summary.get("mid_gray_a", 0.0) or 0.0)
@@ -540,6 +586,10 @@ class LutCatalog:
         for needle, aliases in FORBIDDEN_CAPTION_ALIASES:
             if needle in forbidden and any(alias in caption for alias in aliases):
                 score -= 3.0
+        # B12 item 3: the pre-registered histogram term. It is exactly 0.0 whenever the
+        # source histogram is not wired or the catalog carries no v2 histogram group,
+        # so a v1 mount reproduces the pre-B12 score bit for bit.
+        score += histogram_match_bonus(source_histogram, row.histogram_response)
         return float(score)
 
 
@@ -746,6 +796,7 @@ def build_local_packets(
     row_limit: int = LOCAL_PACKET_ROW_LIMIT,
     mask_reach: Any | None = None,
     direction_probe: Any | None = None,
+    source_histogram: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """(mask, intent, LUT subset) packets for one global branch.
 
@@ -796,6 +847,7 @@ def build_local_packets(
                 mask=mask, mask_reach=mask_reach, combined_scores=combined_scores,
                 correction_scores=correction_scores, source_sha256=source_sha256,
                 global_fingerprint=global_fingerprint,
+                source_histogram=source_histogram,
             )
             retrieval.append({
                 "mask_id": str(mask["mask_id"]), "intent": intent, "role": role,
@@ -842,7 +894,10 @@ def build_local_packets(
             )
     return {"rows": rows, "packets": packets, "notes": notes,
             "quota_deficits": deficits, "retrieval": retrieval,
-            "mask_reach_applied": True, "direction_prefilter_applied": True}
+            "mask_reach_applied": True, "direction_prefilter_applied": True,
+            # B12 item 3 runtime assertion channel: the histogram term only entered
+            # `_score` if a source reading was actually handed down here.
+            "source_histogram_applied": bool(source_histogram)}
 
 
 def offered_intents(packets: Sequence[Mapping[str, Any]], mask_id: str) -> list[str]:

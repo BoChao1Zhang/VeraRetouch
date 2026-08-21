@@ -38,6 +38,11 @@ from .lut_annotations import file_sha256
 
 
 SEGMENT_FINGERPRINT_SCHEMA = "lut-segment-fingerprint-v1"
+# B12 item 2: v2 = every v1 field, byte for byte, plus one `histogram` group.
+SEGMENT_FINGERPRINT_SCHEMA_V2 = "lut-segment-fingerprint-v2"
+SEGMENT_FINGERPRINT_SCHEMAS: tuple[str, ...] = (
+    SEGMENT_FINGERPRINT_SCHEMA, SEGMENT_FINGERPRINT_SCHEMA_V2,
+)
 # Bump this whenever the arithmetic below changes; loaders reject a foreign revision.
 DERIVATION_REVISION = "ramp-band-lumsign-v1"
 
@@ -61,6 +66,9 @@ DEFAULT_ANNOTATIONS = DEFAULT_CLOSED_ANNOTATIONS
 DEFAULT_FINGERPRINTS = Path(
     "/home/bc/data/scratch/lut_reannotate/out/segment_fingerprints.v1.jsonl"
 )
+DEFAULT_FINGERPRINTS_V2 = Path(
+    "/home/bc/data/scratch/lut_reannotate/out/segment_fingerprints.v2.jsonl"
+)
 # SHA-256 of the production artifact derived from `annotations.closed-v1.jsonl`
 # (4,051 rows). B11 item 6 puts it into `prompt_revision_fingerprint()`: the table
 # decides which LUTs the online local retrieval can even see, so a different table is a
@@ -68,6 +76,38 @@ DEFAULT_FINGERPRINTS = Path(
 # actually mounted, which is what the runtime assertion compares against.
 SEGMENT_FINGERPRINT_TABLE_SHA256 = (
     "bac4db04e402b0eaefb702502027f7287b99ee50e8fa76b6b48871a9f0774939"
+)
+
+# --- B12 item 2: LUT histogram response ---------------------------------------------
+#
+# The v1 table is a re-read of already recorded numbers. The histogram group is the
+# only measured addition: a frozen probe-pixel population is rendered through every
+# LUT and the L* bin shares of the rendered pixels are compared, bin by bin, with the
+# bin shares of the same pixels before the LUT.
+#
+#     delta[i] = l_bins_out[i] - l_bins_in[i]          (sums to 0 by construction)
+#     d_shadow = sum(delta[i] for i in HISTOGRAM_GROUPS["d_shadow"])
+#     d_mid    = sum(delta[i] for i in HISTOGRAM_GROUPS["d_mid"])
+#     d_high   = sum(delta[i] for i in HISTOGRAM_GROUPS["d_high"])
+#
+# The three groups partition the eight bins, so `d_shadow + d_mid + d_high == 0`.
+HISTOGRAM_DERIVATION_REVISION = "probe-l8-binshare-v1"
+HISTOGRAM_GROUPS: dict[str, tuple[int, ...]] = {
+    "d_shadow": (0, 1, 2), "d_mid": (3, 4, 5), "d_high": (6, 7),
+}
+HISTOGRAM_AGGREGATES: tuple[str, ...] = ("d_shadow", "d_mid", "d_high")
+HISTOGRAM_FIELDS: tuple[str, ...] = (
+    "l_bins_in", "l_bins_out", "delta", *HISTOGRAM_AGGREGATES,
+)
+HISTOGRAM_ROUND_DIGITS = 6
+# SHA-256 of the production v2 artifact. Empty until the artifact is built; the
+# runtime assertion in `runtime.require_frozen_segment_fingerprints` accepts any table
+# listed in `REGISTERED_SEGMENT_FINGERPRINT_TABLES`, so v1 stays mountable.
+SEGMENT_FINGERPRINT_TABLE_SHA256_V2 = (
+    "62aae05eef857cc3557f7121e21b6d0528b7822e6b5917a5ffe45b1a02b43681"
+)
+REGISTERED_SEGMENT_FINGERPRINT_TABLES: tuple[str, ...] = (
+    SEGMENT_FINGERPRINT_TABLE_SHA256, SEGMENT_FINGERPRINT_TABLE_SHA256_V2,
 )
 
 
@@ -182,10 +222,68 @@ def derive_segment_fingerprint(
     return result
 
 
-def validate_segment_fingerprint_row(row: Mapping[str, Any]) -> None:
-    if row.get("schema") != SEGMENT_FINGERPRINT_SCHEMA:
+def derive_histogram_response(
+    l_bins_in: Sequence[float], l_bins_out: Sequence[float]
+) -> dict[str, Any]:
+    """Bin-share difference of one LUT plus the three pre-registered aggregates."""
+    inside = [_finite(value, f"l_bins_in[{i}]") for i, value in enumerate(l_bins_in)]
+    outside = [_finite(value, f"l_bins_out[{i}]") for i, value in enumerate(l_bins_out)]
+    expected = max(index for group in HISTOGRAM_GROUPS.values() for index in group) + 1
+    if len(inside) != expected or len(outside) != expected:
         raise SegmentFingerprintError(
-            f"schema must be {SEGMENT_FINGERPRINT_SCHEMA!r}"
+            f"l_bins_in / l_bins_out must carry exactly {expected} numbers"
+        )
+    delta = [outside[i] - inside[i] for i in range(expected)]
+    payload: dict[str, Any] = {
+        "l_bins_in": [round(value, HISTOGRAM_ROUND_DIGITS) for value in inside],
+        "l_bins_out": [round(value, HISTOGRAM_ROUND_DIGITS) for value in outside],
+        "delta": [round(value, HISTOGRAM_ROUND_DIGITS) for value in delta],
+    }
+    for name in HISTOGRAM_AGGREGATES:
+        payload[name] = round(
+            float(sum(delta[index] for index in HISTOGRAM_GROUPS[name])),
+            HISTOGRAM_ROUND_DIGITS,
+        )
+    return payload
+
+
+def validate_histogram_response(payload: Any) -> None:
+    if not isinstance(payload, Mapping) or set(payload) != set(HISTOGRAM_FIELDS):
+        raise SegmentFingerprintError(
+            f"histogram must have exactly {list(HISTOGRAM_FIELDS)}"
+        )
+    expected = max(index for group in HISTOGRAM_GROUPS.values() for index in group) + 1
+    for name in ("l_bins_in", "l_bins_out", "delta"):
+        values = payload[name]
+        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)) \
+                or len(values) != expected:
+            raise SegmentFingerprintError(
+                f"histogram.{name} must carry exactly {expected} numbers"
+            )
+        for index, value in enumerate(values):
+            _finite(value, f"histogram.{name}[{index}]")
+    for name in HISTOGRAM_AGGREGATES:
+        _finite(payload[name], f"histogram.{name}")
+
+
+def validate_segment_fingerprint_row(row: Mapping[str, Any]) -> None:
+    schema = row.get("schema")
+    if schema not in SEGMENT_FINGERPRINT_SCHEMAS:
+        raise SegmentFingerprintError(
+            f"schema must be one of {list(SEGMENT_FINGERPRINT_SCHEMAS)}"
+        )
+    if schema == SEGMENT_FINGERPRINT_SCHEMA_V2:
+        if row.get("histogram_revision") != HISTOGRAM_DERIVATION_REVISION:
+            raise SegmentFingerprintError(
+                f"histogram_revision must be {HISTOGRAM_DERIVATION_REVISION!r}"
+            )
+        probe_sha = row.get("probe_sha256")
+        if not isinstance(probe_sha, str) or len(probe_sha) != 64:
+            raise SegmentFingerprintError("probe_sha256 must be a sha256 hex digest")
+        validate_histogram_response(row.get("histogram"))
+    elif "histogram" in row:
+        raise SegmentFingerprintError(
+            "a v1 row must not carry a histogram group"
         )
     if row.get("derivation_revision") != DERIVATION_REVISION:
         raise SegmentFingerprintError(
@@ -211,8 +309,10 @@ def validate_segment_fingerprint_row(row: Mapping[str, Any]) -> None:
 
 
 def build_row(
-    preset_id: str, hsl_features: Mapping[str, Any], *, source_sha256: str
+    preset_id: str, hsl_features: Mapping[str, Any], *, source_sha256: str,
+    histogram: Mapping[str, Any] | None = None, probe_sha256: str = "",
 ) -> dict[str, Any]:
+    """One fingerprint row; a `histogram` argument promotes it from v1 to v2."""
     bands = _bands(hsl_features)
     assignment = assign_bands(bands)
     row = {
@@ -226,6 +326,12 @@ def build_row(
         },
         "segments": derive_segment_fingerprint(hsl_features),
     }
+    if histogram is not None:
+        # B12 item 2: every v1 key above is preserved verbatim; v2 only adds.
+        row["schema"] = SEGMENT_FINGERPRINT_SCHEMA_V2
+        row["histogram_revision"] = HISTOGRAM_DERIVATION_REVISION
+        row["probe_sha256"] = str(probe_sha256)
+        row["histogram"] = dict(histogram)
     validate_segment_fingerprint_row(row)
     return row
 
@@ -256,6 +362,55 @@ def load_segment_fingerprints(
     if not result:
         raise SegmentFingerprintError(f"{path}: segment fingerprint artifact is empty")
     return result
+
+
+def read_segment_fingerprint_rows(path: str | Path) -> list[dict[str, Any]]:
+    """Every validated row of a v1 or v2 artifact, in file order."""
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    with Path(path).open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise SegmentFingerprintError(f"{path}:{line_number}: invalid JSON") from exc
+            if not isinstance(row, dict):
+                raise SegmentFingerprintError(f"{path}:{line_number}: row must be an object")
+            validate_segment_fingerprint_row(row)
+            preset_id = str(row["preset_id"])
+            if preset_id in seen:
+                raise SegmentFingerprintError(f"{path}: duplicate preset_id {preset_id}")
+            seen.add(preset_id)
+            rows.append(row)
+    if not rows:
+        raise SegmentFingerprintError(f"{path}: segment fingerprint artifact is empty")
+    return rows
+
+
+def load_segment_histograms(path: str | Path) -> dict[str, dict[str, Any]]:
+    """`preset_id -> histogram response` of a v2 artifact; `{}` for a v1 artifact.
+
+    B12 item 3: `LutCatalog` mounts whatever this returns, so a v1 table keeps the
+    pre-B12 behaviour (no histogram column, no histogram retrieval term) instead of
+    failing.
+    """
+    rows = read_segment_fingerprint_rows(path)
+    schemas = {str(row["schema"]) for row in rows}
+    if len(schemas) != 1:
+        raise SegmentFingerprintError(
+            f"{path}: mixed fingerprint schemas {sorted(schemas)}"
+        )
+    if schemas == {SEGMENT_FINGERPRINT_SCHEMA}:
+        return {}
+    return {
+        str(row["preset_id"]): {
+            key: (list(value) if isinstance(value, list) else float(value))
+            for key, value in row["histogram"].items()
+        }
+        for row in rows
+    }
 
 
 def _quantile(values: Sequence[float], fraction: float) -> float:
@@ -395,9 +550,16 @@ if __name__ == "__main__":
 
 __all__ = [
     "BAND_SEGMENT_LUM_THRESHOLD", "DERIVATION_REVISION", "DEFAULT_FINGERPRINTS",
+    "DEFAULT_FINGERPRINTS_V2",
     "HEADLINE_FIELDS", "RAMP_SEGMENTS", "SEGMENT_FIELDS", "SEGMENT_FINGERPRINT_SCHEMA",
+    "SEGMENT_FINGERPRINT_SCHEMAS", "SEGMENT_FINGERPRINT_SCHEMA_V2",
     "SEGMENT_L_BOUNDS", "SEGMENT_NAMES", "SegmentFingerprintError", "assign_bands",
-    "SEGMENT_FINGERPRINT_TABLE_SHA256",
-    "build_row", "build_segment_fingerprints", "derive_segment_fingerprint",
-    "load_segment_fingerprints", "validate_segment_fingerprint_row",
+    "SEGMENT_FINGERPRINT_TABLE_SHA256", "SEGMENT_FINGERPRINT_TABLE_SHA256_V2",
+    "REGISTERED_SEGMENT_FINGERPRINT_TABLES",
+    "HISTOGRAM_AGGREGATES", "HISTOGRAM_DERIVATION_REVISION", "HISTOGRAM_FIELDS",
+    "HISTOGRAM_GROUPS", "HISTOGRAM_ROUND_DIGITS",
+    "build_row", "build_segment_fingerprints", "derive_histogram_response",
+    "derive_segment_fingerprint", "load_segment_fingerprints",
+    "load_segment_histograms", "read_segment_fingerprint_rows",
+    "validate_histogram_response", "validate_segment_fingerprint_row",
 ]

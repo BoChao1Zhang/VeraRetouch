@@ -95,6 +95,9 @@ from dataset_build.agent_loop.scheduler import (
 from dataset_build.agent_loop.source_annotations import (
     SOURCE_ANNOTATION_SCHEMA, annotate_source, load_source_annotation,
 )
+from dataset_build.agent_loop.source_histogram import (
+    assert_histogram_columns, source_histogram,
+)
 from dataset_build.agent_loop.source_reach import (
     REACH_SCHEMA, SAMPLER_REVISION, SAMPLE_PIXELS, configured_lut_loader,
     probe_preset_reach,
@@ -412,16 +415,25 @@ def test_mounted_segment_fingerprint_path_enters_the_thread_revision(
 def test_startup_rejects_a_segment_fingerprint_table_that_is_not_the_frozen_one(
     tmp_path: Path,
 ) -> None:
-    """C1b item 2: the registry claims one table SHA; a different mount fails loud."""
+    """C1b item 2: the registry claims table SHAs; a different mount fails loud.
+
+    B12 item 2: the claim is now the *set* `REGISTERED_SEGMENT_FINGERPRINT_TABLES`
+    (v1 and v2), and a mount that is in the set passes whichever member it matches.
+    """
     config = _write_config(tmp_path, presets=2)
     catalog = LutCatalog.load(config.catalog, config.databuild_config)
     mounted = catalog.segment_fingerprints_sha256
     assert len(mounted) == 64
     require_frozen_segment_fingerprints(catalog, expected_sha256=mounted)
-    with pytest.raises(ConfigError, match="!= registered"):
+    require_frozen_segment_fingerprints(catalog, expected_sha256=("0" * 64, mounted))
+    with pytest.raises(ConfigError, match="not one of the registered tables"):
         require_frozen_segment_fingerprints(catalog, expected_sha256="0" * 64)
-    with pytest.raises(ConfigError, match="!= registered"):
-        # The production default is the constant in `prompt_registry()`, which no
+    with pytest.raises(ConfigError, match="not one of the registered tables"):
+        require_frozen_segment_fingerprints(
+            catalog, expected_sha256=("0" * 64, "1" * 64)
+        )
+    with pytest.raises(ConfigError, match="not one of the registered tables"):
+        # The production default is the constant set in `prompt_registry()`, which no
         # fixture table can ever match.
         require_frozen_segment_fingerprints(catalog)
     unmounted = LutCatalog.load(
@@ -500,10 +512,19 @@ def test_shortlist_row_serialization_is_byte_stable() -> None:
     )
     assert "strongest_bands" not in shortlist_rows_text([row])
     assert len(line) / 3 < 80  # single-row prompt cost stays in the ~60 token band
-    assert CANDIDATE_SERIALIZATION_REVISION == "lut-intent-v7-optB"
+    assert CANDIDATE_SERIALIZATION_REVISION == "lut-intent-v7.1-optB"
     # B8 item 4: a local row carries the mask-conditioned reach as a trailing column;
     # a global row (no `mask_reach_de`) is byte-identical to the B7 line.
     assert shortlist_row_text(3, {**row, "mask_reach_de": 4.125}) == line + " | 4.12"
+    # B12 item 3: a v2-mounted row closes with `d_shadow d_mid d_high`, after the
+    # mask-reach column when there is one. A row without a `histogram` key is
+    # byte-identical to the B11 line.
+    histogram = {"d_shadow": -0.0231, "d_mid": 0.4, "d_high": -0.0004}
+    assert shortlist_row_text(3, {**row, "histogram": histogram}) == \
+        line + " | -0.023 0.400 0.000"
+    assert shortlist_row_text(
+        3, {**row, "mask_reach_de": 4.125, "histogram": histogram}
+    ) == line + " | 4.12 | -0.023 0.400 0.000"
 
 
 def test_fingerprint_formatting_never_emits_negative_zero(monkeypatch) -> None:
@@ -1097,7 +1118,11 @@ def test_prompt_registry_key_set_is_the_explicit_frozen_list() -> None:
     below is the contract and this assertion is its runtime guard.
     """
     assert sorted(prompt_registry()) == sorted(PROMPT_REGISTRY_KEYS)
-    assert len(set(PROMPT_REGISTRY_KEYS)) == len(PROMPT_REGISTRY_KEYS) == 41
+    # B12 adds three keys: 41 -> 44.
+    assert len(set(PROMPT_REGISTRY_KEYS)) == len(PROMPT_REGISTRY_KEYS) == 44
+    for key in ("source_histogram", "segment_fingerprint_histogram",
+                "histogram_match_gate"):
+        assert key in PROMPT_REGISTRY_KEYS
 
 
 @pytest.mark.parametrize("key", [
@@ -2812,6 +2837,13 @@ def test_region_descriptor_separates_geometries_center_hint_collapses() -> None:
     }
 
 
+def _source_histogram_fixture() -> dict[str, Any]:
+    """B12 item 1: a valid frozen source-histogram reading for hand-built states."""
+    return source_histogram(
+        np.linspace(0.0, 1.0, 32 * 32 * 3, dtype=np.float32).reshape(32, 32, 3)
+    )
+
+
 def _global_shortlist_fixture() -> dict[str, list[dict[str, Any]]]:
     def row(preset_id: str, bins: list[str], raw: int, offered: int) -> dict[str, Any]:
         return {
@@ -2869,6 +2901,7 @@ def test_graph_sends_a_source_to_its_own_lane_only(tmp_path: Path) -> None:
             "source_artifact": {"sha256": "a" * 64, "media_type": "image/jpeg",
                                 "size": 10, "uri": "sha256://" + "a" * 64},
             "global_shortlist": _global_shortlist_fixture(),
+            "source_histogram": _source_histogram_fixture(),
         }
         _global_propose_node(services)(state)
         expected = config.terra_lane(source_sha).identity
@@ -2904,6 +2937,7 @@ def _run_global_propose(tmp_path: Path) -> tuple[Any, SQLiteAuditStore, dict[str
         "source_artifact": {"sha256": "a" * 64, "media_type": "image/jpeg", "size": 10,
                             "uri": "sha256://" + "a" * 64},
         "global_shortlist": shortlist,
+        "source_histogram": _source_histogram_fixture(),
     }
     produced = _global_propose_node(services)(state)
     return captured["validate"], audit, produced
@@ -3201,7 +3235,11 @@ def test_graph_fanout_join_and_cap_excluded_audit(tmp_path: Path) -> None:
     shortlist_payload = json.loads(
         services.artifacts.read_bytes(tree["global_shortlist_artifact"])
     )
-    assert set(shortlist_payload) == {"by_major", "quota_deficits", "offered_majors"}
+    # B12 item 1: the shortlist artifact also carries the source histogram evidence.
+    assert set(shortlist_payload) == {
+        "by_major", "quota_deficits", "offered_majors", "source_histogram",
+    }
+    assert_histogram_columns(shortlist_payload["source_histogram"])
     assert shortlist_payload["quota_deficits"] == []
     assert all(branch["local_shortlist_deficits"] == [] for branch in tree["branches"])
     proposal_audit = audit._conn().execute(
@@ -3371,7 +3409,7 @@ def test_prompt_revision_fingerprint_covers_the_b11_retrieval_contract(
     """B11 item 6: the fingerprint table SHA, the retrieval budget, the role domains,
     the two new intent gates and the packet order all move the revision."""
     baseline = prompt_revision_fingerprint()
-    assert prompts_module.CANDIDATE_SERIALIZATION_REVISION == "lut-intent-v7-optB"
+    assert prompts_module.CANDIDATE_SERIALIZATION_REVISION == "lut-intent-v7.1-optB"
     assert SEGMENT_FINGERPRINT_TABLE_SHA256 == (
         "bac4db04e402b0eaefb702502027f7287b99ee50e8fa76b6b48871a9f0774939"
     )
@@ -3787,44 +3825,6 @@ def test_stream_without_text_reports_empty_output_and_stays_retryable() -> None:
     assert retryable_exception(raised.value)
 
 
-def test_responses_adapter_payload_model_and_usage(tmp_path: Path) -> None:
-    config = _write_config(tmp_path)
-    artifacts = ArtifactStore(config.artifact_root)
-    image = artifacts.put_image_array(np.full((600, 900, 3), .5, dtype=np.float32))
-    parsed = {
-        "correction_needs": [], "preserve_intent": ["skin"],
-        "enhancement_opportunities": ["tone", "depth"],
-        "forbidden_directions": [], "evidence": ["balanced"],
-        "confidence": .8, "intent_mode": "enhancement_led",
-    }
-    responses = _FakeResponses([
-        _completed_events(
-            parsed, config.terra.model, cached_tokens=77, cache_write_tokens=128,
-        )
-    ])
-    adapter = ResponsesAdapter(
-        config.terra, artifacts,
-        client_factory=lambda _endpoint: SimpleNamespace(responses=responses),
-    )
-    spec = diagnosis_request(config.terra, image.to_dict())
-    result = adapter.send_once(spec, 1)
-    assert result["parsed"] == parsed
-    assert result["usage"] == {
-        "input_tokens": 100, "output_tokens": 20,
-        "cached_tokens": 77, "cache_write_tokens": 128,
-    }
-    payload = responses.calls[0]
-    assert payload["model"] == config.terra.model
-    assert payload["prompt_cache_key"] == spec.prompt_cache_key
-    assert payload["store"] is False and payload["stream"] is True
-    assert payload["text"]["format"]["strict"] is True
-    image_item = payload["input"][1]["content"][0]
-    assert image_item["type"] == "input_image"
-    assert image_item["image_url"].startswith("data:image/jpeg;base64,")
-    encoded = base64.b64decode(image_item["image_url"].split(",", 1)[1])
-    with Image.open(io.BytesIO(encoded)) as rendered:
-        assert max(rendered.size) <= 512
-    assert image_item["detail"] == "low"
 def test_stream_strips_relay_zero_width_space_prefix() -> None:
     from openai.types.responses import ResponseCompletedEvent, ResponseTextDeltaEvent
 
@@ -3966,6 +3966,44 @@ def test_consume_response_strips_relay_zero_width_space_prefix() -> None:
     assert json.loads(text) == payload
 
 
+def test_responses_adapter_payload_model_and_usage(tmp_path: Path) -> None:
+    config = _write_config(tmp_path)
+    artifacts = ArtifactStore(config.artifact_root)
+    image = artifacts.put_image_array(np.full((600, 900, 3), .5, dtype=np.float32))
+    parsed = {
+        "correction_needs": [], "preserve_intent": ["skin"],
+        "enhancement_opportunities": ["tone", "depth"],
+        "forbidden_directions": [], "evidence": ["balanced"],
+        "confidence": .8, "intent_mode": "enhancement_led",
+    }
+    responses = _FakeResponses([
+        _completed_events(
+            parsed, config.terra.model, cached_tokens=77, cache_write_tokens=128,
+        )
+    ])
+    adapter = ResponsesAdapter(
+        config.terra, artifacts,
+        client_factory=lambda _endpoint: SimpleNamespace(responses=responses),
+    )
+    spec = diagnosis_request(config.terra, image.to_dict())
+    result = adapter.send_once(spec, 1)
+    assert result["parsed"] == parsed
+    assert result["usage"] == {
+        "input_tokens": 100, "output_tokens": 20,
+        "cached_tokens": 77, "cache_write_tokens": 128,
+    }
+    payload = responses.calls[0]
+    assert payload["model"] == config.terra.model
+    assert payload["prompt_cache_key"] == spec.prompt_cache_key
+    assert payload["store"] is False and payload["stream"] is True
+    assert payload["text"]["format"]["strict"] is True
+    image_item = payload["input"][1]["content"][0]
+    assert image_item["type"] == "input_image"
+    assert image_item["image_url"].startswith("data:image/jpeg;base64,")
+    encoded = base64.b64decode(image_item["image_url"].split(",", 1)[1])
+    with Image.open(io.BytesIO(encoded)) as rendered:
+        assert max(rendered.size) <= 512
+    assert image_item["detail"] == "low"
     assert "artifact_sha256" not in image_item
     assert "TOP-SECRET" not in json.dumps(payload)
 

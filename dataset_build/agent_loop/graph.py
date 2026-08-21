@@ -26,6 +26,7 @@ from .render import (
     LocalDirectionProbe, MaskReachProbe, RenderError, StrengthCalibrator,
     measure_subject_headroom,
 )
+from .source_histogram import assert_histogram_columns, source_histogram
 from .source_reach import configured_lut_loader
 from .responses import CachedResponsesClient
 from .scheduler import TerraLane, TerraLimiter, TerraRouter
@@ -131,6 +132,10 @@ def _prepare_node(services: AgentServices):
             include_background=True, diagnostics=mask_diagnostics,
         )
         palette = palette_summary(services.artifacts.path_for(source_ref))
+        # B12 item 1: the source histogram is read off the same normalized source
+        # artifact the palette is read off, so both describe the same pixels.
+        histogram = source_histogram(services.artifacts.path_for(source_ref))
+        assert_histogram_columns(histogram)
         services.audit.record_source_start({
             "campaign_id": services.config.campaign_id, "source_sha256": source_sha,
             "prompt_revision": _source_run_revision(services.config, pass_index),
@@ -145,7 +150,7 @@ def _prepare_node(services: AgentServices):
             "source_render_artifact": render_ref.to_dict(),
             "source_annotation_artifact": annotation_ref.to_dict(),
             "diagnosis": diagnosis, "preset_reach": preset_reach,
-            "palette": palette, "masks": masks,
+            "palette": palette, "source_histogram": histogram, "masks": masks,
             "mask_diagnostics": mask_diagnostics, "branches": [],
         }
 
@@ -154,11 +159,19 @@ def _prepare_node(services: AgentServices):
 
 def _shortlist_node(services: AgentServices):
     def shortlist(state: MainState) -> dict[str, Any]:
+        # B12 items 1/3 runtime assertion: the histogram must have been produced
+        # upstream, otherwise the retrieval term and the prompt line silently vanish.
+        histogram = dict(state.get("source_histogram") or {})
+        assert_histogram_columns(histogram)
         payload = services.catalog.global_shortlist(
             state["diagnosis"], state["palette"], str(state.get("scene") or "unknown"),
             services.config.catalog, state["preset_reach"],
             source_sha256=str(state["source_sha256"]),
+            source_histogram=histogram,
         )
+        # B12 item 1: the histogram evidence lands in the shortlist artifact next to
+        # the rows it scored.
+        payload = {**payload, "source_histogram": histogram}
         ref = services.artifacts.put_json(payload, retention="audit")
         return {
             "global_shortlist": payload["by_major"],
@@ -171,11 +184,14 @@ def _shortlist_node(services: AgentServices):
 def _global_propose_node(services: AgentServices):
     def propose(state: MainState) -> dict[str, Any]:
         lane = terra_lane(services, str(state["source_sha256"]))
+        histogram = dict(state.get("source_histogram") or {})
+        assert_histogram_columns(histogram)
         spec = global_request(
             lane.endpoint, state["source_artifact"], state["diagnosis"],
             state["global_shortlist"],
             min_proposals=services.config.min_global_proposals,
             max_proposals=services.config.max_global_proposals,
+            source_histogram=histogram,
         )
 
         def validate(parsed: dict[str, Any]) -> str | None:
@@ -304,12 +320,15 @@ def _global_branch_graph(services: AgentServices):
             source_sha256=str(state["source_sha256"]),
             global_fingerprint=_global_fingerprint(services.catalog, state),
             headroom=headroom, mask_reach=probe, direction_probe=directions,
+            source_histogram=dict(state.get("source_histogram") or {}),
         )
-        # Pre-registered criteria, runtime assertions: both gates must have run.
+        # Pre-registered criteria, runtime assertions: every gate must have run.
         if not built.get("mask_reach_applied"):
             raise RuntimeError("mask_reach_gate_not_wired")
         if not built.get("direction_prefilter_applied"):
             raise RuntimeError("direction_prefilter_not_wired")
+        if not built.get("source_histogram_applied"):
+            raise RuntimeError("source_histogram_not_wired")
         return built
 
     def build_local_packet(state: GlobalBranchState) -> dict[str, Any]:
@@ -1086,7 +1105,8 @@ def build_graph(
             key: state[key] for key in (
                 "source_id", "source_sha256", "thread_id", "source_artifact",
                 "source_render_artifact", "diagnosis", "masks", "selected_major",
-                "global_shortlist", "preset_reach", "palette", "scene",
+                "global_shortlist", "preset_reach", "palette", "source_histogram",
+                "scene",
             ) if key in state
         }
         return [Send("global_branch", {**common, "global_proposal": proposal, "leaves": []})

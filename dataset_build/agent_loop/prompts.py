@@ -21,7 +21,15 @@ from .models import (
     MASK_REACH_GATE, REASON_CODES, SUBJECT_HEADROOM_GATE, intent_packet_order,
 )
 from .segment_fingerprints import (
-    BAND_SEGMENT_LUM_THRESHOLD, SEGMENT_FINGERPRINT_TABLE_SHA256,
+    BAND_SEGMENT_LUM_THRESHOLD, HISTOGRAM_AGGREGATES, HISTOGRAM_DERIVATION_REVISION,
+    HISTOGRAM_GROUPS, SEGMENT_FINGERPRINT_TABLE_SHA256,
+    SEGMENT_FINGERPRINT_TABLE_SHA256_V2,
+)
+from .source_histogram import (
+    CHROMA_BIN_EDGES, CLIP_FORMAT, CLIP_HIGH_L, CLIP_LOW_L, C_BIN_FORMAT,
+    HISTOGRAM_MATCH_GATE, HISTOGRAM_SAMPLE_PIXELS, HUE_CHROMA_MIN, HUE_FORMAT,
+    HUE_SECTOR_COUNT, L_BIN_COUNT, L_BIN_FORMAT, SOURCE_HISTOGRAM_CONTRACT,
+    SOURCE_HISTOGRAM_HEADER, source_histogram_block,
 )
 
 
@@ -32,12 +40,25 @@ ADAPTER_REVISION = "responses-auto-prefix-cache-v4"
 IMAGE_ENCODING = {
     "format": "jpeg", "longest_edge": 512, "quality": 85, "subsampling": 0,
 }
-CANDIDATE_SERIALIZATION_REVISION = "lut-intent-v7-optB"
+CANDIDATE_SERIALIZATION_REVISION = "lut-intent-v7.1-optB"
 MASK_SUMMARY_REVISION = "mask-summary-v3-role"
 # The frozen 5k offline diagnosis batch was produced under `diagnose-v1`; it stays
 # valid (its records carry no prompt revision and are validated by schema only).
 # This revision only governs diagnosis batches produced from now on.
 DIAGNOSE_PROMPT_REVISION = "diagnose-v2-viewer-orientation"
+
+# B12 item 3: the last column group of every row, present only when the catalog mounts
+# a v2 fingerprint table. `{:.3f}` keeps the three numbers at ~4 tokens per row.
+HISTOGRAM_ROW_FORMAT = "{:.3f}"
+HISTOGRAM_SHORTLIST_NOTE = (
+    "When a row ends with three more numbers they are that LUT's tone-histogram "
+    "response, measured on a fixed probe pixel set: d_shadow d_mid d_high are the "
+    "change in the share of pixels landing in L* bins "
+    f"{list(HISTOGRAM_GROUPS['d_shadow'])}, {list(HISTOGRAM_GROUPS['d_mid'])} and "
+    f"{list(HISTOGRAM_GROUPS['d_high'])} of the {L_BIN_COUNT} equal-width L* bins. "
+    "A positive number means the LUT moves more pixels into that tonal group, a "
+    "negative one that it moves pixels out of it; the three always add up to zero."
+)
 
 SHORTLIST_COLUMNS = (
     "id | achievable_bins | " + " ".join(FINGERPRINT_FIELDS) + " | caption"
@@ -51,7 +72,8 @@ SHORTLIST_HEADER = (
     "contrast is the tone-response contrast ratio (1.000 = unchanged). "
     "cast_hue is the mid-gray color-cast angle in degrees and cast_mag its Lab chroma "
     "magnitude. dSat is the mean saturation shift in percent. hue_rot is the largest "
-    "absolute band hue rotation in degrees. caption is the frozen objective description."
+    "absolute band hue rotation in degrees. caption is the frozen objective description.\n"
+    + HISTOGRAM_SHORTLIST_NOTE
 )
 # B8 item 4: the local table adds one trailing column after caption.
 LOCAL_SHORTLIST_NOTE = (
@@ -61,10 +83,15 @@ LOCAL_SHORTLIST_NOTE = (
 )
 
 
+def _zero_safe(template: str, value: Any) -> str:
+    """Format one number; a rounded-to-zero negative prints without its sign."""
+    text = template.format(float(value))
+    return text.lstrip("-") if float(text) == 0.0 else text
+
+
 def _fingerprint_number(name: str, value: float) -> str:
     """Format one fingerprint number; a rounded-to-zero negative prints as `0`."""
-    text = FINGERPRINT_FORMATS[name].format(float(value))
-    return text.lstrip("-") if float(text) == 0.0 else text
+    return _zero_safe(FINGERPRINT_FORMATS[name], value)
 
 
 def shortlist_row_text(row_index: int, row: Mapping[str, Any]) -> str:
@@ -81,6 +108,14 @@ def shortlist_row_text(row_index: int, row: Mapping[str, Any]) -> str:
     reach = row.get("mask_reach_de")
     if reach is not None:
         text += f" | {float(reach):.2f}"
+    # B12 item 3: `d_shadow d_mid d_high` close every row of a v2-mounted catalog. A
+    # v1 mount carries no `histogram` key and the row is byte-identical to the B11 line.
+    histogram = row.get("histogram")
+    if histogram:
+        text += " | " + " ".join(
+            _zero_safe(HISTOGRAM_ROW_FORMAT, histogram.get(name, 0.0))
+            for name in HISTOGRAM_AGGREGATES
+        )
     return text
 
 
@@ -233,6 +268,7 @@ PROMPT_REGISTRY_KEYS: tuple[str, ...] = (
     "fingerprint_formats",
     "global_bin_quota",
     "global_delta_e_targets",
+    "histogram_match_gate",
     "image_encoding",
     "intent_direction_gate",
     "intent_fingerprint_gate",
@@ -256,8 +292,10 @@ PROMPT_REGISTRY_KEYS: tuple[str, ...] = (
     "role_packet_target",
     "rules",
     "schemas",
+    "segment_fingerprint_histogram",
     "segment_fingerprint_table_sha256",
     "shortlist_header",
+    "source_histogram",
     "subject_band_gate",
     "subject_headroom_gate",
 )
@@ -346,6 +384,39 @@ def prompt_registry() -> dict[str, Any]:
         ],
         "measure_sample_pixels": MEASURE_SAMPLE_PIXELS,
         "band_segment_lum_threshold": BAND_SEGMENT_LUM_THRESHOLD,
+        # B12 items 1-3. `source_histogram` is everything that decides the bytes of the
+        # one histogram line the global round now sees (bin geometry + the four fixed
+        # number formats + the frozen header text). `segment_fingerprint_histogram` is
+        # the LUT-side derivation: which table the v2 columns came from, how the eight
+        # bins are grouped, and the serialization width of the three shortlist numbers.
+        # `histogram_match_gate` is the pre-registered retrieval bonus, sign convention
+        # included, so a weight change is a different prompt revision.
+        "source_histogram": {
+            "contract": SOURCE_HISTOGRAM_CONTRACT,
+            "sample_pixels": HISTOGRAM_SAMPLE_PIXELS,
+            "l_bin_count": L_BIN_COUNT,
+            "clip_low_l": CLIP_LOW_L,
+            "clip_high_l": CLIP_HIGH_L,
+            "chroma_bin_edges": list(CHROMA_BIN_EDGES),
+            "hue_sector_count": HUE_SECTOR_COUNT,
+            "hue_chroma_min": HUE_CHROMA_MIN,
+            "formats": {
+                "l_bin": L_BIN_FORMAT, "clip": CLIP_FORMAT,
+                "c_bin": C_BIN_FORMAT, "hue": HUE_FORMAT,
+            },
+            "header": SOURCE_HISTOGRAM_HEADER,
+        },
+        "segment_fingerprint_histogram": {
+            "derivation_revision": HISTOGRAM_DERIVATION_REVISION,
+            "table_sha256_v2": SEGMENT_FINGERPRINT_TABLE_SHA256_V2,
+            "groups": {
+                name: list(group) for name, group in HISTOGRAM_GROUPS.items()
+            },
+            "aggregates": list(HISTOGRAM_AGGREGATES),
+            "row_format": HISTOGRAM_ROW_FORMAT,
+            "note": HISTOGRAM_SHORTLIST_NOTE,
+        },
+        "histogram_match_gate": dict(HISTOGRAM_MATCH_GATE),
         "rules": {
             "diagnose": _DIAGNOSE_RULES, "global": _GLOBAL_RULES,
             "local": _LOCAL_RULES, "local_intent_guide": _LOCAL_INTENT_GUIDE,
@@ -434,16 +505,22 @@ def diagnosis_request(endpoint: EndpointConfig, source: Mapping[str, Any]) -> Re
 def global_request(
     endpoint: EndpointConfig, source: Mapping[str, Any], diagnosis: Mapping[str, Any],
     shortlist: Mapping[str, Any], *, min_proposals: int = 1, max_proposals: int,
+    source_histogram: Mapping[str, Any] | None = None,
 ) -> RequestSpec:
+    """B12 item 1: the frozen source-histogram line sits in the stable prefix, in the
+    slot right after the frozen diagnosis and right before the shortlist table."""
     if not 1 <= min_proposals <= max_proposals <= 6:
         raise ValueError("global proposal bounds must satisfy 1 <= min <= max <= 6")
+    prefix = [
+        _text(_GLOBAL_RULES), _image(source), _text({"diagnosis": diagnosis}),
+    ]
+    if source_histogram is not None:
+        prefix.append(_text(source_histogram_block(source_histogram)))
+    prefix.append(_text(global_shortlist_text(shortlist)))
     return _request(
         endpoint=endpoint, stage="global_propose", schema_name="global_batch_v1",
         schema=GLOBAL_BATCH_SCHEMA,
-        prefix_content=[
-            _text(_GLOBAL_RULES), _image(source), _text({"diagnosis": diagnosis}),
-            _text(global_shortlist_text(shortlist)),
-        ],
+        prefix_content=prefix,
         tail_content=[_text({
             "task": {
                 "min_proposals": min_proposals,
@@ -656,7 +733,8 @@ def schema_error(schema: Mapping[str, Any], value: Any, path: str = "$") -> str 
 __all__ = [
     "ADAPTER_REVISION", "CANDIDATE_SERIALIZATION_REVISION", "DIAGNOSE_PROMPT_REVISION",
     "DIAGNOSIS_SCHEMA",
-    "GLOBAL_BATCH_SCHEMA", "IMAGE_ENCODING", "MASK_SUMMARY_REVISION",
+    "GLOBAL_BATCH_SCHEMA", "HISTOGRAM_ROW_FORMAT", "HISTOGRAM_SHORTLIST_NOTE",
+    "IMAGE_ENCODING", "MASK_SUMMARY_REVISION",
     "LOCAL_BATCH_SCHEMA", "LOCAL_SHORTLIST_NOTE", "PREFLIGHT_SCHEMA",
     "PROMPT_REGISTRY_KEYS", "PROMPT_REVISION", "REASON_CODES", "prompt_registry",
     "SHORTLIST_COLUMNS", "SHORTLIST_HEADER", "VALIDATION_SCHEMA", "assigned_mask_views",

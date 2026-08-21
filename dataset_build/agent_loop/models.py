@@ -243,6 +243,8 @@ class MainState(SourceInput, total=False):
     source_artifact: dict[str, Any]
     source_render_artifact: dict[str, Any]
     palette: dict[str, Any]
+    # B12 item 1: the frozen source L*/C*ab/hue histogram of this source.
+    source_histogram: dict[str, Any]
     masks: list[dict[str, Any]]
     mask_diagnostics: list[dict[str, Any]]
     source_annotation_artifact: dict[str, Any]
@@ -268,6 +270,7 @@ class GlobalBranchState(TypedDict, total=False):
     diagnosis: dict[str, Any]
     preset_reach: dict[str, Any]
     palette: dict[str, Any]
+    source_histogram: dict[str, Any]
     scene: str
     masks: list[dict[str, Any]]
     selected_major: str
