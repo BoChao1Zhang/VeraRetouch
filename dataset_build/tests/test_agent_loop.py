@@ -3836,7 +3836,9 @@ class _FakeResponses:
         action = self.actions.pop(0)
         if isinstance(action, BaseException):
             raise action
-        return _FakeStream(action)
+        # A list of events is a stream; anything else is a non-streaming response
+        # object, i.e. what `stream=False` returns.
+        return _FakeStream(action) if isinstance(action, list) else action
 
 
 class _FakeHttpError(Exception):
@@ -4135,6 +4137,74 @@ def test_responses_adapter_payload_model_and_usage(tmp_path: Path) -> None:
     assert board_bytes == artifacts.read_bytes(board.sha256)
     with Image.open(io.BytesIO(board_bytes)) as rendered:
         assert rendered.size == BOARD_SIZE and rendered.format == "PNG"
+
+
+def test_nonstream_transport_sends_stream_false_and_reads_the_response(
+    tmp_path: Path,
+) -> None:
+    config = _write_config(tmp_path)
+    artifacts = ArtifactStore(config.artifact_root)
+    image = artifacts.put_image_array(np.full((8, 8, 3), .5, dtype=np.float32))
+    board = artifacts.put_bytes(
+        _png_bytes((16, 16)), media_type="image/png", retention="audit"
+    )
+    parsed = {
+        "correction_needs": [], "preserve_intent": ["skin"],
+        "enhancement_opportunities": ["tone", "depth"],
+        "forbidden_directions": [], "evidence": ["balanced"],
+        "confidence": .8, "intent_mode": "enhancement_led",
+    }
+    endpoint = dataclasses.replace(config.terra, transport="nonstream")
+    response = SimpleNamespace(
+        status="completed", model=endpoint.model, id="response-9",
+        output_text=json.dumps(parsed),
+        usage=SimpleNamespace(
+            input_tokens=100, output_tokens=20,
+            input_tokens_details=SimpleNamespace(cached_tokens=77, cache_write_tokens=128),
+        ),
+    )
+    responses = _FakeResponses([response])
+    adapter = ResponsesAdapter(
+        endpoint, artifacts,
+        client_factory=lambda _endpoint: SimpleNamespace(responses=responses),
+    )
+    spec = diagnosis_request(endpoint, image.to_dict(), board.to_dict())
+    result = adapter.send_once(spec, 1)
+    assert result["parsed"] == parsed
+    assert result["response_id"] == "response-9"
+    assert result["usage"] == {
+        "input_tokens": 100, "output_tokens": 20,
+        "cached_tokens": 77, "cache_write_tokens": 128,
+    }
+    # Non-streaming results come from `consume_response`, which reports no stream
+    # telemetry counter at all.
+    assert "relay_telemetry_events" not in result
+    payload = responses.calls[0]
+    assert payload["stream"] is False
+    # Everything else about the request is unchanged, prompt caching included.
+    assert payload["prompt_cache_key"] == spec.prompt_cache_key
+    assert payload["model"] == endpoint.model
+    assert payload["text"]["format"]["strict"] is True
+
+
+def test_endpoint_transport_defaults_to_stream_and_rejects_unknown_values(
+    tmp_path: Path,
+) -> None:
+    config = _write_config(tmp_path)
+    assert config.terra.transport == "stream"
+    assert config.validator.transport == "stream"
+    assert config.sanitized_dict()["terra"]["transport"] == "stream"
+    text = config.path.read_text(encoding="utf-8")
+    nonstream = text.replace("[terra]\n", '[terra]\ntransport = "nonstream"\n')
+    config.path.write_text(nonstream, encoding="utf-8")
+    reloaded = load_config(config.path)
+    assert reloaded.terra.transport == "nonstream"
+    assert reloaded.validator.transport == "stream"
+    config.path.write_text(
+        text.replace("[terra]\n", '[terra]\ntransport = "sse"\n'), encoding="utf-8"
+    )
+    with pytest.raises(ConfigError, match="transport must be stream or nonstream"):
+        load_config(config.path)
 
 
 def test_responses_adapter_rejects_model_substitution_and_preserves_retry_after(

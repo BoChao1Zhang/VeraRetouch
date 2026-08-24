@@ -32,6 +32,9 @@ class EndpointConfig:
     reasoning_effort: str | None = None
     allow_uncached_provider: bool = False
     provider_kind: str = "hosted"
+    # 2026-08-24: "stream" = SSE (default), "nonstream" = one blocking
+    # responses.create call consumed by `consume_response`.
+    transport: str = "stream"
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,6 +264,7 @@ def _safe_endpoint(endpoint: EndpointConfig) -> dict[str, Any]:
         "reasoning_effort": endpoint.reasoning_effort,
         "allow_uncached_provider": endpoint.allow_uncached_provider,
         "provider_kind": endpoint.provider_kind,
+        "transport": endpoint.transport,
         "base_url": "<redacted>",
         "api_key": "<redacted>",
     }
@@ -353,6 +357,9 @@ def _endpoint(
     effort = table.get("reasoning_effort")
     if effort is not None and not isinstance(effort, str):
         raise ConfigError("reasoning_effort must be a string")
+    transport = table.get("transport", "stream")
+    if transport not in {"stream", "nonstream"}:
+        raise ConfigError("transport must be stream or nonstream")
     return EndpointConfig(
         identity=identity,
         base_url=base_url.rstrip("/"),
@@ -365,6 +372,7 @@ def _endpoint(
         reasoning_effort=effort,
         allow_uncached_provider=bool(table.get("allow_uncached_provider", False)),
         provider_kind=provider_kind,
+        transport=str(transport),
     )
 
 

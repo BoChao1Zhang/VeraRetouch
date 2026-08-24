@@ -40,6 +40,8 @@ PROMPT_REVISION = "local-agent-v1"
 # v5 = 跳过 relay codex 后端注入的 `codex.*` / `responsesapi.*` 遥测事件(实抓
 # codex.rate_limits / codex.response.metadata / responsesapi.websocket_timing);
 # 其余未知事件仍按畸形流硬断。
+# 2026-08-24:新增 endpoint 键 `transport`(stream/nonstream),流式仍为默认;传输模式是
+# per-config 行为而非适配器语义变化,故 ADAPTER_REVISION 保持 v5 不变。
 ADAPTER_REVISION = "responses-auto-prefix-cache-v5"
 IMAGE_ENCODING = {
     "format": "jpeg", "longest_edge": 512, "quality": 85, "subsampling": 0,

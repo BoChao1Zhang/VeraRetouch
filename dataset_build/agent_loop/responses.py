@@ -243,6 +243,10 @@ class ResponsesAdapter:
     def send_once(self, spec: RequestSpec, _attempt: int) -> dict[str, Any]:
         request = spec.canonical
         behavior = request["behavior"]
+        # 2026-08-24: per-config transport. Some relay channels emit SSE payloads
+        # that fail SDK validation, so `transport = "nonstream"` takes the blocking
+        # path instead; everything else about the request is identical.
+        streaming = self.endpoint.transport == "stream"
         payload: dict[str, Any] = {
             "model": request["model"],
             "input": [
@@ -250,7 +254,7 @@ class ResponsesAdapter:
                  "content": [self._content(item) for item in message["content"]]}
                 for message in request["input"]
             ],
-            "stream": True,
+            "stream": streaming,
             "temperature": behavior["temperature"],
             "max_output_tokens": behavior["max_output_tokens"],
             "store": behavior["store"],
@@ -266,7 +270,8 @@ class ResponsesAdapter:
         if behavior.get("reasoning_effort") is None:
             payload["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
         try:
-            result = consume_stream(self._client().responses.create(**payload))
+            raw = self._client().responses.create(**payload)
+            result = consume_stream(raw) if streaming else consume_response(raw)
         except Exception as exc:
             if isinstance(exc, (TransportError, ModelSubstituted)):
                 raise
