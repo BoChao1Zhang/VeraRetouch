@@ -1,0 +1,82 @@
+# v34b:lane-2 于 2026-08-21 晚 403/503 风暴(748 失败/17 成功),本档只挂 lane-1、attempts 5、新 campaign 绕过已烧尽的重试预算。
+# E4 v3.4 全量诊断专用:campaign 独立;[terra] max_output_tokens = 4192(2026-08-24 用户定,含 reasoning 预算);timeout 240s。其余与 local-v1.annotate.toml 一致。
+[agent_loop]
+campaign_id = "local-v2-annot-v34d"
+prompt_revision = "local-agent-v1"
+databuild_config = "../databuild.prod-l8-local400k-20260812.toml"
+# Per lane. Two lanes => 32 concurrent Terra calls in total.
+terra_concurrency_target = 16
+renderer_concurrency = 3
+validator_concurrency = 1
+max_global_proposals = 6
+max_local_proposals = 3
+max_local_repairs = 1
+min_committed_leaves = 2
+max_committed_leaves = 6
+rejected_asset_ttl_days = 30
+request_lease_seconds = 180
+
+# A3b: offline annotate-sources only. This command never opens the checkpointer
+# (dataset_build/agent_loop/cli.py:_annotate_sources), it only needs the audit
+# store. The postgres tablespace `agent_loop_local` is not provisioned on this
+# box, so the offline stage uses a local sqlite audit store. The online
+# run/resume stage keeps using configs/agent_loop.local-v1.toml (postgres).
+[checkpoint]
+backend = "sqlite"
+sqlite_path = "/home/bc/data/agent_loop/local-v1/offline.sqlite"
+minimum_free_bytes = 10737418240
+
+[artifacts]
+root = "/mnt/ramstage/agent_loop/local-v2-pilot"
+landing_enabled = true
+archive_root = "/mnt/nfs/bc/data/datasets"
+archive_group = "artifacts/local-v2-pilot"
+plan_root = "/home/bc/data/agent_loop/local-v2-pilot/plans"
+meta_staging = "/home/bc/data/agent_loop/local-v2-pilot/meta"
+catalog_db = "/var/cache/veradata/global.sqlite3"
+land_watermark_bytes = 8589934592
+land_min_interval_seconds = 300
+land_min_groups = 25
+land_free_bytes_floor = 4294967296
+
+[catalog]
+annotations = "/home/bc/data/scratch/lut_reannotate/out/annotations.closed-v1.jsonl"
+# B11 item 1 (R7.1): the online local retrieval reads this table; graph build
+# asserts it is mounted.
+segment_fingerprints = "/home/bc/data/scratch/lut_reannotate/out/segment_fingerprints.v1.jsonl"
+global_major_limit = 3
+global_per_major_limit = 7
+local_limit = 9
+reach_limit = 300
+
+[source_annotation]
+reasoning_effort = "high"
+
+[terra]
+# A6: two provider keys, deterministic per-source sharding, 16 slots each.
+endpoints = ["provider-c-lane-1", "provider-c-lane-2"]
+model = "gpt-5.6-terra"
+allow_uncached_provider = true
+reasoning_effort = "low"
+temperature = 0.1
+max_output_tokens = 4192
+timeout_seconds = 240.0
+attempts = 5
+
+[validator]
+enabled = false
+endpoint = "local"
+temperature = 0.1
+max_output_tokens = 1024
+timeout_seconds = 90.0
+attempts = 5
+
+[render]
+backend = "cpu_lut"
+renderer_revision = "agent-cpu-lut-strength-v2"
+search_steps = 5
+clip_fraction_max = 0.01
+
+[retention]
+keep_audit_forever = true
+rejected_image_days = 30
