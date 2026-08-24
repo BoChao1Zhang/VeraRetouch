@@ -505,8 +505,10 @@ def _validate(config: AgentLoopConfig) -> None:
         raise ConfigError("render.search_steps must be in [3, 12]")
     if config.render.backend not in {"cpu_lut", "gpu_lut"}:
         raise ConfigError("render.backend must be cpu_lut or gpu_lut")
-    if config.source_annotation.reasoning_effort != "high":
-        raise ConfigError("source_annotation.reasoning_effort must be high")
+    # 2026-08-24 用户裁决:诊断 effort 开放三档(zzone codex 后端无视 max_output_tokens,
+    # effort 是唯一有效的输出量杠杆;low 实测 out~5.8k vs high ~14.6k)。
+    if config.source_annotation.reasoning_effort not in {"low", "medium", "high"}:
+        raise ConfigError("source_annotation.reasoning_effort must be low, medium or high")
     if config.catalog.reach_limit < 1:
         raise ConfigError("catalog.reach_limit must be positive")
     # Quota floors (decisions doc section 2.3): 3 global bins x 2 per bin, 3 local
