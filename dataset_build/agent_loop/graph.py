@@ -21,7 +21,7 @@ from .models import (
     local_target_center, luma_capped, target_center,
 )
 from .persistence import AuditStore
-from .prompts import global_request, local_request
+from .prompts import global_direction_budget, global_request, local_request
 from .render import (
     LocalDirectionProbe, MaskReachProbe, RenderError, StrengthCalibrator,
     measure_subject_headroom,
@@ -181,52 +181,130 @@ def _shortlist_node(services: AgentServices):
     return shortlist
 
 
+def _global_response_validator(state: Mapping[str, Any], min_proposals: int):
+    def validate(parsed: dict[str, Any]) -> str | None:
+        major = str(parsed.get("major") or "")
+        rows = list(state["global_shortlist"].get(major) or [])
+        proposals = parsed.get("proposals") or []
+        if not rows:
+            return "global_major_outside_shortlist"
+        if len(proposals) < min_proposals:
+            return "global_count_below_config_minimum"
+        indices = [row.get("row_index") for row in proposals]
+        if any(not isinstance(index, int) or isinstance(index, bool)
+               or not 0 <= index < len(rows) for index in indices):
+            return "global_row_index_out_of_range"
+        if len(set(indices)) != len(indices):
+            return "global_row_index_not_distinct"
+        for proposal in proposals:
+            row = rows[int(proposal["row_index"])]
+            if proposal.get("bin") not in set(row.get("achievable_bins") or []):
+                return "global_strength_bin_unreachable"
+        bins = {row.get("bin") for row in proposals}
+        if len(proposals) >= 2 and len(bins) < 2:
+            return "global_strength_bin_diversity"
+        return None
+
+    return validate
+
+
+def _merge_direction_proposals(
+    per_direction: Sequence[Sequence[Mapping[str, Any]]], budget: int
+) -> list[dict[str, Any]]:
+    """G3 merge: dedupe by row, round-robin truncate, then concatenate by direction.
+
+    Dedupe - the key is the row the proposal points at, `(major, row_index)`; a preset
+    lives in exactly one major, so inside the (normal) single-major case this is plain
+    `row_index` dedupe. The direction that proposed a row first keeps it.
+    Truncate - the budget is handed out round-robin: every direction's first surviving
+    proposal before any direction's second, and so on, so no direction can be starved by
+    a greedy neighbour as long as the budget covers the direction count.
+    Order - the survivors are then concatenated direction by direction, each direction's
+    picks in its own scorer order, which is what the fan-out downstream consumes.
+    """
+    seen: set[tuple[str, int]] = set()
+    ranked: list[list[dict[str, Any]]] = []
+    for proposals in per_direction:
+        kept: list[dict[str, Any]] = []
+        for proposal in sorted(
+            proposals, key=lambda row: int(row["scorer_rank_offered"])
+        ):
+            key = (str(proposal["style_major"]), int(proposal["row_index"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            kept.append(dict(proposal))
+        ranked.append(kept)
+    selected: set[tuple[int, int]] = set()
+    for rank in range(max((len(kept) for kept in ranked), default=0)):
+        for direction, kept in enumerate(ranked):
+            if len(selected) >= budget:
+                break
+            if rank < len(kept):
+                selected.add((direction, rank))
+        if len(selected) >= budget:
+            break
+    return [proposal for direction, kept in enumerate(ranked)
+            for rank, proposal in enumerate(kept) if (direction, rank) in selected]
+
+
 def _global_propose_node(services: AgentServices):
     def propose(state: MainState) -> dict[str, Any]:
         lane = terra_lane(services, str(state["source_sha256"]))
         histogram = dict(state.get("source_histogram") or {})
         assert_histogram_columns(histogram)
-        spec = global_request(
-            lane.endpoint, state["source_artifact"], state["diagnosis"],
-            state["global_shortlist"],
-            min_proposals=services.config.min_global_proposals,
-            max_proposals=services.config.max_global_proposals,
-            source_histogram=histogram,
+        # G3: one proposal request per diagnosed enhancement direction, each seeing the
+        # full corrections plus exactly ONE opportunity - the structural guarantee that
+        # the branches cover different directions instead of one look's variants. A
+        # source whose diagnosis carries no opportunity at all (correction_led) keeps
+        # the single call with the diagnosis passed through unfiltered.
+        directions = [
+            str(item) for item in
+            (state["diagnosis"].get("enhancement_opportunities") or [])
+        ]
+        indices: list[int | None] = list(range(len(directions))) or [None]
+        min_proposals, max_proposals = global_direction_budget(
+            services.config.max_global_proposals, len(indices),
+            services.config.min_global_proposals,
         )
-
-        def validate(parsed: dict[str, Any]) -> str | None:
-            major = str(parsed.get("major") or "")
+        majors: list[str] = []
+        per_direction: list[list[dict[str, Any]]] = []
+        for index in indices:
+            spec = global_request(
+                lane.endpoint, state["source_artifact"], state["diagnosis"],
+                state["global_shortlist"],
+                min_proposals=min_proposals, max_proposals=max_proposals,
+                source_histogram=histogram, enhancement_index=index,
+            )
+            result = _request_with_limit(
+                services, state["thread_id"], "global_propose", spec,
+                _global_response_validator(state, min_proposals), lane,
+            )
+            _record_request_context(services, state, result, "global_propose")
+            parsed = result.response["parsed"]
+            major = str(parsed["major"])
+            majors.append(major)
             rows = list(state["global_shortlist"].get(major) or [])
-            proposals = parsed.get("proposals") or []
-            if not rows:
-                return "global_major_outside_shortlist"
-            if len(proposals) < services.config.min_global_proposals:
-                return "global_count_below_config_minimum"
-            indices = [row.get("row_index") for row in proposals]
-            if any(not isinstance(index, int) or isinstance(index, bool)
-                   or not 0 <= index < len(rows) for index in indices):
-                return "global_row_index_out_of_range"
-            if len(set(indices)) != len(indices):
-                return "global_row_index_not_distinct"
-            for proposal in proposals:
-                row = rows[int(proposal["row_index"])]
-                if proposal.get("bin") not in set(row.get("achievable_bins") or []):
-                    return "global_strength_bin_unreachable"
-            bins = {row.get("bin") for row in proposals}
-            if len(proposals) >= 2 and len(bins) < 2:
-                return "global_strength_bin_diversity"
-            return None
-
-        result = _request_with_limit(
-            services, state["thread_id"], "global_propose", spec, validate, lane
+            per_direction.append([
+                {
+                    **proposal, "style_major": major, "enhancement_index": index,
+                    "enhancement_direction": directions[index]
+                    if index is not None else None,
+                }
+                for proposal in _enrich_global_proposals(
+                    parsed["proposals"][:max_proposals], rows
+                )
+            ])
+        proposals = _merge_direction_proposals(
+            per_direction, services.config.max_global_proposals
         )
-        _record_request_context(services, state, result, "global_propose")
-        parsed = result.response["parsed"]
-        major = str(parsed["major"])
-        rows = list(state["global_shortlist"].get(major) or [])
-        proposals = _enrich_global_proposals(
-            parsed["proposals"][:services.config.max_global_proposals], rows
-        )
+        # Pre-registered runtime assertion (G3 item 4): the fan-out exists to spread the
+        # branches over the diagnosed directions, so a merged set that came out of one
+        # direction alone means the wiring did not do its job.
+        if len(indices) >= 2 and len({
+            proposal["enhancement_index"] for proposal in proposals
+        }) < 2:
+            raise RuntimeError("global_direction_fanout_degenerate")
         for proposal in proposals:
             services.audit.record_proposal_audit({
                 "campaign_id": services.config.campaign_id,
@@ -241,7 +319,7 @@ def _global_propose_node(services: AgentServices):
                 "scorer_top1_raw": int(proposal["scorer_rank_raw"] == 0),
                 "direction_cosine": None,
             })
-        return {"selected_major": major, "global_proposals": proposals}
+        return {"selected_major": majors[0], "global_proposals": proposals}
 
     return propose
 

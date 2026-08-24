@@ -1134,10 +1134,12 @@ def test_prompt_registry_key_set_is_the_explicit_frozen_list() -> None:
     below is the contract and this assertion is its runtime guard.
     """
     assert sorted(prompt_registry()) == sorted(PROMPT_REGISTRY_KEYS)
-    # B12 adds three keys: 41 -> 44. E4 adds two more: 44 -> 46.
-    assert len(set(PROMPT_REGISTRY_KEYS)) == len(PROMPT_REGISTRY_KEYS) == 46
+    # B12 adds three keys: 41 -> 44. E4 adds two more: 44 -> 46. G3 adds the global
+    # direction fan-out contract: 46 -> 47.
+    assert len(set(PROMPT_REGISTRY_KEYS)) == len(PROMPT_REGISTRY_KEYS) == 47
     for key in ("source_histogram", "segment_fingerprint_histogram",
-                "histogram_match_gate", "histogram_board", "board_image_encoding"):
+                "histogram_match_gate", "histogram_board", "board_image_encoding",
+                "global_direction_fanout"):
         assert key in PROMPT_REGISTRY_KEYS
 
 
@@ -2431,6 +2433,29 @@ def _parse_global_shortlist(content: list[dict[str, Any]]) -> dict[str, list[str
     return result
 
 
+def _prompt_diagnosis(content: list[dict[str, Any]]) -> dict[str, Any]:
+    """G3: the frozen diagnosis block of a global request, as the model sees it."""
+    text = next(item["text"] for item in content
+                if item["type"] == "input_text"
+                and item["text"].startswith('{"diagnosis"'))
+    return json.loads(text)["diagnosis"]
+
+
+def _direction_slot(content: list[dict[str, Any]]) -> tuple[int, int]:
+    """G3: which of the fixture's enhancement directions this request was fanned out on.
+
+    A global request now carries exactly one enhancement direction, so a fake model can
+    answer differently per direction - which is what the merge and the degeneracy
+    assertion downstream are about.
+    """
+    offered = list(_prompt_diagnosis(content).get("enhancement_opportunities") or [])
+    assert len(offered) == 1, offered
+    reference = list(_diagnosis()["enhancement_opportunities"])
+    if offered[0] not in reference:
+        return 0, 1
+    return reference.index(offered[0]), len(reference)
+
+
 def _parse_local_shortlist(content: list[dict[str, Any]]) -> list[str]:
     rows: list[str] = []
     started = False
@@ -2474,11 +2499,16 @@ class _FakeTerra:
             user_content = spec.canonical["input"][-1]["content"]
             shortlist = _parse_global_shortlist(user_content)
             major, rows = next(iter(shortlist.items()))
+            # G3: the stage is fanned out over the diagnosed directions, so the fake
+            # splits its planned picks over them - the merged set still holds
+            # `self.globals` rows, and every direction contributes its own.
+            slot, fanout = _direction_slot(user_content)
+            planned = list(range(min(self.globals, len(rows))))[slot::fanout]
             parsed = {"major": major, "proposals": [{
                 "row_index": index,
                 "bin": ("natural", "medium", "bold")[index % 3],
                 "reason_codes": ["scene_mood_fit"],
-            } for index in range(min(self.globals, len(rows)))]}
+            } for index in planned]}
         elif stage == "local_propose":
             user_content = spec.canonical["input"][-1]["content"]
             text_items = [json.loads(item["text"]) for item in user_content
@@ -2947,10 +2977,11 @@ def test_graph_sends_a_source_to_its_own_lane_only(tmp_path: Path) -> None:
 
         def request(self, spec, validate_extra=None):
             seen.append((self.identity, spec.canonical["endpoint_identity"]))
+            slot, fanout = _direction_slot(spec.canonical["input"][-1]["content"])
             parsed = {"major": "major", "proposals": [
                 {"row_index": 0, "bin": "medium", "reason_codes": ["tonal_contrast"]},
                 {"row_index": 2, "bin": "bold", "reason_codes": ["diversity_pick"]},
-            ]}
+            ][slot::fanout]}
             assert validate_extra(parsed) is None
             return SimpleNamespace(
                 response={"parsed": parsed}, request_hash="h", cache_hit=False, usage={},
@@ -2983,7 +3014,9 @@ def test_graph_sends_a_source_to_its_own_lane_only(tmp_path: Path) -> None:
     assert {row[0] for row in seen} == {"lane", "lane2"}
 
 
-def _run_global_propose(tmp_path: Path) -> tuple[Any, SQLiteAuditStore, dict[str, Any]]:
+def _run_global_propose(
+    tmp_path: Path,
+) -> tuple[Any, SQLiteAuditStore, dict[str, Any], Any]:
     config = _write_config(tmp_path)
     audit = SQLiteAuditStore(tmp_path / "propose-audit.sqlite")
     audit.setup()
@@ -2991,19 +3024,25 @@ def _run_global_propose(tmp_path: Path) -> tuple[Any, SQLiteAuditStore, dict[str
     shortlist = _global_shortlist_fixture()
 
     class _Spy:
+        def __init__(self) -> None:
+            self.specs: list[Any] = []
+
         def request(self, spec, validate_extra=None):
             captured["validate"] = validate_extra
+            self.specs.append(spec)
+            slot, fanout = _direction_slot(spec.canonical["input"][-1]["content"])
             parsed = {"major": "major", "proposals": [
                 {"row_index": 0, "bin": "medium", "reason_codes": ["tonal_contrast"]},
                 {"row_index": 2, "bin": "bold", "reason_codes": ["diversity_pick"]},
-            ]}
+            ][slot::fanout]}
             assert validate_extra(parsed) is None
             return SimpleNamespace(
                 response={"parsed": parsed}, request_hash="h", cache_hit=False, usage={},
             )
 
+    spy = _Spy()
     services = AgentServices(
-        config, None, audit, _Spy(), LutCatalog.load(config.catalog, config.databuild_config),
+        config, None, audit, spy, LutCatalog.load(config.catalog, config.databuild_config),
         None, None, TerraLimiter(2),
     )
     state = {
@@ -3014,19 +3053,22 @@ def _run_global_propose(tmp_path: Path) -> tuple[Any, SQLiteAuditStore, dict[str
         "source_histogram": _source_histogram_fixture(),
     }
     produced = _global_propose_node(services)(state)
-    return captured["validate"], audit, produced
+    return captured["validate"], audit, produced, spy
 
 
 def test_global_response_validation_rejects_bad_rows_bins_and_majors(
     tmp_path: Path,
 ) -> None:
-    validate, _audit, produced = _run_global_propose(tmp_path)
+    validate, _audit, produced, _spy = _run_global_propose(tmp_path)
     assert [row["preset_id"] for row in produced["global_proposals"]] == ["p0", "p2"]
     assert produced["global_proposals"][0] == {
         "proposal_id": "g0-medium", "preset_id": "p0", "strength_bin": "medium",
         "row_index": 0, "reason_codes": ["tonal_contrast"], "scorer_rank_raw": 0,
-        "scorer_rank_offered": 0,
+        "scorer_rank_offered": 0, "style_major": "major", "enhancement_index": 0,
+        "enhancement_direction": "tone separation",
     }
+    assert produced["global_proposals"][1]["enhancement_index"] == 1
+    assert produced["global_proposals"][1]["enhancement_direction"] == "depth"
 
     def payload(*proposals: dict[str, Any], major: str = "major") -> dict[str, Any]:
         return {"major": major, "proposals": list(proposals)}
@@ -3036,7 +3078,9 @@ def test_global_response_validation_rejects_bad_rows_bins_and_majors(
     assert validate(payload(good, other)) is None
     assert validate(payload(good, other, major="absent")) == \
         "global_major_outside_shortlist"
-    assert validate(payload(good)) == "global_count_below_config_minimum"
+    # G3: the per-direction floor is one proposal, so only an empty answer is short.
+    assert validate(payload(good)) is None
+    assert validate(payload()) == "global_count_below_config_minimum"
     assert validate(payload(good, {**other, "row_index": 3})) == \
         "global_row_index_out_of_range"
     assert validate(payload(good, {**other, "row_index": -1})) == \
@@ -3053,7 +3097,7 @@ def test_global_response_validation_rejects_bad_rows_bins_and_majors(
 
 
 def test_scorer_agreement_columns_land_in_sql(tmp_path: Path) -> None:
-    _validate, audit, _produced = _run_global_propose(tmp_path)
+    _validate, audit, _produced, _spy = _run_global_propose(tmp_path)
     rows = audit._conn().execute(
         "SELECT preset_id,level,scorer_top1,scorer_top3,scorer_top1_raw,"
         "direction_cosine FROM proposal_audit ORDER BY preset_id"
@@ -3064,6 +3108,159 @@ def test_scorer_agreement_columns_land_in_sql(tmp_path: Path) -> None:
     ]
     assert "proposal_audit" in audit.export_tables()
     assert "scorer_top1_raw INTEGER" in _POSTGRES_SCHEMA
+
+
+def _wide_global_shortlist(count: int) -> dict[str, list[dict[str, Any]]]:
+    """A single major whose rows all reach every bin, in scorer order."""
+    return {"major": [{
+        "preset_id": f"p{index}", "style_major": "major", "caption": "objective",
+        "fingerprint": {name: 0.0 for name in FINGERPRINT_FIELDS},
+        "achievable_bins": ["natural", "medium", "bold"], "scorer_rank_raw": index,
+        "scorer_rank_offered": index, "score": 1.0, "cluster_id": f"p{index}",
+        "d_full": 9.0,
+    } for index in range(count)]}
+
+
+def _run_direction_fanout(
+    tmp_path: Path, diagnosis: Mapping[str, Any],
+    answers: Sequence[Sequence[tuple[int, str]]], *,
+    max_global_proposals: int = 6, rows: int = 6,
+) -> tuple[list[Any], dict[str, Any]]:
+    """Drive `_global_propose_node` with one scripted answer per fanned-out request."""
+    config = dataclasses.replace(
+        _write_config(tmp_path), max_global_proposals=max_global_proposals
+    )
+    audit = SQLiteAuditStore(tmp_path / "fanout-audit.sqlite")
+    audit.setup()
+    specs: list[Any] = []
+
+    class _Spy:
+        def request(self, spec, validate_extra=None):
+            specs.append(spec)
+            parsed = {"major": "major", "proposals": [
+                {"row_index": index, "bin": bin_, "reason_codes": ["scene_mood_fit"]}
+                for index, bin_ in answers[len(specs) - 1]
+            ]}
+            assert validate_extra(parsed) is None
+            return SimpleNamespace(
+                response={"parsed": parsed}, request_hash=f"h{len(specs)}",
+                cache_hit=False, usage={},
+            )
+
+    services = AgentServices(
+        config, None, audit, _Spy(),
+        LutCatalog.load(config.catalog, config.databuild_config),
+        None, None, TerraLimiter(2),
+    )
+    produced = _global_propose_node(services)({
+        "source_sha256": "d" * 64, "thread_id": "thread", "diagnosis": dict(diagnosis),
+        "source_artifact": {"sha256": "a" * 64, "media_type": "image/jpeg", "size": 10,
+                            "uri": "sha256://" + "a" * 64},
+        "global_shortlist": _wide_global_shortlist(rows),
+        "source_histogram": _source_histogram_fixture(),
+    })
+    return specs, produced
+
+
+def _three_direction_diagnosis() -> dict[str, Any]:
+    return {
+        "correction_needs": ["cast | global | blue cast | neutralise"],
+        "preserve_intent": ["skin tone"],
+        "enhancement_opportunities": ["golden hour", "cool editorial", "matte film"],
+        "forbidden_directions": ["do not push warmer"],
+        "evidence": ["panel 2: blue channel offset +6"],
+        "confidence": 0.7, "intent_mode": "mixed",
+    }
+
+
+def test_global_fanout_sends_one_request_per_enhancement_direction(
+    tmp_path: Path,
+) -> None:
+    """G3 (a): n directions = n requests, each seeing ONE of them and all corrections."""
+    diagnosis = _three_direction_diagnosis()
+    specs, produced = _run_direction_fanout(tmp_path, diagnosis, [
+        [(0, "natural"), (1, "medium")],
+        [(2, "natural"), (3, "medium")],
+        [(4, "natural"), (5, "medium")],
+    ])
+    assert len(specs) == 3
+    for index, spec in enumerate(specs):
+        user_content = spec.canonical["input"][-1]["content"]
+        # The rules stay in the developer turn and the source image stays ahead of the
+        # diagnosis, so the fanned-out siblings still share that head of the prefix.
+        assert spec.canonical["input"][0]["role"] == "developer"
+        assert user_content[0]["type"] == "input_image"
+        asked = _prompt_diagnosis(user_content)
+        assert asked["enhancement_opportunities"] == [
+            diagnosis["enhancement_opportunities"][index]
+        ]
+        for key in ("correction_needs", "preserve_intent", "forbidden_directions",
+                    "evidence", "intent_mode", "confidence"):
+            assert asked[key] == diagnosis[key]
+        # Per-direction budget: min 1, max = max(2, 6 // 3).
+        task = json.loads(user_content[-1]["text"])["task"]
+        assert (task["min_proposals"], task["max_proposals"]) == (1, 2)
+    assert len({spec.prompt_cache_key for spec in specs}) == 3
+    assert [row["enhancement_index"] for row in produced["global_proposals"]] == \
+        [0, 0, 1, 1, 2, 2]
+    assert [row["enhancement_direction"] for row in produced["global_proposals"]] == [
+        "golden hour", "golden hour", "cool editorial", "cool editorial",
+        "matte film", "matte film",
+    ]
+    assert produced["selected_major"] == "major"
+
+
+def test_global_fanout_dedupes_by_row_and_truncates_round_robin(tmp_path: Path) -> None:
+    """G3 (b): a repeated row belongs to the direction that asked first, and the
+    budget is handed out round-robin so no direction is starved."""
+    specs, produced = _run_direction_fanout(
+        tmp_path, _three_direction_diagnosis(), [
+            [(0, "natural"), (1, "medium")],
+            [(1, "natural"), (2, "medium")],
+            [(2, "natural"), (3, "medium")],
+        ], max_global_proposals=3,
+    )
+    assert len(specs) == 3
+    # Direction 1 loses row 1 and direction 2 loses row 2 to the earlier direction; the
+    # budget of three then keeps each direction's first survivor and cuts direction 0's
+    # second one.
+    assert [(row["preset_id"], row["enhancement_index"])
+            for row in produced["global_proposals"]] == [
+        ("p0", 0), ("p2", 1), ("p3", 2),
+    ]
+
+
+def test_global_fanout_degenerates_to_one_call_without_opportunities(
+    tmp_path: Path,
+) -> None:
+    """G3 (c): a correction_led source with no opportunity keeps the single call."""
+    diagnosis = {**_three_direction_diagnosis(), "enhancement_opportunities": [],
+                 "intent_mode": "correction_led"}
+    specs, produced = _run_direction_fanout(
+        tmp_path, diagnosis, [[(0, "natural"), (1, "medium")]]
+    )
+    assert len(specs) == 1
+    asked = _prompt_diagnosis(specs[0].canonical["input"][-1]["content"])
+    assert asked == diagnosis
+    # The single-call path keeps the campaign floor it had before the fan-out.
+    task = json.loads(specs[0].canonical["input"][-1]["content"][-1]["text"])["task"]
+    assert (task["min_proposals"], task["max_proposals"]) == (2, 6)
+    assert [row["enhancement_index"] for row in produced["global_proposals"]] == \
+        [None, None]
+    assert [row["enhancement_direction"] for row in produced["global_proposals"]] == \
+        [None, None]
+
+
+def test_global_fanout_raises_when_every_survivor_is_one_direction(
+    tmp_path: Path,
+) -> None:
+    """G3 (d): the pre-registered assertion fires when the fan-out bought nothing."""
+    with pytest.raises(RuntimeError, match="global_direction_fanout_degenerate"):
+        _run_direction_fanout(tmp_path, _three_direction_diagnosis(), [
+            [(0, "natural"), (1, "medium")],
+            [(0, "natural"), (1, "medium")],
+            [(1, "natural"), (0, "medium")],
+        ])
 
 
 def test_reason_codes_are_a_closed_vocabulary() -> None:
@@ -3277,7 +3474,8 @@ def test_graph_fanout_join_and_cap_excluded_audit(tmp_path: Path) -> None:
     assert len(result["branches"]) == 6
     assert all(row["status"] == "formal_global" for row in result["branches"])
     assert len(result["committed_leaves"]) == 6
-    assert terra.counts == {"global_propose": 1, "local_propose": 6}
+    # G3: two diagnosed enhancement directions = two global proposal requests.
+    assert terra.counts == {"global_propose": 2, "local_propose": 6}
     assert terra.stages[0] == "global_propose"
     assert len(set(terra.cache_keys["local_propose"])) == 6
     local_rows = [row for row in audit.export_tables()["agent_branch"]
@@ -3766,8 +3964,9 @@ def test_external_failures_propagate_then_resume_from_checkpoint(
         }
         resumed = run_source(graph, config, row, resume=True)
     assert resumed["terminal_status"] == "accepted"
-    assert completed_calls == {"global_propose": 1}
-    assert terra.counts["global_propose"] == 1
+    # G3: one request per diagnosed direction, and the resume repeats neither.
+    assert completed_calls == {"global_propose": 2}
+    assert terra.counts["global_propose"] == 2
 
 
 def test_failed_global_does_not_cancel_sibling_and_source_contract_rejects(tmp_path: Path) -> None:
@@ -3808,7 +4007,7 @@ def test_checkpoint_resume_does_not_repeat_completed_external_calls(
         )
     assert resumed["terminal_status"] == "accepted"
     assert resumed["source_sha256"] == source_sha
-    assert terra.counts == {"global_propose": 1, "local_propose": 2}
+    assert terra.counts == {"global_propose": 2, "local_propose": 2}
     assert terra.stages[0] == "global_propose"
 
 

@@ -315,8 +315,8 @@ contrast, cast_hue and cast_mag, dSat, hue_rot, and the d_shadow d_mid d_high tr
 rows through those numbers and pick the LUTs whose measured response actually realizes the
 diagnosed directions on this image.
 Choose one style major from the offered majors, then choose up to six materially distinct
-whole-image edits from that major's rows: corrections first, then the looks - cover different
-diagnosed directions rather than variants of one look. Choose the bin from that row's
+whole-image edits from that major's rows: you are given the corrections and ONE enhancement
+direction; serve the corrections first, then realize THIS direction. Choose the bin from that row's
 achievable_bins by the diagnosis evidence numbers: a strongly evidenced deviation justifies a
 stronger bin, while an asset named in preserve_intent or forbidden_directions caps the strength.
 Never pick a row whose caption or fingerprint realizes a forbidden direction.
@@ -326,6 +326,44 @@ proposals and never repeat a row. Include both correction and enhancement capaci
 supports both. Honor task.min_proposals by choosing a major with enough rows, and use at least two
 bins when returning multiple proposals. Give one to three reason_codes per proposal from the fixed
 vocabulary. Return only the strict JSON object, with no rationale or extra prose."""
+
+# G3: the global round is fanned out over the diagnosed enhancement directions - one
+# request per direction, each seeing the full corrections and exactly ONE opportunity.
+# These numbers decide what every one of those requests asks for (and therefore what the
+# model may answer), so they are part of the prompt revision.
+GLOBAL_DIRECTION_FANOUT: dict[str, Any] = {
+    "one_direction_per_request": True,
+    "min_proposals_per_direction": 1,
+    "max_proposals_floor": 2,
+    "single_call_min_from_config": True,
+    "dedupe_key": "row_index",
+    "truncation": "round_robin_by_direction",
+}
+
+
+def global_direction_budget(
+    max_global_proposals: int, direction_count: int, min_global_proposals: int = 1
+) -> tuple[int, int]:
+    """Per-direction (min, max) proposal budget of the G3 fan-out.
+
+    Fanned out (2+ directions), every direction asks for at least one proposal and the
+    per-call ceiling is the campaign budget split over the directions - never below
+    `max_proposals_floor`, so a four-direction source still gets a two-pick choice per
+    direction. A source that degenerates to a single call (no diagnosed opportunity)
+    keeps the campaign floor it had before the fan-out, so it still cannot come back
+    with fewer proposals than the source contract needs.
+    """
+    if direction_count < 1:
+        raise ValueError("direction_count must be >= 1")
+    ceiling = int(max_global_proposals)
+    if direction_count == 1:
+        return min(int(min_global_proposals), ceiling), ceiling
+    minimum = int(GLOBAL_DIRECTION_FANOUT["min_proposals_per_direction"])
+    maximum = max(
+        int(GLOBAL_DIRECTION_FANOUT["max_proposals_floor"]), ceiling // direction_count,
+    )
+    return minimum, min(maximum, ceiling)
+
 
 _LOCAL_INTENT_GUIDE = """Local intent vocabulary. Every assigned mask carries a role and the intents
 offered on it, and every offered intent lists the row ids you may pick for it:
@@ -377,6 +415,7 @@ PROMPT_REGISTRY_KEYS: tuple[str, ...] = (
     "fingerprint_formats",
     "global_bin_quota",
     "global_delta_e_targets",
+    "global_direction_fanout",
     "histogram_board",
     "histogram_match_gate",
     "image_encoding",
@@ -497,6 +536,9 @@ def prompt_registry() -> dict[str, Any]:
         "role_packet_target": dict(ROLE_PACKET_TARGET),
         "background_family_counts": dict(BACKGROUND_FAMILY_COUNTS),
         "global_bin_quota": GLOBAL_BIN_QUOTA,
+        # G3: the global fan-out contract - one request per diagnosed enhancement
+        # direction, the per-direction proposal budget and the merge rules.
+        "global_direction_fanout": dict(GLOBAL_DIRECTION_FANOUT),
         "axis_scales": dict(AXIS_SCALES),
         "axis_weights": dict(AXIS_WEIGHTS),
         "keyword_axes": [
@@ -637,15 +679,44 @@ def diagnosis_request(
     )
 
 
+def single_direction_diagnosis(
+    diagnosis: Mapping[str, Any], enhancement_index: int
+) -> dict[str, Any]:
+    """G3: the diagnosis with exactly ONE enhancement direction left standing.
+
+    Everything else - `correction_needs`, `preserve_intent`, `forbidden_directions`,
+    `evidence`, `intent_mode`, `confidence` - is passed through verbatim, so the only
+    thing that differs between the fanned-out requests of one source is which single
+    enhancement direction the model is asked to realize.
+    """
+    opportunities = list(diagnosis.get("enhancement_opportunities") or [])
+    if not 0 <= enhancement_index < len(opportunities):
+        raise ValueError("enhancement_index outside enhancement_opportunities")
+    return {
+        **dict(diagnosis),
+        "enhancement_opportunities": [opportunities[enhancement_index]],
+    }
+
+
 def global_request(
     endpoint: EndpointConfig, source: Mapping[str, Any], diagnosis: Mapping[str, Any],
     shortlist: Mapping[str, Any], *, min_proposals: int = 1, max_proposals: int,
     source_histogram: Mapping[str, Any] | None = None,
+    enhancement_index: int | None = None,
 ) -> RequestSpec:
     """B12 item 1: the frozen source-histogram line sits in the stable prefix, in the
-    slot right after the frozen diagnosis and right before the shortlist table."""
+    slot right after the frozen diagnosis and right before the shortlist table.
+
+    G3: `enhancement_index` selects the single enhancement direction this request may
+    realize. The rules and the source image keep their existing slots *before* the
+    diagnosis, so the fanned-out siblings of one source still share that head of the
+    prefix; the cache key diverges from the diagnosis block onward, which is the point -
+    a different direction is a different request.
+    """
     if not 1 <= min_proposals <= max_proposals <= 6:
         raise ValueError("global proposal bounds must satisfy 1 <= min <= max <= 6")
+    if enhancement_index is not None:
+        diagnosis = single_direction_diagnosis(diagnosis, enhancement_index)
     prefix = [
         _text(_GLOBAL_RULES), _image(source), _text({"diagnosis": diagnosis}),
     ]
@@ -868,13 +939,16 @@ def schema_error(schema: Mapping[str, Any], value: Any, path: str = "$") -> str 
 __all__ = [
     "ADAPTER_REVISION", "BOARD_IMAGE_ENCODING", "CANDIDATE_SERIALIZATION_REVISION",
     "DIAGNOSE_PROMPT_REVISION", "DIAGNOSIS_SCHEMA",
-    "GLOBAL_BATCH_SCHEMA", "HISTOGRAM_ROW_FORMAT", "HISTOGRAM_SHORTLIST_NOTE",
+    "GLOBAL_BATCH_SCHEMA", "GLOBAL_DIRECTION_FANOUT", "HISTOGRAM_ROW_FORMAT",
+    "HISTOGRAM_SHORTLIST_NOTE",
     "IMAGE_ENCODING", "MASK_SUMMARY_REVISION",
     "LOCAL_BATCH_SCHEMA", "LOCAL_SHORTLIST_NOTE", "PREFLIGHT_SCHEMA",
     "PROMPT_REGISTRY_KEYS", "PROMPT_REVISION", "REASON_CODES", "prompt_registry",
     "SHORTLIST_COLUMNS", "SHORTLIST_HEADER", "VALIDATION_SCHEMA", "assigned_mask_views",
-    "diagnosis_request", "global_request", "global_shortlist_text", "local_request",
+    "diagnosis_request", "global_direction_budget", "global_request",
+    "global_shortlist_text", "local_request",
     "local_shortlist_text", "preflight_request", "prompt_revision_fingerprint",
     "schema_error", "semantic_error", "shortlist_row_text", "shortlist_rows_text",
+    "single_direction_diagnosis",
     "validation_request",
 ]
