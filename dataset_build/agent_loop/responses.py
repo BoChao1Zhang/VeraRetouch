@@ -72,10 +72,18 @@ def consume_stream(stream: Any) -> dict[str, Any]:
 
     chunks: list[str] = []
     completed: Any = None
+    relay_telemetry_events = 0
     context = stream if hasattr(stream, "__enter__") else nullcontext(stream)
     with context as events:
         for event in events:
             if not is_official_response_event(event):
+                # The zzone relay's codex-backed channels inject benign telemetry
+                # events (observed: type='codex.rate_limits', carrying plan/usage
+                # numbers) into every stream. They are skipped and counted; any
+                # other unofficial event still fails closed as a malformed stream.
+                if str(getattr(event, "type", "") or "").startswith("codex."):
+                    relay_telemetry_events += 1
+                    continue
                 raise TransportError("untyped_responses_event")
             if isinstance(event, ResponseTextDeltaEvent):
                 chunks.append(event.delta)
@@ -112,6 +120,7 @@ def consume_stream(stream: Any) -> dict[str, Any]:
         "response_id": str(getattr(completed, "id", "") or ""),
         "usage": _usage(completed),
         "raw_response": raw,
+        "relay_telemetry_events": relay_telemetry_events,
     }
 
 

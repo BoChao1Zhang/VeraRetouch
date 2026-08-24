@@ -3949,6 +3949,46 @@ def test_stream_strips_relay_zero_width_space_prefix() -> None:
     assert json.loads(text) == payload
 
 
+def test_stream_skips_relay_codex_telemetry_but_rejects_other_untyped() -> None:
+    """The relay's codex-backed channels inject `codex.*` telemetry events into the
+    stream (observed live: type='codex.rate_limits' parsed into
+    ResponseAudioDeltaEvent). Those are skipped and counted; any other unofficial
+    event still fails closed."""
+    from openai.types.responses import (
+        ResponseAudioDeltaEvent, ResponseCompletedEvent, ResponseTextDeltaEvent,
+    )
+
+    payload = {"confidence": .8, "intent_mode": "enhancement_led"}
+    clean = json.dumps(payload)
+    usage = SimpleNamespace(
+        input_tokens=1, output_tokens=1,
+        input_tokens_details=SimpleNamespace(cached_tokens=0, cache_write_tokens=0),
+    )
+    completed = SimpleNamespace(
+        status="completed", model="gpt-5.6-terra", id="response-1",
+        usage=usage, output_text=clean,
+    )
+    telemetry = ResponseAudioDeltaEvent.model_construct(
+        delta=None, sequence_number=None, type="codex.rate_limits",
+    )
+    delta = ResponseTextDeltaEvent.model_construct(
+        content_index=0, delta=clean, item_id="msg", logprobs=[],
+        output_index=0, sequence_number=1, type="response.output_text.delta",
+    )
+    done = ResponseCompletedEvent.model_construct(
+        response=completed, sequence_number=9, type="response.completed",
+    )
+    result = consume_stream([telemetry, delta, telemetry, done])
+    assert json.loads(result["text"]) == payload
+    assert result["relay_telemetry_events"] == 2
+
+    other = ResponseAudioDeltaEvent.model_construct(
+        delta=None, sequence_number=None, type="relay.unknown_junk",
+    )
+    with pytest.raises(TransportError, match="untyped_responses_event"):
+        consume_stream([other, delta, done])
+
+
 class _RaisingOutputTextResponse:
     """Relay shape whose ``output_text`` property raises instead of returning ""."""
 
