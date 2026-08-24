@@ -3971,6 +3971,9 @@ def test_stream_skips_relay_codex_telemetry_but_rejects_other_untyped() -> None:
     telemetry = ResponseAudioDeltaEvent.model_construct(
         delta=None, sequence_number=None, type="codex.rate_limits",
     )
+    timing = ResponseAudioDeltaEvent.model_construct(
+        delta=None, sequence_number=None, type="responsesapi.websocket_timing",
+    )
     delta = ResponseTextDeltaEvent.model_construct(
         content_index=0, delta=clean, item_id="msg", logprobs=[],
         output_index=0, sequence_number=1, type="response.output_text.delta",
@@ -3978,9 +3981,9 @@ def test_stream_skips_relay_codex_telemetry_but_rejects_other_untyped() -> None:
     done = ResponseCompletedEvent.model_construct(
         response=completed, sequence_number=9, type="response.completed",
     )
-    result = consume_stream([telemetry, delta, telemetry, done])
+    result = consume_stream([telemetry, delta, timing, telemetry, done])
     assert json.loads(result["text"]) == payload
-    assert result["relay_telemetry_events"] == 2
+    assert result["relay_telemetry_events"] == 3
 
     other = ResponseAudioDeltaEvent.model_construct(
         delta=None, sequence_number=None, type="relay.unknown_junk",

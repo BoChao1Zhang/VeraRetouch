@@ -78,10 +78,12 @@ def consume_stream(stream: Any) -> dict[str, Any]:
         for event in events:
             if not is_official_response_event(event):
                 # The zzone relay's codex-backed channels inject benign telemetry
-                # events (observed: type='codex.rate_limits', carrying plan/usage
-                # numbers) into every stream. They are skipped and counted; any
-                # other unofficial event still fails closed as a malformed stream.
-                if str(getattr(event, "type", "") or "").startswith("codex."):
+                # events into every stream (observed live: 'codex.rate_limits',
+                # 'codex.response.metadata', 'responsesapi.websocket_timing').
+                # They are skipped and counted; any other unofficial event still
+                # fails closed as a malformed stream.
+                event_type = str(getattr(event, "type", "") or "")
+                if event_type.startswith(("codex.", "responsesapi.")):
                     relay_telemetry_events += 1
                     continue
                 raise TransportError("untyped_responses_event")
