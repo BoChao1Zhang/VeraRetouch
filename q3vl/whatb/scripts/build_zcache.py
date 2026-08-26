@@ -56,6 +56,43 @@ by ``(split, tag)`` and assert the context.  Give the two contexts two roots::
 so a run started with ``--context teacher`` against the generated root dies on
 the start-up assertion instead of quietly training on the other condition.
 
+``--readout-multi kind1,kind2,...``  (one forward, several readout positions)
+    EPR-024 §4.3's readout-position ablation needs the same samples read out at
+    ``color_close`` / ``im_end`` / ``color_span_pool`` / ``seg_where`` /
+    ``seg_color``.  The five reply spans are **prefixes of one another** (see
+    :data:`SUPERSET_KIND`) and the base is causal, so one forward over the
+    longest span (``im_end``) carries every one of the five positions.  Each
+    kind is written to its own root, because the leaf name ``<split>__<tag>``
+    carries no kind::
+
+        <out-root>/<kind>/<split>__<tag>/{z.npy,index.jsonl,meta.json}
+
+    Two runtime assertions, not two comments: the prefix property is checked per
+    sample per kind (:func:`assert_prefix_plan`), and ``--causality-gate N``
+    re-runs the gate kind through its OWN forward on the first ``N`` samples and
+    kills the job before anything is written if the two z disagree.
+
+    **What "disagree" has to mean here.**  Measured on this base (V_what, eager,
+    4 samples, ``<seg_color>`` row, ``max|z|`` ~ 47-62):
+
+        dtype      repeat   batch 4 vs 1   superset vs own forward
+        float32    0.0      1.2e-4..7.5e-4   0.0  (exactly, 4/4)
+        bfloat16   0.0      1.25 .. 2.5      1.1 .. 4.25
+
+    The base is prefix-invariant -- in fp32 the superset forward reproduces the
+    per-kind forward **exactly**.  In bf16 the same z moves by O(1) when only the
+    padding shape changes, so a fixed ``1e-3`` is a floor no bf16 run can meet,
+    and every bf16 cache already carries that much batch-shape noise against any
+    other bf16 build of itself.  The gate therefore accepts
+    ``max|dz| <= max(--causality-gate-tol, --causality-gate-factor x control)``
+    where the control is the same superset tokens re-encoded at batch 1, and
+    writes all three numbers (delta, control, ``max|z|``) into the setup, the
+    cache ``meta.json`` and the report.  A wiring error (reading the wrong row)
+    is O(|z|) and still dies here; an fp32 run still has to come out at ~0.
+
+    With ``--readout-multi`` empty the job is the single-``--readout`` one it
+    always was, down to the forward it runs.
+
 Local disk only -- these are GB-scale and ``/mnt/nfs`` is the hard mount.
 
 **Run this file by absolute path, never ``python -m``.**  ``q3vl/whatb/__init__``
@@ -152,6 +189,8 @@ if (_REPO / "q3vl").is_dir() and str(_REPO) not in sys.path:
 from q3vl.whatb import caliber as K                           # noqa: E402
 from q3vl.whatb import splits as S                            # noqa: E402
 from q3vl.whatb.readout import (                              # noqa: E402
+    WHATB_READOUT_KINDS,
+    ReplyPlan,
     WhatReadoutBuilder,
     WhatReadoutSpec,
     readout_vector,
@@ -163,7 +202,9 @@ from q3vl.whatb.zcache import (                               # noqa: E402
 )
 
 __all__ = ["build_parser", "plan_rows", "shuffle_partner", "control_instruction",
-           "main"]
+           "parse_readout_multi", "assert_prefix_plan", "readout_index_field",
+           "resolve_outputs", "prompt_ids", "causality_gate_verdict",
+           "SUPERSET_KIND", "MULTI_KINDS", "main"]
 
 BASE_CHECKPOINT = "/home/bc/data/runs/q3vl_base_sft_v2seg_20260814/checkpoint-4976"
 MODEL_DIR = "/home/bc/data/models/Qwen3-VL-4B-Instruct"
@@ -171,6 +212,28 @@ GENCTX_ROOT = "/home/bc/data/runs/where_b/genwhere_v2seg"
 DEFAULT_OUT = "/home/bc/data/caches/whatb_z_20260815"
 CONST_PHRASE = "Please edit this photo."
 DEFAULT_SEED = 20260810
+
+#: ``--readout-multi``: the readout kind whose reply span contains every other
+#: kind's span as a **prefix**, so one forward serves all of them.
+#:
+#:     color_span_pool  w + c
+#:     color_close      w + c
+#:     seg_where        w + c + [<seg_where>]
+#:     seg_color        w + c + [<seg_where>, <seg_color>]
+#:     im_end           w + c + [<seg_where>, <seg_color>, <im_end>]
+#:
+#: (``q3vl/whatb/readout.py:165-189`` for the first two whatb builds itself,
+#: ``q3vl/whereb/readout.py:319-352`` for the three it delegates.)  The base is
+#: causal, so the hidden state at position i of the superset forward is the
+#: hidden state at position i of every prefix forward -- which is what the
+#: ``--causality-gate`` measures at run time instead of assuming.
+SUPERSET_KIND = "im_end"
+
+#: the kinds ``--readout-multi`` may carry.  ``qtok`` is excluded: its plan
+#: **appends** K query rows the VLM wrapper adds after the reply span
+#: (``whereb/readout.py:354-362``, ``n_appended``), so it is not a prefix of the
+#: superset and its z is ``(K, 2560)``, not ``(2560,)`` (EPR-024 NOTES-10).
+MULTI_KINDS: tuple[str, ...] = tuple(k for k in WHATB_READOUT_KINDS if k != "qtok")
 
 
 
@@ -232,6 +295,115 @@ def control_instruction(tag: str, row: S.IndexRow, *, instructions: dict[str, st
     raise ValueError(f"unknown control tag {tag!r}")
 
 
+def parse_readout_multi(raw: str | None) -> list[str]:
+    """``--readout-multi`` -> the ordered, de-duplicated kind list ([] = off)."""
+    kinds: list[str] = []
+    for part in str(raw or "").split(","):
+        k = part.strip()
+        if not k:
+            continue
+        if k not in WHATB_READOUT_KINDS:
+            raise SystemExit(
+                f"--readout-multi {k!r}: unknown readout kind; expected one of "
+                f"{MULTI_KINDS}")
+        if k not in MULTI_KINDS:
+            raise SystemExit(
+                f"--readout-multi {k!r}: this kind is not exportable from the "
+                "shared forward.  Its plan appends query rows after the reply "
+                "span, so it is not a prefix of the superset and its z is "
+                "(K, 2560); run it as its own --readout job.")
+        if k not in kinds:
+            kinds.append(k)
+    return kinds
+
+
+def assert_prefix_plan(super_ids: Sequence[int], plan: ReplyPlan, *, kind: str,
+                       sample_id: str) -> None:
+    """Runtime proof that ``plan`` reads a **prefix** of the superset forward.
+
+    Wired, not assumed: this is the whole licence for reading five kinds out of
+    one forward, so it runs on every plan of every sample rather than on a
+    sample of them (the campaign's "defined but not wired" failure mode).
+    """
+    ids = [int(t) for t in plan.token_ids]
+    head = [int(t) for t in super_ids[:len(ids)]]
+    if plan.n_appended:
+        raise AssertionError(
+            f"{sample_id}: readout {kind!r} appends {plan.n_appended} rows after "
+            "the reply span, so it is not a prefix of the superset forward")
+    if head != ids:
+        n = next((i for i, (a, b) in enumerate(zip(head, ids)) if a != b),
+                 min(len(head), len(ids)))
+        raise AssertionError(
+            f"{sample_id}: readout {kind!r} is not a prefix of the "
+            f"{SUPERSET_KIND!r} superset span (first difference at token {n}: "
+            f"superset has {head[n:n + 1]}, plan has {ids[n:n + 1]}; lengths "
+            f"{len(super_ids)} vs {len(ids)})")
+    if plan.end > len(super_ids):
+        raise AssertionError(
+            f"{sample_id}: readout {kind!r} slice {plan.start}:{plan.end} runs "
+            f"past the superset span ({len(super_ids)} tokens)")
+
+
+def readout_index_field(plan: ReplyPlan) -> int | list[int]:
+    """The schema's ``readout_index``: ``int``, or ``[start, end]`` when pooled.
+
+    ``zcache.py:21`` spells the field "int (or [start, end] for a pooled kind)"
+    and ``ZCache._plan_of`` (``zcache.py:453-472``) rebuilds a pooled plan only
+    from the two-element form; writing the bare ``start`` for
+    ``color_span_pool`` would have the start-up replay verify a one-row slice of
+    a span that was mean-pooled over ``end - start`` rows.
+    """
+    if plan.pool:
+        return [int(plan.start), int(plan.end)]
+    return int(plan.start)
+
+
+def causality_gate_verdict(*, delta: float, control: float, tol: float,
+                           factor: float) -> tuple[float, bool]:
+    """``(threshold, passed)`` for gate G1 -- see the module docstring's table.
+
+    ``control`` is the same token sequence re-encoded at batch 1: the part of
+    ``delta`` that is the arithmetic's own reproducibility floor rather than the
+    prefix.  In fp32 the control is ~1e-4 and the prefix delta is exactly 0, so
+    ``tol`` decides; in bf16 the control is O(1) and it decides.
+    """
+    thr = max(float(tol), float(factor) * float(control))
+    return thr, float(delta) <= thr
+
+
+def resolve_outputs(*, out_root: str | Path, split: str, tag: str, readout: str,
+                    readout_multi: str | None
+                    ) -> tuple[list[str], bool, dict[str, Path], str]:
+    """``(kinds, multi, out_dirs, superset_kind)`` for one invocation.
+
+    With ``--readout-multi`` empty this is the single-kind job it always was:
+    one kind, the historical ``<out-root>/<split>__<tag>`` leaf, and the forward
+    driven by that kind's own span (``superset_kind`` == the kind).
+    """
+    multi_kinds = parse_readout_multi(readout_multi)
+    multi = bool(multi_kinds)
+    kinds = multi_kinds or [readout]
+    out_dirs = {
+        k: (Path(out_root) / k / f"{split}__{tag}" if multi
+            else Path(out_root) / f"{split}__{tag}")
+        for k in kinds}
+    return kinds, multi, out_dirs, (SUPERSET_KIND if multi else kinds[0])
+
+
+def prompt_ids(collator, shim, sample, instruction: str | None) -> Sequence[int]:
+    """The prompt half of one sample's encoding, **under ``instruction``**.
+
+    Both phases go through here, and the instruction is a required argument, so
+    the forward cannot quietly fall back to the sample's own instruction.  It
+    did: the control caches' phase-2 forward was encoded from an un-perturbed
+    ``_PromptShim(s)``, which puts the TRUE instruction back into the prompt the
+    readout position attends to and voids N1/N2/N3 (frozen block ⑥).
+    """
+    enc = collator.encode_one(shim(sample, instruction=instruction))
+    return enc["input_ids"][:enc["n_prompt_tokens"]]
+
+
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
@@ -254,6 +426,35 @@ def build_parser() -> argparse.ArgumentParser:
                     help="'normal' = winner_confidence normal only (train: 93934)")
     ap.add_argument("--readout", default="seg_color")
     ap.add_argument("--readout-qtok", type=int, default=0)
+    ap.add_argument("--readout-multi", default="",
+                    help="comma-separated readout kinds exported from ONE "
+                         f"forward (the {SUPERSET_KIND!r} span; every other "
+                         "kind's span is a prefix of it, asserted per sample).  "
+                         "Each kind gets its own root: <out-root>/<kind>/"
+                         "<split>__<tag>.  Empty = the single --readout job, "
+                         f"unchanged.  Allowed: {','.join(MULTI_KINDS)}")
+    ap.add_argument("--causality-gate", type=int, default=32,
+                    help="--readout-multi only: on the first N samples, compare "
+                         "the kind read out of the superset forward against the "
+                         "same kind read out of its OWN forward, and die if they "
+                         "differ.  Not a post-hoc check -- it runs before "
+                         "anything is written.")
+    ap.add_argument("--causality-gate-tol", type=float, default=1e-3,
+                    help="max|dz| the causality gate accepts outright (default "
+                         "1e-3).  Above it the gate compares against the "
+                         "batch-shape control measured on the same samples, see "
+                         "--causality-gate-factor.")
+    ap.add_argument("--causality-gate-factor", type=float, default=4.0,
+                    help="the gate also accepts max|dz| <= factor * the "
+                         "batch-shape control (the SAME token sequence encoded "
+                         "at batch 1 instead of --batch-size).  In bf16 that "
+                         "control is O(1) on a |z| of O(50) -- see the module "
+                         "docstring -- so a fixed 1e-3 is a floor no bf16 run "
+                         "can meet, while a wiring error (wrong row) is O(|z|) "
+                         "and still dies here.")
+    ap.add_argument("--causality-gate-kind", default="seg_color",
+                    help="which kind the gate compares (default seg_color; "
+                         "falls back to the first --readout-multi kind)")
     ap.add_argument("--checkpoint", default=BASE_CHECKPOINT)
     ap.add_argument("--model-dir", default=MODEL_DIR)
     ap.add_argument("--genctx-root", default=GENCTX_ROOT,
@@ -358,11 +559,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         span_source = "regenerate"
     regenerate = span_source in ("control_regenerate", "regenerate")
-    out_dir = Path(args.out_root) / f"{args.split}__{tag}"
-    if out_dir.exists():
+
+    # -- which kinds this job exports, and where each one lands ---------------
+    kinds, multi, out_dirs, super_kind = resolve_outputs(
+        out_root=args.out_root, split=args.split, tag=tag, readout=args.readout,
+        readout_multi=args.readout_multi)
+    if multi and int(args.readout_qtok):
+        raise SystemExit("--readout-qtok is not read under --readout-multi")
+    if multi and int(args.causality_gate) < 1:
         raise SystemExit(
-            f"{out_dir} already exists.  Move it aside (do NOT delete -- long-job "
-            "discipline) before re-running.")
+            "--readout-multi without --causality-gate N>=1: the prefix property "
+            "is the licence for reading N kinds out of one forward, and a gate "
+            "that never runs is the failure mode this campaign has already paid "
+            "for three times.")
+    # one root per kind: the leaf name is <split>__<tag> (zcache.py:126-141) and
+    # carries no kind, so five kinds in one root would be five collisions.
+    out_dir = out_dirs[kinds[0]]
+    for k, d in out_dirs.items():
+        if d.exists():
+            raise SystemExit(
+                f"{d} already exists.  Move it aside (do NOT delete -- long-job "
+                "discipline) before re-running.")
+    gate_kind = (args.causality_gate_kind if args.causality_gate_kind in kinds
+                 else kinds[0]) if multi else None
     if tag != "none" and args.split == "train":
         raise SystemExit(
             "the three controls are evaluation-only columns (n = V_what 897); "
@@ -399,7 +618,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         "dataset_version_facts": ver.facts(),
         "n_index_rows": len(S.load_index(args.split)),
         "readout": args.readout, "readout_qtok": int(args.readout_qtok),
-        "out_dir": str(out_dir), "seed": int(args.seed),
+        "readout_multi": kinds if multi else None,
+        "superset_kind": SUPERSET_KIND if multi else None,
+        "out_dir": str(out_dir),
+        "out_dirs": {k: str(d) for k, d in out_dirs.items()},
+        # filled in by the gate itself while the job runs; a None here on a
+        # --readout-multi artefact means the gate did not run.
+        "causality_gate": ({"kind": gate_kind, "n_requested": int(args.causality_gate),
+                            "tol": float(args.causality_gate_tol),
+                            "factor": float(args.causality_gate_factor),
+                            "n_compared": 0, "max_abs_delta": None,
+                            "max_abs_delta_batch_control": None,
+                            "max_abs_z": None, "threshold": None,
+                            "passed": None} if multi else None),
+        "seed": int(args.seed),
         "span_source": span_source, "regenerate": regenerate,
         "genctx_root": (args.genctx_root if span_source == "reuse_where_side"
                         else None),
@@ -438,13 +670,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     tokenizer = collator.tokenizer
     tags = SegmentIds(tokenizer)
 
-    spec = WhatReadoutSpec(kind=args.readout, qtok=int(args.readout_qtok))
-    builder = WhatReadoutBuilder(
-        tokenizer, spec,
-        control_color="own" if tag == "none" else "regenerated")
-    colorspan_check = builder.run_colorspan_assertion(
-        [str(rec.get("color", "")) for rec in records.values()
-         if rec.get("color")][:256])
+    control_color = "own" if tag == "none" else "regenerated"
+    # one builder per kind: each keeps its own facts()/counts, so a per-kind
+    # flag (missing_tag, null_context) is not pooled across the五档.
+    specs = {k: WhatReadoutSpec(kind=k,
+                                qtok=0 if multi else int(args.readout_qtok))
+             for k in kinds}
+    builders = {k: WhatReadoutBuilder(tokenizer, specs[k],
+                                      control_color=control_color)
+                for k in kinds}
+    spec = specs[kinds[0]]
+    builder = builders[kinds[0]]
+    # the forward is driven by the superset span.  In the single-kind job that
+    # IS the kind's own span, so that path stays byte-for-byte what it was.
+    super_builder = builders.get(super_kind) or WhatReadoutBuilder(
+        tokenizer, WhatReadoutSpec(kind=super_kind), control_color=control_color)
+    color_texts = [str(rec.get("color", "")) for rec in records.values()
+                   if rec.get("color")][:256]
+    colorspan_check = builder.run_colorspan_assertion(color_texts)
+    for k, b in builders.items():
+        if b is not builder:
+            b.run_colorspan_assertion(color_texts)
 
     dataset, ds_info = open_dataset(args.split, need_mask=False)
     by_id = {r.sample_id: r for r in rows}
@@ -456,10 +702,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rng = random.Random(args.seed)
     skipped: dict[str, int] = {}
-    index_rows: list[dict[str, Any]] = []
-    vectors: list[np.ndarray] = []
+    index_rows: dict[str, list[dict[str, Any]]] = {k: [] for k in kinds}
+    vectors: dict[str, list[np.ndarray]] = {k: [] for k in kinds}
     n_done = 0
     t0 = time.time()
+    gate_left = int(args.causality_gate) if multi else 0
+    gate_n, gate_max, gate_ctl, gate_absz = 0, 0.0, 0.0, 0.0
 
     for chunk in _batched(order, args.batch_size):
         samples = [dataset[i] for i in chunk]
@@ -468,6 +716,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         # 6: the perturbed instruction must drive the reasoning); the ``none``
         # cache only does it for a split the where-side job never covered.
         gen_ids: dict[str, list[int]] = {}
+        # the instruction the FORWARD is conditioned on, per sample.  A control's
+        # forward must carry the same perturbed instruction its generation did:
+        # re-encoding the sample's own instruction here would put the TRUE
+        # instruction's semantics back into the prompt the readout position
+        # attends to, i.e. void the control (frozen block ⑥).
+        prompt_instr: dict[str, str | None] = {}
         if regenerate:
             items, keep_samples = [], []
             for s in samples:
@@ -478,10 +732,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if tag != "none" and not instr:
                     skipped["no_perturbation"] = skipped.get("no_perturbation", 0) + 1
                     continue
-                enc = collator.encode_one(_PromptShim(s, instruction=instr))
+                prompt_instr[s.sample_id] = instr
                 items.append(EncodeItem(
                     sample_id=s.sample_id, image=s.image,
-                    prompt_ids=enc["input_ids"][:enc["n_prompt_tokens"]]))
+                    prompt_ids=prompt_ids(collator, _PromptShim, s, instr)))
                 keep_samples.append(s)
             if not items:
                 continue
@@ -524,38 +778,96 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not color_ids:
                 skipped["empty_color_span"] = skipped.get("empty_color_span", 0) + 1
                 continue
-            plan = builder.plan_for(
+            plans_k = {k: b.plan_for(sample_id=sid, where_ids=where_ids,
+                                     color_ids=color_ids, source=context_source,
+                                     control_tag=tag)
+                       for k, b in builders.items()}
+            super_plan = plans_k.get(super_kind) or super_builder.plan_for(
                 sample_id=sid, where_ids=where_ids, color_ids=color_ids,
                 source=context_source, control_tag=tag)
-            enc = collator.encode_one(_PromptShim(s))
+            if multi:
+                for k, p in plans_k.items():
+                    assert_prefix_plan(super_plan.token_ids, p, kind=k,
+                                       sample_id=sid)
+            pids = prompt_ids(collator, _PromptShim, s, prompt_instr.get(sid))
             items.append(EncodeItem(sample_id=sid, image=s.image,
-                                    prompt_ids=enc["input_ids"][:enc["n_prompt_tokens"]],
-                                    where_ids=plan.token_ids))
-            plans.append(plan)
+                                    prompt_ids=pids,
+                                    where_ids=super_plan.token_ids))
+            plans.append(plans_k)
             metas.append({"sample_id": sid, "n_generated_tokens": n_generated,
-                          "rec": rec})
+                          "rec": rec, "image": s.image, "prompt_ids": pids})
         if not items:
             continue
 
         results = vlm.encode(items)
-        for res, plan, meta in zip(results, plans, metas):
-            z = readout_vector(res.h_where, plan).float().cpu().numpy()
-            if z.shape != (Z_DIM,):
-                raise AssertionError(f"z is {z.shape}, expected ({Z_DIM},)")
-            vectors.append(z.astype(np.float32))
+        for res, plans_k, meta in zip(results, plans, metas):
             rec = meta["rec"]
-            index_rows.append({
-                "sample_id": meta["sample_id"], "split": args.split,
-                "checkpoint": args.checkpoint, "readout_kind": spec.kind,
-                "context_source": context_source, "control_tag": tag,
-                "reply_token_ids": [int(t) for t in plan.token_ids],
-                "readout_index": int(plan.start),
-                "expected_ids": [int(t) for t in plan.expected_ids],
-                "n_generated_tokens": int(meta["n_generated_tokens"]),
-                "color_text": str(rec.get("color", "")),
-                "lut_id": str(rec.get("lut_id", "")),
-                "minor": rec.get("minor"),
-            })
+            for k, plan in plans_k.items():
+                h = res.h_where[:len(plan.token_ids)] if multi else res.h_where
+                z = readout_vector(h, plan).float().cpu().numpy()
+                if z.shape != (Z_DIM,):
+                    raise AssertionError(f"z is {z.shape}, expected ({Z_DIM},)")
+                vectors[k].append(z.astype(np.float32))
+                index_rows[k].append({
+                    "sample_id": meta["sample_id"], "split": args.split,
+                    "checkpoint": args.checkpoint, "readout_kind": k,
+                    "context_source": context_source, "control_tag": tag,
+                    "reply_token_ids": [int(t) for t in plan.token_ids],
+                    "readout_index": readout_index_field(plan),
+                    "expected_ids": [int(t) for t in plan.expected_ids],
+                    "n_generated_tokens": int(meta["n_generated_tokens"]),
+                    "color_text": str(rec.get("color", "")),
+                    "lut_id": str(rec.get("lut_id", "")),
+                    "minor": rec.get("minor"),
+                })
+
+        # -- gate G1: the superset forward vs the kind's OWN forward ----------
+        # Runs on the first N samples of the job, before a single vector is
+        # written, and kills the job on violation.  "one forward, five kinds"
+        # rests entirely on the base being causal; this measures it, next to the
+        # batch-shape control that says how much of the measured delta is the
+        # arithmetic's own reproducibility floor rather than the prefix.
+        if gate_left > 0:
+            take = min(gate_left, len(items))
+            g_items = [EncodeItem(sample_id=metas[i]["sample_id"],
+                                  image=metas[i]["image"],
+                                  prompt_ids=metas[i]["prompt_ids"],
+                                  where_ids=plans[i][gate_kind].token_ids)
+                       for i in range(take)]
+            g_results = vlm.encode(g_items)
+            # the control: the SAME superset tokens, encoded alone.  Nothing
+            # about the sequence changes, only the batch it is padded in.
+            c_results = [vlm.encode([items[i]])[0] for i in range(take)]
+            for i, g_res in enumerate(g_results):
+                plan = plans[i][gate_kind]
+                n = len(plan.token_ids)
+                z_super = readout_vector(results[i].h_where[:n], plan).float()
+                z_solo = readout_vector(g_res.h_where, plan).float()
+                z_ctl = readout_vector(c_results[i].h_where[:n], plan).float()
+                gate_max = max(gate_max, float((z_super - z_solo).abs().max()))
+                gate_ctl = max(gate_ctl, float((z_super - z_ctl).abs().max()))
+                gate_absz = max(gate_absz, float(z_super.abs().max()))
+                gate_n += 1
+            gate_left -= take
+            thr, ok = causality_gate_verdict(
+                delta=gate_max, control=gate_ctl,
+                tol=args.causality_gate_tol, factor=args.causality_gate_factor)
+            setup["causality_gate"].update(
+                {"n_compared": gate_n, "max_abs_delta": gate_max,
+                 "max_abs_delta_batch_control": gate_ctl,
+                 "max_abs_z": gate_absz, "threshold": thr, "passed": ok})
+            if not ok:
+                raise SystemExit(
+                    f"causality gate FAILED after {gate_n} samples: --readout "
+                    f"{gate_kind} read out of the {super_kind!r} superset forward "
+                    f"differs from its own forward by max|dz| = {gate_max:.3e}, "
+                    f"over the threshold {thr:.3e} (= max(tol {args.causality_gate_tol:.3e}, "
+                    f"{args.causality_gate_factor} x batch-shape control "
+                    f"{gate_ctl:.3e})); max|z| = {gate_absz:.3e}.  The one-forward "
+                    "export is not valid here; nothing was written.")
+            if gate_left <= 0:
+                print(json.dumps({"causality_gate": setup["causality_gate"]}),
+                      flush=True)
         n_done += len(results)
         if n_done % 500 < args.batch_size:
             rate = n_done / max(1e-9, time.time() - t0)
@@ -564,37 +876,58 @@ def main(argv: Sequence[str] | None = None) -> int:
                               "eta_s": round((len(order) - n_done) / max(rate, 1e-9))}),
                   flush=True)
 
-    z = np.stack(vectors).astype(np.float32) if vectors else \
-        np.zeros((0, Z_DIM), dtype=np.float32)
-    write_z_cache(out_dir, index_rows, z, checkpoint=args.checkpoint,
-                  readout_kind=spec.kind, context_source=context_source,
-                  control_tag=tag, split=args.split,
-                  readout_qtok=int(args.readout_qtok),
-                  extra_meta={"irrelevant_source": setup["irrelevant_source"],
-                              "rows_filter": args.rows, "seed": int(args.seed),
-                              "genctx_root": setup["genctx_root"],
-                              # the consumer's口径 gate (run_carrier_arm.
-                              # assert_zcache_dataset_version) reads these two
-                              "dataset_version": setup["dataset_version"],
-                              "dataset_root": setup["dataset_root"],
-                              "dataset_version_facts":
-                                  setup["dataset_version_facts"]})
+    if multi and gate_n == 0:
+        raise SystemExit(
+            "--readout-multi ran to the end without the causality gate ever "
+            f"comparing a sample (requested N={args.causality_gate}, kind "
+            f"{gate_kind!r}).  A gate that is defined but never fires is not a "
+            "gate; nothing was written.")
 
+    zs: dict[str, np.ndarray] = {}
+    for k in kinds:
+        zs[k] = (np.stack(vectors[k]).astype(np.float32) if vectors[k]
+                 else np.zeros((0, Z_DIM), dtype=np.float32))
+        write_z_cache(out_dirs[k], index_rows[k], zs[k],
+                      checkpoint=args.checkpoint,
+                      readout_kind=k, context_source=context_source,
+                      control_tag=tag, split=args.split,
+                      readout_qtok=int(specs[k].qtok),
+                      extra_meta={"irrelevant_source": setup["irrelevant_source"],
+                                  "rows_filter": args.rows, "seed": int(args.seed),
+                                  "genctx_root": setup["genctx_root"],
+                                  # the consumer's口径 gate (run_carrier_arm.
+                                  # assert_zcache_dataset_version) reads these two
+                                  "dataset_version": setup["dataset_version"],
+                                  "dataset_root": setup["dataset_root"],
+                                  "dataset_version_facts":
+                                      setup["dataset_version_facts"],
+                                  "readout_multi": kinds if multi else None,
+                                  "superset_kind": super_kind if multi else None,
+                                  "causality_gate": setup["causality_gate"]})
+
+    z = zs[kinds[0]]
     report = {
         "setup": setup, "dataset": ds_info,
         "n_written": int(z.shape[0]), "n_planned": len(order),
+        "n_written_by_kind": {k: int(v.shape[0]) for k, v in zs.items()},
         "skipped": skipped, "colorspan_check": colorspan_check,
-        "readout": builder.facts(), "vlm": vlm.facts(),
+        "readout": builder.facts(),
+        "readout_by_kind": {k: b.facts() for k, b in builders.items()},
+        "superset_readout": super_builder.facts() if multi else None,
+        "causality_gate": setup["causality_gate"],
+        "vlm": vlm.facts(),
         "special_token_ids": special_ids,
         "seconds": round(time.time() - t_start, 1),
         "samples_per_second": round(z.shape[0] / max(1e-9, time.time() - t0), 3),
         "peak_memory_gib": (round(torch.cuda.max_memory_allocated() / 2 ** 30, 2)
                             if torch.cuda.is_available() else None),
     }
-    path = Path(args.report) if args.report else out_dir / "build_report.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(report, indent=2, ensure_ascii=False, default=str),
-                    encoding="utf-8")
+    blob = json.dumps(report, indent=2, ensure_ascii=False, default=str)
+    paths = ([Path(args.report)] if args.report
+             else [d / "build_report.json" for d in out_dirs.values()])
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(blob, encoding="utf-8")
     print(json.dumps({k: v for k, v in report.items() if k != "setup"},
                      indent=2, ensure_ascii=False, default=str), flush=True)
     return 0

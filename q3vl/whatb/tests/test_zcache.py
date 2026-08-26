@@ -366,6 +366,217 @@ def test_all_six_arm_seams_resolve_the_same_cache(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# one forward, several readout positions (build_zcache --readout-multi)
+# --------------------------------------------------------------------------- #
+#: the five kinds EPR-024 §4.3's readout-position ablation asks for, longest last
+_FIVE = ("color_span_pool", "color_close", "seg_where", "seg_color", "im_end")
+
+
+def _spans(tokenizer):
+    from q3vl.whatb.colorspan import encode_color_span
+
+    w = tokenizer("<where> the sky </where>")["input_ids"]
+    c = encode_color_span(tokenizer, "cooler blues")
+    return w, c
+
+
+def _plans(tokenizer, kinds=_FIVE):
+    from q3vl.whatb.readout import WhatReadoutBuilder, WhatReadoutSpec
+
+    w, c = _spans(tokenizer)
+    out = {}
+    for k in kinds:
+        b = WhatReadoutBuilder(tokenizer, WhatReadoutSpec(kind=k))
+        out[k] = b.plan_for(sample_id="s1", where_ids=w, color_ids=c,
+                            source="generated")
+    return w, c, out
+
+
+def test_the_five_readout_kinds_are_prefixes_of_one_superset_span(tokenizer):
+    """The whole licence for reading five kinds out of ONE forward."""
+    from q3vl.whatb.scripts import build_zcache as BZ
+
+    w, c, plans = _plans(tokenizer)
+    assert BZ.SUPERSET_KIND == "im_end"
+    super_ids = plans[BZ.SUPERSET_KIND].token_ids
+    assert len(super_ids) == max(len(p.token_ids) for p in plans.values())
+    for k, p in plans.items():
+        BZ.assert_prefix_plan(super_ids, p, kind=k, sample_id="s1")
+        assert list(super_ids[:len(p.token_ids)]) == list(p.token_ids)
+        assert p.end <= len(super_ids)
+
+
+def test_assert_prefix_plan_catches_a_span_that_is_not_a_prefix(tokenizer):
+    from q3vl.whatb.scripts import build_zcache as BZ
+
+    w, c, plans = _plans(tokenizer, ("seg_color", "im_end"))
+    bad = plans["seg_color"]
+    bad.token_ids = [999] + list(bad.token_ids)[1:]
+    with pytest.raises(AssertionError, match="not a prefix"):
+        BZ.assert_prefix_plan(plans["im_end"].token_ids, bad, kind="seg_color",
+                              sample_id="s1")
+    # a slice that runs past the superset is caught too
+    w, c, fresh = _plans(tokenizer, ("seg_color", "im_end"))
+    over = fresh["seg_color"]
+    over.end = len(fresh["im_end"].token_ids) + 1
+    with pytest.raises(AssertionError, match="past the superset"):
+        BZ.assert_prefix_plan(fresh["im_end"].token_ids, over, kind="seg_color",
+                              sample_id="s1")
+    # and a kind that appends rows after the reply span (qtok) is refused
+    from q3vl.whatb.readout import WhatReadoutBuilder, WhatReadoutSpec
+    q = WhatReadoutBuilder(tokenizer, WhatReadoutSpec("qtok", qtok=4)).plan_for(
+        sample_id="s1", where_ids=w, color_ids=c, source="generated")
+    with pytest.raises(AssertionError, match="appends"):
+        BZ.assert_prefix_plan(fresh["im_end"].token_ids, q, kind="qtok",
+                              sample_id="s1")
+
+
+def test_each_kind_reads_its_own_position_out_of_the_shared_hidden(tokenizer):
+    """Recorded index + the row the slice of the superset hidden actually reads."""
+    from q3vl.whatb.readout import readout_vector
+    from q3vl.whatb.scripts import build_zcache as BZ
+
+    w, c, plans = _plans(tokenizer)
+    n = len(w) + len(c)
+    want = {"color_span_pool": (len(w), n), "color_close": (n - 1, n),
+            "seg_where": (n, n + 1), "seg_color": (n + 1, n + 2),
+            "im_end": (n + 2, n + 3)}
+    for k, (start, end) in want.items():
+        assert (plans[k].start, plans[k].end) == (start, end), k
+
+    # the readout_index field: [start, end] for the pooled kind, int for the rest
+    assert BZ.readout_index_field(plans["color_span_pool"]) == [len(w), n]
+    for k in ("color_close", "seg_where", "seg_color", "im_end"):
+        assert BZ.readout_index_field(plans[k]) == plans[k].start
+
+    # and the vectors the shared forward hands back, per kind
+    h = torch.arange(len(plans["im_end"].token_ids) * 4,
+                     dtype=torch.float32).reshape(-1, 4)
+    for k, p in plans.items():
+        z = readout_vector(h[:len(p.token_ids)], p)
+        assert torch.equal(z, h[len(w):n].mean(0) if p.pool else h[p.start])
+
+
+def test_a_pooled_kind_writes_start_and_end_so_the_replay_rebuilds_it(tmp_path,
+                                                                     tokenizer):
+    """``zcache.py:21``: readout_index is [start, end] for a pooled kind."""
+    from q3vl.whatb.scripts import build_zcache as BZ
+
+    w, c, plans = _plans(tokenizer, ("color_span_pool",))
+    p = plans["color_span_pool"]
+    row = {"sample_id": "a", "split": "V_what",
+           "reply_token_ids": [int(t) for t in p.token_ids],
+           "readout_index": BZ.readout_index_field(p),
+           "n_generated_tokens": len(p.token_ids)}
+    d = Z.write_z_cache(Z.leaf_dir(tmp_path, "V_what", "none"), [row],
+                        np.zeros((1, Z.Z_DIM), dtype=np.float32),
+                        checkpoint="ckpt", readout_kind="color_span_pool",
+                        context_source="generated", control_tag="none",
+                        split="V_what")
+    cache = Z.ZCache(d)
+    rebuilt = cache._plan_of(cache.rows[0])
+    assert rebuilt.pool is True
+    assert (rebuilt.start, rebuilt.end) == (len(w), len(w) + len(c))
+    assert cache.assert_belongs_to(checkpoint="ckpt",
+                                   readout_kind="color_span_pool",
+                                   verify_frac=1.0)["n_verify_plan"] == 1
+
+
+def test_readout_multi_refuses_qtok_and_unknown_kinds():
+    from q3vl.whatb.scripts import build_zcache as BZ
+
+    assert BZ.parse_readout_multi("seg_color,im_end,seg_color") == ["seg_color",
+                                                                   "im_end"]
+    assert "qtok" not in BZ.MULTI_KINDS
+    with pytest.raises(SystemExit, match="not exportable"):
+        BZ.parse_readout_multi("seg_color,qtok")
+    with pytest.raises(SystemExit, match="unknown readout kind"):
+        BZ.parse_readout_multi("seg_colour")
+
+
+def test_readout_multi_empty_is_the_single_kind_job_unchanged():
+    """The default path must stay the historical one, leaf name included."""
+    from q3vl.whatb.scripts import build_zcache as BZ
+
+    for raw in ("", None, " , "):
+        kinds, multi, dirs, sup = BZ.resolve_outputs(
+            out_root="/r", split="V_what", tag="none", readout="seg_color",
+            readout_multi=raw)
+        assert (kinds, multi, sup) == (["seg_color"], False, "seg_color")
+        assert dirs == {"seg_color": Path("/r/V_what__none")}
+
+    kinds, multi, dirs, sup = BZ.resolve_outputs(
+        out_root="/r", split="V_what", tag="shuffle", readout="seg_color",
+        readout_multi=",".join(_FIVE))
+    assert (multi, sup) == (True, "im_end") and kinds == list(_FIVE)
+    # one root per kind: the leaf name carries no kind, so a shared root collides
+    assert dirs["seg_color"] == Path("/r/seg_color/V_what__shuffle")
+    assert len({str(p) for p in dirs.values()}) == len(_FIVE)
+
+
+def test_the_causality_gate_measures_the_prefix_against_the_batch_floor():
+    """A wiring error is O(|z|); the bf16 batch-shape floor is O(1) on |z|~50."""
+    from q3vl.whatb.scripts import build_zcache as BZ
+
+    # fp32: control ~1e-4, prefix delta measured at exactly 0 -> tol decides
+    assert BZ.causality_gate_verdict(delta=0.0, control=7.5e-4, tol=1e-3,
+                                     factor=4.0) == (3e-3, True)
+    assert BZ.causality_gate_verdict(delta=2e-3, control=0.0, tol=1e-3,
+                                     factor=4.0)[1] is False
+    # bf16: prefix 4.75 against a batch-shape control of 5.75 -> passes
+    thr, ok = BZ.causality_gate_verdict(delta=4.75, control=5.75, tol=1e-3,
+                                        factor=4.0)
+    assert (round(thr, 6), ok) == (23.0, True)
+    # a readout pointing at the wrong row is O(|z|) and still dies
+    assert BZ.causality_gate_verdict(delta=57.0, control=5.75, tol=1e-3,
+                                     factor=4.0)[1] is False
+
+
+def test_the_forward_of_a_control_carries_the_perturbed_instruction():
+    """N1/N2/N3 phase-2 forward used to re-encode the sample's OWN instruction."""
+    from q3vl.whatb.scripts import build_zcache as BZ
+
+    seen = []
+
+    class _Shim:
+        def __init__(self, sample, instruction=None):
+            self.instruction = sample["instruction"] if instruction is None \
+                else instruction
+
+    class _Collator:
+        def encode_one(self, shim):
+            seen.append(shim.instruction)
+            return {"input_ids": [1, 2, 3, 4], "n_prompt_tokens": 3}
+
+    s = {"instruction": "make the sky bluer"}
+    assert list(BZ.prompt_ids(_Collator(), _Shim, s, "shuffled: warm up the sand")
+                ) == [1, 2, 3]
+    BZ.prompt_ids(_Collator(), _Shim, s, None)
+    assert seen == ["shuffled: warm up the sand", "make the sky bluer"]
+
+
+def test_no_prompt_is_encoded_outside_the_instruction_carrying_seam():
+    """The regression guard: no bare ``_PromptShim(s)`` may grow back."""
+    src = (Path(Z.__file__).resolve().parent / "scripts" / "build_zcache.py")
+    tree = ast.parse(src.read_text(encoding="utf-8"), filename=str(src))
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    shim_calls = [n for n in calls
+                  if isinstance(n.func, ast.Name) and n.func.id == "_PromptShim"]
+    assert not shim_calls, (
+        "_PromptShim is called directly at line(s) "
+        f"{[n.lineno for n in shim_calls]}; go through prompt_ids(), whose "
+        "instruction argument is required")
+    seam = [n for n in calls
+            if isinstance(n.func, ast.Name) and n.func.id == "prompt_ids"]
+    assert len(seam) >= 2, "both phases encode their prompt through prompt_ids()"
+    for n in seam:
+        assert len(n.args) == 4, ast.dump(n)
+        assert not (isinstance(n.args[3], ast.Constant) and n.args[3].value is None), (
+            f"prompt_ids(..., None) at line {n.lineno}: the forward's "
+            "instruction must be derived per sample, never hard-coded")
+
+
+# --------------------------------------------------------------------------- #
 # the index口径 gate on the consumer side (DATA-P45 B3)
 # --------------------------------------------------------------------------- #
 def _write_versioned(root, version, *, split="V_what", tag="none",
