@@ -136,3 +136,4 @@ experiments/_archive/**
 # 文档一律不入库（覆盖 docs/assets/** 等旧规则）；已跟踪的旧 docs 文件保持跟踪，不做 git rm。
 docs/**
 experiments/**
+trash/**
