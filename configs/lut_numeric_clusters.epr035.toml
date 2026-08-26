@@ -1,0 +1,83 @@
+# EPR-035_numeric-clusters — 聚类参数档(探索参数留档)
+# 唯一被 dataset_build/tools/build_numeric_clusters.py 读取的参数来源。
+# 预注册说明见 experiments/prs/EPR-035_numeric-clusters/NOTES.md §1。
+
+[inputs]
+agent_loop_config = "configs/agent_loop.local-v2-b12.toml"
+render_t1_clusters = "/home/bc/data/scratch/lut_clusters/clusters.render_t1.jsonl"
+calibration_pairs = "/home/bc/data/scratch/lut_clusters/render_calibration.merged200.json"
+out_dir = "/home/bc/data/scratch/lut_clusters"
+expect_rows = 4051
+
+[probe]
+# EPR-035b M3: `spec` used to live here but nothing consumed it (it only travelled into
+# the manifest), so it is now the literal PROBE_SPEC in build_numeric_clusters.py.
+neutral_l =[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
+chroma_l = [30.0, 50.0, 70.0]
+chroma_c = [20.0, 40.0, 60.0]
+chroma_h = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
+gamut_tolerance_de00 = 1.0
+# sRGB (0..1) memory colours, always in gamut.
+memory_rgb = [
+  [0.87, 0.71, 0.62],
+  [0.72, 0.53, 0.44],
+  [0.55, 0.38, 0.31],
+  [0.35, 0.45, 0.22],
+  [0.22, 0.33, 0.16],
+  [0.45, 0.62, 0.82],
+  [0.25, 0.42, 0.68],
+]
+memory_names = ["skin_light", "skin_mid", "skin_deep", "foliage_light", "foliage_deep", "sky_light", "sky_deep"]
+# ramp segment bounds on L_in
+shadow_l_max = 30.0
+highlight_l_min = 70.0
+# hue is unavailable below this per-probe-point output chroma (§4.3 hue validity gate,
+# style vector side)
+hue_chroma_floor = 5.0
+
+[normalize]
+target_de00 = 5.5
+tolerance = 0.05
+bisect_iters = 60
+
+# EPR-035b B1 + M6: the shape vector's chroma block.
+[shape]
+# Which canonical render the true ΔC*ab = C*out − C*in is measured on.
+# "lab_full"  = full-strength render (the other four shape blocks are full-strength
+#               fingerprint measurements, so the single global L2 division stays one
+#               common magnitude factor).  "lab_norm" = the ΔE00≈5.5 normalised render.
+chroma_source = "lab_full"
+# §4.3 hue validity gate on the shape vector: a tonal segment whose canonical-render
+# mean C*in or mean C*out falls below this floor has its (sin Δh, 1−cos Δh) pair written
+# as explicit zeros instead of a hue rotation read off a near-neutral response.
+hue_chroma_floor = 5.0
+
+[duplicate]
+tau_render = 1.0
+tau_render_grid = [0.5, 1.0, 1.5, 2.0]
+linkage_method = "average"
+fcluster_t = 1.0
+# EPR-035b M3: `tau_shape_rule` and `scope` were dead keys (the rule and the global
+# scope are what the code does unconditionally); both are literals in the tool now.
+
+[family]
+k_grid = [32, 48, 64]
+seed = 20260824
+n_init = 10
+lloyd_iters = 200
+selection_metric = "silhouette_calibration_subset"
+name_bright_dl = 2.0
+name_dark_dl = -2.0
+name_warm_cast_b = 1.5
+name_cool_cast_b = -1.5
+name_vivid_dc = 3.0
+name_desat_dc = -3.0
+name_crisp_contrast = 0.05
+
+[verify]
+singleton_sample = 60
+sample_salt = "EPR-035_numeric-clusters|singleton|"
+
+[runtime]
+workers = 24
+pair_chunk = 40000
