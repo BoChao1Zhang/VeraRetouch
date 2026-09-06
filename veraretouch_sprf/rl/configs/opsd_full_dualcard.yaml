@@ -1,0 +1,58 @@
+# EPR-052 · OPSD 全参双卡正式配置（用户裁决 2026-09-06；数值来自探测 a–f 与全参变体实测，见 ENG2_REPORT.md）
+# gpu0 = 学生 rollout（swift rollout, vLLM server）+ 教师 logprob 服务（swift deploy, vLLM, 固定 S1F）
+# gpu1 = 学生全参训练（swift rlhf --rlhf_type gkd）。禁止 CPU offload；两卡只走 PCIe（权重同步 + logprob HTTP）。
+route: opsd_gkd_full_dualcard
+model: /data/runs/epr052_rl/s1f_epoch1_merged            # S1F-FULL ckpt_epoch1（含 6 行阶段 token）；学生初始化 = 教师
+teacher:
+  mode: fixed_initial_policy                              # OPSD 论文 §4.1：教师 = 初始策略，不 EMA / 不同步
+  server: http://127.0.0.1:8100                           # swift deploy（gpu0），返回 top-k logprobs
+  gkd_logits_topk: 64                                     # 教师 API 只返回 top-k；学生侧对该 k 做 KL
+data:
+  jsonl: /data/runs/epr052_rl/data/opsd50k/opsd_train.jsonl   # S2 train 50,000 条（sha1 规则，排除 held-out/eval-only）
+  keys_sha256: e3e1b24f02bbe53e25c5deed504330bd509f75d416a1ca290314e0eafeb5e5a6   # data/opsd50k/META.json（n=50,000；pool 73,854 = S2 train，held-out 1,558 id / eval-only 1,464 键与其交集为空）
+  salt: epr052-opsd-train-v1
+  teacher_prompt: "<image>" + 指令 + "\n\nHere is a reference grade for this photograph:\n" + GT 六段 + "\n\n" + 过渡句
+  student_prompt: "<image>" + 指令（无 system；与 SFT prompt_text 逐 id 相等，断言 8/8）
+  images: spec-5 几何（短边 512、对齐 32）
+rollout:                                                   # gpu0 swift rollout
+  vllm_gpu_memory_utilization: 0.47                       # 待按 gpu0 实测调到两服务合计 ~75 GB
+  vllm_max_model_len: 4096
+  vllm_limit_mm_per_prompt: '{"image": 1}'
+  port: 8000
+teacher_server:                                            # gpu0 swift deploy
+  vllm_gpu_memory_utilization: 0.30
+  vllm_max_model_len: 6144                                # 教师视图 ≈ prompt(≤600) + GT(≈1,700) + 补全(≤2,048)
+  max_logprobs: 64
+  port: 8100
+train:                                                     # gpu1 swift rlhf
+  rlhf_type: gkd
+  tuner_type: full
+  freeze_vit: true
+  freeze_aligner: true
+  torch_dtype: bfloat16                                   # bf16 权重/梯度
+  optim: adamw_bnb_8bit                                   # bitsandbytes 8-bit AdamW（容器内 0.49.2）
+  adam_beta1: 0.9
+  adam_beta2: 0.999                                       # ms-swift 默认 0.95，显式改回 S1F 口径
+  learning_rate: 5.0e-6                                   # OPSD 论文 Table 6
+  beta: 0                                                 # forward KL（论文 §4.3.1）；无参考模型
+  lmbda: 1.0
+  sft_alpha: 0
+  temperature: 1.0                                        # 采样与散度共用（ms-swift 同一参数）
+  max_length: 4096
+  max_completion_length: 2048
+  truncation_strategy: delete
+  gradient_checkpointing: true
+  per_device_train_batch_size: TBD_FROM_SWEEP             # 把激活推到 ~75 GB
+  gradient_accumulation_steps: TBD_FROM_SWEEP
+  steps_per_generation: 1
+  use_vllm: true
+  vllm_mode: server
+  vllm_server_host: 127.0.0.1
+  vllm_server_port: 8000
+  logging_steps: 1
+  save_steps: 200                                         # 用户裁决更正：每 200 步，只存 bf16 权重（save_only_model），保留最近 2 个 + 训练末（=epoch 末）1 个
+  save_total_limit: 2
+  save_only_model: true
+  num_train_epochs: 1                                     # 50,000 prompt × 1 epoch
+  online_probe_every: 200                                 # 32 键 val greedy → S2F-B 读出 → e* 余弦（gpu0，online_eval.sh）
+guards: [prompt_parity_8of8, six_stage_tokens_per_step, finish_reason_stop_ratio, per_segment_forwardKL_probe, G4_G4b_exclusion]
