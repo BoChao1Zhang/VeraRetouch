@@ -157,3 +157,46 @@ try:
     print('[gkd_segment_probe] patched GRPOTrainer._postprocess_batch / compute_teacher_kl_per_token', flush=True)
 except Exception as _e:  # grpo 模块不可用时不影响 GKD 路径
     print(f'[gkd_segment_probe] grpo hook skipped: {_e!r}', flush=True)
+
+
+# --------------------------------------------------------------------------- #
+# 计时：rollout 等待（async 队列 _wait_queue）与生成耗时（_generate_completions），写入每步记录
+# --------------------------------------------------------------------------- #
+try:
+    from swift.rlhf_trainers import rollout_mixin as RM
+    _tim = dict(wait_s=0.0, gen_s=0.0, gen_n=0, step_t0=time.time())
+    _o_wait = RM.RolloutTrainerMixin._wait_queue if hasattr(RM, 'RolloutTrainerMixin') else None
+    _cls = getattr(RM, 'RolloutTrainerMixin', None)
+    if _cls is not None:
+        _o_gen = _cls._generate_completions
+
+        def _wait_p(self, *a, **k):
+            t0 = time.time(); r = _o_wait(self, *a, **k); _tim['wait_s'] += time.time() - t0; return r
+
+        def _gen_p(self, samples, *a, **k):
+            t0 = time.time(); r = _o_gen(self, samples, *a, **k); _tim['gen_s'] += time.time() - t0; _tim['gen_n'] += len(samples); return r
+
+        _cls._wait_queue = _wait_p
+        _cls._generate_completions = _gen_p
+        _o_log = GRT.GRPOTrainer.log if hasattr(GRT.GRPOTrainer, 'log') else None
+
+        def _log_p(self, logs, *a, **k):
+            try:
+                now = time.time(); dt = now - _tim['step_t0']; _tim['step_t0'] = now
+                logs['probe/rollout_wait_s'] = round(_tim['wait_s'], 2)
+                logs['probe/gen_s_total'] = round(_tim['gen_s'], 2)
+                logs['probe/gen_s_per_sample'] = round(_tim['gen_s'] / max(1, _tim['gen_n']), 3)
+                logs['probe/gen_n'] = _tim['gen_n']
+                logs['probe/wall_since_last_log_s'] = round(dt, 2)
+                logs['probe/rollout_wait_frac'] = round(_tim['wait_s'] / dt, 4) if dt > 0 else None
+                logs['probe/cuda_max_reserved_gib'] = round(torch.cuda.max_memory_reserved() / 2 ** 30, 2)
+                _tim['wait_s'] = 0.0; _tim['gen_s'] = 0.0; _tim['gen_n'] = 0
+            except Exception as e:
+                logs['probe/error'] = repr(e)
+            return _o_log(self, logs, *a, **k)
+
+        if _o_log is not None:
+            GRT.GRPOTrainer.log = _log_p
+        print('[gkd_segment_probe] timing hooks: _wait_queue / _generate_completions / log', flush=True)
+except Exception as _e:
+    print(f'[gkd_segment_probe] timing hooks skipped: {_e!r}', flush=True)

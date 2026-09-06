@@ -5,7 +5,7 @@ set -uo pipefail
 NAME=${1:?run name}; ROOT=/home/bc/data/runs/epr052_rl/opsd_full/$NAME; mkdir -p "$ROOT/online"
 S=/home/bc/VeraRetouch/veraretouch_sprf/rl/scripts/dualcard
 cd /home/bc/VeraRetouch/docker/ms-swift
-(docker compose exec -T -e GPU=1 -e OUT=/data/runs/epr052_rl/opsd_full/$NAME -e STEPS=${STEPS:-} -e EPOCHS=${EPOCHS:-1} -e MAXLEN=${MAXLEN:-4096} -e SAVE=${SAVE:-200} -e KEEP=${KEEP:-2} -e PB=${PB:-1} -e GA=${GA:-8} swift bash /workspace/VeraRetouch/veraretouch_sprf/rl/scripts/dualcard/train_opsd_full.sh >| "$ROOT/train_host.log" 2>&1 &)
+(docker compose exec -T -e GPU=1 -e OUT=/data/runs/epr052_rl/opsd_full/$NAME -e STEPS=${STEPS:-} -e EPOCHS=${EPOCHS:-1} -e MAXLEN=${MAXLEN:-4096} -e SAVE=${SAVE:-200} -e KEEP=${KEEP:-2} -e PB=${PB:-1} -e GA=${GA:-8} swift bash /workspace/VeraRetouch/veraretouch_sprf/rl/scripts/dualcard/${TRAIN_SCRIPT:-train_opsd_grpo.sh} >| "$ROOT/train_host.log" 2>&1 &)
 (nvidia-smi --query-gpu=timestamp,index,memory.used,utilization.gpu --format=csv,noheader -l 10 >| "$ROOT/nvsmi.log" 2>&1 &)
 echo "[pilot] training launched; monitoring checkpoints under $ROOT"
 done_ck=""
