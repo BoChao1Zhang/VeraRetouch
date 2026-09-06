@@ -1,0 +1,28 @@
+# GRPO 占位配置（EPR-052）—— 全部字段【待调研确认】，不可直接跑。
+route: grpo
+model_path: ${paths.runs_vlm}/sft_s1f_full/ckpt_epoch1      # 策略初始化 + 参考策略
+adapter_path: ${paths.runs_vlm}/adapt_s2fb/ckpt_epoch1       # 读出 adapter（奖励计算用，冻结）
+executor:
+  backbone_run: ${paths.runs_sprf}/bkfull_adagn_ff_affhead   # BK-FULL
+  ckpt: ckpt_last.pt
+  feats_cache: ${paths.runs_sprf}/feature_cache
+  target_latents: ${paths.runs_vlm}/targets_bkfull/target_latents_bkfull.pt
+reward_funcs:
+  - veraretouch_sprf.rl.reward.latent_reward:cosine_reward     # 读出向量余弦
+  - veraretouch_sprf.rl.reward.executor_reward:executor_reward # 执行器 linf8（stub，待接线）
+reward_weights: [1.0, 0.0]        # 待确认
+missing_penalty: -1.0             # 缺阶段 token 的奖励，待确认
+sampling:
+  num_generations: 8              # G，待确认
+  temperature: 1.0
+  top_p: 0.95
+  max_new_tokens: 2048
+kl:
+  type: k3                        # 待确认
+  coef: 0.04                      # β，待确认
+optim:
+  lr: 1.0e-6
+  micro_batch: 1
+  grad_accum: 16
+  epochs: 1
+guards: [A-inj, A-lat, G4, G4b, slot_to_chain_flip]

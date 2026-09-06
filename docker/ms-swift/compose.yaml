@@ -1,0 +1,41 @@
+# ms-swift 训练/RL 容器（EPR-052 准备件；不自动启动训练）。
+# 镜像来源：ms-swift 官方文档 docs/source_en/GetStarted/SWIFT-installation.md 「Docker」节
+# （https://github.com/modelscope/ms-swift ，2026-09-06 打开核实）；tag 在 .env 里选，见 README.md。
+services:
+  swift:
+    image: ${MS_SWIFT_IMAGE}
+    container_name: ${CONTAINER_NAME:-vr-ms-swift}
+    command: ["sleep", "infinity"]
+    working_dir: /workspace/VeraRetouch
+    gpus: all
+    ipc: host
+    shm_size: "64g"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    environment:
+      HF_HOME: /data/hf_home
+      MODELSCOPE_CACHE: /data/modelscope_cache
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      PYTHONPATH: /workspace/VeraRetouch
+      VR_REPO: /workspace/VeraRetouch
+      VR_PATH_REPO: /workspace/VeraRetouch
+      VR_PATH_MODELS: /models
+      VR_PATH_RUNS: /data/runs
+      VR_PATH_RUNS_SPRF: /data/runs/epr051_sprf
+      VR_PATH_RUNS_VLM: /data/runs/epr051_vlmsft
+      VR_PATH_BUILDS: /data/builds
+      VR_PATH_SHARDS_LOCAL: /data/builds/epr051_stage0
+      VR_PATH_SHARDS_NFS: /nfs-ro/bc/data/datasets/epr051_stage0
+      VR_QWEN3VL_DIR: /models/Qwen3-VL-4B-Instruct
+      VR_EVAL_ONLY_DIR: /data/builds/epr051_cot_heldout_eval
+    volumes:
+      - /home/bc/VeraRetouch:/workspace/VeraRetouch
+      - /home/bc/data:/data
+      - /home/bc/data/models:/models
+      - /mnt/nfs-ro:/nfs-ro:ro
+      # LUT bank（解码器配置 [data] lut_bank_dir）；容器内路径通过 VR_PATH_LUT_BANK 指过去
+      - /var/cache/veradata/preset_bank_full:/lut_bank:ro
+    # 注意：/var/cache/veradata 只挂了 preset_bank_full；其它 veradata 缓存按需再加。

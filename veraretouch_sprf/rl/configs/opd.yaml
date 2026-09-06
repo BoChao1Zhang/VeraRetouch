@@ -1,0 +1,29 @@
+# OPD/OPSD 占位配置（EPR-052）—— 全部字段【待调研确认】，不可直接跑。
+route: opd
+model_path: ${paths.runs_vlm}/sft_s1f_full/ckpt_epoch1      # 学生 = 教师权重（S1F-FULL）
+adapter_path: ${paths.runs_vlm}/adapt_s2fb/ckpt_epoch1       # 读出 adapter（只用于监控余弦，不参与蒸馏损失）
+data:
+  snapshot_dir: ${paths.runs_vlm}/snap_sft2                  # train 73,854 / val 3,786
+  instruction_mode: per_sample
+  instruction_salt: epr051-inst-mix-v1
+  reject_keys: ${paths.runs_vlm}/s2_aspect_reject_keys.json
+sampling:
+  num_generations: 4            # G，待确认
+  temperature: 1.0
+  top_p: 0.95
+  max_new_tokens: 2048
+teacher:
+  context: gt_cot_prefix        # prompts.build.teacher_prompt；格式待确认
+  stop_grad: true
+distill:
+  kl_type: forward              # forward / reverse / jsd，待确认
+  token_level: true
+  coef: 1.0
+optim:
+  lr: 1.0e-6
+  micro_batch: 1
+  grad_accum: 16
+  epochs: 1
+monitor:
+  latent_cos_reward: veraretouch_sprf.rl.reward.latent_reward:cosine_reward
+guards: [A-inj, A-lat, G4, G4b, slot_to_chain_flip]

@@ -1,0 +1,279 @@
+[paths]
+# veraretouch_sprf 主线配置（EPR-052）：由 experiments/prs/EPR-051_masked-restore-production/stage0/sprf/configs/smoke_clut_full.toml 机械派生；去掉本 [paths] 节后与原件逐字节相同（scripts/check_configs.py 核对）。
+# 路径占位 ${paths.<key>} 由 veraretouch_sprf.configs.materialize() 解析；环境变量 VR_PATH_<KEY> 可覆盖。
+repo = "/home/bc/VeraRetouch"
+runs_sprf = "/home/bc/data/runs/epr051_sprf"
+runs = "/home/bc/data/runs"
+shards_local = "/home/bc/data/builds/epr051_stage0"
+shards_nfs = "/mnt/nfs-ro/bc/data/datasets/epr051_stage0"
+lut_bank = "/var/cache/veradata/preset_bank_full"
+models = "/home/bc/data/models"
+# --- end [paths] ---
+# EPR-051 · stage0 · arm=sprf —— C-LUT：逆 LUT 网格 latent（oracle_lut；其余同 Chain-end）
+# 由 configs/make_configs.py 生成，请勿手改：同组内除 flow.path_mode /
+# flow.endpoint_probability / flow.alpha_mode / solver.nfe_per_stage 与三个
+# run 身份键外必须逐键相同（train_sprf 启动断言 A3）。
+# 实验语义数字全部在本文件；train_sprf.py 里没有任何默认值兜底（缺键 = 停机）。
+
+[arm]
+name          = "smoke_clut_full"
+# 本臂无同组对照臂（C-REF 已取消、C-LUT 是 v2 数据），A3 组内比对因此为空集。
+# 与 C-LUT 的跨组差异由 NOTES D-xc14 逐键钉死，不靠 A3。
+peer_configs  = []
+# 允许臂间不同的非实验语义键（run 身份），其余任何差异都是 A3 的 blocker。
+identity_keys = ["arm.name", "arm.peer_configs", "run.out_dir"]
+
+[run]
+name              = "epr051_sprf"
+out_dir           = "${paths.runs_sprf}_smoke/smoke_clut_full"
+device            = "cuda:0"          # payload 恒 cuda:0（CUDA_VISIBLE_DEVICES 重映射后）
+seed              = 20260830
+max_steps         = 20
+one_pass_cap      = false   # 8000x64=512k draws > 300k 子集，禁静默截断
+log_every         = 1
+eval_every        = 10
+ckpt_every        = 10
+auto_log_divisor  = 30
+auto_eval_divisor = 10
+eval_at           = []
+
+[data]
+shards             = [
+  "${paths.shards_nfs}/shard-0023",
+  "${paths.shards_nfs}/shard-0024",
+  "${paths.shards_nfs}/shard-0025",
+  "${paths.shards_local}/shard-0028",
+]
+asset_source       = "dir"
+clean_only         = true
+depth_flags_ok     = ["clean"]
+clean_index_names  = ["clean_index.by_depth.json", "clean_index.json"]
+split_salt         = "epr051-stage0"
+holdout_bucket_min = 95
+require_split_rules = ["frozen_table", "sha1_verasplit-v1"]
+split_table         = "${paths.repo}/tools/data_splits/splits_sources.csv"
+train_bucket_max    = 89
+num_workers         = 2
+# 目标构造要 LUT 身份：bank 与每进程的 LUT 体 LRU 上限。
+lut_bank_dir        = "${paths.lut_bank}"
+lut_cache_size      = 64
+# 本数据律下每条链同时落 d4/d5/d6（snapshot v2 的 emit_spec）。
+depth_values        = [4, 5, 6]
+
+[guard]
+build_tool_sha256_allowed = [
+  "d7171588958533227a81ca127dd513a461ca6fece469cecd4e664b21c03fb1ee",
+]
+build_config_sha256_allowed = [
+  "d857b685855decde3e29625623edec9e144e03b360c8660b5bad08ad5b86d202",
+]
+# 渲染律本体（mix_alpha）——前向机械 import 原件，sha 冻在第一步前。
+lutdata_sha256 = "50fe6cf5f18ab547bdf65998af4f4a52530f1d8cd0313bcf5fa3ab5c46ec9169"
+
+[encoder]
+# C0：冻结 pooled read-out，首轮一律不动 conditioner（C1–C3 只注册不实现）。
+path        = "${paths.models}/siglip2-so400m-patch14-384"
+readout     = "pooler"
+inputs      = ["after"]               # headline：模型只看退化图
+dtype       = "bf16"
+cache_batch = 32
+cache_dir   = "${paths.runs_sprf}_smoke/feature_cache_xl"
+
+[flow]
+# —— 以下四个是臂间唯一允许不同的预注册键 ——
+path_mode             = "chain"
+endpoint_probability  = 1.0
+alpha_mode            = "alpha_full"
+# —— 以上 ——
+width            = 512
+n_layers         = 8
+n_layers_allowed = [4, 5, 6, 8]   # 提案容量节 v2：主臂 8 层，4–6 是容量下界消融
+cond_hidden      = 256
+cond_layers      = 4
+# K5 的 LUT-ID 条件诊断臂。off = 首版（推理端无 LUT 身份）；
+# embed 只用于 oracle 诊断行，此时 restore() 拒绝当生产接口用。
+# D-quant 裁决的锚点契约（预注册键，train_sprf 启动断言 A10）：
+# rollout loss 与推理起点 = uint8 资产 y（与部署一致）；
+# teacher-forced 采样 = fp32 链态 r^m。两者差一个已知量化位（≈0.5/255），不混用。
+rollout_anchor   = "asset_y"
+teacher_anchor   = "chain_r"
+anchor_quant_gap_max = 0.00393   # = 1/255，允许 <=1 个 8bit 级；超了即口径漂移
+# T5 B-g4d：action 表示消融（mlp = 逐像素 1x1 conv；g4d = EPR-028 载体）。
+action_backend   = "mlp"
+lut_id_condition = "off"
+lut_id_vocab     = 4096
+
+[g4d]
+# 只有 flow.action_backend = "g4d" 时才实例化；mlp 臂读了也不建模块。
+mode        = "A3"
+n_gauss     = 48                  # 27*48 + 12 = 1308 个 θ
+hidden      = 512
+init_seed   = 20260810            # 抄 G4DConfig 的默认，恒等 init 可复现
+point_chunk = 2048
+
+[ft]
+# T6b：从 VeraRetouch 预训练 ckpt 暖启动；encoder 在线前向（不用 feature cache）。
+init_from_ckpt  = "${paths.runs}/epr051_new_confpool"
+cache           = "off"
+finetune_scope  = "lora_readout_trunk_render"
+inject_hidden   = 256
+# E4 裁决：预训练载体指向 clean，action 必须是 C(z)-z；s 取 α̂（generator 原生输入）。
+action_sign     = "carrier_minus_z"
+carrier_s       = "alpha_hat"
+# E5 裁决：auto = PEFT "all-linear"（只自动选注入位置）；r/alpha 锚 EPR-033 钉死值。
+lora_target_modules = "all-linear"
+lora_r          = 8
+lora_alpha      = 16
+lora_dropout    = 0.0
+
+[solver]
+nfe_per_stage = 1       # 预注册键（1 = Euler，2 = 中点，NFE sweep）
+clamp_lo      = 0.0
+clamp_hi      = 1.0
+
+[loss]
+pixels_per_sample = 2048
+w_prev   = 1.0
+w_action = 0.25
+w_clean  = 0.1
+w_bound  = 0.01
+w_rollout = 0.5
+w_q50     = 0.05
+# B3 损失形式（预注册）：prev/clean/rollout = Charbonnier，action = SmoothL1，
+# bound = ReLU(|ĥ|-1) 的平方。两个形状参数是 TOML 键，代码里无默认值。
+charbonnier_eps = 1e-6
+smooth_l1_beta  = 0.05            # ĥ∈[-1,1]，β=1 会退化成纯 L2；见 NOTES D-sl1
+action_abs_bound        = 1.0     # h* ∈ [-1,1]^3（构造代数事实）
+# N1：rollout 从 30% budget 起，batch 比例走**两段阶跃** 25% -> 50%
+rollout_start_frac      = 0.3
+rollout_step_frac       = 0.65    # 阶跃点：此前 25%，此后 50%
+rollout_batch_frac_start = 0.25
+rollout_batch_frac_end   = 0.5
+q50_start_frac = 0.7              # 最后 30%
+q50_band_lo    = 0.45             # Q45–Q55 分位带
+q50_band_hi    = 0.55
+
+[optim]
+lr             = 3e-4
+weight_decay   = 0.01
+betas          = [0.9, 0.999]
+batch          = 4
+schedule       = "cosine"
+warmup_steps   = 2
+warmup_frac    = 0.05
+warmup_max     = 500
+grad_clip      = 1.0
+autocast       = "bf16"
+# rollout 反传要留 d 阶段 × n_layers 层的激活；batch64×8192px×w512×8层×6阶段
+# 实测 OOM（68.5 GiB）。梯度检查点只存阶段边界、反传重算层内激活，
+# **数学与梯度不变**，换显存。
+rollout_grad_checkpoint = true
+autocast_scope = "trunk_only"      # 只包 conditioner trunk；action 与更新路径恒 fp32
+
+[eval]
+pixels_per_sample    = 4096
+interval_max_samples = 4
+final_max_samples    = 0
+subset_salt          = "epr051-stage0-eval"
+# B5：Δ_shuffle 的错位对象必须跨 source_id（同源不同 depth 的条件近乎等价）。
+shuffle_rule         = "cross_source_sha1_next"
+shuffle_salt         = "epr051-sprf-shuffle:"
+# 提案第 3 节评测列全表；MetricLedger 逐列 assert_wired（调用数 == 被评样本数）。
+# true_lut_condition_delta 需 flow.lut_id_condition = "embed"；
+# predicted_lut_accuracy 需挂 LUT 辅助分类头。首版都不挂 -> 两列不注册，
+# 在 metrics.json 的 columns_declared_unavailable 里注明（不出假数）。
+columns              = [
+  "model", "identity", "exact_solve", "model_midpoint", "active_only_headline",
+  "stage_all", "stage_active", "stage_beta1", "cycle",
+  "rollout_drift", "mask_leak_max", "mask_bitexact_count",
+  "stage_oob_fraction", "stage_oob_max", "condition_number_by_stage",
+  "nfe_d_vs_2d", "latency_by_depth", "delta_const", "delta_shuffle",
+  "stage_mask_bitexact",
+  # X-COND：ΔE00 主列 + 恒等对照行。de00 从构造工具 import 原件
+  # （epr050_build_degradation.de00 = skimage deltaE_ciede2000，与构造侧
+  # 标定 s 时用的是同一个函数）。
+  "de00", "de00_frac_le5", "de00_identity", "de00_identity_frac_le5",
+  # 编辑侧负控制（战役硬规则：每个消融行必带负控制）。作用对象是**编辑描述子**
+  # 本身，不是 SigLIP 的 c —— 后者已有 delta_const / delta_shuffle。
+  #   null: 描述子置零     -> 「用没用编辑信息」
+  #   roll: 沿阶段轴移一位 -> 「用没用**对**的那条编辑」（样本/容量都不变）
+  "delta_edit_null", "delta_edit_roll",
+]
+# ΔE00 走 skimage，10 万像素 × 4560 样本不可行；按**确定性等距**子采样
+# （不是随机抽）到这个上限，实际像素数逐样本落盘。
+de00_max_pixels      = 1024
+strata               = ["depth", "geom", "rec_band"]
+# 结构性稀疏层：β = 场 × s，s≠1 的链上没有 β==1 的像素（mix_alpha 的
+# alpha==1 分支不触发），该列会在整批样本上为空。只放宽「全体 missing 即停机」
+# 一条，调用计数与单一来源两条守卫不变；n_available 照样落盘。
+# stage_mask_bitexact 同理：本数据律的 global 步让 union 覆盖全图
+# （union_frac=1.0），linear/one_shot 臂逐阶段 β_m==0 的像素集为空 —— 分母空，
+# 不是没算（调用计数照常）。见 NOTES D-mask。
+sparse_ok_columns    = ["stage_beta1", "stage_mask_bitexact"]
+exact_solve_source   = "journal"
+select_metric        = "heldout_model_linf8_p50"   # 禁 val loss / 禁 AUC
+
+[diag]
+# condition_number_by_stage：κ₂((1-β)I + βJ_L)，FD 口径抄 epr050::_gn，
+# σ_min < sigma_floor 的像素显式排除（preflight B1：不做 clamp 兜底）。
+condition_number_enabled = true
+condition_number_max_pixels = 512
+svd_chunk    = 200000
+sigma_floor  = 1e-12
+fd_clamp_lo  = 0.0
+fd_clamp_hi  = 1.0
+fd_min_h     = 1e-8
+
+[assert]
+teacher_check_every = 5     # 每 N 个 batch 抽 1 个样本独立重算
+teacher_tol         = 1e-6         # 沿 preflight G-A1 / G-A2 的 tol
+teacher_rho         = [0.13, 0.5, 0.87]
+# 目标构造在 DataLoader worker 的 CPU 上做；逐位比对必须同设备
+# （同一样本 GPU 与 CPU 的 fp32 链差 1.19e-07~1.79e-07，preflight D3/D9）。
+teacher_device      = "cpu"
+# A1 的 g4d 两界：g4d 恒等 init 只保证 sum_i w_i ≈ 1，不是逐位恒等。
+a1_g4d_abs_tol        = 2e-3
+a1_g4d_max_level_diff = 1
+
+[edit]
+# X-COND：显式编辑信息注入。用户假设 —— 模型只见退化图、不知道「编辑是什么」，
+# 信息瓶颈在编辑操作不可见。本节把编辑信息用 oracle 方式显式喂进去。
+#   inv_lut   该阶段真实 LUT 的**逆表**（直接给编辑）        契约 oracle_lut
+#   ref_pair  该阶段真实 LUT 的**演示对**（从演示里提编辑）  契约 oracle_ref
+# 两档的描述子逐字同形 (grid³, 4)：通道 0..2 位移、通道 3 有效/占用位，
+# 编码器结构与参数量因此在两臂上完全一致（J-C3 读的是来源差，不是容量差）。
+# **两臂都写满两档的键**，所以组内 A3 的 diff 正好是 condition + contract。
+condition      = "inv_lut"
+contract       = "oracle_lut"
+grid           = 17               # 17³ = 4913 格；逆表与演示对分箱共用同一个格
+latent_dim     = 128              # per-stage latent，与 c 在 FiLM 头入口**拼接**
+enc_hidden     = 512
+enc_layers     = 3                # 2-3 层 MLP，普通 init（FiLM 头仍零初始化 -> A1 不变）
+# inv_lut：precompute_inv_lut.py 的产物（按 lut_id 一次性求逆，**不逐图求逆**）。
+# 指纹（bank / build 工具 / build config / INV_ITERS / INV_EARLY / 表体 sha256）
+# 在启动时逐项比对，任一漂了即停机。
+inv_cache_dir  = "${paths.runs_sprf}/lut_inv_cache/g17"
+# ref_pair：参考池从 **train 侧**按 source_id 去重等距抽，选谁走
+# sha1(salt + sample_id) 后向前找第一个跨 source 的成员（禁与本样本同源）。
+ref_pool_n     = 256
+ref_size       = 256
+ref_salt       = "epr051-sprf-refpair:"
+ref_hist_bins  = 256              # 直方图匹配的 CDF 级数（资产本来就是 8bit）
+
+[subset]
+# T-ALIGN/XL 的**新预注册**训练子集规则（用户裁决 2026-08-31 采纳 300k）。
+# 与快照里的 200k epoch 规则**并存不替代**：那条是 epoch 语义（每轮走哪 200k），
+# 本条是单臂训练子集语义（这条臂总共只见这 300k）。各有各的 sha。
+# 「跑全量的 300k」按字面取 300k 子集；v3 全量 655,461 的选项留档未取。
+enabled   = true
+train_subset = false
+n         = 17137
+salt      = "epr051-v3-clutxl"
+sample_key = 'f"{id}|d{depth}"  (depth "full" when the row has no emits[])'
+rule      = 'sort TRAIN samples by sha1("epr051-v3-clutxl:" + sample_key) hex ascending, take the first 300000'
+keys_file = "${paths.repo}/experiments/prs/EPR-051_masked-restore-production/stage0/snapshot_newdata_v3.smoke_xl_keys.json"
+sha256    = "2518128aec071b7846953f81386ca3a0d964166c4906f2d64278f4a33640fdb1"
+train_universe = 12804
+heldout_ids_file   = "${paths.repo}/experiments/prs/EPR-051_masked-restore-production/stage0/snapshot_newdata_v3.heldout_ids.json"
+heldout_ids_sha256 = "bc8b3ea776985ccf2314782c0d7ee327ef6563ce8cdb8d99a04b9569fddaa22d"
+expect_heldout_samples = 0

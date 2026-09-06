@@ -1,0 +1,82 @@
+[paths]
+# veraretouch_sprf 主线配置（EPR-052）：由 experiments/prs/EPR-051_masked-restore-production/stage0/sprf/vlmsft/configs/q3vl_adapt_s2fb.toml 机械派生；去掉本 [paths] 节后与原件逐字节相同（scripts/check_configs.py 核对）。
+# 路径占位 ${paths.<key>} 由 veraretouch_sprf.configs.materialize() 解析；环境变量 VR_PATH_<KEY> 可覆盖。
+repo = "/home/bc/VeraRetouch"
+runs_sprf = "/home/bc/data/runs/epr051_sprf"
+runs_vlm = "/home/bc/data/runs/epr051_vlmsft"
+# --- end [paths] ---
+# EPR-051 / SFT+ADAPT stage 2 -- 联合训练 LoRA + span-pool adapter -> LUT latent。
+# 本文件是数值唯一来源。
+
+[arm]
+name = "SPRF_ADAPT_S2FB"
+
+[run]
+device = "cuda:0"
+
+[data]
+snapshot_dir = "${paths.runs_vlm}/snap_sft2"
+heldout_ids  = "${paths.repo}/experiments/prs/EPR-051_masked-restore-production/stage0/snapshot_newdata_v3.heldout_ids.json"
+# 基座 = S1F-FULL 全参 ckpt(权重冻结,其上新挂 LoRA);阶段 token 6 行已在权重内。
+base_weights_dir = "${paths.runs_vlm}/sft_s1f_full/ckpt_epoch1"
+reject_keys = "${paths.runs_vlm}/s2_aspect_reject_keys.json"
+instruction_mode = "per_sample"
+instruction_salt = "epr051-inst-mix-v1"
+
+[model]
+dtype = "bf16"
+# 与 stage-1 同:实测 eager 在本臂序列长度下 mb2 直接 OOM(见 NOTES N9)
+attn_implementation = "sdpa"
+model_max_length = 4096
+# A-9 是 forward hook 专属陷阱;本臂读 Qwen3VLModel.last_hidden_state(图内返回值),
+# 故可开检查点。use_reentrant=False。A12 断言在第一次 backward 实测梯度非零。
+grad_checkpointing = true
+adapter_hidden = 768
+
+# S2B 是"续训 stage-1 的 LoRA",故其 config 无 [lora] 段(超参随 stage-1 权重而来)。
+# S2F-B 的基座是全参 ckpt,LoRA 是**新挂**的,必须显式给出超参。取值与 stage-1/EPR-033
+# 主行逐项相同(r16 / alpha16 / dropout0 / 语言塔末 8 块 q,k,v,o),不是新选的。
+[lora]
+r = 16
+alpha = 16
+dropout = 0.0
+last_n_blocks = 8
+
+[readout]
+# 主线:逐段 span mean-pool(带梯度),层 -1 + final norm,fp32
+# (SEGMENT_HIDDEN_LAYER / SEGMENT_HIDDEN_FINAL_NORM,q3vl/whereb/contracts.py:30,32)
+include_stage_token = false
+kind = "segment_span_pool"
+
+[target]
+# D-B1 已裁决(2026-09-02 追认):执行器与对齐目标一律取 C-LUT-FULL 的 ckpt_last
+# (step 20,000),与已登记的 FULL final 行同一 checkpoint。
+# ckpt_best(18,800)版留档不读。
+target_latents = "${paths.runs_vlm}/targets_bkfull/target_latents_bkfull.pt"
+inv_index      = "${paths.runs_sprf}/lut_inv_cache/g17/index.json"
+
+[loss]
+smooth_l1_beta = 0.05      # 与 T-ALIGN 同
+w_latent = 1.0
+w_pixel  = 0.0             # 预注册为关,未实现;非 0 直接 die
+# 变体 B 唯一的 config diff:加语言项。CE 只在被监督位置、分块算,与 stage-1 同实现。
+w_ce = 1.0
+ce_chunk = 512
+
+[optim]
+lora_lr = 1e-4             # EPR-033 LORA_LR
+adapter_lr = 3e-4          # T-ALIGN predictor lr
+weight_decay = 0.0         # LoRA 组(EPR-033 主行)
+adapter_weight_decay = 0.01
+betas = [0.9, 0.999]
+micro_batch = 2
+grad_accum = 8             # 有效 batch = 16
+epochs = 2
+warmup = 0
+grad_clip = 1.0
+seed = 20260902
+num_workers = 4
+print_every = 10
+eval_every = 200
+save_every = 100           # 每 100 个优化步存一次 LoRA+adapter(几 MB,成本零)
+                           # stage-1 无周期保存,是已知风险 D-sft2,stage-2 不重蹈

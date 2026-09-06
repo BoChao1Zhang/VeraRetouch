@@ -137,3 +137,13 @@ experiments/_archive/**
 docs/**
 experiments/**
 trash/**
+# EPR-052 主线工程包 veraretouch_sprf/ 与 docker/：权重/缓存/日志/打包件不入库
+*.pt
+*.safetensors
+*.tar.gz
+pack_*/
+pack_*.tar.gz
+*.log
+veraretouch_sprf/**/runs/
+veraretouch_sprf/**/configs_resolved/
+docker/**/.env

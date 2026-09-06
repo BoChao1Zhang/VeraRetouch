@@ -1,0 +1,78 @@
+[paths]
+# veraretouch_sprf 主线配置（EPR-052）：由 experiments/prs/EPR-051_masked-restore-production/stage0/sprf/vlmsft/configs/q3vl_sft_s1f_full.toml 机械派生；去掉本 [paths] 节后与原件逐字节相同（scripts/check_configs.py 核对）。
+# 路径占位 ${paths.<key>} 由 veraretouch_sprf.configs.materialize() 解析；环境变量 VR_PATH_<KEY> 可覆盖。
+repo = "/home/bc/VeraRetouch"
+runs_vlm = "/home/bc/data/runs/epr051_vlmsft"
+# --- end [paths] ---
+# EPR-051 / SFT+ADAPT stage 1 -- Qwen3-VL-4B LoRA CoT SFT。本文件是数值唯一来源。
+
+[arm]
+name = "SPRF_SFT_S1F_FULL"
+
+[run]
+device = "cuda:0"          # q 作业里 CUDA_VISIBLE_DEVICES 重映射后一律 cuda:0
+
+[data]
+snapshot_dir = "${paths.runs_vlm}/snap_sft2"
+# 2026-09-04 裁决:prompt 的指令改为**逐样本真实编辑指令**,三档按
+# sha1(salt+":"+key) 抽 70/20/10(long/medium/short),逐样本确定、可重放、每 epoch 相同。
+instruction_mode = "per_sample"
+instruction_salt = "epr051-inst-mix-v1"
+# spec-5 契约:宽高比 > 4:1 的图**按设计被 plan_geometry 拒绝**(不拉伸迁就)。
+# S2 的 77,640 张里恰好 1 张越界(src_82aa529003c37a29.rep8|d6,155x768,4.955),
+# 它在 step 4,210 打死了一次 11 h 的训练。此处显式剔除并计数,不在 Dataset 里静默跳过。
+reject_keys = "${paths.runs_vlm}/s2_aspect_reject_keys.json"
+preflight_images = true
+heldout_ids  = "${paths.repo}/experiments/prs/EPR-051_masked-restore-production/stage0/snapshot_newdata_v3.heldout_ids.json"
+
+[model]
+dtype = "fp32"          # fp32 主权重/状态;前后向 bf16 由 autocast 负责(裁决 b)
+# 实测裁决(memprobe 2026-09-02):EPR-033 主行默认 eager,但本臂序列 2,220 token,
+# eager 在 mb2 直接 OOM(91.31 alloc / 92.79 reserved),mb1 也要 59.10 GiB reserved
+# 且 0.853 s/样本;sdpa mb2 = 44.76 GiB reserved、0.755 s/样本,显存与吞吐双优。
+# 故本臂用 sdpa —— 这是被测量推翻的照抄,不是静默回落。
+attn_implementation = "sdpa"
+# 目标 p99 约 1,836 text token + 指令 + spec-5 图像 token(512 短边,典型 384-768)
+model_max_length = 4096
+# stage-1 走 labels/CE 前向,不挂 forward hook,A-9 从不适用;原版关检查点是被
+# q3vl_common 的一刀切 die 连累。重跑版打开,use_reentrant=False。
+grad_checkpointing = true
+
+[readout]
+# 段末 special token 是否计入 span。主线读出 = 逐段 span mean-pool(EPR-033
+# color_span_pool 形态),special token 单点读出为消融行。
+include_stage_token = false
+kind = "segment_span_pool"
+
+[train]
+# 2026-09-04 裁决:全参微调。可训 = 语言主干全部(含与 lm_head 绑定的 embedding,
+# 6 行阶段 token 行随之);model.visual(patch_embed/blocks/merger/deepstack/pos_embed)
+# 全部冻结。A_freeze 用 full 口径 assert_frozen_area_full。
+train_mode = "full"
+
+# [lora] 段保留但**本臂不读**(train_q3vl_sft3.py 不引用任何 cfg["lora"] 键),
+# 只为让与 S1F-inst 的 config diff 保持最小。
+[lora]
+# EPR-033 主行逐项照抄(q3vl/whatb/loraspan.py:131-137)
+r = 16
+alpha = 16
+dropout = 0.0
+last_n_blocks = 8          # 语言塔最后 8 块的 q/k/v/o_proj = 32 个全限定模块
+
+[optim]
+# 全参 lr(**待决策:用户未指定,此值为 coordinator 所定默认**)
+lr = 1e-5
+weight_decay = 0.0
+eps = 1e-8
+betas = [0.9, 0.999]
+micro_batch = 1            # 裁决 2026-09-04:减激活;有效 batch 仍 16(数值口径不变)
+grad_accum = 16            # 1 x 16 = 16,与 S1F-inst 的 2 x 8 等效
+epochs = 2
+warmup = 0                 # EPR-033 主行无 warmup
+grad_clip = 1.0
+seed = 20260902
+num_workers = 4
+print_every = 10
+save_every = 100           # 每 100 步存全参 ckpt(约 8 GiB)
+keep_last_ckpt = 2         # 只留最近 2 个 step ckpt;每 epoch 的另存不受此限
+ce_chunk = 512             # 分块交叉熵的块大小(只算被监督位置)
