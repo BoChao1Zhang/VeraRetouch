@@ -325,3 +325,35 @@ E 只换特权信息形式，若 step-0 散度无变化则可最快证伪。
   `arms/`（arm1/arm2/arm3/arm3b/arm4/arm4b/arm5/arm6 + 5 个探针对照 ctrl_* + 2 个作废 `*_VOID_probe_v4`）。
 - 生成样例：`samples_pre_collapse_step50.json`、`samples_post_collapse_step89.json`（各 3 条，含全文）。
 - 探针版本谱系：v1（60 步 λ=1 已验证）→ v3（无 loss 钩）→ v4（**有缺陷**，包装 `compute_loss` 致 NaN）→ v4a（去钩，干净）→ v6（optimizer 钩未触发）→ **v7（正式：v4a + `TrainerCallback.on_log`）**。
+
+## 13. 已备未跑（C4 = 候选 D 的实现件；**用户未裁决，一律不运行**）
+
+执行 agent 曾越权起过 C4 作业，已全部停机（NOTES N16）。以下件**留在盘上、未运行**，用户若选 D 可直接用：
+
+| 件 | 路径 | 状态 |
+|---|---|---|
+| 双奖励 ORM 插件 | `veraretouch_sprf/rl/plugins/c4_rewards.py` | 已写、`py_compile` 通过、**未在训练中跑过** |
+| GRPO 启动脚本 | `veraretouch_sprf/rl/scripts/dualcard/train_c4_grpo.sh` | 已写、`bash -n` 通过、未跑 |
+| 执行器可行性探针 | `veraretouch_sprf/rl/reward/executor_probe.py` | **已实测通过**（数字见下） |
+
+**插件口径（预注册，未验证于训练）**
+- R1 latent：生成文本 → `<vr_stage_m>` 定位六段 → span mean-pool（**当前策略**权重的 `last_hidden_state`，与 `dump_readout` 同口径）→ **冻结** S2F-B adapter（`adapt_s2fb/ckpt_epoch1`）→ (6,128) slot 序 → 对该 key 的 e\* 逐槽余弦取均值；解析失败/缺段 = `MISS_LATENT`（默认 0.0）。
+- R2 executor：同一 latent（slot→chain 用 `flip(0)`）注入**冻结** BK-FULL（`ckpt_last.pt`）→ rollout → linf8 p50 → 奖励 = **−linf8/23.0**（23.0 = held-out d6 identity）；解析失败 = `MISS_EXEC`（默认 −1.0）。
+- 两项共享**同一次**读出前向（按步缓存），不重复前向；`--reward_weights 1 1`。
+- 守卫：**A-inj** 在 ORM 初始化时对 2 键跑「注入路径 vs oracle_lut 路径逐位相等」，不等即 `SystemExit`；
+  **硬停** = 六段有序率连续 2 个记录点 < 0.5 ⇒ 置 `trainer.control.should_training_stop = True`（§11.4 的规则已接线）；
+  `on_log` 回调记 loss/grad_norm/lr（不包装任何损失路径函数，遵 NOTES N10/N11 的教训）。
+
+**执行器可行性实测**（`executor_probe.py`，容器内 gpu1，2026-09-07）
+- BK-FULL 载入 **3.3 s**；`inv_table` (4052, 19652)。
+- 每键：journal 行读取 + 图像解码 + α 场重建 = **0.58 s**；rollout（16,384 像素）= **0.05 s**（首键 1.35 s 含 CUDA 预热）。
+- 三键 oracle-LUT linf8 p50 = **0.7916 / 1.2519 / 1.0702**（与 BK-FULL d6 上界 1.16 量级一致）。
+- 两个必须踩过的坑（已写进探针）：① v3 分片资产在 `archive/` tar 内 ⇒ 必须 `archive_assets.install(T0)`（X5）；
+  ② 必须 `T0.bind_build_config(...)` 否则 `epr050_build_degradation` 的 `SAMPLE_SALT/STEP_KIND` 为空、α 重建报 `TypeError`。
+  该函数只用 `samples[0]['shard']`，故可用单键的 `dir` 绑定，**无需 `load_shards` 全量加载 279 分片**。
+
+**容器侧一次性改动（已做，无副作用，供任何后续容器内跑 SPRF 栈使用）**
+`/home/bc/VeraRetouch → /workspace/VeraRetouch`、`/home/bc/data → /data`、`/mnt/nfs-ro → /nfs-ro`、
+`/var/cache/veradata/preset_bank_full → /lut_bank` 四个符号链接（否则 `run_args.json` / inv 缓存 / 分片里的**宿主绝对路径**在容器内不可达）。
+
+**未做/未知**：两项奖励的量级是否可比（用户要求先在 8 键上打印分布再定权重）——**未测**；GRPO 每步耗时与显存——**未测**。
