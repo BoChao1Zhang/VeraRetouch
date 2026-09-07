@@ -1,4 +1,4 @@
-"""EPR-052 ENG-2 探针 v4（臂 4 起用；v1/v2/v3 保持不动）。
+"""EPR-052 ENG-2 探针 v6（正式用：= v4a + 优化器步前梯度统计；臂 4/5 重跑与臂 4b 起用；v1/v2/v3 保持不动）。
 
 相对 v3 的三处修正（均为探针自身缺陷，不动训练口径）：
   F1 rollout logprob 取法：`OnPolicySample.rollout_logprobs` 是**每个 choice 一条的嵌套列表**
@@ -198,30 +198,53 @@ def _roll_patched(self, inputs):
 
 
 GT.GKDTrainer._rollout_samples = _roll_patched
-print(f'[gkd_probe_v4] patched; out={OUT} cov_k={COV_K} chunk={CHUNK}', flush=True)
+print(f'[gkd_probe_v6] patched; out={OUT} cov_k={COV_K} chunk={CHUNK}', flush=True)
+
+
 
 
 # --------------------------------------------------------------------------- #
-# F2：记录 trainer 实际返回的 loss（含 sft_alpha 项）与有限性
+# G2：梯度统计——**不包装 compute_loss / training_step**（二分已证包装 compute_loss 会引入 NaN，
+#     见 NOTES N10/N11），改用 optimizer 的 step-pre-hook：在参数更新前读 p.grad，只读不改。
 # --------------------------------------------------------------------------- #
-_orig_cl = GT.GKDTrainer.compute_loss
+_orig_create_opt = GT.GKDTrainer.create_optimizer
 
 
-def _cl_patched(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-    out = _orig_cl(self, model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch)
+def _grad_hook(opt, *a, **k):
+    rec = dict(t=time.time(), probe='v6-grad')
     try:
-        loss = out[0] if isinstance(out, tuple) else out
-        rec = dict(t=time.time(), step=int(self.state.global_step), probe='v4-loss',
-                   data_source=str(getattr(inputs.get('gkd_batch', None), 'data_source', None)),
-                   loss=float(loss.detach()), finite=bool(torch.isfinite(loss.detach())),
-                   sft_alpha=float(getattr(self.args, 'sft_alpha', 0.0)), lmbda=float(getattr(self, 'lmbda', -1)))
-        with open(OUT, 'a') as f:
-            f.write(json.dumps(rec) + '\n')
+        with torch.no_grad():
+            gs, ws = [], []
+            for g in opt.param_groups:
+                for p in g['params']:
+                    if p.grad is not None:
+                        gs.append(p.grad)
+                    ws.append(p)
+            rec['n_grad_tensors'] = len(gs)
+            if gs:
+                norms = torch.stack([n.float() for n in torch._foreach_norm(gs)])
+                rec['grad_norm'] = float(torch.linalg.vector_norm(norms))
+                rec['grad_norm_finite'] = bool(torch.isfinite(norms).all())
+                rec['n_grad_nan'] = int(torch.isnan(norms).sum())
+                rec['n_grad_inf'] = int(torch.isinf(norms).sum())
+            rec['w_nan_tensors'] = int(sum(1 for p in ws[:32] if torch.isnan(p).any()))
+            rec['w_checked'] = min(32, len(ws))
     except Exception as e:
-        with open(OUT, 'a') as f:
-            f.write(json.dumps(dict(probe='v4-loss', error=repr(e))) + '\n')
-    return out
+        rec['error'] = repr(e)
+    with open(OUT, 'a') as f:
+        f.write(json.dumps(rec) + '\n')
 
 
-GT.GKDTrainer.compute_loss = _cl_patched
-print('[gkd_probe_v4] compute_loss hook installed', flush=True)
+def _create_opt_patched(self, *a, **k):
+    opt = _orig_create_opt(self, *a, **k)
+    try:
+        target = getattr(opt, 'optimizer', opt)
+        target.register_step_pre_hook(_grad_hook)
+        print('[gkd_probe_v6] optimizer step-pre-hook registered on', type(target).__name__, flush=True)
+    except Exception as e:
+        print(f'[gkd_probe_v6] grad hook NOT registered: {e!r}', flush=True)
+    return opt
+
+
+GT.GKDTrainer.create_optimizer = _create_opt_patched
+print('[gkd_probe_v6] create_optimizer patched (no compute_loss/training_step wrapping)', flush=True)

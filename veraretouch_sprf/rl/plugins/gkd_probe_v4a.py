@@ -1,4 +1,4 @@
-"""EPR-052 ENG-2 探针 v4（臂 4 起用；v1/v2/v3 保持不动）。
+"""EPR-052 ENG-2 探针 v4a（二分用：v4 去掉 compute_loss 钩 = v3 + b2 + b3；臂 4 起用；v1/v2/v3 保持不动）。
 
 相对 v3 的三处修正（均为探针自身缺陷，不动训练口径）：
   F1 rollout logprob 取法：`OnPolicySample.rollout_logprobs` 是**每个 choice 一条的嵌套列表**
@@ -198,30 +198,6 @@ def _roll_patched(self, inputs):
 
 
 GT.GKDTrainer._rollout_samples = _roll_patched
-print(f'[gkd_probe_v4] patched; out={OUT} cov_k={COV_K} chunk={CHUNK}', flush=True)
+print(f'[gkd_probe_v4a] patched; out={OUT} cov_k={COV_K} chunk={CHUNK}', flush=True)
 
 
-# --------------------------------------------------------------------------- #
-# F2：记录 trainer 实际返回的 loss（含 sft_alpha 项）与有限性
-# --------------------------------------------------------------------------- #
-_orig_cl = GT.GKDTrainer.compute_loss
-
-
-def _cl_patched(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-    out = _orig_cl(self, model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch)
-    try:
-        loss = out[0] if isinstance(out, tuple) else out
-        rec = dict(t=time.time(), step=int(self.state.global_step), probe='v4-loss',
-                   data_source=str(getattr(inputs.get('gkd_batch', None), 'data_source', None)),
-                   loss=float(loss.detach()), finite=bool(torch.isfinite(loss.detach())),
-                   sft_alpha=float(getattr(self.args, 'sft_alpha', 0.0)), lmbda=float(getattr(self, 'lmbda', -1)))
-        with open(OUT, 'a') as f:
-            f.write(json.dumps(rec) + '\n')
-    except Exception as e:
-        with open(OUT, 'a') as f:
-            f.write(json.dumps(dict(probe='v4-loss', error=repr(e))) + '\n')
-    return out
-
-
-GT.GKDTrainer.compute_loss = _cl_patched
-print('[gkd_probe_v4] compute_loss hook installed', flush=True)

@@ -1,4 +1,13 @@
-"""EPR-052 ENG-2 探针 v4（臂 4 起用；v1/v2/v3 保持不动）。
+"""EPR-052 ENG-2 探针 v5（臂 4b 起用；v1–v4 保持不动）。
+
+相对 v4 增加 G1：`training_step` 包装，在 **backward 之后、优化器步之前** 记录
+  - `grad_norm`（全体可训练参数梯度的 L2，`torch._foreach_norm`，不裁剪、不改梯度）
+  - `n_grad_nan` / `n_grad_inf`（含 NaN/Inf 的梯度张量数）
+  - `w_nan_tensors`（抽查前 32 个可训练张量里含 NaN 的个数，用于判断权重是否已被污染）
+判定用途：若 NaN 出现前一步 `grad_norm` 有限且梯度无 NaN，而下一步权重已 NaN ⇒ 指向**优化器更新路径**；
+若该步梯度本身已 NaN/Inf ⇒ 指向**前向/反向（损失）路径**。
+
+（v4 原说明）
 
 相对 v3 的三处修正（均为探针自身缺陷，不动训练口径）：
   F1 rollout logprob 取法：`OnPolicySample.rollout_logprobs` 是**每个 choice 一条的嵌套列表**
@@ -91,7 +100,7 @@ def _scan(s_act, t_act, toks, temperature, beta):
 def _patched(self, student_logits, teacher_output: TeacherOutput, labels):
     rec = dict(t=time.time(), step=int(self.state.global_step), beta=float(self.beta),
                temperature=float(self.temperature), student_seq_len=int(labels.shape[1]),
-               teacher_seq_len=int(teacher_output.labels.shape[1]), probe='v4')
+               teacher_seq_len=int(teacher_output.labels.shape[1]), probe='v5')
     try:
         with torch.no_grad():
             sl_lab = torch.roll(labels, -1, 1)
@@ -198,7 +207,7 @@ def _roll_patched(self, inputs):
 
 
 GT.GKDTrainer._rollout_samples = _roll_patched
-print(f'[gkd_probe_v4] patched; out={OUT} cov_k={COV_K} chunk={CHUNK}', flush=True)
+print(f'[gkd_probe_v5] patched; out={OUT} cov_k={COV_K} chunk={CHUNK}', flush=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -211,7 +220,7 @@ def _cl_patched(self, model, inputs, return_outputs=False, num_items_in_batch=No
     out = _orig_cl(self, model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch)
     try:
         loss = out[0] if isinstance(out, tuple) else out
-        rec = dict(t=time.time(), step=int(self.state.global_step), probe='v4-loss',
+        rec = dict(t=time.time(), step=int(self.state.global_step), probe='v5-loss',
                    data_source=str(getattr(inputs.get('gkd_batch', None), 'data_source', None)),
                    loss=float(loss.detach()), finite=bool(torch.isfinite(loss.detach())),
                    sft_alpha=float(getattr(self.args, 'sft_alpha', 0.0)), lmbda=float(getattr(self, 'lmbda', -1)))
@@ -219,9 +228,48 @@ def _cl_patched(self, model, inputs, return_outputs=False, num_items_in_batch=No
             f.write(json.dumps(rec) + '\n')
     except Exception as e:
         with open(OUT, 'a') as f:
-            f.write(json.dumps(dict(probe='v4-loss', error=repr(e))) + '\n')
+            f.write(json.dumps(dict(probe='v5-loss', error=repr(e))) + '\n')
     return out
 
 
 GT.GKDTrainer.compute_loss = _cl_patched
-print('[gkd_probe_v4] compute_loss hook installed', flush=True)
+print('[gkd_probe_v5] compute_loss hook installed', flush=True)
+
+
+# --------------------------------------------------------------------------- #
+# G1：backward 之后、optimizer.step 之前的梯度统计
+# --------------------------------------------------------------------------- #
+_orig_ts = GT.GKDTrainer.training_step
+
+
+def _ts_patched(self, model, inputs, num_items_in_batch=None):
+    try:
+        out = _orig_ts(self, model, inputs, num_items_in_batch=num_items_in_batch)
+    except TypeError:
+        out = _orig_ts(self, model, inputs)
+    rec = dict(t=time.time(), step=int(self.state.global_step), probe='v5-grad')
+    try:
+        with torch.no_grad():
+            grads = [p.grad for p in model.parameters() if p.requires_grad and p.grad is not None]
+            rec['n_grad_tensors'] = len(grads)
+            if grads:
+                norms = torch._foreach_norm(grads)
+                stacked = torch.stack([n.float() for n in norms])
+                rec['grad_norm'] = float(torch.linalg.vector_norm(stacked))
+                rec['grad_norm_finite'] = bool(torch.isfinite(stacked).all())
+                rec['n_grad_nan'] = int(sum(1 for n in norms if torch.isnan(n)))
+                rec['n_grad_inf'] = int(sum(1 for n in norms if torch.isinf(n)))
+            ws = [p for p in model.parameters() if p.requires_grad][:32]
+            rec['w_nan_tensors'] = int(sum(1 for p in ws if torch.isnan(p).any()))
+            rec['w_checked'] = len(ws)
+            rec['loss_step'] = float(out.detach()) if hasattr(out, 'detach') else None
+            rec['loss_finite'] = bool(torch.isfinite(out.detach())) if hasattr(out, 'detach') else None
+    except Exception as e:
+        rec['error'] = repr(e)
+    with open(OUT, 'a') as f:
+        f.write(json.dumps(rec) + '\n')
+    return out
+
+
+GT.GKDTrainer.training_step = _ts_patched
+print('[gkd_probe_v5] training_step grad hook installed', flush=True)

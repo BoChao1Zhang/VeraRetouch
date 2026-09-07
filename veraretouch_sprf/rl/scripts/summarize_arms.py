@@ -6,11 +6,15 @@ from pathlib import Path
 
 ROOT = Path('/home/bc/data/runs/epr052_rl')
 ARMS = [
-    ('baseline_lr5e-6', ROOT / 'opsd_full/opsd50k_gkd/probe_segments.jsonl', 'lr 5e-6, 无 warmup, API top-64, λ=1'),
-    ('arm1_lr1e-6', ROOT / 'arms/arm1_lr1e6/probe_segments.jsonl', 'lr 1e-6 + warmup100, API top-64, λ=1'),
-    ('arm2_localteacher(step0)', ROOT / 'arms/arm2_localteacher/probe_segments.jsonl', 'arm1 + 本地全词表教师（PB8 OOM，仅 step0）'),
-    ('arm3_lambda0.75', ROOT / 'arms/arm3_lambda075/probe_segments.jsonl', 'arm1 + λ0.75 + sft_alpha0.1（数据无 assistant ⇒ DATASET 步零监督）'),
-    ('arm3b_lambda0.75_ce', ROOT / 'arms/arm3b_lambda075_ce/probe_segments.jsonl', 'arm3 + 数据含 assistant=GT CoT（CE 真正生效）'),
+    ('baseline lr5e-6 无warmup(v1)', ROOT / 'opsd_full/opsd50k_gkd/probe_segments.jsonl', 'λ=1, API top-64'),
+    ('arm1 lr1e-6+warmup(v1)', ROOT / 'arms/arm1_lr1e6/probe_segments.jsonl', 'λ=1'),
+    ('arm2 本地全词表教师(v3)', ROOT / 'arms/arm2_localteacher/probe_segments.jsonl', 'arm1+全词表教师；PB8 OOM，仅 step0'),
+    ('arm3 λ0.75零监督(v3)', ROOT / 'arms/arm3_lambda075/probe_segments.jsonl', 'arm1+λ0.75+sft_alpha0.1（数据无 assistant）'),
+    ('arm3b λ0.75+CE(v4)', ROOT / 'arms/arm3b_lambda075_ce/probe_segments.jsonl', 'arm3+assistant=GT CoT；30 步'),
+    ('arm4 lr3e-6(v7)', ROOT / 'arms/arm4_lr3e6/probe_segments.jsonl', 'arm1 基础上改 lr'),
+    ('arm4b adamw_torch(v7)', ROOT / 'arms/arm4b_adamw_torch/probe_segments.jsonl', 'arm4+torch AdamW(bf16 状态)；20 步'),
+    ('arm5 top_p0.9(v7)', ROOT / 'arms/arm5_topp09/probe_segments.jsonl', 'arm1 基础上改 top_p'),
+    ('arm6 lr5e-6+warmup(v7)', ROOT / 'arms/arm6_lr5e6_warmup/probe_segments.jsonl', 'arm1 基础上改 lr（pilot 选定配置）'),
 ]
 
 
@@ -23,7 +27,7 @@ def load(p):
             r = json.loads(l)
         except Exception:
             continue
-        if r.get('probe') == 'v4-loss':
+        if str(r.get('probe','')).endswith('-loss') or str(r.get('probe','')).endswith('-log') or str(r.get('probe','')).endswith('-grad'):
             continue
         out.append(r)
     return out
@@ -32,7 +36,7 @@ def load(p):
 def losses(p):
     if not p.exists():
         return []
-    return [json.loads(l) for l in open(p) if '"v4-loss"' in l]
+    return [json.loads(l) for l in open(p) if '"v4-loss"' in l or '"v7-log"' in l]
 
 
 def m(v):

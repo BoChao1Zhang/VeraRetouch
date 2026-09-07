@@ -9,7 +9,7 @@ R=/home/bc/data/runs/epr051_vlmsft
 mkdir -p "$OUT/base_$TAG"; ln -sfn "$CK" "$OUT/base_$TAG/model"
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 PYTHONPATH=$REPO PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 cd "$REPO"
-CUDA_VISIBLE_DEVICES=${GPU:-0} $PY -u -m veraretouch_sprf.eval.eval_vlm_e2e dump \
+CUDA_VISIBLE_DEVICES=${GPU:-1} $PY -u -m veraretouch_sprf.eval.eval_vlm_e2e dump \
   --adapt-run $R/adapt_s2fb/ckpt_epoch1 --sft-run $R/sft_s1f_full --base-weights-dir "$OUT/base_$TAG" \
   --contract predicted_text --gen-adapter s2 --instruction-mode per_sample \
   --keys $R/s1f_val32_keys.json --records $R/snap_sft2/records.jsonl --assets-index $R/snap_sft2/assets_index.json \

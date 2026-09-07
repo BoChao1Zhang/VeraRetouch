@@ -1,4 +1,4 @@
-"""EPR-052 ENG-2 探针 v4（臂 4 起用；v1/v2/v3 保持不动）。
+"""EPR-052 ENG-2 探针 v7（正式用：= v4a + TrainerCallback.on_log 记录 HF 自身的 loss/grad_norm；臂 4/5 重跑与臂 4b 起用；v1/v2/v3 保持不动）。
 
 相对 v3 的三处修正（均为探针自身缺陷，不动训练口径）：
   F1 rollout logprob 取法：`OnPolicySample.rollout_logprobs` 是**每个 choice 一条的嵌套列表**
@@ -198,30 +198,52 @@ def _roll_patched(self, inputs):
 
 
 GT.GKDTrainer._rollout_samples = _roll_patched
-print(f'[gkd_probe_v4] patched; out={OUT} cov_k={COV_K} chunk={CHUNK}', flush=True)
+print(f'[gkd_probe_v7] patched; out={OUT} cov_k={COV_K} chunk={CHUNK}', flush=True)
+
+
+
+
 
 
 # --------------------------------------------------------------------------- #
-# F2：记录 trainer 实际返回的 loss（含 sft_alpha 项）与有限性
+# G3：每步 loss / grad_norm / lr —— 用 transformers 官方扩展点 TrainerCallback.on_log，
+#     **不包装任何损失路径函数**。背景：包装 compute_loss 会引入 step-1 NaN（NOTES N10/N11 二分实证）；
+#     ms-swift 不调用 create_optimizer（其 create_optimizer_and_scheduler 内建优化器），故 optimizer
+#     step-pre-hook 不触发（v6 实测 grad rows=0）；本版本 transformers 无 on_pre_optimizer_step。
+#     logging_steps=1 时 on_log 每个优化步触发一次，logs 内含 HF 自算的 loss 与 grad_norm。
 # --------------------------------------------------------------------------- #
-_orig_cl = GT.GKDTrainer.compute_loss
+from transformers import TrainerCallback  # noqa: E402
 
 
-def _cl_patched(self, model, inputs, return_outputs=False, num_items_in_batch=None):
-    out = _orig_cl(self, model, inputs, return_outputs=return_outputs, num_items_in_batch=num_items_in_batch)
+class _ProbeLogCb(TrainerCallback):
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        try:
+            rec = dict(t=time.time(), probe='v7-log', step=int(getattr(state, 'global_step', -1)))
+            for k, v in (logs or {}).items():
+                if isinstance(v, (int, float, str, bool)) or v is None:
+                    rec[k] = v
+            lo = rec.get('loss')
+            rec['loss_finite'] = None if lo is None else bool(lo == lo and abs(float(lo)) != float('inf'))
+            gn = rec.get('grad_norm')
+            rec['grad_norm_finite'] = None if gn is None else bool(gn == gn and abs(float(gn)) != float('inf'))
+            with open(OUT, 'a') as f:
+                f.write(json.dumps(rec) + '\n')
+        except Exception:
+            pass
+
+
+_orig_init = GT.GKDTrainer.__init__
+
+
+def _init_patched(self, *a, **k):
+    _orig_init(self, *a, **k)
     try:
-        loss = out[0] if isinstance(out, tuple) else out
-        rec = dict(t=time.time(), step=int(self.state.global_step), probe='v4-loss',
-                   data_source=str(getattr(inputs.get('gkd_batch', None), 'data_source', None)),
-                   loss=float(loss.detach()), finite=bool(torch.isfinite(loss.detach())),
-                   sft_alpha=float(getattr(self.args, 'sft_alpha', 0.0)), lmbda=float(getattr(self, 'lmbda', -1)))
-        with open(OUT, 'a') as f:
-            f.write(json.dumps(rec) + '\n')
+        self.add_callback(_ProbeLogCb())
+        print('[gkd_probe_v7] on_log callback added', flush=True)
     except Exception as e:
-        with open(OUT, 'a') as f:
-            f.write(json.dumps(dict(probe='v4-loss', error=repr(e))) + '\n')
-    return out
+        print(f'[gkd_probe_v7] callback NOT added: {e!r}', flush=True)
 
 
-GT.GKDTrainer.compute_loss = _cl_patched
-print('[gkd_probe_v4] compute_loss hook installed', flush=True)
+GT.GKDTrainer.__init__ = _init_patched
+print('[gkd_probe_v7] __init__ patched (no compute_loss/training_step/optimizer wrapping)', flush=True)
