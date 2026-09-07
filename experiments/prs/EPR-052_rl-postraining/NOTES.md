@@ -184,3 +184,14 @@
 - **硬停条件**（§11.5，对后续所有 RL/蒸馏臂强制）：六段有序率连续 2 个记录点 <0.5 即停；触顶率并列上报。
   本次若已生效应在 **step 69** 停机。该条件写入驱动脚本为待接线项。
 - 两卡已释放（rollout/teacher 两个 vLLM 服务已停，gpu0/gpu1 均 0 MiB），未自动起新臂。
+
+## N15（2026-09-07）pilot 停机与两卡释放
+- 停机：pilot 跑到 **step 89/200** 人工停（用户裁决），目录改名 `opsd_full/pilot200_lr5e6_COLLAPSE_step89/`，
+  保留 `checkpoint-50`（8.3 GB）、`probe_segments.jsonl`（90 步 seg + 91 条 v7-log）、`online/`（step-50 全量评测产物）、`nvsmi.log`。
+- 崩塌定位：首次非满分 **step 56**、首次 <50% 与首次 0/8 **step 68**、step 71 起连续 0/8。
+- 崩塌前后样例：崩塌后无 ckpt（save_steps=50，step 100 未到），故直接向 **rollout vLLM server** 取（其权重 = 停机时最后同步的 ≈step 89）；
+  崩塌前用 `checkpoint-50` 离线生成同 3 条 prompt。落盘 `collapse_samples_{pre_ckpt50,post}.json`（已复制进 run 目录）。
+  形态：阶段 token 身份塌陷（`[1,4,4,4,5,6]` / `[1,4,4,5,5,6]`）或整篇无阶段 token 提前 stop；prose 通顺、无重复、无长度爆炸。
+- 两卡已释放：容器内 `swift deploy`(:8100) 与 `swift rollout`(:8000) 及其 `VLLM::EngineCore` 子进程全部 kill，
+  `nvidia-smi` 两卡均 **0 MiB**、compute-apps 0 条。**按裁决不自动起新臂，等下一路线。**
+- 报告：ENG2_REPORT.md 增 §11（pilot 收尾：全曲线/崩塌定位/生成样例/三条观测/硬停条件）与 §12（5 条候选 A–E，各附预算与预注册判据）。
