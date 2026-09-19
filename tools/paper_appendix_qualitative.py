@@ -49,7 +49,16 @@ def prepare():
     keys={r['key'] for r in json.loads(PLAN.read_text())['records']}
     sources={r['source_id']:r for r in csv.DictReader(open(REPO/'tools/data_splits/splits_sources.csv'))}
     stop=set(STOPWORDS)|set('image photo photograph current make please look give create scene across overall keep turn bring feel apply'.split())
-    counts=Counter();lengths=[];pool=Counter();tiers=Counter();found=set();annotations=[]
+    # Remove annotation-protocol scaffolding, not unwanted empirical outcomes.
+    protocol_stop=set('mask masks grade grading finish toward towards use using used start starting globally global weighted weights weight broad presence specified controlled without keeping softly gently separately pass passes slightly followed following covering band bands core side frame roll-offs roll-off recipe recipes step steps first next finally then requested exact numbers parameter parameters stronger build building'.split())
+    forms={'greens':'green','blues':'blue','reds':'red','cyans':'cyan','yellows':'yellow',
+           'oranges':'orange','purples':'purple','magentas':'magenta','colours':'color',
+           'colour':'color','colors':'color','colour-range':'color range','midtone':'midtones',
+           'highlight':'highlights','shadow':'shadows','skin-tones':'skin tones',
+           'tones':'tone','details':'detail','textures':'texture','lifting':'lift',
+           'brightening':'brighten','enriching':'enrich','deepening':'deepen',
+           'preserving':'preserve','cooler':'cool','warmer':'warm','richer':'rich'}
+    counts=Counter();raw_counts=Counter();lengths=[];pool=Counter();tiers=Counter();found=set();annotations=[]
     candidates=[]
     for line in RECORDS.open():
         r=json.loads(line);key=r['key']
@@ -57,7 +66,9 @@ def prepare():
         if key in found:raise ValueError('Duplicate training annotation')
         found.add(key);instruction,tier=instruction_for(r,key)
         words=re.findall(r"[a-z]+(?:-[a-z]+)?",instruction.lower())
-        counts.update(w for w in words if w not in stop and len(w)>2)
+        tokens=[w for w in words if w not in stop and len(w)>2]
+        raw_counts.update(tokens)
+        counts.update(forms.get(w,w) for w in tokens if w not in protocol_stop)
         lengths.append(len(words));tiers[tier]+=1
         source=key.split('.rep')[0];provenance=sources.get(source,{})
         pool[provenance.get('pool','unresolved')]+=1
@@ -78,15 +89,20 @@ def prepare():
        instruction_word_count=dict(median=float(np.median(lengths)),p10=float(np.percentile(lengths,10)),
                                    p90=float(np.percentile(lengths,90))),
        counting='One deterministically selected instruction per trainfull chain; lowercase English tokens; no reasoning fields or repeated scaffold.',
-       stopwords=sorted(stop),top_words=counts.most_common(100),plan_sha256=sha(PLAN),
+       stopwords=sorted(stop),additional_protocol_stopwords=sorted(protocol_stop),
+       word_form_merges=forms,cleaning_version='content-v2',
+       top_words=counts.most_common(100),plan_sha256=sha(PLAN),
        records_sha256=sha(RECORDS),source_table_sha256=sha(REPO/'tools/data_splits/splits_sources.csv'))
     dump(OUT/'language_statistics.json',stats)
     with (OUT/'word_frequencies.csv').open('w') as f:
         writer=csv.writer(f,lineterminator='\n');writer.writerow(['word','count']);writer.writerows(counts.most_common())
-    wc=WordCloud(width=1400,height=650,background_color='white',max_words=70,
+    with (OUT/'word_frequencies_raw.csv').open('w') as f:
+        writer=csv.writer(f,lineterminator='\n');writer.writerow(['word','count']);writer.writerows(raw_counts.most_common())
+    wc=WordCloud(width=1500,height=850,background_color='white',max_words=65,
                  font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
                  random_state=19,collocations=False,prefer_horizontal=1,
-                 colormap='viridis',relative_scaling=.4).generate_from_frequencies(counts)
+                 colormap='Dark2',relative_scaling=.55,margin=7,
+                 max_font_size=150,min_font_size=18).generate_from_frequencies(counts)
     wc.to_file(str(OUT/'instruction_wordcloud.png'))
     (OUT/'instruction_wordcloud.svg').write_text(wc.to_svg(embed_font=False))
     plt.rcParams.update({'font.family':'DejaVu Sans','font.size':9,'pdf.fonttype':42})
@@ -114,6 +130,19 @@ def image(path,x):
     import torch
     if isinstance(x,torch.Tensor):x=x.detach().cpu().numpy()
     Image.fromarray(np.rint(np.clip(x,0,1)*255).astype(np.uint8)).save(path)
+
+
+def cloud():
+    """Layout-only refresh from the counted corpus, avoiding another data scan."""
+    sys.path.insert(0,'/tmp/codex-appendix-wordcloud')
+    from wordcloud import WordCloud
+    counts={r['word']:int(r['count']) for r in csv.DictReader((OUT/'word_frequencies.csv').open())}
+    wc=WordCloud(width=1500,height=850,background_color='white',max_words=65,
+        font_path='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',random_state=19,
+        collocations=False,prefer_horizontal=1,colormap='Dark2',relative_scaling=.55,
+        margin=7,max_font_size=150,min_font_size=18).generate_from_frequencies(counts)
+    wc.to_file(str(OUT/'instruction_wordcloud.png'))
+    (OUT/'instruction_wordcloud.svg').write_text(wc.to_svg(embed_font=False))
 
 
 def recover():
@@ -212,5 +241,5 @@ def infer():
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','recover','infer'])
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','recover','infer','cloud'])
     globals()[p.parse_args().mode]()
