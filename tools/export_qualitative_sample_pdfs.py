@@ -1,7 +1,8 @@
-"""Author-requested HTML-to-PDF sample cards, for direct appendix insertion.
+"""Legacy standalone browser cards, NOT for direct appendix insertion.
 
-This deliberately exports composed pages as an exception to individual-asset
-figures. The original standalone image files remain available.
+Letter-width cards collide with the ICLR review ruler when used as full-page
+overlays. Use build_appendix_paper_samples.py for the paper's text-width PDFs.
+This exporter is retained only to reproduce the earlier independent preview.
 """
 import argparse
 import base64

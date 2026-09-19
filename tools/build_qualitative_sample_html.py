@@ -14,7 +14,11 @@ def main():
            ('recovery_03','泳池的鲜明色彩','Poolside color'),
            ('inference_01','狐狸的温暖毛色','Warm fur tones'),
            ('inference_02','瀑布的冷色对比','Cool waterfall'),
-           ('inference_03','咖啡馆的暖色氛围','Warm interior')]
+           ('inference_03','咖啡馆的暖色氛围','Warm interior'),
+           ('inference_04','秋叶的暖色层次','Autumn foliage'),
+           ('inference_05','洞穴与海岸光线','Coastal light'),
+           ('inference_06','城市俯瞰的色调','Urban tones'),
+           ('inference_07','日落中的人物剪影','Sunset silhouettes')]
     for ident,title,english in names:
         r=json.loads((ASSETS/ident/'provenance.json').read_text())
         recovery=ident.startswith('recovery')
