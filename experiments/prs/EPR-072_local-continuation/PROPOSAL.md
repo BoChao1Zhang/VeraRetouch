@@ -1,6 +1,23 @@
 # EPR-072-LOCAL：当前状态蒙版的六阶段续训与style回放
 
-状态：方案就绪，尚未启动训练。沿用用户指定编号；已有 `EPR-072_mmart-ppr10k` 是数据任务，保留其目录与产物。本任务使用唯一标签 `EPR072LOCAL` 和独立输出根，不能覆盖原EPR-072。
+状态：已按用户最新指令启动两臂；下方初始方案的冲突项以本节实际运行配置为准。沿用用户指定编号；已有 `EPR-072_mmart-ppr10k` 是数据任务，保留其目录与产物。本任务使用唯一标签 `EPR072LOCAL` 和独立输出根，不能覆盖原EPR-072。
+
+## 当前实际运行配置（2026-09-19）
+
+- GPU0：PIX，纯像素MAE；GPU1：NCE，像素MAE+0.1 InfoNCE。两臂代码MSE均为0，温度0.07。
+- 同一R best@800初始化。LoRA r/alpha=32、全部36语言层，8个共享readout token；六个读出组复用同一组token参数，无新随机阶段参数。六个颜色槽均计损失。
+- Style：从原style30k的有效改写/CoT记录中按tar组固定抽取15,000条，末组截取到指定数量；MMArt全量16,163条；local全量75,311条有效链（原manifest75,317条，6条格式无效）。
+- 两队列按optimizer update交替：global队列混合style+MMArt；local队列为全部有效链。有效batch16、micro4、6250 updates，AdamW与Stage1相同，LoRA lr1e-4、head/token lr1e-3、warmup100、weight decay0.01、grad clip1。
+- **6250 updates不等于全部local链都访问一遍**：1:1交替时local约消费50,000条；75,311条均在固定采样池内。保持用户要求的Stage1步数设置，完整覆盖一遍需要另行延长预算。
+- Local teacher forcing：Hue/亮度支持从本步记录current重算，Global为1，Subject/geom使用记录支持作为teacher。where头不在此两臂中训练；自由滚动诊断的Subject也是GT支持，不能将其指标当作预测where的端到端表现。
+- local NCE正样本是新支持下求解的恢复码，固定5075 bank提供负样本，排除与正样本余弦近乎相同的重复项；不使用正向退化LUT标签。global NCE沿用Stage1的style/MMArt标签。两臂没有额外代码MSE。
+- I/O：每臂12GiB上限的整文件LRU驻留，队列块512，num_workers=0避免复制驻留缓存。原style30k图像是散PNG，按对应CoT tar组采样并缓存图像字节；local原图若在tar中则整包读入再切片。MMArt保持原数据读取路径，未擅自丢弃条目。
+- 固定seed20260918。两臂完整样本manifest SHA256一致：`27f165df7f15084d701c7242d26fbbbbad60d3d8aead136bc723213fd0ef7d3a`；每个update记录keys_sha。
+- Style guard固定32条style_val，使用真实像素L1而非R臂未训练的分类头。每400步同时测local单步/滚动和ArtEdit val50；best仅从style误差不超过初始1.05倍的检查点中选local验证误差最低者。
+- q任务：1158 `EPR072LOCAL_PIX_IO`、1159 `EPR072LOCAL_NCE_IO`。两步真实数据smoke通过后自动进入正式训练。最初准备作业1156/1157已因用户要求调整I/O主动取消，未开始优化步骤。
+- 运行根：`/home/bc/data/runs/epr072_local_continuation_20260919/{PIX_IO,NCE_IO}/`；`smoke/`和`full/`分别保留。未修改EPR-071产物。
+
+以下为初始讨论方案，已被上述实际运行配置明确覆盖的包括学习率、200步pilot、local默认无InfoNCE、Subject预测支持及完整一遍local的预算。
 
 ## 1. 目标与基线
 
