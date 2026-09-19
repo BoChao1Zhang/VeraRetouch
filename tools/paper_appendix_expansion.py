@@ -63,6 +63,37 @@ def choose_local():
     print(json.dumps(dict(eligible=len(candidates), chosen=len(selected))), flush=True)
 
 
+def choose_landscape():
+    from tools.paper_appendix_qualitative import RECORDS
+    scene_file=REPO/'EPR/ICLR2027/figures/appendix_scene_words/counting_trace.jsonl'
+    sources={r['source_id']:r for r in csv.DictReader(open(REPO/'tools/data_splits/splits_sources.csv'))}
+    eligible=[]
+    for line in scene_file.open():
+        row=json.loads(line); terms=set(row['scene_terms'])
+        if sources.get(row['source_id'],{}).get('pool')!='unsplash':
+            continue
+        if not {'Sky','Clouds'}.issubset(terms):
+            continue
+        if not terms & {'Mountains','Lakes','Sea','Coast','Landscape','Hills','Rocks','Fields'}:
+            continue
+        eligible.append(row)
+    eligible.sort(key=lambda r:hashlib.sha256(('hue-landscape-v1:'+r['canonical_key']).encode()).hexdigest())
+    selected_keys={r['canonical_key'] for r in eligible[:40]}
+    selected=[]
+    for line in RECORDS.open():
+        row=json.loads(line)
+        if row['key'] not in selected_keys:
+            continue
+        answer=row['answer']
+        selected.append(dict(key=row['key'],source_id=row['key'].split('.rep')[0],annotation=answer,
+                             instruction=answer['instruction_medium'],pool='unsplash',split='train'))
+    selected.sort(key=lambda r:hashlib.sha256(('hue-landscape-v1:'+r['key']).encode()).hexdigest())
+    if len(selected)!=len(selected_keys):
+        raise ValueError('Missing landscape annotations')
+    dump(WORK/'local_candidates.json',selected)
+    print(json.dumps(dict(eligible=len(eligible),chosen=len(selected))),flush=True)
+
+
 def recover():
     import torch
     from veraretouch_sprf.readout import mixed_data as MX, multistage_data as MD, mixed_codes as MC
@@ -181,8 +212,11 @@ def infer():
 
 
 def main():
-    p = argparse.ArgumentParser(); p.add_argument('mode', choices=['infer', 'choose_local', 'recover', 'preview'])
-    globals()[p.parse_args().mode]()
+    global WORK
+    p = argparse.ArgumentParser(); p.add_argument('mode', choices=['infer', 'choose_local', 'choose_landscape', 'recover', 'preview'])
+    p.add_argument('--work',type=Path,default=WORK)
+    args=p.parse_args();WORK=args.work;WORK.mkdir(exist_ok=True)
+    globals()[args.mode]()
 
 
 if __name__ == '__main__':
