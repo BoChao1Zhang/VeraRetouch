@@ -27,6 +27,21 @@ class LocalPanelsTest(unittest.TestCase):
         # A nearly zero mask must never be mislabeled as an exact-zero control.
         masks[masks==0]=1e-12
         self.assertIsNone(context_windows(states,masks,6))
+        soft=context_windows(states,masks,6,allow_low_support=True)
+        self.assertEqual(soft['outside_kind'],'low_support')
+        self.assertGreater(soft['outside']['mean_support'],0)
+
+    def test_face_priority_keeps_visible_face(self):
+        h,w=120,80
+        mask=np.zeros((h,w),np.float32);mask[5:110,10:70]=1
+        before=np.full((h,w,3),.3,np.float32)
+        after=before+mask[...,None]*.05
+        face=[25,15,45,38]
+        chosen=context_windows(np.stack([before,after]),mask[None],1,face_boxes=[face])
+        self.assertEqual(chosen['inside']['focus'],'detected_face')
+        x0,y0,x1,y1=chosen['inside']['box']
+        self.assertLessEqual(x0,face[0]);self.assertLessEqual(y0,face[1])
+        self.assertGreaterEqual(x1,face[2]);self.assertGreaterEqual(y1,face[3])
 
     def test_integral_windows(self):
         a=np.arange(30).reshape(5,6)

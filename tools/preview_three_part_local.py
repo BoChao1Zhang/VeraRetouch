@@ -28,17 +28,19 @@ def select_window(score,valid,cw,ch):
     return dict(box=[int(x),int(y),int(x+cw),int(y+ch)],score=float(values[y,x]))
 
 
-def prepare(index, meta=None, output=None, require_spatial=False, subject_context=False):
+def prepare(index, meta=None, output=None, require_spatial=False, subject_context=False,
+            subject_priority=None, allow_low_support=False):
     meta=meta or json.loads((SOURCE/f'case_{index:02d}/provenance.json').read_text())
     src=Path(meta['folder']);folder=output or OUT/f'case_{index:02d}';folder.mkdir(parents=True,exist_ok=True)
     with np.load(src/'float_states.npz') as data:
         states=np.clip(data['recovery'],0,1);masks=data['masks']
     h,w=states.shape[1:3]
+    if subject_priority is None:subject_priority=require_spatial
     if subject_context:
         from tools.local_subject_crop import context_windows
         candidates=[]
         for step in range(2,7):
-            r=context_windows(states,masks,step,subject_priority=require_spatial)
+            r=context_windows(states,masks,step,subject_priority=subject_priority,allow_low_support=allow_low_support)
             candidates.append(dict(r,stage=NAMES[step-1]) if r else dict(step=step,eligible=False))
         eligible=sorted([r for r in candidates if r['eligible']],key=lambda r:r['inside']['score'],reverse=True)
         if require_spatial:
@@ -88,8 +90,9 @@ def prepare(index, meta=None, output=None, require_spatial=False, subject_contex
             for state,name in [(step-1,'before'),(step,'after')]:
                 img=Image.open(src/f'recovery_{state}.png').convert('RGB').crop(r[area]['box'])
                 img.save(folder/f'{step}_{area}_{name}.png')
-        assert np.array_equal(np.asarray(Image.open(folder/f'{step}_outside_before.png')),
-                              np.asarray(Image.open(folder/f'{step}_outside_after.png')))
+        if r.get('outside_kind','zero')=='zero':
+            assert np.array_equal(np.asarray(Image.open(folder/f'{step}_outside_before.png')),
+                                  np.asarray(Image.open(folder/f'{step}_outside_after.png')))
         Image.fromarray(np.rint(masks[step-1]*255).astype(np.uint8)).save(folder/f'{step}_support.png')
         Image.fromarray((matplotlib.colormaps['inferno'](delta/maximum)[...,:3]*255).astype(np.uint8)).save(folder/f'{step}_residual.png')
     fig,ax=plt.subplots(figsize=(3.8,.35));fig.subplots_adjust(left=.02,right=.98,bottom=.6,top=.9)
@@ -109,8 +112,10 @@ def prepare(index, meta=None, output=None, require_spatial=False, subject_contex
         record['selection']='spatial subject move plus strongest texture-weighted regional move among steps 2--5; both require exact-zero outside controls'
     if subject_context:
         record.update(region_definition='edit ROI: >=80% subject coverage when applicable, >=50% active stage support; control ROI: exact zero support',
-                      selection='large subject-oriented spatial detail plus strongest eligible subject-oriented local detail',
-                      subject_context=True,subject_priority=require_spatial)
+                      selection=('large subject-oriented spatial detail plus strongest eligible local detail' if subject_priority else
+                                 'large edit-region context; spatial step plus strongest eligible local detail'),
+                      subject_context=True,subject_priority=subject_priority,allow_low_support=allow_low_support)
+        if allow_low_support:record['region_definition']+='; low_support controls are labeled explicitly and may change'
     (folder/'audit.json').write_text(json.dumps(record,indent=2)+'\n')
     return folder,record
 

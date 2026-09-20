@@ -8,7 +8,7 @@ ws.onmessage=e=>{const r=JSON.parse(e.data);if(pending.has(r.id)){const [ok,fail
 function call(method,params={}){return new Promise((resolve,reject)=>{const id=++serial;pending.set(id,[resolve,reject]);ws.send(JSON.stringify({id,method,params}))})}
 async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value}
 await call('Page.enable');await call('Emulation.setDeviceMetricsOverride',{width:1440,height:1200,deviceScaleFactor:1,mobile:false});
-await call('Page.navigate',{url:`file://${root}/index.html`});
+await call('Page.navigate',{url:`file://${root}/index.html?geometry=all`});
 await evaluate(`new Promise(resolve=>{const t=setInterval(()=>{if(document.querySelectorAll('.card').length){clearInterval(t);resolve(true)}},100)})`);
 const initial=await evaluate(`({total:records.length,cards:document.querySelectorAll('.card').length})`);
 if(initial.cards!==Math.min(24,initial.total))throw Error('Wrong pagination');
@@ -28,6 +28,13 @@ if(exported.selected.length!==1||exported.selected[0].number!=='001')throw Error
 await evaluate(`$('onlySelected').click();$('search').value=records[3].source_id;$('search').dispatchEvent(new Event('input'))`);
 if(!await evaluate(`document.querySelectorAll('.card').length===1`))throw Error('Search failed');
 await evaluate(`$('search').value='';$('search').dispatchEvent(new Event('input'));$('view').value='local';$('view').dispatchEvent(new Event('change'));chosen.clear();save();render()`);
+if(await evaluate(`records.some(r=>r.geometry_kind==='linear')`)){
+  for(const kind of ['radial','band','linear']){
+    await evaluate(`$('geometry').value='${kind}';$('geometry').dispatchEvent(new Event('change'))`);
+    if(!await evaluate(`filtered().length===${initial.total===800?100:30}&&filtered().every(r=>r.geometry_kind==='${kind}')`))throw Error('Geometry filter failed: '+kind);
+  }
+  await evaluate(`$('geometry').value='nonsemantic';$('geometry').dispatchEvent(new Event('change'))`);
+}
 await evaluate(`Promise.all([...document.querySelectorAll('.card img')].slice(0,12).map(i=>i.decode()))`);
 const screenshot=await call('Page.captureScreenshot',{format:'png'});
 await writeFile(`${root}/browser_qa.png`,Buffer.from(screenshot.data,'base64'));

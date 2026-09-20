@@ -27,6 +27,7 @@ def local_panel(folder, record, chosen):
     lines=[r'\begin{minipage}{\linewidth}',heading('Step '+str(step)+' / '+chosen['stage']),
            r'\setlength{\CellWidth}{\dimexpr(\linewidth-2\PhotoGap)/3\relax}']
     for area,aux,label in [('inside','support','Edit ROI'),('outside','residual','Mask-out')]:
+        if area=='outside' and chosen.get('outside_kind')=='low_support':label='Low-support ROI'
         # Keep each auxiliary on the SAME row as its paired crops. Equal-height
         # boxes align centers while preserving the auxiliary's aspect ratio.
         w,h=record['image_size']
@@ -87,14 +88,17 @@ def body(folder,record,title):
     lines += [r'\smallskip\textit{Instruction.} '+tex(record['instruction'])+r'\par']
     portrait=record['image_size'][1]>record['image_size'][0]
     if portrait:lines += [r'\clearpage']
-    lines += [heading('3. Local changes and unchanged controls'),
-              r'Orange box: edit detail. Blue box: unchanged control ($\beta=0$).\par']
+    low_support=any(s.get('outside_kind')=='low_support' for s in record['picked'])
+    lines += [heading('3. Local changes and spatial controls' if low_support else '3. Local changes and unchanged controls'),
+              (r'Orange box: edit detail. Blue box: control ROI (see panel labels).\par' if low_support else
+               r'Orange box: edit detail. Blue box: unchanged control ($\beta=0$).\par')]
     for i,chosen in enumerate(record['picked']):
         if i==1:lines += [r'\clearpage']
         lines+=local_panel(folder,record,chosen)
     lines += [r'\smallskip\noindent\hfill\includegraphics[width=.7\linewidth]{'+
               str((folder/'colorbar.pdf').relative_to(PAPER))+r'}\hfill\null\par',
-              r'\smallskip The matched mask-out crops are unchanged. Residuals show the actual adjacent-state RGB change; the two steps share one color scale.\par']
+              (r'\smallskip Low-support controls can change; exact preservation applies where $\beta=0$. Residuals show the actual adjacent-state RGB change on a shared scale.\par' if low_support else
+               r'\smallskip The matched mask-out crops are unchanged. Residuals show the actual adjacent-state RGB change; the two steps share one color scale.\par')]
     if portrait:lines += [r'\clearpage']
     lines+=reasoning(folder,record,compact=not portrait)
     lines += [r'\endgroup']
@@ -111,17 +115,31 @@ PREAMBLE=r'''\documentclass{article}
 
 
 def main():
+    global ASSETS,DRAFTS
     parser=argparse.ArgumentParser()
     parser.add_argument('manifest',type=Path)
     parser.add_argument('--apply',action='store_true')
+    parser.add_argument('--tag',help='Separate candidate output folder; does not replace the manuscript without --apply.')
     args=parser.parse_args()
+    if args.tag:
+        if not re.fullmatch(r'[a-z0-9_]+',args.tag):raise ValueError('Use a simple lowercase output tag')
+        ASSETS=PAPER/'figures'/('appendix_'+args.tag);DRAFTS=PAPER/'drafts'/args.tag
     DRAFTS.mkdir(parents=True,exist_ok=True)
     manifest=json.loads(args.manifest.read_text())
+    if args.apply:
+        kinds=[r.get('geometry_kind') for r in manifest]
+        if len(kinds)!=4 or set(kinds)!={'semantic','radial','band','linear'}:
+            raise ValueError('The author now requires one verified example per geometry family before manuscript insertion.')
     all_bodies=[]; audit=[]
     for i,item in enumerate(manifest,1):
         meta=json.loads(Path(item['provenance']).read_text())
+        if meta.get('geometry_kind') and item.get('geometry_kind')!=meta['geometry_kind']:
+            raise ValueError('Manifest geometry differs from the construction record')
         folder,record=prepare(i,meta=meta,output=ASSETS/f'case_{i:02d}',
-                              require_spatial=item.get('require_spatial',True),subject_context=True)
+                              require_spatial=item.get('require_spatial',True),subject_context=True,
+                              subject_priority=item.get('subject_priority'),
+                              allow_low_support=item.get('geometry_kind') in {'radial','band','linear'})
+        record['geometry_kind']=item.get('geometry_kind')
         record['display_title']=item['title']
         (folder/'audit.json').write_text(json.dumps(record,indent=2)+'\n')
         content=body(folder,record,item['title'])

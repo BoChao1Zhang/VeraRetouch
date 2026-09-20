@@ -169,8 +169,13 @@ def recover():
     run = json.loads((MD.BK_RUN/'run_args.json').read_text())['config']
     bank = LutVolumes(run['data']['lut_bank_dir'], 64)
     basis = GlutBasis(str(MD.GEOMETRY), device)
-    output = []
+    results_path=WORK/'local_results.json'
+    output=json.loads(results_path.read_text()) if results_path.exists() else []
+    for i,old in enumerate(output):
+        if i>=len(selected) or old['key']!=selected[i]['key']:
+            raise ValueError('Refusing to renumber previously rendered recovery cases')
     for i, row in enumerate(selected):
+        if i<len(output):continue
         law = source.chain(row['key']); journal = source.ds.journal(row['key'])
         beta = law['beta'].to(device)
         states = MD.chain_states(law['x0'], beta, law['luts'], bank, device)

@@ -5,11 +5,14 @@ from tools.build_local_review500 import ROOT,WEB
 
 
 def main():
-    records=json.loads((ROOT/'results.json').read_text())
+    source=WEB/'combined_results.json'
+    records=json.loads((source if source.exists() else ROOT/'results.json').read_text())
     public=[]
     for r in records:
         public.append({k:r[k] for k in ['number','source_id','key','instruction','annotation','pool','image_size',
                                        'portrait','local_amplitude','background','crop','residual_max']})
+        public[-1]['geometry_kind']=r.get('geometry_kind','semantic')
+        public[-1]['geometry_parameters']=r.get('geometry_parameters')
         for image in ['input','before','after','gt','support','residual','crop_before','crop_after','z1','z2','z3','z4']:
             assert (WEB/f'case_{r["number"]:03d}'/f'{image}.png').is_file()
     html=(Path(__file__).with_name('local_review_gallery.html')).read_text()
