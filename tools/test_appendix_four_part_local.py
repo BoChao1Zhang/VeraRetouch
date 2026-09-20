@@ -9,9 +9,25 @@ from PIL import Image
 
 from tools.build_appendix_four_part_local import ASSETS, DRAFTS
 from tools.preview_three_part_local import window_sum
+from tools.local_subject_crop import context_windows
 
 
 class LocalPanelsTest(unittest.TestCase):
+    def test_large_subject_roi_and_exact_zero_rule(self):
+        h,w=60,90
+        subject=np.zeros((h,w),np.float32);subject[10:55,15:50]=1
+        rgb=np.linspace(.1,.6,h*w*3,dtype=np.float32).reshape(h,w,3)
+        states=np.repeat(rgb[None],7,axis=0);states[6]+=subject[...,None]*.05
+        masks=np.repeat(subject[None],6,axis=0)
+        chosen=context_windows(states,masks,6)
+        self.assertIsNotNone(chosen)
+        self.assertGreaterEqual(chosen['inside']['area_fraction'],.17)
+        self.assertGreaterEqual(chosen['inside']['subject_fraction'],.8)
+        self.assertEqual(chosen['outside_max_change'],0)
+        # A nearly zero mask must never be mislabeled as an exact-zero control.
+        masks[masks==0]=1e-12
+        self.assertIsNone(context_windows(states,masks,6))
+
     def test_integral_windows(self):
         a=np.arange(30).reshape(5,6)
         expected=np.array([[a[y:y+2,x:x+3].sum() for x in range(4)] for y in range(4)])
@@ -19,7 +35,7 @@ class LocalPanelsTest(unittest.TestCase):
 
     def test_true_crops_and_zero_outside(self):
         records=sorted(ASSETS.glob('case_*/audit.json'))
-        self.assertEqual(len(records),6)
+        self.assertEqual(len(records),4)
         for audit in records:
             r=json.loads(audit.read_text());folder=audit.parent;src=Path(r['source_folder'])
             with np.load(src/'float_states.npz') as data:
@@ -31,7 +47,12 @@ class LocalPanelsTest(unittest.TestCase):
                 for area in ['inside','outside']:
                     box=selected[area]['box'];x0,y0,x1,y1=box
                     support=masks[step-1,y0:y1,x0:x1]
-                    self.assertTrue((support>0).all() if area=='inside' else (support==0).all())
+                    if area=='inside':
+                        self.assertGreaterEqual(float((support>0).mean()),.5)
+                        if r['subject_priority']:
+                            self.assertGreaterEqual(float((masks[-1,y0:y1,x0:x1]>0).mean()),.8)
+                        self.assertGreaterEqual(selected[area]['area_fraction'],.07)
+                    else:self.assertTrue((support==0).all())
                     for when,slot in [('before',step-1),('after',step)]:
                         expected=np.asarray(Image.open(src/f'recovery_{slot}.png').convert('RGB').crop(box))
                         actual=np.asarray(Image.open(folder/f'{step}_{area}_{when}.png'))
@@ -43,7 +64,7 @@ class LocalPanelsTest(unittest.TestCase):
                 self.assertIn(6,[s['step'] for s in r['picked']])
 
     def test_compiled_pages(self):
-        expected=[2,2,2,3,3,3]
+        expected=[2,2,2,4]
         for i,count in enumerate(expected,1):
             pdf=DRAFTS/f'case_{i:02d}.pdf'
             info=subprocess.check_output(['pdfinfo',str(pdf)],text=True)

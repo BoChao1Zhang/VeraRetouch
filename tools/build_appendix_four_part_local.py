@@ -13,8 +13,8 @@ from tools.preview_three_part_local import prepare, picture, row, NAMES
 from tools.build_appendix_paper_samples import PAPER, tex
 from tools.build_appendix_local_detail import compile_pdf
 
-ASSETS=PAPER/'figures/appendix_local_four_part'
-DRAFTS=PAPER/'drafts/local_four_part_20260920'
+ASSETS=PAPER/'figures/appendix_local_equal'
+DRAFTS=PAPER/'drafts/local_equal_20260920'
 
 
 def heading(text):
@@ -25,20 +25,21 @@ def local_panel(folder, record, chosen):
     """Two independently aligned rows: support/before/after, residual/before/after."""
     step=chosen['step']
     lines=[r'\begin{minipage}{\linewidth}',heading('Step '+str(step)+' / '+chosen['stage']),
-           r'\setlength{\CellWidth}{\dimexpr\linewidth-2\PhotoGap\relax}']
-    for area,aux,label in [('inside','support','Mask-in'),('outside','residual','Mask-out')]:
+           r'\setlength{\CellWidth}{\dimexpr(\linewidth-2\PhotoGap)/3\relax}']
+    for area,aux,label in [('inside','support','Edit ROI'),('outside','residual','Mask-out')]:
         # Keep each auxiliary on the SAME row as its paired crops. Equal-height
         # boxes align centers while preserving the auxiliary's aspect ratio.
         w,h=record['image_size']
         x0,y0,x1,y1=chosen[area]['box']
-        lines += [rf'\setlength{{\CropHeight}}{{{(y1-y0)/(x1-x0):.8f}\dimexpr.4\CellWidth\relax}}']
+        lines += [rf'\setlength{{\CropHeight}}{{{h/w:.8f}\CellWidth}}']
         auximg=picture(folder,f'{step}_{aux}',chosen,record['image_size']).replace(
             r'width=\linewidth',r'width=\linewidth,height=\CropHeight,keepaspectratio')
-        cells=[r'\begin{minipage}[t]{.2\CellWidth}\vspace{0pt}\centering '+aux.capitalize()+
+        cells=[r'\begin{minipage}[t]{\CellWidth}\vspace{0pt}\centering '+aux.capitalize()+
                r'\par\begin{minipage}[c][\CropHeight][c]{\linewidth}\centering '+auximg+r'\end{minipage}\end{minipage}']
         for when,title in [('before','Before'),('after','After')]:
-            cells.append(r'\begin{minipage}[t]{.4\CellWidth}\vspace{0pt}\centering '+title+' / '+label+
-                         r'\par'+picture(folder,f'{step}_{area}_{when}')+r'\end{minipage}')
+            crop=picture(folder,f'{step}_{area}_{when}').replace(r'width=\linewidth',r'width=\linewidth,height=\CropHeight,keepaspectratio')
+            cells.append(r'\begin{minipage}[t]{\CellWidth}\vspace{0pt}\centering '+title+' / '+label+
+                         r'\par\begin{minipage}[c][\CropHeight][c]{\linewidth}\centering '+crop+r'\end{minipage}\end{minipage}')
         lines += [r'\noindent'+r'\hspace{\PhotoGap}'.join(cells)+r'\par']
         if area=='inside':lines += [r'\vspace{\PhotoGap}']
     lines += [r'\end{minipage}\par']
@@ -87,9 +88,9 @@ def body(folder,record,title):
     portrait=record['image_size'][1]>record['image_size'][0]
     if portrait:lines += [r'\clearpage']
     lines += [heading('3. Local changes and unchanged controls'),
-              r'Orange box: mask-in ($\beta>0$). Blue box: mask-out ($\beta=0$).\par']
+              r'Orange box: edit detail. Blue box: unchanged control ($\beta=0$).\par']
     for i,chosen in enumerate(record['picked']):
-        if not portrait and i==1:lines += [r'\clearpage']
+        if i==1:lines += [r'\clearpage']
         lines+=local_panel(folder,record,chosen)
     lines += [r'\smallskip\noindent\hfill\includegraphics[width=.7\linewidth]{'+
               str((folder/'colorbar.pdf').relative_to(PAPER))+r'}\hfill\null\par',
@@ -120,7 +121,7 @@ def main():
     for i,item in enumerate(manifest,1):
         meta=json.loads(Path(item['provenance']).read_text())
         folder,record=prepare(i,meta=meta,output=ASSETS/f'case_{i:02d}',
-                              require_spatial=item.get('require_spatial',True))
+                              require_spatial=item.get('require_spatial',True),subject_context=True)
         record['display_title']=item['title']
         (folder/'audit.json').write_text(json.dumps(record,indent=2)+'\n')
         content=body(folder,record,item['title'])
@@ -146,7 +147,7 @@ def main():
                r'\newlength{\CellWidth}\newlength{\CropHeight}']
         for i in range(1,len(manifest)+1):
             if i>1:lines += [r'\clearpage']
-            lines += [r'\input{figures/appendix_local_four_part/case_'+f'{i:02d}'+r'/panels}']
+            lines += [r'\input{'+str(ASSETS.relative_to(PAPER))+r'/case_'+f'{i:02d}'+r'/panels}']
         (PAPER/'sections/appendix/local_four_part_pages.tex').write_text('\n'.join(lines)+'\n')
 
 

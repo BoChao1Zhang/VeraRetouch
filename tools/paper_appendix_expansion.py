@@ -111,7 +111,7 @@ def choose_landscape():
     print(json.dumps(dict(eligible=len(eligible),chosen=len(selected))),flush=True)
 
 
-def choose_portraits():
+def choose_portraits(count=24):
     """Deterministic training-source shortlist; visual selection follows recovery."""
     from tools.paper_appendix_qualitative import RECORDS, PLAN
     sources = {r['source_id']: r for r in csv.DictReader(open(REPO/'tools/data_splits/splits_sources.csv'))}
@@ -146,7 +146,7 @@ def choose_portraits():
         if row['source_id'] in seen:
             continue
         selected.append(row); seen.add(row['source_id'])
-        if len(selected) == 24:
+        if len(selected) == count:
             break
     dump(WORK/'local_candidates.json', selected)
     print(json.dumps(dict(eligible=len(candidates), chosen=len(selected))), flush=True)
@@ -273,8 +273,10 @@ def main():
     global WORK
     p = argparse.ArgumentParser(); p.add_argument('mode', choices=['infer', 'choose_local', 'choose_landscape', 'choose_portraits', 'recover', 'preview', 'portrait_preview'])
     p.add_argument('--work',type=Path,default=WORK)
+    p.add_argument('--count',type=int,default=24)
     args=p.parse_args();WORK=args.work;WORK.mkdir(exist_ok=True)
-    globals()[args.mode]()
+    if args.mode=='choose_portraits':choose_portraits(args.count)
+    else:globals()[args.mode]()
 
 
 if __name__ == '__main__':

@@ -28,15 +28,28 @@ def select_window(score,valid,cw,ch):
     return dict(box=[int(x),int(y),int(x+cw),int(y+ch)],score=float(values[y,x]))
 
 
-def prepare(index, meta=None, output=None, require_spatial=False):
+def prepare(index, meta=None, output=None, require_spatial=False, subject_context=False):
     meta=meta or json.loads((SOURCE/f'case_{index:02d}/provenance.json').read_text())
     src=Path(meta['folder']);folder=output or OUT/f'case_{index:02d}';folder.mkdir(parents=True,exist_ok=True)
     with np.load(src/'float_states.npz') as data:
         states=np.clip(data['recovery'],0,1);masks=data['masks']
     h,w=states.shape[1:3]
+    if subject_context:
+        from tools.local_subject_crop import context_windows
+        candidates=[]
+        for step in range(2,7):
+            r=context_windows(states,masks,step,subject_priority=require_spatial)
+            candidates.append(dict(r,stage=NAMES[step-1]) if r else dict(step=step,eligible=False))
+        eligible=sorted([r for r in candidates if r['eligible']],key=lambda r:r['inside']['score'],reverse=True)
+        if require_spatial:
+            picked=[r for r in eligible if r['step']==6]+[r for r in eligible if r['step']!=6][:1]
+        else:picked=eligible[:2]
+    else:
+        picked=[]
     # Use an equal-sized window inside and outside, and across candidate steps.
     aspect=1.4
     for fraction in [.04,.02,.01,.005]:
+        if subject_context:break
         cw=round(np.sqrt(fraction*h*w*aspect));ch=round(cw/aspect);candidates=[]
         for step in range(2,7):
             mask=masks[step-1];delta=np.abs(states[step]-states[step-1]).mean(-1)*100
@@ -86,7 +99,7 @@ def prepare(index, meta=None, output=None, require_spatial=False):
     fig.savefig(folder/'colorbar.pdf',bbox_inches='tight',pad_inches=.01);plt.close(fig)
     record=dict(source_id=meta['source_id'],source_key=meta['key'],source_folder=str(src),image_size=[w,h],
                 instruction=meta['annotation']['instruction_medium'],picked=picked,candidates=candidates,
-                region_area_fraction=cw*ch/(w*h),region_definition='inside: all weights >0; outside: all weights exactly zero',
+                region_area_fraction=(None if subject_context else cw*ch/(w*h)),region_definition='inside: all weights >0; outside: all weights exactly zero',
                 selection='top two texture-weighted regional changes among steps 2--6 with both verified control windows',
                 residual_scale=[0,maximum],gap_css_px=5,gap_pdf_bp=3.75)
     record['annotation']=meta['annotation']
@@ -94,6 +107,10 @@ def prepare(index, meta=None, output=None, require_spatial=False):
     record['execution']=meta.get('execution','Target-conditioned recovery, not model inference.')
     if require_spatial:
         record['selection']='spatial subject move plus strongest texture-weighted regional move among steps 2--5; both require exact-zero outside controls'
+    if subject_context:
+        record.update(region_definition='edit ROI: >=80% subject coverage when applicable, >=50% active stage support; control ROI: exact zero support',
+                      selection='large subject-oriented spatial detail plus strongest eligible subject-oriented local detail',
+                      subject_context=True,subject_priority=require_spatial)
     (folder/'audit.json').write_text(json.dumps(record,indent=2)+'\n')
     return folder,record
 
