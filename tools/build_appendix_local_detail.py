@@ -46,7 +46,7 @@ def compile_pdf(source, destination):
     with tempfile.TemporaryDirectory(prefix='appendix-local-') as temp:
         result = subprocess.run(['pdflatex', '-halt-on-error', '-interaction=nonstopmode',
                                  f'-output-directory={temp}', str(source)], cwd=PAPER,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors='replace')
         if result.returncode or 'Overfull' in result.stdout:
             raise RuntimeError(result.stdout[-5000:])
         shutil.copyfile(Path(temp)/(source.stem+'.pdf'), destination)

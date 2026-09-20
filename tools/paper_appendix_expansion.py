@@ -33,6 +33,23 @@ def preview():
         canvas.save(WORK/(pool+'_internal_preview.png'))
 
 
+def portrait_preview():
+    """Internal selection sheet only; never a manuscript asset."""
+    from PIL import ImageDraw, ImageFont
+    records=json.loads((WORK/'local_results.json').read_text())
+    font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',14)
+    canvas=Image.new('RGB',(1600,((len(records)+3)//4)*260),'white')
+    draw=ImageDraw.Draw(canvas)
+    for i,r in enumerate(records):
+        x=(i%4)*400;y=(i//4)*260;folder=Path(r['folder'])
+        size=Image.open(folder/'reference.png').size
+        draw.text((x+3,y+3),f'{i:02d} {size} local {r["local_amplitude"]:.2f}',fill='black',font=font)
+        for j,s in enumerate([5,6]):
+            frame=Image.open(folder/f'recovery_{s}.png');frame.thumbnail((195,230))
+            canvas.paste(frame,(x+j*200+(195-frame.width)//2,y+25))
+    canvas.save(WORK/'portrait_selection_internal.png')
+
+
 def choose_local():
     from tools.paper_appendix_qualitative import PLAN, RECORDS
     sources = {r['source_id']: r for r in csv.DictReader(open(REPO/'tools/data_splits/splits_sources.csv'))}
@@ -92,6 +109,47 @@ def choose_landscape():
         raise ValueError('Missing landscape annotations')
     dump(WORK/'local_candidates.json',selected)
     print(json.dumps(dict(eligible=len(eligible),chosen=len(selected))),flush=True)
+
+
+def choose_portraits():
+    """Deterministic training-source shortlist; visual selection follows recovery."""
+    from tools.paper_appendix_qualitative import RECORDS, PLAN
+    sources = {r['source_id']: r for r in csv.DictReader(open(REPO/'tools/data_splits/splits_sources.csv'))}
+    train_keys = {r['key'] for r in json.loads(PLAN.read_text())['records']}
+    trace = REPO/'EPR/ICLR2027/figures/appendix_scene_words/counting_trace.jsonl'
+    eligible = set()
+    for line in trace.open():
+        row = json.loads(line); terms = set(row['scene_terms'])
+        if sources.get(row['source_id'], {}).get('pool') not in {'unsplash', 'ppr10k', 'fivek_gold'}:
+            continue
+        if terms & {'Portraits', 'Women', 'Men', 'Children'} and not terms & {'Dogs', 'Cats', 'Animals'}:
+            eligible.add(row['source_id'])
+    candidates = []
+    for line in RECORDS.open():
+        row = json.loads(line); key = row['key']; source_id = key.split('.rep')[0]
+        if source_id not in eligible or key not in train_keys:
+            continue
+        answer = row['answer']; last = answer['cot'][-1]
+        if not re.search(r'segment|main.subject', last['mask'], re.I):
+            continue
+        if not re.search(r'face|skin|woman|man\b|girl|boy|child|person', last['observation'], re.I):
+            continue
+        values = [float(s) for s in re.findall(r'(?<![A-Za-z])0\.\d+', last['mask'])]
+        if not values or not .10 < max(values) < .65:
+            continue
+        candidates.append(dict(key=key, source_id=source_id, annotation=answer,
+                               instruction=answer['instruction_medium'],
+                               pool=sources[source_id]['pool'], split='train'))
+    candidates.sort(key=lambda r: hashlib.sha256(('portrait-local-v1:'+r['key']).encode()).hexdigest())
+    selected = []; seen = set()
+    for row in candidates:
+        if row['source_id'] in seen:
+            continue
+        selected.append(row); seen.add(row['source_id'])
+        if len(selected) == 24:
+            break
+    dump(WORK/'local_candidates.json', selected)
+    print(json.dumps(dict(eligible=len(candidates), chosen=len(selected))), flush=True)
 
 
 def recover():
@@ -213,7 +271,7 @@ def infer():
 
 def main():
     global WORK
-    p = argparse.ArgumentParser(); p.add_argument('mode', choices=['infer', 'choose_local', 'choose_landscape', 'recover', 'preview'])
+    p = argparse.ArgumentParser(); p.add_argument('mode', choices=['infer', 'choose_local', 'choose_landscape', 'choose_portraits', 'recover', 'preview', 'portrait_preview'])
     p.add_argument('--work',type=Path,default=WORK)
     args=p.parse_args();WORK=args.work;WORK.mkdir(exist_ok=True)
     globals()[args.mode]()
