@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import sqlite3
+import zipfile
 
 import numpy as np
 from PIL import Image
@@ -14,6 +15,19 @@ from PIL import Image
 from tools.paper_appendix_qualitative import REPO, WORK as OLD, dump, image
 
 WORK = Path('/home/bc/data/runs/paper_appendix_expansion_20260919')
+FAST_EXPORT=False
+
+
+def fast_image(path,x):
+    if hasattr(x,'detach'):x=x.detach().cpu().numpy()
+    Image.fromarray(np.rint(np.clip(x,0,1)*255).astype(np.uint8)).save(path,compress_level=1)
+
+
+def fast_npz(path,**arrays):
+    with zipfile.ZipFile(path,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=1) as archive:
+        for name,array in arrays.items():
+            with archive.open(name+'.npy','w',force_zip64=True) as stream:
+                np.lib.format.write_array(stream,array,allow_pickle=False)
 
 
 def preview():
@@ -171,6 +185,8 @@ def recover():
     basis = GlutBasis(str(MD.GEOMETRY), device)
     results_path=WORK/'local_results.json'
     output=json.loads(results_path.read_text()) if results_path.exists() else []
+    write_image=fast_image if FAST_EXPORT else image
+    write_states=fast_npz if FAST_EXPORT else np.savez_compressed
     for i,old in enumerate(output):
         if i>=len(selected) or old['key']!=selected[i]['key']:
             raise ValueError('Refusing to renumber previously rendered recovery cases')
@@ -186,13 +202,13 @@ def recover():
             replay.append(current); errors.append(float((current-states[slot]).abs().mean())*100)
         folder = WORK/f'local_{i:02d}'; folder.mkdir(exist_ok=True)
         h, w = law['hw']
-        image(folder/'reference.png', states[0].reshape(h, w, 3))
+        write_image(folder/'reference.png', states[0].reshape(h, w, 3))
         for j, frame in enumerate(replay):
-            image(folder/f'recovery_{j}.png', frame.reshape(h, w, 3))
+            write_image(folder/f'recovery_{j}.png', frame.reshape(h, w, 3))
         for j, slot in enumerate(range(5, -1, -1), 1):
-            image(folder/f'mask_{j}.png', beta[slot].reshape(h, w))
-            image(folder/f'recorded_{j}.png', states[slot].reshape(h, w, 3))
-        np.savez_compressed(folder/'float_states.npz',
+            write_image(folder/f'mask_{j}.png', beta[slot].reshape(h, w))
+            write_image(folder/f'recorded_{j}.png', states[slot].reshape(h, w, 3))
+        write_states(folder/'float_states.npz',
                             recovery=torch.stack(replay).cpu().numpy().reshape(7, h, w, 3),
                             masks=beta.flip(0).cpu().numpy().reshape(6, h, w))
         delta = (replay[6]-replay[5]).abs().mean(-1)
@@ -275,11 +291,12 @@ def infer():
 
 
 def main():
-    global WORK
+    global WORK,FAST_EXPORT
     p = argparse.ArgumentParser(); p.add_argument('mode', choices=['infer', 'choose_local', 'choose_landscape', 'choose_portraits', 'recover', 'preview', 'portrait_preview'])
     p.add_argument('--work',type=Path,default=WORK)
     p.add_argument('--count',type=int,default=24)
-    args=p.parse_args();WORK=args.work;WORK.mkdir(exist_ok=True)
+    p.add_argument('--fast-export',action='store_true',help='Lossless level-1 PNG/NPZ compression; identical numeric arrays and pixels.')
+    args=p.parse_args();WORK=args.work;FAST_EXPORT=args.fast_export;WORK.mkdir(exist_ok=True)
     if args.mode=='choose_portraits':choose_portraits(args.count)
     else:globals()[args.mode]()
 
