@@ -64,7 +64,7 @@ class Predictor:
         self.where_facts = self.where.facts()
 
     @torch.inference_mode()
-    def predict(self, rgb, instruction):
+    def predict(self, rgb, instruction, journal=None, paired=None):
         # No target path, target tensor, recorded mask, or fitted code is accepted.
         from veraretouch_sprf.data import q3vl_text as T
         from veraretouch_sprf.models.vlm import q3vl_common as Q
@@ -75,11 +75,23 @@ class Predictor:
         h, w = rgb.shape[:2]
         located = self.where.predict(pil, instruction)
         subject = located['soft'].to(self.device)
+        if paired is not None:
+            if located['where_text'] != paired['where']['where_text']:
+                raise ValueError('Subject locator text differs from paired no-CoT run')
+            if abs(float(subject.mean())-paired['stages'][-1]['support_mean']) > 1e-7:
+                raise ValueError('Subject support mean differs from paired no-CoT run')
         if tuple(subject.shape) != (h, w):
             raise ValueError('Predicted subject support size mismatch')
         small, _ = Q.prepare_image_spec5(pil)
         enc = T.encode_prompt(self.model.processor, small, instruction)
         segments = [[int(token)] for token in self.model.stage_ids[:6]]
+        if journal is not None:
+            from veraretouch_sprf.readout.artedit_eval import segments_of
+            if enc['input_ids'][0].tolist() != journal['prompt_token_ids']:
+                raise ValueError('CoT prompt does not match current input/instruction')
+            segments, reason = segments_of(journal, self.model.stage_ids)
+            if segments is None:
+                raise ValueError('Invalid generated six-stage CoT: '+str(reason))
         ids, groups = sequence_six(enc['input_ids'][0].tolist(), segments,
                                    self.model.readout_ids)
         images = [dict(pixel_values=enc['pixel_values'], image_grid_thw=enc['image_grid_thw'])]
@@ -146,6 +158,27 @@ def run_bench(predictor, bench, args):
         records = records[:args.limit]
     out = args.out/bench
     out.mkdir(parents=True, exist_ok=True)
+    journals = None
+    if args.text_mode == 'cot':
+        if bench == 'artedit':
+            from veraretouch_sprf.readout.artedit_eval import JournalPack, default_journal
+            pack = JournalPack(default_journal('six'))
+            journals = {r['sample_id']: pack.get(r['sample_id']) for r in records}
+            journal_facts = pack.facts()
+        else:
+            jp = args.journal_root/(bench+'.json')
+            payload = read_json(jp)
+            journals = {r['sample_id']: r for r in payload['rows']}
+            journal_facts = dict(path=str(jp), sha256=digest(jp), n=len(journals))
+        if not all(r['sample_id'] in journals for r in records):
+            raise ValueError('Missing six-stage CoT')
+    paired_rows = {}
+    if args.paired_root:
+        for part in sorted((args.paired_root/bench).glob('part_*.json')):
+            for row in read_json(part)['rows']:
+                paired_rows[row['sample_id']] = row
+        if not all(r['sample_id'] in paired_rows for r in records):
+            raise ValueError('Missing paired no-CoT output')
     manifest = dict(protocol='six-stage joint readout, sequential current-state execution',
                     checkpoint=str(CKPT), checkpoint_sha256=CKPT_SHA,
                     stage_text='disabled; six stage markers and six readout groups retained',
@@ -155,6 +188,11 @@ def run_bench(predictor, bench, args):
                     source_sha256=digest(Path(__file__)),
                     sample_ids=[r['sample_id'] for r in records], limit=args.limit,
                     shard_size=args.shard_size)
+    if journals is not None:
+        manifest.update(stage_text='AR1600 six-segment CoT retained', journal=journal_facts)
+    if args.paired_root:
+        manifest['paired_no_cot_root'] = str(args.paired_root)
+        manifest['support_pair_check'] = 'same generated where text and support mean within 1e-7'
     path = out/'manifest.json'
     if path.exists() and read_json(path) != manifest:
         raise ValueError('Existing output has a different frozen protocol')
@@ -179,7 +217,14 @@ def run_bench(predictor, bench, args):
                 for record in batch:
                     t0 = time.monotonic()
                     rgb = load_rgb_u8(record['input_path'])
-                    pred, codes, stages, where = predictor.predict(rgb, record['instruction'])
+                    paired = paired_rows.get(record['sample_id'])
+                    if paired and (paired['input_sha256'] != digest(record['input_path'])
+                                   or paired['instruction'] != record['instruction']):
+                        raise ValueError('Paired input/instruction mismatch')
+                    pred, codes, stages, where = predictor.predict(
+                        rgb, record['instruction'],
+                        journal=journals[record['sample_id']] if journals is not None else None,
+                        paired=paired)
                     # Only now is the target loaded for reference scoring.
                     target = load_rgb_u8(record['gt_path'])
                     scores = metrics(pred, target, args.device)
@@ -226,6 +271,9 @@ def main():
     ap.add_argument('--chunk', type=int, default=65536)
     ap.add_argument('--device', default='cuda:0')
     ap.add_argument('--mem-fraction', type=float, default=.28)
+    ap.add_argument('--text-mode', choices=['empty', 'cot'], default='empty')
+    ap.add_argument('--journal-root', type=Path)
+    ap.add_argument('--paired-root', type=Path)
     args = ap.parse_args()
     torch.set_num_threads(4)
     torch.manual_seed(20260920)
