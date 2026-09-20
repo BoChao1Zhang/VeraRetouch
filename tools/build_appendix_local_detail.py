@@ -73,8 +73,8 @@ def photo(folder, name, width, height, box=None, size=None):
             + r'\end{scope}\end{tikzpicture}')
 
 
-def build_case(record, index):
-    original = Path(record['folder']); folder = ASSETS/f'case_{index:02d}'
+def build_case(record, index, folder_name=None):
+    original = Path(record['folder']); folder = ASSETS/(folder_name or f'case_{index:02d}')
     folder.mkdir(parents=True, exist_ok=True)
     if (original/'float_states.npz').exists():
         with np.load(original/'float_states.npz') as saved:
@@ -92,7 +92,10 @@ def build_case(record, index):
     shutil.copyfile(original/'reference.png', folder/'reference.png')
     for j in range(1, 7):
         shutil.copyfile(original/f'mask_{j}.png', folder/f'mask_{j}.png')
-        box = crop_box(detail_energy(delta[j-1], states[j-1]))
+        energy = detail_energy(delta[j-1], states[j-1])
+        if record.get('display_focus') == 'hue_sky' and j == 2:
+            energy[energy.shape[0]//2:] = 0
+        box = crop_box(energy)
         before = Image.open(folder/f'recovery_{j-1}.png')
         after = Image.open(folder/f'recovery_{j}.png')
         before.crop(box).save(folder/f'before_zoom_{j}.png')
@@ -144,7 +147,20 @@ def build_case(record, index):
 
 def main():
     p = argparse.ArgumentParser(); p.add_argument('--cases'); p.add_argument('--preview', action='store_true')
+    p.add_argument('--replace-first-with', type=Path)
     args = p.parse_args(); records = json.loads((WORK/'local_results.json').read_text())
+    if args.replace_first_with:
+        record = json.loads(args.replace_first_with.read_text())
+        record['display_focus'] = 'hue_sky'
+        output = build_case(record, 1, folder_name='case_sky')
+        selection = json.loads((ASSETS/'selection.json').read_text())
+        selection['cases'][0] = record
+        selection['files'][0] = output
+        selection['first_case_replacement'] = str(args.replace_first_with)
+        selection['candidate_pools'] = dict(original_local=24, replacement_landscapes=40)
+        (ASSETS/'selection.json').write_text(json.dumps(selection, indent=2)+'\n')
+        print(output, flush=True)
+        return
     if args.preview:
         font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 14)
         for part in range(2):

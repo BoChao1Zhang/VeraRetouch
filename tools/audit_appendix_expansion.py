@@ -20,7 +20,9 @@ def check_crop(folder, before, after, crop_before, crop_after, box):
 
 def main():
     checks=[]
-    for folder in sorted((PAPER/'figures/appendix_local_detail').glob('case_*')):
+    selection=json.loads((PAPER/'figures/appendix_local_detail/selection.json').read_text())
+    for filename in selection['files']:
+        folder=(PAPER/filename).parent
         r=json.loads((folder/'provenance.json').read_text())
         with np.load(Path(r['folder'])/'float_states.npz') as data:
             states=np.clip(data['recovery'],0,1);masks=data['masks']
