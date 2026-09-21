@@ -8,18 +8,17 @@ PAPER=Path('/home/bc/VeraRetouch/EPR/ICLR2027')
 
 def main():
     data=json.loads((PAPER/'tables/expert_results_20260921.json').read_text())['tables']
-    backbone=json.loads((PAPER/'tables/parameter_counts_20260921.json').read_text())['table_nominal_backbone_billions']
     checks=0
     for bench,rows in data.items():
-        lines=(PAPER/f'tables/{bench}_objective.tex').read_text().splitlines()
+        lines=(PAPER/'tables/objective_pair.tex').read_text().splitlines()
         metrics=[('L1','L1$',2,False),('L2','L2$',2,False),('PSNR','PSNR$',2,True),
                  ('SSIM','SSIM$',3,True),('DE00',r'$\Delta E',2,False)]
         for row in rows:
             prefix=r'\textbf{Ours}' if row['method'].startswith('Ours') else row['method']
             line=next(s.strip() for s in lines if s.strip().startswith(prefix))
-            name='Ours (Six-stage)' if row['method'].startswith('Ours') else row['method']
-            assert float(line.split('&')[1])==backbone[name], (bench,name)
-            cells=line.split('&')[2:]
+            cells=line.split('&')[1:]
+            assert len(cells)==10
+            cells=cells[:5] if bench=='fivek' else cells[5:]
             assert len(cells)==5
             for (key,_,digits,high),cell in zip(metrics,cells):
                 ranks=sorted(set(r[key] for r in rows),reverse=high)
@@ -32,7 +31,7 @@ def main():
         ours=rows[-1]
         assert ours['execution']=='six-stage' and ours['stage_text']=='none'
         assert ours['n']==(498 if bench=='fivek' else 492)
-    print(json.dumps(dict(status='PASS',metric_cells=checks,tables=2,
+    print(json.dumps(dict(status='PASS',metric_cells=checks,tables=1,benchmarks=2,
                           ranking='verified before rounding',ours='six-stage without CoT')))
 
 
