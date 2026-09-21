@@ -1,0 +1,27 @@
+import {writeFile} from 'node:fs/promises';
+const tab=await(await fetch('http://127.0.0.1:9326/json/new?about:blank',{method:'PUT'})).json();
+const ws=new WebSocket(tab.webSocketDebuggerUrl),pending=new Map();let serial=0;
+await new Promise((ok,fail)=>{ws.onopen=ok;ws.onerror=fail});
+ws.onmessage=e=>{const r=JSON.parse(e.data);if(pending.has(r.id)){const [ok,fail]=pending.get(r.id);pending.delete(r.id);r.error?fail(r.error):ok(r.result)}};
+const call=(method,params={})=>new Promise((ok,fail)=>{const id=++serial;pending.set(id,[ok,fail]);ws.send(JSON.stringify({id,method,params}))});
+async function evaluate(expression){const r=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value}
+await call('Page.enable');await call('Emulation.setDeviceMetricsOverride',{width:1500,height:1100,deviceScaleFactor:1,mobile:false});
+await call('Page.navigate',{url:'http://127.0.0.1:18764/index.html'});
+await evaluate(`new Promise(resolve=>{const t=setInterval(()=>{if(document.querySelectorAll('#sample option').length===400){clearInterval(t);resolve(true)}},100)})`);
+if(!await evaluate(`all.length===400&&all.filter(r=>r.replay).length===8`))throw Error('Coverage mismatch');
+await evaluate(`Promise.all([...document.querySelectorAll('#outputs img')].map(i=>i.decode()))`);
+if(!await evaluate(`document.querySelector('#outputs img').src.endsWith('artedit_en_0001/cot.png')`))throw Error('Wrong first sample');
+await evaluate(`document.querySelector('[data-step="2"]').click()`);
+if(!await evaluate(`[...document.querySelectorAll('#stagePair img')].every(i=>i.src.endsWith('_z2.png'))`))throw Error('Unmatched stages');
+await evaluate(`(async()=>{const i=document.querySelector('#outputs img');await i.decode();const b=i.getBoundingClientRect();await zoom({target:i,clientX:b.x+b.width/2,clientY:b.y+b.height/2})})()`);
+if(!await evaluate(`!$('zoomPanel').hidden&&$('zooms').querySelectorAll('img').length===2`))throw Error('Zoom missing');
+await evaluate(`$('sample').value='artedit_en_0400';$('sample').dispatchEvent(new Event('change'))`);
+if(!await evaluate(`document.querySelectorAll('#steps button').length===2&&$('next').disabled`))throw Error('Wrong last sample controls');
+await evaluate(`$('search').value='artedit_en_0003';$('search').dispatchEvent(new Event('input'))`);
+if(!await evaluate(`shown.length===1&&$('sample').value==='artedit_en_0003'`))throw Error('Search failed');
+await evaluate(`$('search').value='';filter();$('zoomPanel').hidden=true;scrollTo(0,0)`);
+await evaluate(`Promise.all([...document.querySelectorAll('#outputs img')].map(i=>i.decode()))`);
+const shot=await call('Page.captureScreenshot',{format:'png'});
+await writeFile('/home/bc/VeraRetouch/outputs/sixstage_cot_pair_review/browser_qa.png',Buffer.from(shot.data,'base64'));
+console.log(JSON.stringify({samples:400,stage_replays:8,checks:['paired final images','matched stage selection','coordinate-linked zoom','search','navigation']}));
+ws.close();
