@@ -8,6 +8,7 @@ PAPER=Path('/home/bc/VeraRetouch/EPR/ICLR2027')
 
 def main():
     data=json.loads((PAPER/'tables/expert_results_20260921.json').read_text())['tables']
+    backbone=json.loads((PAPER/'tables/parameter_counts_20260921.json').read_text())['table_nominal_backbone_billions']
     checks=0
     for bench,rows in data.items():
         lines=(PAPER/f'tables/{bench}_objective.tex').read_text().splitlines()
@@ -16,7 +17,9 @@ def main():
         for row in rows:
             prefix=r'\textbf{Ours}' if row['method'].startswith('Ours') else row['method']
             line=next(s.strip() for s in lines if s.strip().startswith(prefix))
-            cells=line.split('&')[1:]
+            name='Ours (Six-stage)' if row['method'].startswith('Ours') else row['method']
+            assert float(line.split('&')[1])==backbone[name], (bench,name)
+            cells=line.split('&')[2:]
             assert len(cells)==5
             for (key,_,digits,high),cell in zip(metrics,cells):
                 ranks=sorted(set(r[key] for r in rows),reverse=high)
