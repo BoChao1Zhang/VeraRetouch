@@ -13,12 +13,13 @@ def main():
         lines=(PAPER/f'tables/{bench}_objective.tex').read_text().splitlines()
         metrics=[('L1','L1$',2,False),('L2','L2$',2,False),('PSNR','PSNR$',2,True),
                  ('SSIM','SSIM$',3,True),('DE00',r'$\Delta E',2,False)]
-        for key,prefix,digits,high in metrics:
+        for row in rows:
+            prefix=r'\textbf{Ours}' if row['method'].startswith('Ours') else row['method']
             line=next(s.strip() for s in lines if s.strip().startswith(prefix))
             cells=line.split('&')[1:]
             assert len(cells)==5
-            ranks=sorted(set(r[key] for r in rows),reverse=high)
-            for row,cell in zip(rows,cells):
+            for (key,_,digits,high),cell in zip(metrics,cells):
+                ranks=sorted(set(r[key] for r in rows),reverse=high)
                 value=re.search(r'\d+\.\d+',cell).group()
                 assert value==f'{row[key]:.{digits}f}',(bench,key,row['method'],cell)
                 assert ('\\bestmetric{' in cell)==(row[key]==ranks[0])
